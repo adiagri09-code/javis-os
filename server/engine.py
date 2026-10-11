@@ -642,6 +642,44 @@ def _gemini_is_reasoning(model):
     return "2.5" in m or "gemini-3" in m or "thinking" in m
 
 
+# ── Ollama (Local): its OWN thinking level, not the shared Effort button (0.95.1) ─────────────────
+# qwen3 and most local reasoning models think BY DEFAULT when the request says nothing. On a home machine one long think can
+# eat the whole turn: a user counted CSV rows with qwen3 and got "Ollama (Local) returned nothing" after 69 s of thinking, and
+# a rerun was still thinking after 5 minutes. Javis never sent a thinking switch to this provider, so nothing could stop it.
+# And the Effort button is one setting for every model: "Medium" suits Claude but makes a local model ramble, "Off" tames the
+# local model but takes thinking away from Claude. So Ollama (Local) reads its own level, `model.ollama_local_reasoning`,
+# default "off", and the Effort button no longer reaches it.
+OLLAMA_LOCAL_REASONING_DEFAULT = "off"
+_OLLAMA_THINKING_OFF = {"reasoning_effort": "none"}    # Ollama's OpenAI layer maps "none" to think=false
+
+
+def ollama_local_reasoning() -> str:
+    """The thinking level for Ollama (Local): `model.ollama_local_reasoning`, "off" when unset or unreadable."""
+    try:
+        import config as cfgmod
+        v = str((cfgmod.read_settings().get("model", {}) or {}).get("ollama_local_reasoning") or "").strip().lower()
+    except Exception:      # noqa: BLE001 - an unreadable setting must not cost the turn; off is the safe level
+        v = ""
+    return v or OLLAMA_LOCAL_REASONING_DEFAULT
+
+
+def _ollama_thinking(level) -> dict:
+    """Payload fields for Ollama's thinking at this level. "off" is said OUT LOUD: leaving the field out is not off for qwen3,
+    it is thinking at the model's own default."""
+    if level in (None, "", "off"):
+        return dict(_OLLAMA_THINKING_OFF)
+    return {"reasoning_effort": api_effort(level)}
+
+
+def _thought_without_answer(label: str) -> dict:
+    """The error for a turn where the model only thought and never wrote an answer. Says what happened and what to change,
+    instead of a bare "returned nothing" that sends the user hunting for a broken connection."""
+    return {"type": "error", "content": _c(
+        f"{label} suy nghĩ hết lượt mà chưa viết ra câu trả lời. Hạ mức suy nghĩ của model này hoặc chia việc nhỏ hơn rồi thử lại.",
+        f"{label} spent the whole turn thinking and never wrote an answer. Lower this model's thinking level or split the "
+        f"task into smaller steps, then try again.")}
+
+
 async def _openai_compat_stream(url, label, api_key, model, messages, reasoning, send_reasoning,
                                 extra_payload=None):
     """Chat Completions dạng OpenAI (dùng chung cho OpenAI + Gemini qua endpoint tương thích).
@@ -673,7 +711,7 @@ async def _openai_compat_stream(url, label, api_key, model, messages, reasoning,
                            "remedy": _fact.remedy, "raw": _fact.raw}
                     yield ev_loi_http(label, r.status_code, body_text, r.headers, _fact)
                     return
-                got = False
+                got = thought = False
                 usage = None
                 async for line in r.aiter_lines():
                     line = (line or "").strip()
@@ -688,13 +726,18 @@ async def _openai_compat_stream(url, label, api_key, model, messages, reasoning,
                         continue
                     if obj.get("usage"):
                         usage = obj["usage"]
-                    c = ((obj.get("choices") or [{}])[0].get("delta") or {}).get("content")
+                    delta = (obj.get("choices") or [{}])[0].get("delta") or {}
+                    if delta.get("reasoning") or delta.get("reasoning_content"):
+                        thought = True      # thinking text is never shown, only remembered for the error below
+                    c = delta.get("content")
                     if c:
                         got = True
                         yield {"type": "text", "content": c}
                 if usage:
                     yield {"type": "usage", "input": usage.get("prompt_tokens", 0), "output": usage.get("completion_tokens", 0)}
-                if not got:
+                if not got and thought:
+                    yield _thought_without_answer(label)
+                elif not got:
                     yield {"type": "error", "content": _c(f"{label} trả về rỗng. Thử model khác.",
                                                           f"{label} returned nothing. Try another model.")}
     except Exception as e:
@@ -739,14 +782,28 @@ async def ollama_stream(api_key, model, messages, reasoning="off"):
 
 
 async def ollama_local_stream(api_key, model, messages, reasoning="off"):
-    """Ollama trên máy nhà - nhánh KHÔNG tool. Cùng khuôn `ollama_stream`, chỉ khác URL."""
+    """Ollama trên máy nhà - nhánh KHÔNG tool. Cùng khuôn `ollama_stream`, chỉ khác URL.
+
+    `reasoning` (the shared Effort button) is ignored on purpose: the level is `ollama_local_reasoning()`, see the block
+    above `_openai_compat_stream`. A model that cannot think at all answers a thinking request with a 400 about thinking;
+    then the turn is asked again with thinking off, before any text went out."""
     url = ollama_local_url()
     if not url:
         yield {"type": "error", "content": _c("Chưa đặt địa chỉ Ollama trong trang Models.", "No Ollama address set on the Models page.")}
         return
-    async for ev in _openai_compat_stream(url, "Ollama (Local)", api_key, model,
-                                          messages, reasoning, False):
-        yield ev
+    extra = _ollama_thinking(ollama_local_reasoning())
+    while True:
+        retry = False
+        async for ev in _openai_compat_stream(url, "Ollama (Local)", api_key, model,
+                                              messages, "off", False, extra):
+            if (ev.get("type") == "error" and extra != _OLLAMA_THINKING_OFF
+                    and _thinking_rejected(400, str(ev.get("content") or "")) and " 400:" in str(ev.get("content") or "")):
+                retry = True
+                break
+            yield ev
+        if not retry:
+            return
+        extra = dict(_OLLAMA_THINKING_OFF)
 
 
 async def openai_compat_stream(api_key, model, messages, reasoning="off"):
@@ -784,9 +841,14 @@ async def ollama_local_chat_with_mcp(api_key, model, messages, reasoning, mcp_to
         yield {"type": "error", "content": _c("Chưa đặt địa chỉ Ollama trong trang Models.", "No Ollama address set on the Models page.")}
         return
     headers = {"Authorization": f"Bearer {api_key or 'local'}", "Content-Type": "application/json"}
+    # Own thinking level, not `reasoning` (the shared Effort button): see `ollama_local_reasoning`. With thinking on, a 400
+    # about thinking (a model that cannot think) drops to thinking off for the rest of the turn, the same rail as DeepSeek.
+    extra = _ollama_thinking(ollama_local_reasoning())
+    fallback = None if extra == _OLLAMA_THINKING_OFF else dict(_OLLAMA_THINKING_OFF)
     yield {"type": "meta", "model": model}
     async for ev in _cc_tool_loop(url, headers, model, messages,
-                                  mcp_tools, mcp_route, {}, "Ollama (Local)"):
+                                  mcp_tools, mcp_route, extra, "Ollama (Local)",
+                                  thinking_fallback=fallback):
         yield ev
 
 
@@ -1818,6 +1880,8 @@ async def _cc_tool_loop(url, headers, model, messages, mcp_tools, mcp_route, rea
             yield {"type": "usage", "input": usage_in, "output": usage_out}
         if content:
             yield {"type": "text", "content": content}
+        elif msg.get("reasoning") or msg.get("reasoning_content"):
+            yield _thought_without_answer(label)
         else:
             yield {"type": "error", "content": _c(f"{label} trả về rỗng.", f"{label} returned nothing.")}
         return
