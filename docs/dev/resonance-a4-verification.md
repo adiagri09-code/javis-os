@@ -1,6 +1,6 @@
 # Resonance A4: biên bản kiểm mã (10/10/2026)
 
-**Trạng thái:** mã A4 trên nhánh `claude/resonance-a4-handoff-grants` (PR #604, số 0.96.0; đánh số lại bốn lần vì `main` đi qua 0.91.0, 0.92.1, 0.94.0 rồi 0.95.1) đã sửa theo **review mã vòng 1** (`a3356165`: 1 P1, 3 P2) **vòng 2** (`7b47e246`: 3 P2) và **vòng 3** (`d26c0f09`: 1 P2); **review mã vòng 5 đạt tại `5b5e3ef0`** (không còn P1, P2 chặn). Sau đó: smoke giao diện trên sandbox bằng engine giả (một lỗi thẻ đã sửa ở `f6aeb6d1`) và bộ chạy pilot (`01b7a7bc`, dry 10/10). **Chờ duyệt pilot.** Thiết kế chốt vòng 5 tại `6d774bd5` (D1: không cấp quyền ghi từ lời chat), reviewer chấp thuận để code. Chưa pilot model thật, chưa merge, chưa phát hành, không đụng VPS.
+**Trạng thái:** mã A4 trên nhánh `claude/resonance-a4-handoff-grants` (PR #604, số 0.96.0; đánh số lại bốn lần vì `main` đi qua 0.91.0, 0.92.1, 0.94.0 rồi 0.95.1) đã sửa theo **review mã vòng 1** (`a3356165`: 1 P1, 3 P2) **vòng 2** (`7b47e246`: 3 P2) và **vòng 3** (`d26c0f09`: 1 P2); **review mã vòng 5 đạt tại `5b5e3ef0`** (không còn P1, P2 chặn). Sau đó: smoke giao diện trên sandbox bằng engine giả (một lỗi thẻ đã sửa ở `f6aeb6d1`) và bộ chạy pilot (review cổng pilot đạt tại `5305687a`, dry 13/13). **Pilot thật đã chạy MỘT lần** tại `5305687a` (chủ dự án duyệt 11/10): 2 lượt chat Claude Code `claude-opus-5-5` qua gói thuê bao, 0 việc nền; kết quả gốc `technical_failed` do bộ chạy, đã khép bằng hậu kiểm offline (mục "Pilot thật real-1"). Thiết kế chốt vòng 5 tại `6d774bd5` (D1: không cấp quyền ghi từ lời chat), reviewer chấp thuận để code. Chưa merge, chưa phát hành, không đụng VPS.
 
 Thiết kế: [2026-10-10-resonance-a4-handoff-grants-design.md](../superpowers/specs/2026-10-10-resonance-a4-handoff-grants-design.md) (mục 12 là ma trận; mục 17 là ghi chú triển khai cần reviewer xác nhận). Hướng dẫn: [resonance-a4-grants.md](resonance-a4-grants.md).
 
@@ -12,7 +12,8 @@ Thiết kế: [2026-10-10-resonance-a4-handoff-grants-design.md](../superpowers/
 | `tests/python/test_resonance_a4_transport.py` (plugin thật, hub HTTP thật với `X-Javis-Turn`, server MCP plugin của Claude SDK thật, `main.app`) | 14 kiểm đạt |
 | `tests/python/test_resonance_a4_rollback.py` (mã 0.95.1 thật, `adb103ed`, bản cuối trước A4, qua `git show`) | 11 kiểm đạt |
 | `tests/js/test_resonance_a4_ui.js` (gồm hành vi `send()` thật với phản hồi server giả) | 27 kiểm đạt |
-| `tests/python/test_resonance_a4_pilot.py` (`JAVIS_RESONANCE_A4_PILOT=dry`, server thật, lượt chat mô phỏng) | 10/10 ca, 0 lượt thật; không đặt biến thì bỏ qua |
+| `tests/python/test_resonance_a4_pilot.py` (`JAVIS_RESONANCE_A4_PILOT=dry`, server thật, lượt chat mô phỏng) | 13/13 ca, 0 lượt thật, mỗi ca xác minh 0 lượt engine; không đặt biến thì bỏ qua |
+| `tests/python/test_resonance_a4_pilot_gate.py` (mã thật của bộ chạy nạp bằng AST, không server, không model) | 133 kiểm đạt |
 | 31 file test Resonance cũ (M1 tới M5, A1 tới A3) và 5 test giao diện Resonance cũ | đều đạt (14 file sửa kỳ vọng hay thêm `RA.preapprove()`, xem dưới) |
 | Toàn repo `tests/run.py` (639 file, lần chạy cuối tại `f6aeb6d1`) | 625 xanh; 14 đỏ, đều do môi trường, phân định ở mục "Toàn repo" |
 
@@ -66,7 +67,7 @@ Server sandbox cổng 7788, state và brain riêng (`exports/sandbox-a4`, ngoài
 
 **Câu hỏi thiết kế, chưa đổi:** Cho phép gặp file đích có sẵn của chủ dự án (không baseline) thì lịch làm việc vẫn chạy lượt việc nền (sandbox: 3 trên hạn mức 4, mỗi bản đều xung đột) rồi dừng `stalled`. Đây là hành vi MVP đã review (kiểm "3a"); thử đổi làm đỏ 5 file test cũ nên trả lại. Cần chủ dự án quyết.
 
-## Bộ chạy pilot A4 (chưa chạy thật)
+## Bộ chạy pilot A4 (đã chạy thật một lần, xem "Pilot thật real-1")
 
 `tests/python/test_resonance_a4_pilot.py`. Real chạy Claude Code (gói thuê bao) ở lượt chat của trợ lý, tối đa 2 lượt (sổ giữ chỗ fsync trước mỗi lần gửi, đóng khi có lỗi, không đặt lại), trần kho 0 cho mọi tiến trình server. Dry 10 ca: chính, cổng chi phí, cổng xác thực, thẻ cũ 409, biên nhận đăng không thành, lỗi engine, không nộp, tự ghi file đích, thiếu bằng chứng, sổ còn giữ chỗ. Đơn xin chạy: `exports/reviews/A4-pilot-run-request.md` (ngoài git). Engine khác Claude Code chỉ kiểm bằng engine giả.
 
@@ -91,6 +92,24 @@ Sự cố trong lúc sửa: một ca dry thử đi qua `/ws` với bộ não API
 - **Vòng 3 (`dd2b1d58`):** sổ từng lượt đã tạo sẵn nên BẮT BUỘC còn và đọc được (mất sổ là không xác minh được, không bỏ đối chiếu); mỗi mục `total` bắt buộc có `turns` là số nguyên không âm (không mặc định 0). `total = {}` với sổ từng lượt rỗng vẫn là 0 hợp lệ. Hai phản ví dụ đi trọn chuỗi: không xác minh được, kiểm hỏng, giữ bằng chứng, dừng cả đợt. Test: 84 kiểm.
 
 Lời giao: hai bộ đầu vào ghim hash. v1 là lời gốc, có thể được làm ngay trong lượt, đúng như lượt lọt cho thấy. v2 là đề xuất giao trách nhiệm sau lượt. Real bắt buộc chọn bộ đã duyệt.
+
+### Pilot thật real-1 (11/10/2026)
+
+**Phạm vi.** Chạy đúng MỘT lần, theo lời duyệt của chủ dự án, trên bản checkout tách riêng ở commit đã review `5305687a` (0.93.0 lúc đó; cây sạch). Một mẫu, một engine: Claude Code `claude-opus-5-5` qua gói thuê bao (`authMethod: claude.ai`, `firstParty`), bộ đầu vào v2. Không chứng minh Codex, Grok, Antigravity hay bảy engine API; không kiểm lượt việc nền bằng model thật. Đây KHÔNG phải bằng chứng đã chạy thử bản tích hợp 0.96.0.
+
+**Hạn mức.** Sổ lượt chat 2/2, cả hai `ok` và `completed`; trần kho 0 giữ qua bốn server, 0 lượt engine cấp kho; bộ đếm lượt engine của server sandbox 2, đã xác minh. Token: 534.079 vào, 5.152 ra; app ước tính 1,23 USD, trong gói thuê bao. Không thử lại, không API trả phí.
+
+**Kết quả gốc giữ nguyên:** `acceptance: technical_failed`, chỉ hai kiểm đối chiếu tin báo hỏng. Báo cáo, sổ và hai sản phẩm không sửa. Hash: báo cáo `3ab7aaf9…4b4a3`, bản 1 `80e28006…3b6a1` (662 byte), bản 2 `135ac274…90c6e` (827 byte).
+
+**Nguyên nhân: lỗi bộ chạy, không phải lỗi giao tin.** Host đặt thẻ `turn:<message_ref>` sau mỗi lượt chat lập hay sửa mục tiêu (`_resonance_push_card`); `audit_notices` cũ đòi tập khoá phiên bằng đúng tập `outbox:<id>` nên loại nhầm hai thẻ đó. Dry mô phỏng lượt chat nên không có thẻ turn; review cổng pilot cũng chưa thấy. Tin báo bắt buộc `outbox:3` (`goal.waiting_human`, revision 2) có đúng một tin, đúng phiên, có biên nhận khớp chính tin, không lặp sau hai lần dựng lại.
+
+**Sửa bộ chạy (`8582bdd6`), không đổi mã sản phẩm.** `read_notice_evidence` đọc chỉ đọc (SQLite `mode=ro`), dùng chung cho bộ chạy và hậu kiểm offline. Biên nhận chỉ tính khi dòng biên nhận duy nhất của (khoá, mục tiêu) trỏ đúng phiên và đúng CHÍNH tin đó. Thẻ turn chỉ được có thêm khi message_ref thuộc chính phiên và kho mục tiêu có sự kiện `created`, `reframe` hay `continued` cùng mục tiêu, cùng message_ref, cùng revision; thẻ turn không bao giờ thay tin outbox bắt buộc. Khoá lạ, khoá lặp vẫn không đạt. Test cổng thêm ba thẻ thật làm fixture và các ca âm (chỉ có turn, thiếu hay sai biên nhận, sai mục tiêu hay phiên, không nối sự kiện, lặp, khoá lạ, outbox revision cũ). Đối chứng: test mới trên bộ chạy `5305687a` đỏ đúng ca ba thẻ thật.
+
+**Hậu kiểm offline** trên bản sao dữ liệu đã lưu, chỉ đọc, không dựng server, không xác thực, không gọi engine: bộ đối chiếu mới cho `matched_ok` và `required_ok` đúng; hàm cũ trên cùng dữ liệu tái hiện kết quả sai; cây bằng chứng 85 file không đổi byte nào. Script hậu kiểm độc lập của reviewer: 16 kiểm đạt. Hồ sơ ngoài git: `exports/reviews/A4-real-1-postcheck.md`.
+
+**Bốn điều cần chứng minh, theo hậu kiểm:** lượt 1 lập đúng một mục tiêu của trợ lý và nộp qua `javis_submit_deliverable`, host giữ nháp chờ quyền, không có file đích; Cho phép đăng đúng bytes đã giữ, không gọi model; lượt 2 sửa mục tiêu, bản 2 được host tự đăng, không hỏi lại quyền; dựng lại hai lần không gọi thêm, tin báo đúng và không lặp. Ghi nhận phụ: lần gọi `javis_goal` đầu của lượt 1 bị host từ chối (thiếu `at_iso` đọc được), bộ não tự sửa trong cùng lượt.
+
+**Nội dung (reviewer).** Bản cuối (revision 2) ĐẠT: đủ ý, mục Việc tiếp theo đúng người và hạn, giữ nguyên lời hẹn "thứ Hai tuần sau". Bản 1 CHƯA ĐẠT hoàn toàn: tự thêm ngày "(19/10/2026)" không có trong lời giao (11/10 là Chủ nhật, theo cách tính thông thường "thứ Hai tuần sau" là 12/10). Lỗi này giữ nguyên trong hồ sơ; bản cuối đã bỏ ngày đó. Không tuyên bố chất lượng model ổn định từ một mẫu.
 
 ## Review mã vòng 3 (`d26c0f09`) và cách sửa
 

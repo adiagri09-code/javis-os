@@ -175,4 +175,4 @@ Nguồn audit và các khoảng trống bằng chứng: [Báo cáo tiến độ 
 - **Kiểm tích hợp:** smoke dry trên server thật (0 lượt engine), soi giao diện heartbeat trên sandbox.
 - **Biên bản:** [resonance-a2-verification](../../dev/resonance-a2-verification.md).
 - **Phát hành:** 0.88.0, PR #593 squash thành `c101d108` (09/10/2026), image GHCR 0.88.0.
-- **Chưa làm:** chưa đo hiệu năng VPS. A3 đã phát hành 0.89.0; A4 mã đạt review, chờ duyệt pilot (0.96.0); A5 chưa bắt đầu.
+- **Chưa làm:** chưa đo hiệu năng VPS. A3 đã phát hành 0.89.0; A4 mã đạt review, pilot thật đã chạy một lần (2 lượt Claude Code Opus, 0 việc nền; kết quả gốc technical_failed do bộ chạy, đã khép bằng hậu kiểm), chờ review tích hợp và chủ dự án quyết merge (0.96.0); A5 chưa bắt đầu.
