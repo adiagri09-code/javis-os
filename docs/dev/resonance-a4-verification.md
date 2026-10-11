@@ -87,7 +87,8 @@ Sự cố trong lúc sửa: một ca dry thử đi qua `/ws` với bộ não API
 - Số đếm KHÔNG đọc được không bao giờ thành 0. Hai sổ lượt của server sandbox (`usage.json`, `usage-events.jsonl`) được tạo sẵn, rỗng và hợp lệ, trước khi dựng server. Chỉ báo 0 khi đọc được, đúng cấu trúc và hai sổ khớp. Ngoài ra là `None` kèm lý do `unverified: ...`, và kiểm dry hỏng.
 - Ca nào báo khác 0 đã xác minh (có lượt, không xác minh được, có lượt thật, không có báo cáo): bộ điều phối dry DỪNG CẢ ĐỢT, không mở ca kế tiếp. Ca đó giữ nguyên thư mục (state, sổ usage như lúc phát hiện, log server) và bộ điều phối chép vào hồ sơ. Ca âm đúng kỳ vọng mà đã xác minh 0 lượt thì vẫn chạy tiếp.
 - Đây là HẬU KIỂM, không phải chốt chặn: `usage_store` bỏ lượt không có token và ghi kiểu cố gắng. Chốt chặn của dry vẫn là `ws_chat` từ chối gửi tin khi không phải real.
-- Hồi quy trong `test_resonance_a4_pilot_gate.py` (74 kiểm), chạy đúng nút AST của bộ chạy.
+- Hồi quy trong `test_resonance_a4_pilot_gate.py`, chạy đúng nút AST của bộ chạy.
+- **Vòng 3 (`dd2b1d58`):** sổ từng lượt đã tạo sẵn nên BẮT BUỘC còn và đọc được (mất sổ là không xác minh được, không bỏ đối chiếu); mỗi mục `total` bắt buộc có `turns` là số nguyên không âm (không mặc định 0). `total = {}` với sổ từng lượt rỗng vẫn là 0 hợp lệ. Hai phản ví dụ đi trọn chuỗi: không xác minh được, kiểm hỏng, giữ bằng chứng, dừng cả đợt. Test: 84 kiểm.
 
 Lời giao: hai bộ đầu vào ghim hash. v1 là lời gốc, có thể được làm ngay trong lượt, đúng như lượt lọt cho thấy. v2 là đề xuất giao trách nhiệm sau lượt. Real bắt buộc chọn bộ đã duyệt.
 
