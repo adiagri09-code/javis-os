@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.99.0] - 2026-10-11
+### Added
+- (in progress) German interface.
+
 ## [0.96.1] - 2026-10-11
 ### Fixed
 - **Updating no longer locks you out.** On servers that set the account from the environment (Docker, Hostinger) where `JAVIS_ADMIN_PASSWORD` carried a stray space, from 0.92.1 the first boot after an update took the environment password as changed and reset the account. The password you had changed in the dashboard was overwritten and the username became `admin`. Updating now leaves the account alone; only a real change of the environment value resets it.
