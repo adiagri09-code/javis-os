@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.96.1] - 2026-10-11
+### Sửa lỗi
+- (đang viết) Cập nhật không còn ghi đè mật khẩu đã đổi trên máy chủ.
+
 ## [0.96.0] - 2026-10-11
 ### Thêm mới
 - **Trợ lý Cộng hưởng chỉ ghi vào file bạn đã cho phép.** Mục tiêu mới hay đổi sang file khác thì thẻ hỏi "Trợ lý muốn ghi vào ... Cho phép?" kèm đúng đường file. Đã cho phép thì trợ lý làm tiếp, không hỏi lại từng lần sửa.

@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.96.1] - 2026-10-11
+### Fixed
+- (in progress) Updating no longer overwrites a password changed in the dashboard.
+
 ## [0.96.0] - 2026-10-11
 ### Added
 - **Resonance assistants only write to files you have allowed.** A new goal, or a switch to another file, makes the card ask "The assistant wants to write to ... Allow?" with the exact path. Once allowed, the assistant keeps working without asking again for each revision.
