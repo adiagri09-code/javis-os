@@ -26,24 +26,28 @@ tags:
 ### Chuẩn hoá và trùng
 
 - Unicode NFC; bỏ ký tự điều khiển; gộp mọi khoảng trắng liên tiếp thành một dấu cách; cắt hai đầu.
-- Rỗng sau chuẩn hoá: không phải tag. Dài quá 40 ký tự: từ chối (`tag_too_long`). Quá 20 tag một agent: từ chối (`too_many_tags`).
-- **Khoá so trùng** = dạng chuẩn hoá rồi `casefold()`: "Marketing" và "marketing" là một tag, giữ cách viết gặp trước. Dấu tiếng Việt là một phần của tag: "Viết" và "Viet" là hai tag khác nhau. Tìm kiếm không dấu chỉ để tìm, không gộp tag.
-- Phía giao diện chỉ hiển thị cách viết server trả về, không tự chuẩn hoá lại.
+- Rỗng sau chuẩn hoá: không phải tag.
+- **Giới hạn chỉ cho đầu vào MỚI** (review vòng 1, R1): tag người dùng thêm, thay cả tập hay đổi tên tới dài quá 40 ký tự thì từ chối (`tag_too_long`); thêm làm tập vượt 20 tag thì từ chối (`too_many_tags`).
+- **Dữ liệu ĐANG CÓ không bao giờ bị cắt:** nhóm cũ dài hơn 40 ký tự (hợp lệ ở 0.96.1) hay file có hơn 20 tag được đọc nguyên, hiện nguyên (chip cắt chữ bằng CSS, tên đủ ở title), và ghim, lưu form, nhập gói ghi lại đúng như đã đọc. Bỏ, đổi tên (tên nguồn) hay xoá một tag dài vẫn làm được; bỏ tag khi đang quá 20 luôn được.
+- **Khoá định danh** = dạng chuẩn hoá rồi Unicode `casefold()` (`agent_tags.tag_key`): "Marketing" và "marketing" là một tag; "Straße" và "STRASSE" là một tag; "Viết" dạng NFC và NFD là một tag. Dấu tiếng Việt là một phần của tag: "Viết" và "Viet" là hai tag khác nhau. Tìm kiếm không dấu chỉ để tìm, không gộp tag. Trong một agent giữ cách viết gặp trước; giữa các agent, cách viết có thể khác nhau nhưng cùng khoá.
+- **Một định danh cho mọi tầng** (R3): API trả `tag_keys` song song với `tags`; trang Cộng sự và Studio đếm, lọc, đánh dấu tick theo khoá đó, không tự tính (`toLowerCase` của trình duyệt khác `casefold`). Giao diện chỉ hiển thị cách viết server trả về.
 
 ### API
 
 | Đường | Agent | Ghi chú |
 |---|---|---|
-| `GET /agents`, `GET /agents/get` | Trả `tags` (danh sách đã chuẩn hoá) | Vẫn trả `group` = tag đầu tiên hoặc "Chung" cho trang cũ còn trong cache. Không gửi một request riêng cho từng agent |
+| `GET /agents`, `GET /agents/get` | Trả `tags` (danh sách đã chuẩn hoá) và `tag_keys` (khoá định danh, cùng thứ tự) | Vẫn trả `group` = tag đầu tiên hoặc "Chung" cho trang cũ còn trong cache. Không gửi một request riêng cho từng agent |
 | `POST /capability/meta`, `kind=agent` | `add_tags` (JSON danh sách): thêm vào tập hiện có. `remove_tags` (JSON danh sách): bỏ đúng các tag đó. `tags` (JSON danh sách): thay cả tập, `[]` là bỏ hết | Không gửi trường nào = giữ nguyên. Đọc và ghi trong một bước của server, nên hai tab thêm/bỏ khác tag không ghi đè nhau |
 | `POST /capability/meta`, `kind=agent`, chỉ có `group` (client cũ) | Agent đang có từ hai tag trở lên: từ chối `409 stale_client` ("Trang đã cũ, tải lại trang"), không đổi gì. Có không quá một tag: `group` không rỗng thành đúng một tag, rỗng là bỏ tag (đúng nghĩa cũ "về Chưa xếp nhóm") | Không bao giờ âm thầm thay nhiều tag bằng một tag |
 | `group` gửi cùng `tags`/`add_tags`/`remove_tags` | Từ chối `400 group_and_tags` | Luật xung đột rõ, không đoán |
 | `POST /agents` (form sửa agent) | Không gửi `tags` = giữ nguyên tag. Gửi `tags` (JSON) = thay cả tập. `group` của client cũ theo đúng luật hàng trên | Agent mới không gửi tag thì `tags: []` |
-| `POST /agents/tags/rename` (`brain`, `from`, `to`) | Đổi tên tag trên mọi agent đang có nó, giữ các tag khác. `to` trùng khoá với một tag đã có trên agent thì gộp, không nhân đôi | Trả `changed`, `failed`, `merged` (tên đích đã tồn tại trong brain). Có agent ghi lỗi thì `ok: false` kèm danh sách đã làm và chưa làm |
+| `POST /agents/tags/rename` (`brain`, `from_tag`, `to_tag`) | Đổi tên tag (so theo khoá) trên mọi agent đang có nó, giữ các tag khác. `to_tag` trùng khoá với một tag đã có thì gộp, không nhân đôi, dùng cách viết của tag đã có | Trả `changed`, `failed`, `merged`, `tag`, `tag_key`. Có agent ghi lỗi thì `ok: false` kèm danh sách đã làm và chưa làm |
 | `POST /agents/tags/delete` (`brain`, `tag`) | Gỡ nhãn đó khỏi mọi agent | Không xoá agent, phiên chat, mục tiêu hay đội. Trả như trên |
 | `kind=workflow` | Không đổi; gửi tham số tag cho workflow bị từ chối `400` | |
 
 Mọi tag thuộc phạm vi **một brain** (thư mục `agents/` của brain đó). Đổi tên hay xoá tag ở brain này không chạm brain khác.
+
+**Đồng bộ ghi và event loop** (R4): mọi đường đọc, sửa, ghi frontmatter agent (`/capability/meta`, đổi tên, xoá tag, và `POST /agents` của form) chạy ở worker (`asyncio.to_thread`) và đọc `previous` rồi ghi trong CÙNG một khoá (`_AGENT_META_LOCK`). Thao tác nhiều agent không chặn event loop khi đĩa chậm; form lưu xen với thêm/bỏ tag không ghi đè nhau. Số đo trong test là I/O giả lập (ghi chậm 80 ms), không phải số đo máy thật.
 
 ## Chuyển đổi
 
