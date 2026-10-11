@@ -253,6 +253,10 @@ def run_case(scen: str) -> int:
     assert not any(k in model for k in ("claude_auth", "anthropic_api_key")), "settings pilot không có chế độ API key"
     (state / "settings.json").write_text(json.dumps({"model": model, "setup_done": True}, ensure_ascii=False),
                                          encoding="utf-8", newline="\n")
+    # Sổ lượt engine của server sandbox (usage_store) tạo SẴN, rỗng và hợp lệ, trước khi dựng server nào: "chưa có file"
+    # không bao giờ bị hiểu là 0 lượt. Chỉ là state tạm của ca, không đụng kho usage của máy thật (review cổng pilot vòng 2).
+    (state / "usage.json").write_text(json.dumps({"days": {}, "total": {}}), encoding="utf-8", newline="\n")
+    (state / "usage-events.jsonl").write_text("", encoding="utf-8", newline="\n")
 
     os.environ["JAVIS_STATE_DIR"] = str(state)
     os.environ["BRAINS_DIR"] = str(brains)
@@ -805,14 +809,30 @@ def run_case(scen: str) -> int:
                               "chat_simulated": led.used() if MODE == "dry" else 0,
                               "store": store_calls() if (state / "resonance.sqlite3").exists() else 0}
         # Bộ đếm lượt engine của chính server sandbox (usage.json): dry phải là 0, không thì có lượt model lọt qua.
+        # HẬU KIỂM, không phải chốt chặn: usage_store chỉ ghi lượt có token và ghi kiểu cố gắng. Chốt chặn của dry là
+        # `ws_chat` từ chối gửi tin. Ở đây chỉ báo 0 khi ĐÃ XÁC MINH: hai sổ (tổng và từng lượt) đọc được, đúng cấu trúc,
+        # khớp nhau (sổ từng lượt có thì phải khớp). Đọc lỗi, JSON hỏng, sai cấu trúc, thiếu `usage.json` (đã tạo sẵn từ đầu
+        # ca) hay hai sổ lệch nhau: None kèm lý do, KHÔNG đổi thành 0 (review cổng pilot vòng 2).
         try:
             usage = json.loads((state / "usage.json").read_text(encoding="utf-8"))
-            rep["engine_turns_logged"] = sum(int(v.get("turns") or 0) for v in (usage.get("total") or {}).values())
-        except (OSError, ValueError):
-            rep["engine_turns_logged"] = 0
+            total = usage.get("total") if isinstance(usage, dict) else None
+            if not isinstance(total, dict) or not all(
+                    isinstance(v, dict) and type(v.get("turns", 0)) is int and v.get("turns", 0) >= 0
+                    for v in total.values()):
+                raise ValueError("usage.json sai cấu trúc")
+            turns = sum(v.get("turns", 0) for v in total.values())
+            ev_path = state / "usage-events.jsonl"
+            events = ([ln for ln in ev_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+                      if ev_path.exists() else None)
+            if events is not None and len(events) != turns:
+                raise ValueError(f"hai sổ lệch nhau: usage.json {turns} lượt, usage-events.jsonl {len(events)} dòng")
+            rep["engine_turns_logged"], rep["engine_turns_status"] = turns, "verified"
+        except (OSError, ValueError) as e:
+            rep["engine_turns_logged"] = None
+            rep["engine_turns_status"] = f"unverified: {type(e).__name__}: {str(e)[:120]}"
         if MODE == "dry":
-            check(f"dry: server sandbox không ghi lượt engine nào ({rep['engine_turns_logged']})",
-                  rep["engine_turns_logged"] == 0)
+            check(f"dry: đã xác minh server sandbox không ghi lượt engine nào ({rep.get('engine_turns_status')}, "
+                  f"{rep['engine_turns_logged']})", rep["engine_turns_logged"] == 0)
         check(f"tổng lượt chat thật trong hạn mức {CHAT_LIMIT}", rep["model_turns"]["chat_real"] <= CHAT_LIMIT)
         rep["servers"] = srv.started
         rep["seconds_total"] = round(time.time() - t_start, 1)
@@ -831,9 +851,15 @@ def run_case(scen: str) -> int:
         for secret in (str(base), str(Path.home())):
             txt = txt.replace(json.dumps(secret)[1:-1], "<path>")
         (out_dir / f"a4-pilot-{MODE}-{scen or 'main'}.json").write_text(txt, encoding="utf-8", newline="\n")
-        print("A4_PILOT " + json.dumps({k: rep.get(k) for k in ("mode", "scenario", "acceptance", "model_turns", "engine_turns_logged")},
+        keep = rep.get("engine_turns_logged") != 0 or bool(os.environ.get("JAVIS_RESONANCE_A4_KEEP"))
+        if keep and rep.get("engine_turns_logged") != 0:
+            # Sự cố hay không xác minh được: GIỮ nguyên thư mục ca (state, sổ usage, log server, brain) làm bằng chứng,
+            # không xoá tệp hỏng; bộ cha chép nó vào hồ sơ rồi dừng cả đợt.
+            print("A4_PILOT_KEPT " + str(base))
+        print("A4_PILOT " + json.dumps({k: rep.get(k) for k in ("mode", "scenario", "acceptance", "model_turns",
+                                                                 "engine_turns_logged", "engine_turns_status")},
                                        ensure_ascii=False))
-        if not os.environ.get("JAVIS_RESONANCE_A4_KEEP"):
+        if not keep:
             shutil.rmtree(base, ignore_errors=True)
     return 0 if rep["acceptance"] in ("dry_ok", "pending_content_review") else 1
 
@@ -892,6 +918,25 @@ for name, (extra, want, needle) in DRY_CASES.items():
     if not ok:
         bad.append(name)
         print("\n".join("    " + x for x in cp.stdout.splitlines()[-25:]))
+    # Sự cố hay không xác minh được (lượt engine khác 0, số đếm không hợp lệ, lượt thật, thiếu báo cáo): DỪNG CẢ ĐỢT
+    # ngay, không mở ca kế tiếp, chép bằng chứng ca đó vào hồ sơ. Ca âm đúng kỳ vọng mà đã xác minh 0 lượt thì vẫn chạy
+    # tiếp (review cổng pilot vòng 2).
+    etl = got.get("engine_turns_logged")
+    if type(etl) is not int or etl != 0 or (got.get("model_turns") or {}).get("chat_real", 1) != 0:
+        kept = next((x[len("A4_PILOT_KEPT "):].strip() for x in cp.stdout.splitlines()
+                     if x.startswith("A4_PILOT_KEPT ")), "")
+        print(f"DỪNG CẢ ĐỢT: ca {name} có lượt engine {etl!r} ({got.get('engine_turns_status') or 'không có báo cáo'}); "
+              "không mở ca kế tiếp, không thử lại.")
+        if kept and os.environ.get("JAVIS_RESONANCE_A4_DRY_DIR"):
+            import shutil as _shutil
+            dest = Path(os.environ["JAVIS_RESONANCE_A4_DRY_DIR"]) / f"incident-{name}"
+            _shutil.copytree(kept, dest, dirs_exist_ok=True)
+            print(f"Bằng chứng (thư mục ca, gồm sổ usage và log server) đã chép vào {dest}")
+        elif kept:
+            print(f"Bằng chứng giữ nguyên tại {kept}")
+        if name not in bad:
+            bad.append(name)
+        break
 if bad:
     print(f"\n{len(bad)} FAIL:", bad)
     sys.exit(1)

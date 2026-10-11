@@ -230,6 +230,133 @@ with tempfile.TemporaryDirectory(prefix="a4-pilot-gate-") as td:
         exec(compile(ast.Module(body=[flow_notice], type_ignores=[]), str(SRC), "exec"), base)
         ok_(f"P2-3 câu kiểm khoá phiên {keys}: {'đạt' if want else 'không đạt'}", (not base["fails"]) == want)
 
+# ═══════════ Review cổng pilot vòng 2: hậu kiểm lượt engine của dry và dừng cả đợt ═══════════
+# Chạy đúng các nút AST của bộ chạy: khối đọc sổ usage trong `finally` của run_case (và câu kiểm ngay sau), đoạn giữ
+# bằng chứng, và vòng điều phối dry (chỉ thay subprocess.run). Không server, không model.
+FINALLY = next(n for n in RUN.body if isinstance(n, ast.Try) and n.finalbody).finalbody
+USAGE = next(i for i, n in enumerate(FINALLY) if isinstance(n, ast.Try) and "engine_turns_logged" in ast.unparse(n))
+# Mã trước bản sửa không có bước giữ bằng chứng: KEEP_AT là None và các ca tương ứng báo hỏng (để chạy đối chứng).
+KEEP_AT = next((i for i, n in enumerate(FINALLY) if isinstance(n, ast.Assign) and ast.unparse(n).startswith("keep =")),
+               None)
+DRIVER = next(n for n in TREE.body if isinstance(n, ast.For) and "DRY_CASES.items" in ast.unparse(n.iter))
+
+with tempfile.TemporaryDirectory(prefix="a4-pilot-gate-r2-") as td:
+    tmp = Path(td)
+    COUNTS = {
+        # tên: (usage.json, usage-events.jsonl hay None, quyền đọc bị từ chối, số mong đợi)
+        "zero": ('{"days": {}, "total": {}}', "", False, 0),
+        "zero_no_events_file": ('{"days": {}, "total": {}}', None, False, 0),
+        "one": ('{"total": {"cli|x": {"in": 9, "out": 1, "turns": 1, "cost": 0.1}}}', '{"model": "x"}\n', False, 1),
+        "truncated": ('{"total":', "", False, None),
+        "permission": ('{"total": {"cli|x": {"turns": 1}}}', '{"m": 1}\n', True, None),
+        "not_object": ("[]", "", False, None),
+        "total_list": ('{"total": []}', "", False, None),
+        "turns_text": ('{"total": {"a": {"turns": "1"}}}', "", False, None),
+        "turns_negative": ('{"total": {"a": {"turns": -1}}}', "", False, None),
+        "turns_bool": ('{"total": {"a": {"turns": true}}}', "", False, None),
+        "missing_usage": (None, "", False, None),
+        "events_disagree": ('{"days": {}, "total": {}}', '{"model": "lot"}\n', False, None),
+    }
+    for name, (usage, events, denied, want) in COUNTS.items():
+        st = tmp / ("c-" + name)
+        st.mkdir()
+        if usage is not None:
+            (st / "usage.json").write_text(usage, encoding="utf-8")
+        if events is not None:
+            (st / "usage-events.jsonl").write_text(events, encoding="utf-8")
+        checks = []
+        ns = {"state": st, "json": json, "rep": {}, "MODE": "dry",
+              "check": lambda label, cond, **kw: checks.append(bool(cond))}
+        code = compile(ast.Module(body=FINALLY[USAGE:USAGE + 2], type_ignores=[]), str(SRC), "exec")
+        crash = ""
+        try:
+            if denied:
+                with patch.object(Path, "read_text", side_effect=PermissionError("bị khoá")):
+                    exec(code, ns)
+            else:
+                exec(code, ns)
+        except Exception as e:  # noqa: BLE001 - mã cũ văng lỗi với dữ liệu sai cấu trúc: tính là hỏng, không sập test
+            crash = f"{type(e).__name__}: {e}"
+        got = ns["rep"].get("engine_turns_logged")
+        status = ns["rep"].get("engine_turns_status", "")
+        ok_(f"vòng 2 sổ usage {name}: báo {want!r}, câu kiểm dry {'đạt' if want == 0 else 'không đạt'}",
+            not crash and got == want and (type(got) is int if want is not None else got is None)
+            and checks == [want == 0], crash or ns["rep"])
+        ok_(f"vòng 2 sổ usage {name}: nhãn {'verified' if want is not None else 'unverified + lý do'}",
+            status == "verified" if want is not None else status.startswith("unverified: "), crash or ns["rep"])
+
+    # Bằng chứng phía ca: chưa xác minh được 0 thì GIỮ thư mục ca (kể cả tệp hỏng), đã xác minh 0 thì dọn.
+    for etl, want_kept in ((0, False), (1, True), (None, True)):
+        if KEEP_AT is None:
+            ok_(f"vòng 2 bằng chứng ca, lượt engine {etl!r}: có bước giữ bằng chứng", False, "không có `keep =`")
+            continue
+        base = tmp / f"ca-{etl}"
+        (base / "state").mkdir(parents=True)
+        (base / "state" / "usage.json").write_text('{"total":', encoding="utf-8")
+        printed = []
+        ns = {"rep": {"engine_turns_logged": etl}, "os": os, "base": base, "json": json, "MODE": "dry",
+              "shutil": __import__("shutil"), "print": lambda *a, **k: printed.append(" ".join(map(str, a)))}
+        body = FINALLY[KEEP_AT:KEEP_AT + 2] + [n for n in FINALLY[KEEP_AT + 2:] if isinstance(n, ast.If)
+                                                and "rmtree" in ast.unparse(n)]
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("JAVIS_RESONANCE_A4_KEEP", None)
+            exec(compile(ast.Module(body=body, type_ignores=[]), str(SRC), "exec"), ns)
+        kept = base.exists() and (base / "state" / "usage.json").read_text(encoding="utf-8") == '{"total":'
+        ok_(f"vòng 2 bằng chứng ca, lượt engine {etl!r}: {'giữ nguyên thư mục và tệp hỏng' if want_kept else 'dọn'}",
+            kept == want_kept and (any(p.startswith("A4_PILOT_KEPT ") for p in printed) == want_kept), printed)
+
+    # Vòng điều phối dry THẬT, chỉ thay subprocess.run: dừng cả đợt ngay khi ca có lượt engine hay không xác minh được.
+    def drive(first: dict, dry_dir=None, kept_dir=None):
+        sent = []
+
+        def fake_run(*a, **kw):
+            sc = kw["env"]["JAVIS_RESONANCE_A4_SCENARIO"]
+            sent.append(sc)
+            rep = {"acceptance": "stopped", "model_turns": {"chat_simulated": 0, "chat_real": 0},
+                   "engine_turns_logged": 0, "engine_turns_status": "verified"}
+            out = "dừng như mong đợi\n"
+            if sc == "first":
+                if first.get("no_report"):
+                    return types.SimpleNamespace(stdout="vỡ giữa chừng\n", stderr="", returncode=1)
+                rep.update(first)
+                if kept_dir:
+                    out += f"A4_PILOT_KEPT {kept_dir}\n"
+            return types.SimpleNamespace(stdout=out + "A4_PILOT " + json.dumps(rep), stderr="", returncode=1)
+        ns = {"os": os, "sys": sys, "HERE": SRC, "ROOT": ROOT, "json": json, "Path": Path, "bad": [],
+              "subprocess": types.SimpleNamespace(run=fake_run), "print": lambda *a, **k: None,
+              "DRY_CASES": {"first": ({}, "stopped", "dừng như mong đợi"), "second": ({}, "stopped", "dừng như mong đợi")},
+              "DRY_TURNS": {"first": 0, "second": 0}}
+        env = {"JAVIS_RESONANCE_A4_DRY_DIR": str(dry_dir)} if dry_dir else {}
+        with patch.dict(os.environ, env, clear=True):
+            exec(compile(ast.Module(body=[DRIVER], type_ignores=[]), str(SRC), "exec"), ns)
+        return sent, ns["bad"]
+
+    sent, bad = drive({})
+    ok_("vòng 2 điều phối: các ca âm đúng kỳ vọng đã xác minh 0 lượt thì chạy tiếp đủ", sent == ["first", "second"]
+        and bad == [], (sent, bad))
+    for name, first in (("một lượt engine", {"engine_turns_logged": 1}),
+                        ("số đếm không xác minh được", {"engine_turns_logged": None,
+                                                         "engine_turns_status": "unverified: JSONDecodeError"}),
+                        ("số đếm sai kiểu", {"engine_turns_logged": "0"}),
+                        ("có lượt thật", {"model_turns": {"chat_simulated": 0, "chat_real": 1}}),
+                        ("tiến trình ca không có báo cáo", {"no_report": True})):
+        sent, bad = drive(first)
+        ok_(f"vòng 2 điều phối, {name}: dừng cả đợt sau ca đầu, không mở ca thứ hai", sent == ["first"]
+            and bad == ["first"], (sent, bad))
+
+    # Bằng chứng được chép nguyên vẹn vào hồ sơ dry trước khi đợt dừng.
+    kept_dir = tmp / "giu-lai"
+    (kept_dir / "state").mkdir(parents=True)
+    (kept_dir / "state" / "usage.json").write_text('{"total":', encoding="utf-8")
+    (kept_dir / "server-1.log").write_text("nhật ký server\n", encoding="utf-8")
+    dry_dir = tmp / "ho-so-dry"
+    sent, bad = drive({"engine_turns_logged": None, "engine_turns_status": "unverified: JSONDecodeError"},
+                      dry_dir=dry_dir, kept_dir=kept_dir)
+    inc = dry_dir / "incident-first"
+    ok_("vòng 2 điều phối: bằng chứng ca sự cố được chép nguyên vẹn (tệp hỏng, log server) rồi mới dừng",
+        sent == ["first"] and (inc / "state" / "usage.json").read_text(encoding="utf-8") == '{"total":'
+        and (inc / "server-1.log").is_file() and (dry_dir / "a4-pilot-dry-first.txt").is_file(), sent)
+
 if _fails:
     print(f"\n{len(_fails)} FAIL:", _fails)
     sys.exit(1)
