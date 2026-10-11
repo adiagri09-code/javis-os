@@ -53,6 +53,7 @@ import _e2e_pilot_guard as G  # noqa: E402
 
 CHAT_LIMIT = 2
 STORE_CEILING = 0
+TOKEN_MIN_S = 600
 TURN_WALL_S = 900
 PORT = int(os.environ.get("JAVIS_RESONANCE_A4_PORT", "7792"))
 SLUG = "tro-ly-tom-tat"
@@ -72,6 +73,20 @@ FROZEN = {
     "content_v1": ["Kết luận", "20/11", "Lan", "Minh"],
     "content_v2": ["Việc tiếp theo", "Lan", "thứ Sáu", "Minh", "thứ Năm"],
 }
+# Hai bộ đầu vào, mỗi bộ ghim bằng hash; real BẮT BUỘC chọn đúng bộ đã duyệt (JAVIS_RESONANCE_A4_INPUTS), không mặc định.
+# v1: lời giao gốc ("soạn giúp"), hash 48a31ab9... Theo hướng dẫn của host ("việc xong ngay trong lượt thì làm luôn"), lời
+# này có thể được làm ngay trong lượt mà không lập mục tiêu; sự cố 11/10 (một lượt Claude Code lọt vào dry) cho thấy đúng
+# như vậy. v2: lời giao giao trách nhiệm sau lượt ("lo tới khi anh duyệt, góp ý thì sửa tiếp"), hash 7762a2d7... Chỉ khác
+# câu lượt 1; chờ review và anh chọn.
+TURN_1_V2 = ("(Dữ liệu mô phỏng để thử nghiệm.) Em nhận lo giúp anh bản tóm tắt cuộc họp sáng nay cho tới khi anh duyệt: "
+             "soạn vào Inbox/tom-tat-hop.md, phải có mục Kết luận; anh xem rồi góp ý thì em sửa tiếp. Nội dung họp: chốt "
+             "ra mắt sản phẩm ngày 20/11; chị Lan lo kế hoạch truyền thông; anh Minh kiểm lại ngân sách quảng cáo; cả "
+             "nhóm họp lại thứ Hai tuần sau.")
+INPUTS = os.environ.get("JAVIS_RESONANCE_A4_INPUTS", "").strip().lower()
+INPUT_SHA = {"v1": "48a31ab95b3c6be873440c1e7e600f98ddd9cf597f9b09d5afb64b456d83693c",
+             "v2": "7762a2d7005ad79a4e596605f898d01ee06ee59b34a42ff02a03d32f03693613"}
+if INPUTS == "v2":
+    FROZEN = {**FROZEN, "turn_1": TURN_1_V2}
 FROZEN_SHA = hashlib.sha256(json.dumps(FROZEN, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
@@ -88,13 +103,21 @@ def _sha_file(p) -> str:
 class ChatLedger:
     """Sổ lượt chat, ghi xuống đĩa (fsync rồi os.replace) TRƯỚC mỗi lần gửi. `create()` chỉ dùng ở đầu một lần chạy mới
     và từ chối khi sổ đã có. Mọi lỗi đọc, sai cấu trúc, lượt giữ chỗ chưa có kết quả hay kết quả không phải `ok` đều
-    ĐÓNG sổ: không gửi thêm."""
+    ĐÓNG sổ: không gửi thêm.
+
+    Hai cổng kiểm NGAY trong `reserve` (review cổng pilot, P2-2), nên không chỗ gọi nào quên được:
+    - `gate()`: lý do dừng khác rỗng khi một kiểm kỹ thuật hay hợp đồng bắt buộc đã hỏng; khi đó không cấp lượt nào nữa.
+    - `token_check()`: (được, lý do) về đăng nhập gói thuê bao và hạn token, chạy trước MỖI lượt (không gọi model)."""
 
     OK = "ok"
-    STATUSES = ("reserved", "ok", "engine_error", "timeout", "no_turn_done", "transport_error")
+    # Kết cục một lượt: chỉ `ok` (engine_status ok VÀ turn_status completed) là thành công (review cổng pilot, P2-1).
+    STATUSES = ("reserved", "ok", "engine_error", "engine_unknown", "cancelled", "no_status", "timeout", "no_turn_done",
+                "transport_error")
 
     def __init__(self, path: Path, limit: int):
         self.path, self.limit = Path(path), int(limit)
+        self.gate = None
+        self.token_check = None
 
     @classmethod
     def create(cls, path: Path, limit: int, run_id: str) -> "ChatLedger":
@@ -147,6 +170,13 @@ class ChatLedger:
         st, _ = self._load()
         if len(st["turns"]) >= self.limit:
             return False, "limit"
+        stop = self.gate() if self.gate else ""
+        if stop:
+            return False, f"contract: {stop}"
+        if self.token_check:
+            ok, why = self.token_check()
+            if not ok:
+                return False, f"token: {why}"
         st["turns"].append({"n": len(st["turns"]) + 1, "label": label, "status": "reserved", "at": time.time()})
         self._write(st)
         return True, ""
@@ -159,6 +189,28 @@ class ChatLedger:
             if t["label"] == label and t["status"] == "reserved":
                 t["status"], t["settled_at"] = status, time.time()
         self._write(st)
+
+
+def audit_notices(rows: list, msgs: list, final_revision: int, goal_id: str, notify_kinds) -> dict:
+    """Đối chiếu tin báo của MỘT mục tiêu (review cổng pilot, P2-3). Hàm thuần để test.
+
+    rows: dòng outbox của mục tiêu `{"id", "kind", "revision", "delivered"}`; msgs: thẻ có khoá báo cáo trong phiên trợ
+    lý `{"key", "goal_id", "receipt"}`. Chỉ xét loại tin host thật sự gửi (`notify_kinds`); tin nội bộ không được gửi
+    nên không đòi.
+    - matched_ok: có ít nhất một tin đã gửi (danh sách rỗng không đạt), không còn tin chờ gửi; mỗi tin đã gửi có ĐÚNG một tin trong phiên mang khoá `outbox:<id>`, đúng mục
+      tiêu, có biên nhận của host; phiên không có khoá báo cáo nào khác (tin cũ, mục tiêu khác, khoá lạ).
+    - required_ok: matched_ok VÀ có ít nhất một tin đã gửi ở đúng revision cuối của mục tiêu."""
+    rows = [n for n in rows if n["kind"] in notify_kinds]
+    pending = [n["id"] for n in rows if not n["delivered"]]
+    delivered = {f"outbox:{n['id']}": n for n in rows if n["delivered"]}
+    keys = [m["key"] for m in msgs]
+    matched = (bool(delivered) and not pending and len(keys) == len(set(keys)) and set(keys) == set(delivered)
+               and all(m["goal_id"] == goal_id and m["receipt"] for m in msgs))
+    at_rev = [k for k, n in delivered.items() if n["revision"] == final_revision]
+    return {"final_revision": final_revision,
+            "outbox": [{k: n[k] for k in ("id", "kind", "revision", "delivered")} for n in rows],
+            "pending": pending, "session_keys": sorted(keys), "messages_with_report": len(msgs),
+            "required_keys": sorted(at_rev), "matched_ok": bool(matched), "required_ok": bool(matched and at_rev)}
 
 
 # ───────────── Ca chạy (một tiến trình mỗi ca) ─────────────
@@ -180,6 +232,9 @@ def run_case(scen: str) -> int:
 
     out_dir = Path(os.environ.get("JAVIS_RESONANCE_A4_OUT") or (base / "out"))
     if MODE == "real":
+        if INPUTS not in INPUT_SHA or FROZEN_SHA != INPUT_SHA[INPUTS]:
+            print("FAIL pilot: real cần JAVIS_RESONANCE_A4_INPUTS=v1 hay v2 (bộ đầu vào đã duyệt) và hash phải khớp")
+            return 1
         if not os.environ.get("JAVIS_RESONANCE_A4_OUT"):
             print("FAIL pilot: chế độ real cần JAVIS_RESONANCE_A4_OUT (thư mục hồ sơ, chưa tồn tại)")
             return 1
@@ -218,11 +273,16 @@ def run_case(scen: str) -> int:
     env0 = {k: v for k, v in G.clean_env(dict(os.environ)).items() if k not in pilot_vars}
     fails, log = [], []
 
-    def check(name, cond):
+    def check(name, cond, hard=False):
+        """Ghi một kiểm. `hard`: kiểm là tiền điều kiện của bước có tác động phía sau (lượt chat, Cho phép, chuyển giai
+        đoạn); hỏng thì DỪNG ngay, chỉ còn lưu bằng chứng và dọn (review cổng pilot, P2-2). Kiểm mềm hỏng vẫn chặn mọi lượt
+        chat sau đó, vì sổ lượt hỏi `fails` trong chính `reserve`."""
         print(("ok   " if cond else "FAIL ") + name)
         log.append({"check": name, "ok": bool(cond)})
         if not cond:
             fails.append(name)
+            if hard:
+                raise SystemExit(f"dừng: kiểm bắt buộc hỏng: {name}")
         return bool(cond)
 
     def store():
@@ -235,7 +295,7 @@ def run_case(scen: str) -> int:
     agent = store().agent_set_enabled(owner, SLUG, True)
     sid = sess().create_session(brain=key, engine="pilot", model="pilot", channel=f"agent:{SLUG}")
 
-    rep = {"mode": MODE, "scenario": scen, "frozen_sha256": FROZEN_SHA, "chat_limit": CHAT_LIMIT,
+    rep = {"mode": MODE, "scenario": scen, "inputs": INPUTS or "v1", "frozen_sha256": FROZEN_SHA, "chat_limit": CHAT_LIMIT,
            "store_ceiling": STORE_CEILING, "unit": "lượt engine cấp host (không phải request nội bộ hay token)",
            "steps": {}, "turns": {}}
     run_id = f"a4-{int(time.time())}-{os.getpid()}"
@@ -382,9 +442,25 @@ def run_case(scen: str) -> int:
     def notices(goal_id) -> list:
         import sqlite3
         c = sqlite3.connect(str(state / "resonance.sqlite3"))
-        rows = c.execute("SELECT id, kind, delivered_at FROM outbox WHERE goal_id=? ORDER BY id", (goal_id,)).fetchall()
+        rows = c.execute("SELECT id, kind, delivered_at, payload_json FROM outbox WHERE goal_id=? ORDER BY id",
+                         (goal_id,)).fetchall()
         c.close()
-        return [{"id": r[0], "kind": r[1], "delivered": r[2] is not None} for r in rows]
+        return [{"id": r[0], "kind": r[1], "delivered": r[2] is not None,
+                 "revision": int((json.loads(r[3] or "{}") or {}).get("revision") or 0)} for r in rows]
+
+    def notice_audit(goal_id) -> dict:
+        """Đọc outbox và phiên trợ lý rồi đối chiếu bằng `audit_notices`."""
+        g_now = store().get(owner, goal_id)
+        ss, msgs = sess(), []
+        for m in ss.get_messages(sid):
+            if m["role"] != "assistant":
+                continue
+            for b in R.parse_goal_blocks(m.get("content") or ""):
+                if b.get("report"):
+                    msgs.append({"key": b["report"], "goal_id": b.get("goal_id"),
+                                 "receipt": bool(ss.report_receipt(sid, b["report"], b.get("goal_id") or ""))})
+        return {"final_status": g_now.status,
+                **audit_notices(notices(goal_id), msgs, g_now.revision, goal_id, R.NOTIFY_KINDS)}
 
     def reports() -> list:
         """(khoá báo cáo, có biên nhận) của mọi thẻ tin báo trong phiên trợ lý."""
@@ -403,8 +479,15 @@ def run_case(scen: str) -> int:
         return s if len(s) <= n else s[:n] + f"...(+{len(s) - n})"
 
     async def ws_chat(message: str):
+        """Gửi MỘT tin như dashboard, đọc khung tới `turn_done`. Trả (loại khung, khung công cụ, câu trả lời, khung kết
+        thúc). Khung kết thúc giữ NGUYÊN siêu dữ liệu host ghi (`engine_status`, `engine_error`, `turn_status`) để phân
+        loại kết cục; thiếu `turn_done` thì là None (review cổng pilot, P2-1)."""
+        if MODE != "real":
+            # Dry KHÔNG BAO GIỜ gửi tin qua /ws: server sandbox vẫn chọn bộ não theo luật runtime, và một lượt ở đó có thể
+            # là lượt model thật (sự cố 11/10/2026: settings dry chỉ đặt provider API nên runtime lùi về Claude Code).
+            raise RuntimeError("dry_never_sends_ws")
         import websockets
-        frames, tools, answer = [], [], []
+        frames, tools, answer, done = [], [], [], None
         async with websockets.connect(f"ws://127.0.0.1:{PORT}/ws", origin=origin, max_size=None) as ws:
             await asyncio.wait_for(ws.recv(), 20)
             await ws.send(json.dumps({"message": message, "brain": "brain", "session_id": sid}))
@@ -419,8 +502,10 @@ def run_case(scen: str) -> int:
                 if t in ("response", "stream", "text") and o.get("content"):
                     answer.append(str(o.get("content")))
                 if t == "turn_done":
+                    done = {k: o.get(k) for k in ("engine_status", "engine_error", "turn_status", "engine", "model")
+                            if k in o}
                     break
-        return frames, tools, "".join(answer)[-6000:]
+        return frames, tools, "".join(answer)[-6000:], done
 
     def sim_turn(n: int, message: str) -> dict:
         """Lượt chat MÔ PHỎNG (dry) bằng đúng các hàm công cụ dùng, trong ngữ cảnh lượt như run_turn dựng."""
@@ -478,7 +563,13 @@ def run_case(scen: str) -> int:
         return {"frames": {"simulated": 1}, "tools": [], "answer": "(mô phỏng)"}
 
     def chat(n: int, message: str) -> tuple:
-        """Một lượt chat qua sổ: giữ chỗ TRƯỚC khi gửi, chốt kết quả sau. Không thử lại."""
+        """Một lượt chat qua sổ: giữ chỗ TRƯỚC khi gửi (sổ tự từ chối khi một kiểm bắt buộc đã hỏng hay token không
+        đạt), chốt kết quả sau. Không thử lại.
+
+        Thành công CHỈ khi khung `turn_done` của host báo `engine_status == "ok"` VÀ `turn_status == "completed"`. Lỗi
+        engine (kể cả lỗi làm mới OAuth), không rõ, thiếu trạng thái, bị huỷ, hết giờ hay không có `turn_done`: lượt vẫn
+        tính là đã dùng, sổ đóng, không gửi tiếp. Đây là lỗi KỸ THUẬT, không phải bằng chứng bộ não định tuyến sai
+        (review cổng pilot, P2-1)."""
         label = f"turn_{n}"
         if led.used() + 1 > limit_env:
             return False, "cost_gate: vượt hạn mức lượt chat đã duyệt"
@@ -489,9 +580,19 @@ def run_case(scen: str) -> int:
         t0 = time.time()
         try:
             if MODE == "real":
-                frames, tools, answer = asyncio.run(ws_chat(message))
-                status = "ok" if frames and frames[-1] == "turn_done" else "no_turn_done"
-                res = {"frames": {k: frames.count(k) for k in sorted(set(f for f in frames if f))}, "tools": tools,
+                frames, tools, answer, done = asyncio.run(ws_chat(message))
+                if done is None:
+                    status = "no_turn_done"
+                elif "engine_status" not in done or "turn_status" not in done:
+                    status = "no_status"
+                elif done["turn_status"] != "completed":
+                    status = "cancelled" if done["turn_status"] == "cancelled" else "engine_error"
+                elif done["engine_status"] == "ok":
+                    status = "ok"
+                else:
+                    status = "engine_unknown" if done["engine_status"] == "unknown" else "engine_error"
+                res = {"frames": {k: frames.count(k) for k in sorted(set(f for f in frames if f))},
+                       "frame_order": [f for f in frames if f][-40:], "turn_done": done, "tools": tools,
                        "answer": answer}
             else:
                 res = sim_turn(n, message)
@@ -507,6 +608,32 @@ def run_case(scen: str) -> int:
                    brain_files=G.snapshot_diff(before, G.snapshot_files(brain)))
         rep["turns"][label] = res
         return status == "ok", status
+
+    def token_gate() -> tuple:
+        """Trước MỖI lượt chat (không gọi model): đăng nhập gói thuê bao gốc bằng đúng binary, cwd và môi trường đã lọc,
+        và hạn token còn ít nhất TOKEN_MIN_S (chỉ đọc `expiresAt`, không đọc hay ghi giá trị token). Giảm, không loại hẳn,
+        rủi ro token hết hạn giữa lượt (pilot e2e lần 4)."""
+        if MODE != "real":
+            if scen == "token" and led.used() >= 1:
+                return False, "token còn 100 giây (giả lập)"
+            return True, ""
+        try:
+            st = json.loads(subprocess.run([cli, "auth", "status", "--json"], cwd=str(brain), env=env0,
+                                           capture_output=True, text=True, timeout=60).stdout or "{}")
+        except Exception as e:  # noqa: BLE001
+            return False, f"không chạy được auth status: {type(e).__name__}"
+        ok, why = G.check_auth_status(st)
+        if not ok:
+            return False, why
+        import claude_token_gate
+        exp = claude_token_gate.han_token()
+        left = round(exp - time.time()) if exp else None
+        rep.setdefault("token_checks", []).append({"before_turn": led.used() + 1, "seconds_left": left})
+        return (left is not None and left >= TOKEN_MIN_S), f"token còn {left} giây"
+
+    # Hai cổng nằm TRONG thao tác giữ lượt (review cổng pilot, P2-2): kiểm nào đã hỏng thì không cấp thêm lượt chat.
+    led.gate = lambda: fails[0] if fails else ""
+    led.token_check = token_gate
 
     cli = resolve_cli() if MODE == "real" else ""
     srv = Server(cli)
@@ -528,27 +655,32 @@ def run_case(scen: str) -> int:
 
         # ───────────── Bước 1: lượt chat 1, đích mới: giữ bản nháp, xin quyền, không có file ─────────────
         ok, why = chat(1, FROZEN["turn_1"])
+        if not ok:
+            rep["failure_class"] = "technical" if why in ChatLedger.STATUSES else "gate"
         if not check(f"lượt chat 1 kết thúc bình thường ({why})", ok):
-            raise SystemExit(f"dừng: lượt chat 1 {why}; không thử lại")
+            raise SystemExit(f"dừng: lượt chat 1 {why}; không thử lại (lỗi kỹ thuật, không phải bằng chứng định tuyến)"
+                             if why in ChatLedger.STATUSES else f"dừng: lượt chat 1 bị từ chối trước khi gửi ({why})")
         gs = goals_of_session()
         if not check("bộ não lập ĐÚNG MỘT mục tiêu gắn phiên trợ lý", len(gs) == 1):
+            rep["failure_class"] = "routing"
             raise SystemExit("dừng: không có mục tiêu để theo dõi (ghi nhận, không thử lại)")
         g = gs[0]
-        check("mục tiêu thuộc trợ lý của phiên (host gắn, không từ lời model)", g.agent_key == agent["agent_key"])
+        check("mục tiêu thuộc trợ lý của phiên (host gắn, không từ lời model)", g.agent_key == agent["agent_key"],
+              hard=True)
         check(f"đích của mục tiêu đúng file người dùng nêu ({FROZEN['deliverable']})",
-              R._deliverable_rel(g) == FROZEN["deliverable"])
+              R._deliverable_rel(g) == FROZEN["deliverable"], hard=True)
         sc = store().scope_state(owner, g.id)
         drafts = store().submissions(owner, g.id, limit=5, statuses=("awaiting_scope",), revision=g.revision)
         rep["after_turn_1"] = {"scope": sc.get("state"), "drafts": [{k: d[k] for k in ("source", "status", "sha256",
                                                                                          "size")} for d in drafts]}
-        check("D1: phạm vi CHỜ chủ cho phép, lời chat không cấp quyền", sc.get("state") == "pending")
+        check("D1: phạm vi CHỜ chủ cho phép, lời chat không cấp quyền", sc.get("state") == "pending", hard=True)
         if not check("bộ não nộp bản qua công cụ chung: host giữ bản nháp chờ quyền (submit_tool)",
                      bool(drafts) and drafts[0]["source"] == "submit_tool"):
             raise SystemExit("dừng: không có bản nháp để chủ cho phép (ghi nhận như kết quả pilot)")
         if not check("không có file đích trước khi chủ cho phép (không ghi native)", not deliv.is_file()
                      if scen != "receipt" else deliv.read_text(encoding="utf-8") == "Bản anh tự viết trước đó.\n"):
             raise SystemExit("dừng: file đích xuất hiện trước khi chủ cho phép")
-        check("lượt chat không mở lượt việc nền hay gọi engine cấp kho", store_calls() == 0)
+        check("lượt chat không mở lượt việc nền hay gọi engine cấp kho", store_calls() == 0, hard=True)
 
         # ───────────── Bước 2: giết A, dựng B; chủ bấm Cho phép qua API ─────────────
         # B vẫn tạm dừng nhịp: mục tiêu không được kết thúc giữa hai lượt chat (lượt 2 cần mục tiêu còn mở để sửa). Nhịp
@@ -561,7 +693,7 @@ def run_case(scen: str) -> int:
         dr = scv.get("draft") or {}
         check("thẻ sau khởi động lại vẫn xin quyền đúng đường, kèm bản nháp (mã, sha)",
               code == 200 and scv.get("state") == "pending" and scv.get("path") == FROZEN["deliverable"]
-              and dr.get("sha256") == drafts[0]["sha256"])
+              and dr.get("sha256") == drafts[0]["sha256"], hard=True)
         req = {"command": "approve_scope", "expected_revision": v.get("revision"),
                "request_id": str((scv.get("request") or {}).get("id") or ""), "path": scv.get("path"),
                "submission_id": dr.get("submission_id"), "sha256": dr.get("sha256")}
@@ -571,15 +703,20 @@ def run_case(scen: str) -> int:
                                                           "expected_revision": v.get("revision"),
                                                           "request_id": req["request_id"]})
         calls0 = store_calls()
+        check("không có kiểm bắt buộc nào hỏng trước khi bấm Cho phép", not fails, hard=True)
         code, ab = http("POST", f"/goals/{g.id}/commands", json=req)
         rep["approve"] = {"code": code, "status": ab.get("status"), "publish": ab.get("publish")}
         if not check("Cho phép: 200, đăng ĐÚNG bản nháp đã giữ (publish succeeded)",
                      code == 200 and ab.get("publish") == "succeeded"):
             raise SystemExit(f"dừng: Cho phép trả {code}/{ab.get('publish') or ab.get('error')}")
+        if scen == "contract":
+            # Tiền điều kiện hỏng trước lượt 2: bytes file đích không còn là bản đã duyệt.
+            deliv.write_text("Bị sửa sau khi đăng.\n", encoding="utf-8", newline="\n")
         s1 = store().submission(owner, ab.get("submission_id") or "") or {}
         check("bytes file đích khớp sha bản nháp chủ đã duyệt, bản nộp đã đăng và đã tiếp nhận",
-              _sha_file(deliv) == dr.get("sha256") and s1.get("status") == "published" and bool(s1.get("adopted_at")))
-        check("Cho phép không gọi thêm model", store_calls() == calls0)
+              _sha_file(deliv) == dr.get("sha256") and s1.get("status") == "published" and bool(s1.get("adopted_at")),
+              hard=True)
+        check("Cho phép không gọi thêm model", store_calls() == calls0, hard=True)
         saved1 = G.preserve_artifact(deliv, out_dir / "a4-deliverable-v1.md") if scen != "evidence" else {"ok": False}
         rep["deliverable_v1"] = {"sha256": _sha_file(deliv), "saved": saved1,
                                  "content_candidate": [k for k in FROZEN["content_v1"]
@@ -589,9 +726,13 @@ def run_case(scen: str) -> int:
             raise SystemExit("dừng: thiếu bằng chứng sản phẩm bản 1")
 
         # ───────────── Bước 3: lượt chat 2, phạm vi đã cấp: tự đăng bản 2, không hỏi lại ─────────────
+        check("không có kiểm bắt buộc nào hỏng trước lượt chat 2", not fails, hard=True)
         ok, why = chat(2, FROZEN["turn_2"])
+        if not ok:
+            rep["failure_class"] = "technical" if why in ChatLedger.STATUSES else "gate"
         if not check(f"lượt chat 2 kết thúc bình thường ({why})", ok):
-            raise SystemExit(f"dừng: lượt chat 2 {why}; không thử lại")
+            raise SystemExit(f"dừng: lượt chat 2 {why}; không thử lại (lỗi kỹ thuật)"
+                             if why in ChatLedger.STATUSES else f"dừng: lượt chat 2 bị từ chối trước khi gửi ({why})")
         g2 = store().get(owner, g.id)
         subs = store().submissions(owner, g.id, limit=20)
         latest = next((s for s in subs if s["revision"] == g2.revision and s["source"] == "submit_tool"), None)
@@ -599,16 +740,17 @@ def run_case(scen: str) -> int:
         rep["after_turn_2"] = {"revision": g2.revision, "scope": sc2.get("state"),
                                "subs": [(s["source"], s["status"], s["revision"]) for s in subs]}
         check("lượt 2 sửa mục tiêu (revision mới) và nộp bản 2 qua công cụ chung", g2.revision > g.revision
-              and latest is not None)
-        check("phạm vi đã cấp: không có yêu cầu quyền mới", sc2.get("state") == "granted" and not sc2.get("request"))
+              and latest is not None, hard=True)
+        check("phạm vi đã cấp: không có yêu cầu quyền mới", sc2.get("state") == "granted" and not sc2.get("request"),
+              hard=True)
         check("bản 2 được host tự đăng, bytes khớp sha bản nộp, đã tiếp nhận",
               latest is not None and latest["status"] == "published" and _sha_file(deliv) == latest["sha256"]
-              and bool(latest.get("adopted_at")))
+              and bool(latest.get("adopted_at")), hard=True)
         saved2 = G.preserve_artifact(deliv, out_dir / "a4-deliverable-v2.md")
         rep["deliverable_v2"] = {"sha256": _sha_file(deliv), "saved": saved2,
                                  "content_candidate": [k for k in FROZEN["content_v2"]
                                                        if k.lower() not in deliv.read_text(encoding="utf-8").lower()]}
-        check("bản 2 lưu NGUYÊN VẸN ra hồ sơ cho người review", saved2.get("ok") is True)
+        check("bản 2 lưu NGUYÊN VẸN ra hồ sơ cho người review", saved2.get("ok") is True, hard=True)
 
         # ───────────── Bước 4: giết B, dựng C: không gọi thêm, không báo lặp; tạm dừng ─────────────
         calls1 = store_calls()
@@ -616,10 +758,34 @@ def run_case(scen: str) -> int:
         rep["steps"]["start_C_s"] = round(srv.start(tick_paused=False), 1)
         time.sleep(75 if MODE == "real" else 35)
         check("sau khởi động lại: trần kho 0 giữ, không lượt engine cấp kho nào", store_calls() == calls1 == 0)
+        if scen == "notice":
+            import sqlite3
+            c = sqlite3.connect(str(state / "resonance.sqlite3"))
+            c.execute("INSERT INTO outbox(goal_id,kind,payload_json,created_at,idem,delivered_at) VALUES(?,?,?,?,?,?)",
+                      (g.id, "goal.succeeded", json.dumps({"revision": store().get(owner, g.id).revision}),
+                       time.time(), "pilot-dry-notice", time.time()))
+            c.commit()
+            c.close()
         ns = notices(g.id)
         keys = reports()
+        # Phiên rỗng không còn được tính là đạt (review cổng pilot, P2-3); đối chiếu đầy đủ ở `notice_audit` ngay dưới.
         check("sau khởi động lại: mỗi tin báo một khoá báo cáo, có biên nhận của host, không lặp",
-              len(keys) == len(set(k for k, _r in keys)) and all(r for _k, r in keys))
+              bool(keys) and len(keys) == len(set(k for k, _r in keys)) and all(r for _k, r in keys))
+        a1 = notice_audit(g.id)
+        rep["notices_after_C"] = a1
+        check("tin báo bắt buộc: có tin trạng thái của mục tiêu ở đúng revision cuối, đã gửi về đúng phiên có biên nhận",
+              a1["required_ok"])
+        check("mọi tin outbox đã gửi của mục tiêu có ĐÚNG một tin trong phiên, đúng mục tiêu, có biên nhận; không có khoá "
+              "lạ, không còn tin chờ gửi", a1["matched_ok"])
+        # Dựng lại lần nữa (D): tin đã gửi không được gửi lại, không thêm khoá.
+        srv.kill()
+        rep["steps"]["start_D_s"] = round(srv.start(tick_paused=False), 1)
+        time.sleep(40 if MODE == "real" else 35)
+        a2 = notice_audit(g.id)
+        rep["notices_after_D"] = a2
+        check("sau khởi động lại lần hai: cùng tập tin báo, không thêm bản sao, vẫn 0 lượt engine cấp kho",
+              a2["session_keys"] == a1["session_keys"] and a2["messages_with_report"] == a1["messages_with_report"]
+              and store_calls() == 0)
         g3 = store().get(owner, g.id)
         if g3.status == "active":
             code, _b = http("POST", f"/goals/{g.id}/commands", json={"command": "pause",
@@ -638,6 +804,15 @@ def run_case(scen: str) -> int:
         rep["model_turns"] = {"chat_real": led.used() if MODE == "real" else 0,
                               "chat_simulated": led.used() if MODE == "dry" else 0,
                               "store": store_calls() if (state / "resonance.sqlite3").exists() else 0}
+        # Bộ đếm lượt engine của chính server sandbox (usage.json): dry phải là 0, không thì có lượt model lọt qua.
+        try:
+            usage = json.loads((state / "usage.json").read_text(encoding="utf-8"))
+            rep["engine_turns_logged"] = sum(int(v.get("turns") or 0) for v in (usage.get("total") or {}).values())
+        except (OSError, ValueError):
+            rep["engine_turns_logged"] = 0
+        if MODE == "dry":
+            check(f"dry: server sandbox không ghi lượt engine nào ({rep['engine_turns_logged']})",
+                  rep["engine_turns_logged"] == 0)
         check(f"tổng lượt chat thật trong hạn mức {CHAT_LIMIT}", rep["model_turns"]["chat_real"] <= CHAT_LIMIT)
         rep["servers"] = srv.started
         rep["seconds_total"] = round(time.time() - t_start, 1)
@@ -656,7 +831,7 @@ def run_case(scen: str) -> int:
         for secret in (str(base), str(Path.home())):
             txt = txt.replace(json.dumps(secret)[1:-1], "<path>")
         (out_dir / f"a4-pilot-{MODE}-{scen or 'main'}.json").write_text(txt, encoding="utf-8", newline="\n")
-        print("A4_PILOT " + json.dumps({k: rep.get(k) for k in ("mode", "scenario", "acceptance", "model_turns")},
+        print("A4_PILOT " + json.dumps({k: rep.get(k) for k in ("mode", "scenario", "acceptance", "model_turns", "engine_turns_logged")},
                                        ensure_ascii=False))
         if not os.environ.get("JAVIS_RESONANCE_A4_KEEP"):
             shutil.rmtree(base, ignore_errors=True)
@@ -677,7 +852,16 @@ DRY_CASES = {
     "native": ({}, "stopped", "file đích xuất hiện trước khi chủ cho phép"),
     "evidence": ({}, "stopped", "thiếu bằng chứng sản phẩm bản 1"),
     "reserved": ({}, "stopped", "sổ lượt chat đã có từ lần chạy trước"),
+    # Review cổng pilot: tiền điều kiện hỏng trước lượt 2, token trước lượt 2, tin báo. Kết cục lượt (engine lỗi, không
+    # rõ, huỷ, thiếu trạng thái) kiểm qua chat() thật với nguồn khung giả trong test_resonance_a4_pilot_gate.py; dry
+    # không gửi tin qua /ws.
+    "contract": ({}, "stopped", "kiểm bắt buộc hỏng: bytes file đích khớp sha"),
+    "token": ({}, "stopped", "lượt chat 2 bị từ chối trước khi gửi (token: token còn 100 giây"),
+    "notice": ({}, "technical_failed", "FAIL mọi tin outbox đã gửi của mục tiêu có ĐÚNG một tin trong phiên"),
 }
+# Số lượt đã giữ trong sổ phải đúng như sau (lượt bị từ chối ở cổng không được giữ chỗ).
+DRY_TURNS = {"main": 2, "cost": 0, "auth": 0, "permission": 1, "receipt": 1, "engine": 1, "nosubmit": 1, "native": 1,
+             "evidence": 1, "reserved": None, "contract": 1, "token": 1, "notice": 2}
 
 if SCEN:
     sys.exit(run_case(SCEN))
@@ -697,10 +881,14 @@ for name, (extra, want, needle) in DRY_CASES.items():
         (dd / f"a4-pilot-dry-{name}.txt").write_text(cp.stdout + cp.stderr[-4000:], encoding="utf-8", newline="\n")
     line = next((x for x in cp.stdout.splitlines() if x.startswith("A4_PILOT ")), "")
     got = json.loads(line[len("A4_PILOT "):]) if line else {}
+    turns = (got.get("model_turns") or {}).get("chat_simulated")
     ok = got.get("acceptance") == want and needle in cp.stdout and \
-        (got.get("model_turns") or {}).get("chat_real", 1) == 0
+        (got.get("model_turns") or {}).get("chat_real", 1) == 0 and \
+        (DRY_TURNS[name] is None or turns == DRY_TURNS[name]) and got.get("engine_turns_logged") == 0
     print(("ok   " if ok else "FAIL ") + f"ca {name}: kết luận {got.get('acceptance')} (mong {want}), "
-          f"lượt thật {(got.get('model_turns') or {}).get('chat_real')}")
+          f"lượt đã giữ trong sổ {turns} (mong {DRY_TURNS[name]}), "
+          f"lượt thật {(got.get('model_turns') or {}).get('chat_real')}, "
+          f"lượt engine server ghi {got.get('engine_turns_logged')}")
     if not ok:
         bad.append(name)
         print("\n".join("    " + x for x in cp.stdout.splitlines()[-25:]))
