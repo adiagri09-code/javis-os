@@ -811,20 +811,22 @@ def run_case(scen: str) -> int:
         # Bộ đếm lượt engine của chính server sandbox (usage.json): dry phải là 0, không thì có lượt model lọt qua.
         # HẬU KIỂM, không phải chốt chặn: usage_store chỉ ghi lượt có token và ghi kiểu cố gắng. Chốt chặn của dry là
         # `ws_chat` từ chối gửi tin. Ở đây chỉ báo 0 khi ĐÃ XÁC MINH: hai sổ (tổng và từng lượt) đọc được, đúng cấu trúc,
-        # khớp nhau (sổ từng lượt có thì phải khớp). Đọc lỗi, JSON hỏng, sai cấu trúc, thiếu `usage.json` (đã tạo sẵn từ đầu
-        # ca) hay hai sổ lệch nhau: None kèm lý do, KHÔNG đổi thành 0 (review cổng pilot vòng 2).
+        # khớp nhau. Đọc lỗi, JSON hỏng, sai cấu trúc, thiếu một trong hai sổ (cả hai đã tạo sẵn từ đầu ca) hay hai sổ
+        # lệch nhau: None kèm lý do, KHÔNG đổi thành 0 (review cổng pilot vòng 2 và 3).
         try:
             usage = json.loads((state / "usage.json").read_text(encoding="utf-8"))
             total = usage.get("total") if isinstance(usage, dict) else None
+            # Mỗi mục BẮT BUỘC có `turns` là số nguyên không âm (không nhận bool, không mặc định 0 cho trường thiếu);
+            # `total = {}` là số đếm rỗng hợp lệ (review cổng pilot vòng 3).
             if not isinstance(total, dict) or not all(
-                    isinstance(v, dict) and type(v.get("turns", 0)) is int and v.get("turns", 0) >= 0
+                    isinstance(v, dict) and "turns" in v and type(v["turns"]) is int and v["turns"] >= 0
                     for v in total.values()):
                 raise ValueError("usage.json sai cấu trúc")
-            turns = sum(v.get("turns", 0) for v in total.values())
-            ev_path = state / "usage-events.jsonl"
-            events = ([ln for ln in ev_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
-                      if ev_path.exists() else None)
-            if events is not None and len(events) != turns:
+            turns = sum(v["turns"] for v in total.values())
+            # Sổ từng lượt đã tạo sẵn từ đầu ca nên BẮT BUỘC còn và đọc được: mất sổ là không xác minh được (vòng 3).
+            events = [ln for ln in (state / "usage-events.jsonl").read_text(encoding="utf-8").splitlines()
+                      if ln.strip()]
+            if len(events) != turns:
                 raise ValueError(f"hai sổ lệch nhau: usage.json {turns} lượt, usage-events.jsonl {len(events)} dòng")
             rep["engine_turns_logged"], rep["engine_turns_status"] = turns, "verified"
         except (OSError, ValueError) as e:

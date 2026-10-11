@@ -245,7 +245,10 @@ with tempfile.TemporaryDirectory(prefix="a4-pilot-gate-r2-") as td:
     COUNTS = {
         # tên: (usage.json, usage-events.jsonl hay None, quyền đọc bị từ chối, số mong đợi)
         "zero": ('{"days": {}, "total": {}}', "", False, 0),
-        "zero_no_events_file": ('{"days": {}, "total": {}}', None, False, 0),
+        # Vòng 3: sổ từng lượt đã tạo sẵn từ đầu ca; mất sổ là KHÔNG xác minh được, không phải 0.
+        "zero_no_events_file": ('{"days": {}, "total": {}}', None, False, None),
+        "missing_turns": ('{"total": {"cli": {"in": 100, "out": 10, "cost": 0.1}}}', "", False, None),
+        "missing_turns_next_to_valid": ('{"total": {"a": {"turns": 0}, "b": {"in": 5}}}', "", False, None),
         "one": ('{"total": {"cli|x": {"in": 9, "out": 1, "turns": 1, "cost": 0.1}}}', '{"model": "x"}\n', False, 1),
         "truncated": ('{"total":', "", False, None),
         "permission": ('{"total": {"cli|x": {"turns": 1}}}', '{"m": 1}\n', True, None),
@@ -356,6 +359,41 @@ with tempfile.TemporaryDirectory(prefix="a4-pilot-gate-r2-") as td:
     ok_("vòng 2 điều phối: bằng chứng ca sự cố được chép nguyên vẹn (tệp hỏng, log server) rồi mới dừng",
         sent == ["first"] and (inc / "state" / "usage.json").read_text(encoding="utf-8") == '{"total":'
         and (inc / "server-1.log").is_file() and (dry_dir / "a4-pilot-dry-first.txt").is_file(), sent)
+
+# ═══════════ Review cổng pilot vòng 3: hai phản ví dụ đi trọn chuỗi unverified, không đạt, giữ bằng chứng, dừng đợt ═══════════
+with tempfile.TemporaryDirectory(prefix="a4-pilot-gate-r3-") as td:
+    tmp = Path(td)
+    for name, usage, events in (("mất sổ từng lượt", '{"days": {}, "total": {}}', None),
+                                ("thiếu turns", '{"total": {"cli": {"in": 100, "out": 10, "cost": 0.1}}}', "")):
+        base = tmp / name.replace(" ", "-")
+        st = base / "state"
+        st.mkdir(parents=True)
+        (st / "usage.json").write_text(usage, encoding="utf-8")
+        if events is not None:
+            (st / "usage-events.jsonl").write_text(events, encoding="utf-8")
+        checks, printed = [], []
+        ns = {"state": st, "json": json, "rep": {}, "MODE": "dry", "base": base, "os": os,
+              "shutil": __import__("shutil"), "print": lambda *a, **k: printed.append(" ".join(map(str, a))),
+              "check": lambda label, cond, **kw: checks.append(bool(cond))}
+        body = FINALLY[USAGE:USAGE + 2]
+        if KEEP_AT is not None:
+            body = body + FINALLY[KEEP_AT:KEEP_AT + 2] + [n for n in FINALLY[KEEP_AT + 2:] if isinstance(n, ast.If)
+                                                          and "rmtree" in ast.unparse(n)]
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("JAVIS_RESONANCE_A4_KEEP", None)
+            exec(compile(ast.Module(body=body, type_ignores=[]), str(SRC), "exec"), ns)
+        rep = ns["rep"]
+        ok_(f"vòng 3 {name}: số đếm None, nhãn unverified, câu kiểm dry không đạt",
+            rep.get("engine_turns_logged") is None and str(rep.get("engine_turns_status", "")).startswith("unverified: ")
+            and checks == [False], rep)
+        # Mã cũ coi là 0 đã xác minh nên xoá thư mục ca: tính là hỏng, không sập test (để chạy đối chứng).
+        kept = (st / "usage.json").is_file() and (st / "usage.json").read_text(encoding="utf-8") == usage
+        ok_(f"vòng 3 {name}: giữ nguyên thư mục ca và sổ như lúc phát hiện",
+            kept and (events is None) == (not (st / "usage-events.jsonl").exists())
+            and any(p.startswith("A4_PILOT_KEPT ") for p in printed), printed or "thư mục ca đã bị xoá")
+        sent, bad = drive({"engine_turns_logged": rep.get("engine_turns_logged"),
+                           "engine_turns_status": rep.get("engine_turns_status")})
+        ok_(f"vòng 3 {name}: bộ điều phối dừng cả đợt sau ca đầu", sent == ["first"] and bad == ["first"], (sent, bad))
 
 if _fails:
     print(f"\n{len(_fails)} FAIL:", _fails)
