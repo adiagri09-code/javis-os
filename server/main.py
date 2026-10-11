@@ -139,7 +139,7 @@ import tien_trinh_nen     # lệnh chạy ngầm engine bỏ lại: nhận theo 
 import chatbot_log       # nhật ký hội thoại khách + thống kê câu bot trả lời không nổi
 import chatbot_runtime   # bộ giám sát Bot chuyên trách (mỗi bot một poller Telegram)
 import agent_avatar
-import agent_tags   # tag của agent (0.98.0): nhiều tag, nhóm cũ thành một tag
+import agent_tags   # tag của agent (0.100.0): nhiều tag, nhóm cũ thành một tag
 import cli_autoinstall   # trạng thái agy/grok do container Docker tự cài (0.85.1)
 import agent_assets      # tài liệu & link gắn vào MỘT trợ lý (lưu trong frontmatter agent)
 import workflow_chat     # persona_cua_phien: kênh agent:/workflow: đổi cách _do_turn chạy lượt
@@ -6519,7 +6519,7 @@ def _nhom_cua(meta) -> str:
     return (str(g).strip() or NHOM_MAC_DINH) if g is not None else NHOM_MAC_DINH
 
 
-# TAG CỦA AGENT (0.98.0): agent không còn dùng `group` làm phân loại mà dùng `tags` (nhiều tag), xem
+# TAG CỦA AGENT (0.100.0): agent không còn dùng `group` làm phân loại mà dùng `tags` (nhiều tag), xem
 # docs/dev/agent-tags.md. Workflow và skill vẫn dùng `group` ở trên. `group` trả về trong API chỉ để trang
 # cũ còn trong cache trình duyệt vẫn vẽ được (tag đầu tiên, hoặc "Chung" khi chưa gắn tag).
 def _agent_tag_fields(meta) -> dict:
@@ -6776,7 +6776,7 @@ async def save_agent(name: str = Form(...), role: str = Form(""), skills: str = 
             # GIỮ mọi khoá frontmatter KHÔNG nằm trong form. Trước đây meta được dựng lại từ đầu, nên
             # mỗi lần bấm Lưu trong trình sửa là xoá sạch những khoá do chỗ khác ghi - `pinned` (ghim ở
             # trang Cộng sự) mất ngay lần sửa kế tiếp, và mọi khoá tương lai cũng vậy.
-            # TAG (0.98.0, docs/dev/agent-tags.md): form sửa trợ lý KHÔNG có ô tag (gắn tag ở cột trái
+            # TAG (0.100.0, docs/dev/agent-tags.md): form sửa trợ lý KHÔNG có ô tag (gắn tag ở cột trái
             # trang Cộng sự), nên không gửi `tags` nghĩa là GIỮ NGUYÊN tag đang có (kể cả tag cũ vượt giới
             # hạn, không cắt); gửi `tags` (JSON) là thay cả tập. Client cũ còn gửi `group` thì theo luật
             # tương thích: không bao giờ thay nhiều tag bằng một.
@@ -8514,7 +8514,7 @@ async def capability_meta(kind: str = Form(...), slug: str = Form(...),
 
     `pinned`: "1"/"true" = ghim, "0"/"false" = bỏ ghim, không gửi = không đụng.
     `group` (workflow): tên nhóm mới, rỗng = về nhóm mặc định. Không gửi = không đụng.
-    Agent (0.98.0, docs/dev/agent-tags.md): `add_tags`/`remove_tags` (JSON danh sách) thêm hay bỏ đúng
+    Agent (0.100.0, docs/dev/agent-tags.md): `add_tags`/`remove_tags` (JSON danh sách) thêm hay bỏ đúng
     các tag đó trên tập hiện có; `tags` thay cả tập (`[]` = bỏ hết). `group` của client cũ theo luật
     tương thích (agent nhiều tag thì 409, không thay nhiều tag bằng một).
     """
@@ -8571,7 +8571,7 @@ async def capability_meta(kind: str = Form(...), slug: str = Form(...),
             # trong lúc đợi khoá thì không ghi (R5).
             meta = await asyncio.to_thread(_sua_meta_agent, f, _sua)
         else:
-            # Workflow giữ đúng như trước 0.98.0: sửa ngay trên event loop như mọi route workflow khác
+            # Workflow giữ đúng như trước 0.100.0: sửa ngay trên event loop như mọi route workflow khác
             # (lưu, bật/tắt, xoá), nên không có worker nào chen được giữa chúng.
             meta = _sua_meta_file(f, _sua)
     except AgentGoneError:
@@ -10154,7 +10154,7 @@ async def studio_seed(brain: str = Form("brain")):
         slug = _ascii_slug(ex["name"])
         meta = {"type": "agent", "name": ex["name"], "slug": slug, "role": ex["role"],
                 "skills": ex["skills"], "model": "sonnet", "updated": _today()}
-        agent_tags.write_tags(meta, ["Nội dung"])     # agent dùng tag từ 0.98.0 (docs/dev/agent-tags.md)
+        agent_tags.write_tags(meta, ["Nội dung"])     # agent dùng tag từ 0.100.0 (docs/dev/agent-tags.md)
         _write_md(a / f"{slug}.md", meta, ex["prompt"])
     wf_meta = {"type": "workflow", "name": "Research → Write (có kiểm chứng)", "slug": "research-and-write",
                "status": "active", "group": "Nội dung",
@@ -11488,7 +11488,7 @@ def _render_javis_index(caps: dict) -> str:
 
     L.append("## Agents")
     if caps["agents"]:
-        # Agent gắn NHIỀU tag (0.98.0), nên không chia theo tag: chia thì agent hai tag hiện hai lần.
+        # Agent gắn NHIỀU tag (0.100.0), nên không chia theo tag: chia thì agent hai tag hiện hai lần.
         # Mỗi agent một dòng, tag ghi ngay trên dòng đó.
         for a in caps["agents"]:
             mdl = f" · model {a['model']}" if a["model"] else ""

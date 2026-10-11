@@ -90,7 +90,7 @@ Trợ lý mới chưa bấm Lưu lần nào thì nút này còn mờ: phải có
 
 ### Tag của một trợ lý
 
-Từ bản 0.98.0 mỗi trợ lý gắn được **nhiều tag** (ví dụ Marketing, Viết nội dung, Kỹ thuật); nhóm cũ của trợ lý tự thành một tag. Tag chỉ để phân loại và tìm trợ lý:
+Từ bản 0.100.0 mỗi trợ lý gắn được **nhiều tag** (ví dụ Marketing, Viết nội dung, Kỹ thuật); nhóm cũ của trợ lý tự thành một tag. Tag chỉ để phân loại và tìm trợ lý:
 
 - **Gắn tag, bỏ tag:** nút **...** trên từng trợ lý, mục **Gắn tag**. Bấm một tag để gắn hay bỏ đúng tag đó; ô **Tag mới** tạo và gắn tag mới. Các tag khác giữ nguyên.
 - **Lọc:** thanh phía trên danh sách chọn **Tất cả agent**, **Chưa gắn tag** hay một tag. Trợ lý có nhiều tag hiện ở mọi tag của nó nhưng chỉ một lần trong danh sách.

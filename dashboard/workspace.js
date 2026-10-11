@@ -113,7 +113,7 @@
     return ra;
   }
 
-  // ---------- TAG của AGENT (0.98.0, docs/dev/agent-tags.md) ----------
+  // ---------- TAG của AGENT (0.100.0, docs/dev/agent-tags.md) ----------
   // Agent không còn "một nhóm" mà mang NHIỀU tag; quy trình vẫn dùng nhóm như trên. Vì thế mọi chỗ
   // phân loại ở trang này rẽ theo S.loai: agent đi đường tag, workflow giữ đường nhóm. Lọc theo tag
   // không gom tiêu đề: agent hai tag mà chia theo tag là hiện hai lần trong cùng danh sách.
@@ -817,7 +817,7 @@
     if (!tg.length) return "";
     var hien = tg.slice(0, CHIP_TOI_DA), du = tg.length - hien.length;
     return '<span class="ws-tags" aria-label="' + esc(t("ws.tags_aria")) + '">' +
-      // title = tên đầy đủ: tag cũ dài (dữ liệu trước 0.98.0 không cắt, R1) bị CSS cắt chữ thì vẫn đọc được.
+      // title = tên đầy đủ: tag cũ dài (dữ liệu trước 0.100.0 không cắt, R1) bị CSS cắt chữ thì vẫn đọc được.
       hien.map(function (g) { return '<span class="ws-tag" title="' + esc(g) + '">' + esc(g) + '</span>'; }).join("") +
       (du > 0 ? '<span class="ws-tag ws-tag-more" title="' + esc(tg.slice(CHIP_TOI_DA).join(", ")) + '">' +
         esc(t("ws.tag_more", { n: du })) + '</span>' : "") + '</span>';

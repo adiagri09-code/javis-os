@@ -40,7 +40,7 @@ Search matches names, slugs, roles, descriptions and tag names, and supports acc
 
 ### Agent tags
 
-Since 0.98.0 an agent can carry **several tags** (for example Marketing, Writing, Engineering); an agent's old group became one tag. Tags only sort and find agents:
+Since 0.100.0 an agent can carry **several tags** (for example Marketing, Writing, Engineering); an agent's old group became one tag. Tags only sort and find agents:
 
 - **Add or remove a tag:** the **...** button on an agent, item **Tags**. Click a tag to add or remove just that tag; the **New tag** box creates and adds one. Other tags stay.
 - **Filter:** the bar above the list picks **All agents**, **Untagged** or one tag. An agent with several tags shows under each of them but only once in the list.

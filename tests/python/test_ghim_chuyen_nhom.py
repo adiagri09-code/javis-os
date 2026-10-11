@@ -95,7 +95,7 @@ r = meta("agent", "nguoi-viet", group="Sales")
 check("chuyển nhóm agent", r.get("group") == "Sales" and doc(_AG)[0].get("group") == "Sales")
 check("chuyển nhóm không đụng thân file", "Bạn là người viết bài" in doc(_AG)[1])
 r = meta("agent", "nguoi-viet", group="   ")
-# 0.98.0 (docs/dev/agent-tags.md): agent dùng tag. Client cũ gửi nhóm rỗng ("về Chưa xếp nhóm") nghĩa là bỏ
+# 0.100.0 (docs/dev/agent-tags.md): agent dùng tag. Client cũ gửi nhóm rỗng ("về Chưa xếp nhóm") nghĩa là bỏ
 # tag: file ghi `tags: []` và xoá gương `group`; API vẫn trả "Chung" cho trang cũ.
 check("nhóm rỗng thì về nhóm mặc định",
       r.get("group") == main.NHOM_MAC_DINH and doc(_AG)[0].get("tags") == [] and "group" not in doc(_AG)[0])

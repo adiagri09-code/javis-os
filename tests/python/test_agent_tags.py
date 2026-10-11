@@ -1,4 +1,4 @@
-"""Tag của agent (0.98.0): mỗi agent gắn nhiều tag, nhóm cũ thành một tag. Chạy tay / CI:
+"""Tag của agent (0.100.0): mỗi agent gắn nhiều tag, nhóm cũ thành một tag. Chạy tay / CI:
 
     python tests/run.py agent_tags
 

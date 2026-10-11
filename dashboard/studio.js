@@ -184,7 +184,7 @@
     return m;
   }
 
-  // TAG của AGENT (0.98.0, docs/dev/agent-tags.md): agent mang nhiều tag thay cho một nhóm; quy trình
+  // TAG của AGENT (0.100.0, docs/dev/agent-tags.md): agent mang nhiều tag thay cho một nhóm; quy trình
   // và skill vẫn dùng nhóm. Cột phân loại của trang agent liệt kê tag (agent nhiều tag được đếm ở
   // mỗi tag nhưng chỉ hiện MỘT lần trong danh sách) và "Chưa gắn tag". Gắn/bỏ tag làm ở trang Cộng sự.
   // Giá trị lọc "Chưa gắn tag": bắt đầu bằng dấu cách nên không bao giờ trùng tên tag thật (server cắt

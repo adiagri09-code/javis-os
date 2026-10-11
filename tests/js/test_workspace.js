@@ -197,7 +197,7 @@ check("phan tram", W.phanTram(W.tienDoMoi(4)) === 0 && W.phanTram(st) === 100);
     gomNhom: W.gomNhom, nhomHtml: W.nhomHtml, daThu: () => false,
     nhomCua: (x) => (String((x && x.group) || "").trim()) || "Chung", NHOM_MD: "Chung", brain: () => "brain",
     nhomCua: (x) => (String((x && x.group) || "").trim()) || "Chung", NHOM_MD: "Chung", brain: () => "brain",
-    // Tag của agent (0.98.0) cũng khai ở đầu module: mượn bản thật qua W.
+    // Tag của agent (0.100.0) cũng khai ở đầu module: mượn bản thật qua W.
     tagsCua: W.tagsCua, tagCap: W.tagCap, laKhoa: W.laKhoa, demTag: W.demTag, coTag: W.coTag,
     khoaTag: W.khoaTag, dongChonTag: W.dongChonTag, TAG_NONE: W.TAG_NONE,
     TAB_PHAI: ["cai", "lichsu", "files"],
@@ -217,7 +217,7 @@ check("phan tram", W.phanTram(W.tienDoMoi(4)) === 0 && W.phanTram(st) === 100);
   vm.createContext(ctx); vm.runInContext(doan, ctx);
 
   // ---- Bộ chọn nhóm là THANH + bảng nổi cùng khuôn thanh project bên Trò chuyện (0.59.47) ----
-  // Từ 0.98.0 NHÓM chỉ còn ở QUY TRÌNH; agent dùng tag (kiểm riêng ngay dưới khối này).
+  // Từ 0.100.0 NHÓM chỉ còn ở QUY TRÌNH; agent dùng tag (kiểm riêng ngay dưới khối này).
   ctx.S.loai = "workflow";
   ctx.veTrai();
   const html = nodes["#wsGroup"].innerHTML;
@@ -240,7 +240,7 @@ check("phan tram", W.phanTram(W.tienDoMoi(4)) === 0 && W.phanTram(st) === 100);
     nodes["#wsGroup"].innerHTML.includes("Finance") && nodes["#wsGroup"].innerHTML.includes("cs-proj-x"));
   ctx.S.nhom = ""; ctx.S.loai = "agent"; ctx.veTrai();
 
-  // ---- TAG của agent (0.98.0, docs/dev/agent-tags.md) ----
+  // ---- TAG của agent (0.100.0, docs/dev/agent-tags.md) ----
   const tagBar = nodes["#wsGroup"].innerHTML, tagDs = nodes["#wsList"].innerHTML;
   check("agent: thanh loc hien Tat ca agent, khong co nut tao nhom/tag rieng",
     tagBar.includes("ws.tag_all") && !tagBar.includes("cs-proj-add") && !tagBar.includes("cs-proj-x"));
@@ -375,7 +375,7 @@ check("phan tram", W.phanTram(W.tienDoMoi(4)) === 0 && W.phanTram(st) === 100);
     !/<strong>[^<]*<span class="ws-item-pin"/.test(htmlGhim));
   // 0.59.46: ở "Tất cả", phần không ghim chia theo NHÓM chứ không gom thành "Còn lại"
   // nữa; nhãn "Còn lại" chỉ còn khi đang lọc MỘT nhóm mà có mục ghim phía trên.
-  // Agent (0.98.0) không chia theo tag: một khối ghim, rồi một khối "Còn lại".
+  // Agent (0.100.0) không chia theo tag: một khối ghim, rồi một khối "Còn lại".
   check("agent: co nhan Da ghim, phan con lai la mot khoi (khong chia theo tag)",
     htmlGhim.includes("ws.grp_pinned") && htmlGhim.includes("ws.grp_rest") && !htmlGhim.includes("data-nhom="));
   ctx.S.loai = "workflow"; ctx.veDanhSach();

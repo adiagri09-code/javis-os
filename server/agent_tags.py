@@ -1,4 +1,4 @@
-"""Tag của agent (0.98.0): mỗi agent gắn nhiều tag, nhóm cũ thành một tag.
+"""Tag của agent (0.100.0): mỗi agent gắn nhiều tag, nhóm cũ thành một tag.
 
 Hàm thuần, không đọc ghi file, để test được và để server, chỉ mục, giao diện hiểu tag giống nhau.
 Hợp đồng đầy đủ: docs/dev/agent-tags.md.

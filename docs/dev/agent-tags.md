@@ -1,4 +1,4 @@
-# Tag của agent (0.98.0)
+# Tag của agent (0.100.0)
 
 Agent được phân loại bằng **nhiều tag** thay cho một nhóm. Quyết định của chủ dự án: "Tag thực sự: mỗi agent gắn được nhiều tag, nhóm cũ chuyển thành một tag."
 
@@ -20,7 +20,7 @@ tags:
 - `tags` là **nguồn chuẩn** khi khoá này có mặt, kể cả `tags: []` (người dùng đã bỏ hết tag).
 - File cũ **chưa có khoá `tags`**: đọc `group` thật trong frontmatter. `group` là chuỗi không rỗng thì thành đúng một tag (`group: Chung` thật thì thành tag "Chung"). Không có `group` hay `group` rỗng thì chưa có tag. Không suy ra tag từ nhãn "Chung" mà API cũ tự điền.
 - `tags` là chuỗi đơn (người hay model ghi tay `tags: Marketing`) thì đọc thành một tag. Phần tử không phải chuỗi, rỗng sau chuẩn hoá thì bỏ qua khi đọc.
-- **Gương `group`** (để hạ phiên bản vẫn có nhãn): mỗi lần ghi chuẩn, `group` = tag đầu tiên; không còn tag thì xoá khoá `group`. Khi đã có `tags`, mã 0.98.0 trở đi KHÔNG đọc `group` của agent.
+- **Gương `group`** (để hạ phiên bản vẫn có nhãn): mỗi lần ghi chuẩn, `group` = tag đầu tiên; không còn tag thì xoá khoá `group`. Khi đã có `tags`, mã 0.100.0 trở đi KHÔNG đọc `group` của agent.
 - Ghi bằng `yaml.safe_dump` như mọi frontmatter khác, đọc bằng `fastyaml.safe_load`: danh sách ra danh sách, chuỗi có ký tự đặc biệt được trích dẫn.
 
 ### Chuẩn hoá và trùng
@@ -53,7 +53,7 @@ Mọi tag thuộc phạm vi **một brain** (thư mục `agents/` của brain đ
 - Form lưu xen với thêm/bỏ tag không ghi đè nhau.
 - **Xoá agent không bị hoàn tác** (R5): thao tác ghi đang giữ khoá thì xoá đợi nó ghi xong rồi mới xoá. Thao tác tới sau lúc xoá thấy file đã mất và không tạo lại: `/capability/meta` và route tài liệu trả 404; đổi tên hay xoá tag hàng loạt bỏ qua agent đó (không vào `changed`, không vào `failed`).
 - `POST /agents` (form) vẫn là tạo-hoặc-sửa như trước: lưu form sau khi agent đã bị xoá là tạo một agent MỚI cùng tên, không mang tag hay vai cũ, và theo luật A1 phải bật lại Cộng hưởng.
-- Workflow giữ nguyên như trước 0.98.0: `/capability/meta` cho workflow sửa ngay trên event loop như các route workflow khác (lưu, bật/tắt, xoá), không qua worker hay khoá này.
+- Workflow giữ nguyên như trước 0.100.0: `/capability/meta` cho workflow sửa ngay trên event loop như các route workflow khác (lưu, bật/tắt, xoá), không qua worker hay khoá này.
 
 Số đo trong test là I/O giả lập (ghi chậm 80 ms, barrier giữ worker), không phải số đo máy thật.
 
@@ -73,6 +73,6 @@ Số đo trong test là I/O giả lập (ghi chậm 80 ms, barrier giữ worker)
 ## Quay về
 
 - **Hạ về 0.96.1 (mã cũ):** mã cũ đọc `group`, nên agent hiện dưới nhóm = tag đầu tiên (gương), agent không còn tag hiện là "Chung". Khoá `tags` còn nguyên trong file, mã cũ giữ nó khi lưu (đã giữ mọi khoá lạ từ 0.59.x). Đã kiểm trên trình duyệt với `main` 0.96.1 mở bản sao dữ liệu đã chuyển.
-- **Giới hạn:** file agent có `tags` mà chưa từng được mã 0.98.0 lưu (người hay model ghi tay chỉ `tags`, hay gói nhập từ nơi khác) thì chưa có gương `group`, nên mã cũ hiện nó là "Chung" cho tới khi được lưu một lần bằng mã mới. Không mất tag.
-- **Nâng lại 0.98.0:** `tags` là nguồn chuẩn. Thay đổi nhóm làm bằng mã cũ trong lúc hạ phiên bản (sửa `group`) **không** được đưa vào tag; muốn giữ thì gắn lại tag. Đây là giới hạn đã biết, đổi lại tag đã bỏ không bao giờ sống lại từ `group`.
+- **Giới hạn:** file agent có `tags` mà chưa từng được mã 0.100.0 lưu (người hay model ghi tay chỉ `tags`, hay gói nhập từ nơi khác) thì chưa có gương `group`, nên mã cũ hiện nó là "Chung" cho tới khi được lưu một lần bằng mã mới. Không mất tag.
+- **Nâng lại 0.100.0:** `tags` là nguồn chuẩn. Thay đổi nhóm làm bằng mã cũ trong lúc hạ phiên bản (sửa `group`) **không** được đưa vào tag; muốn giữ thì gắn lại tag. Đây là giới hạn đã biết, đổi lại tag đã bỏ không bao giờ sống lại từ `group`.
 - Không có bản sao file riêng: chuyển đổi chỉ thêm khoá `tags` và đồng bộ `group`, không xoá nội dung nào.
