@@ -82,6 +82,13 @@ Hồi quy bền: `tests/python/test_resonance_a4_pilot_gate.py` nạp mã thật
 
 Sự cố trong lúc sửa: một ca dry thử đi qua `/ws` với bộ não API không khoá, settings thiếu `engine`, nên runtime lùi về Claude Code và chạy 1 lượt thật bằng gói thuê bao. Đã bỏ đường đó: dry không bao giờ gửi tin qua `/ws`, mỗi ca dry kiểm bộ đếm lượt engine của server sandbox phải bằng 0. Hồ sơ ngoài git: `exports/reviews/a4-pilot-incident-2026-10-11/`.
 
+**Review cổng pilot vòng 2 (`da2b8c0b`): 1 P2 ở hậu kiểm dry, đã sửa.**
+
+- Số đếm KHÔNG đọc được không bao giờ thành 0. Hai sổ lượt của server sandbox (`usage.json`, `usage-events.jsonl`) được tạo sẵn, rỗng và hợp lệ, trước khi dựng server. Chỉ báo 0 khi đọc được, đúng cấu trúc và hai sổ khớp. Ngoài ra là `None` kèm lý do `unverified: ...`, và kiểm dry hỏng.
+- Ca nào báo khác 0 đã xác minh (có lượt, không xác minh được, có lượt thật, không có báo cáo): bộ điều phối dry DỪNG CẢ ĐỢT, không mở ca kế tiếp. Ca đó giữ nguyên thư mục (state, sổ usage như lúc phát hiện, log server) và bộ điều phối chép vào hồ sơ. Ca âm đúng kỳ vọng mà đã xác minh 0 lượt thì vẫn chạy tiếp.
+- Đây là HẬU KIỂM, không phải chốt chặn: `usage_store` bỏ lượt không có token và ghi kiểu cố gắng. Chốt chặn của dry vẫn là `ws_chat` từ chối gửi tin khi không phải real.
+- Hồi quy trong `test_resonance_a4_pilot_gate.py` (74 kiểm), chạy đúng nút AST của bộ chạy.
+
 Lời giao: hai bộ đầu vào ghim hash. v1 là lời gốc, có thể được làm ngay trong lượt, đúng như lượt lọt cho thấy. v2 là đề xuất giao trách nhiệm sau lượt. Real bắt buộc chọn bộ đã duyệt.
 
 ## Review mã vòng 3 (`d26c0f09`) và cách sửa
