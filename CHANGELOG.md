@@ -8,7 +8,11 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.98.0] - 2026-10-11
 ### Cải thiện
-- **Agent gắn được nhiều tag (đang làm):** phân loại agent chuyển từ một nhóm sang nhiều tag; nhóm cũ thành một tag. Bản này mới giữ số phiên bản.
+- **Trợ lý gắn được nhiều tag.** Thay cho một nhóm, mỗi trợ lý giờ mang nhiều tag (Marketing, Viết nội dung, Kỹ thuật...). Nhóm cũ tự thành một tag, không mất gì.
+- **Gắn và bỏ tag ngay ở trang Cộng sự:** nút **...** trên trợ lý, mục **Gắn tag**. Bấm tag để gắn hay bỏ đúng tag đó, gõ tên để tạo tag mới. Thanh phía trên lọc theo **Tất cả agent**, **Chưa gắn tag** hay một tag; trợ lý nhiều tag chỉ hiện một lần.
+- **Đổi tên hay xoá một tag** áp cho mọi trợ lý mang nó; đổi sang tên đã có thì gộp làm một. Xoá tag chỉ gỡ nhãn, không xoá trợ lý hay cuộc trò chuyện.
+- Tag chỉ để phân loại: không thêm trợ lý vào nhóm chat, không cấp quyền. Quy trình vẫn xếp theo nhóm như cũ.
+- Quay về bản cũ hơn: trợ lý hiện dưới nhóm bằng tag đầu tiên của nó.
 
 ## [0.96.1] - 2026-10-11
 ### Sửa lỗi

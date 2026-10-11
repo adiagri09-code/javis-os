@@ -10,7 +10,11 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.98.0] - 2026-10-11
 ### Improved
-- **Agents can carry several tags (in progress):** agent classification moves from one group to multiple tags; the old group becomes one tag. This entry only reserves the version.
+- **Assistants can carry several tags.** Instead of one group, each assistant now has any number of tags (Marketing, Writing, Engineering...). The old group becomes one tag; nothing is lost.
+- **Add and remove tags on the Partners page:** the **...** button on an assistant, item **Tags**. Click a tag to add or remove just that one, or type a name to create a new tag. The bar above filters by **All agents**, **Untagged** or one tag; an assistant with several tags shows only once.
+- **Renaming or deleting a tag** applies to every assistant that has it; renaming to an existing name merges the two. Deleting a tag only removes the label, never the assistant or its chats.
+- Tags only sort: they add no one to a group chat and grant nothing. Workflows keep their groups.
+- Going back to an older release: an assistant shows under a group named after its first tag.
 
 ## [0.96.1] - 2026-10-11
 ### Fixed
