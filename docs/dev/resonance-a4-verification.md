@@ -70,6 +70,20 @@ Server sandbox cổng 7788, state và brain riêng (`exports/sandbox-a4`, ngoài
 
 `tests/python/test_resonance_a4_pilot.py`. Real chạy Claude Code (gói thuê bao) ở lượt chat của trợ lý, tối đa 2 lượt (sổ giữ chỗ fsync trước mỗi lần gửi, đóng khi có lỗi, không đặt lại), trần kho 0 cho mọi tiến trình server. Dry 10 ca: chính, cổng chi phí, cổng xác thực, thẻ cũ 409, biên nhận đăng không thành, lỗi engine, không nộp, tự ghi file đích, thiếu bằng chứng, sổ còn giữ chỗ. Đơn xin chạy: `exports/reviews/A4-pilot-run-request.md` (ngoài git). Engine khác Claude Code chỉ kiểm bằng engine giả.
 
+**Review cổng pilot (`1719303d`): 3 P2 trong bộ chạy, đã sửa.**
+
+| Điểm | Sửa |
+|---|---|
+| P2-1: có `turn_done` là ghi thành công | Chỉ `engine_status == ok` và `turn_status == completed` là thành công; `ws_chat` giữ nguyên siêu dữ liệu `turn_done`. Lỗi engine, không rõ, huỷ, thất bại, thiếu trạng thái, không có `turn_done`: vẫn tính lượt, đóng sổ, lỗi kỹ thuật (không phải định tuyến) |
+| P2-2: kiểm hỏng vẫn gọi lượt 2 | Cổng nằm trong `reserve` của sổ (kiểm bắt buộc đã hỏng, hay token không đạt trước lượt đó: không giữ chỗ, không gửi); tiền điều kiện của bước có tác động là kiểm cứng (dừng ngay); cổng tường minh trước Cho phép và trước lượt 2; kiểm đăng nhập và hạn token trước MỖI lượt |
+| P2-3: phiên rỗng vẫn đạt | `audit_notices`: mỗi tin outbox loại được gửi có đúng một tin trong phiên, đúng mục tiêu, có biên nhận; không khoá lạ hay lặp, không tin chờ; rỗng không đạt; phải có tin ở revision cuối; dựng lại lần hai (D) không đổi tập tin |
+
+Hồi quy bền: `tests/python/test_resonance_a4_pilot_gate.py` nạp mã thật của bộ chạy (sổ, `chat`, `ws_chat`, `audit_notices`, đoạn điều phối trước lượt 2) và chạy với nguồn khung giả, không server, không mạng, không model. Dry thêm ca `contract`, `token`, `notice`.
+
+Sự cố trong lúc sửa: một ca dry thử đi qua `/ws` với bộ não API không khoá, settings thiếu `engine`, nên runtime lùi về Claude Code và chạy 1 lượt thật bằng gói thuê bao. Đã bỏ đường đó: dry không bao giờ gửi tin qua `/ws`, mỗi ca dry kiểm bộ đếm lượt engine của server sandbox phải bằng 0. Hồ sơ ngoài git: `exports/reviews/a4-pilot-incident-2026-10-11/`.
+
+Lời giao: hai bộ đầu vào ghim hash. v1 là lời gốc, có thể được làm ngay trong lượt, đúng như lượt lọt cho thấy. v2 là đề xuất giao trách nhiệm sau lượt. Real bắt buộc chọn bộ đã duyệt.
+
 ## Review mã vòng 3 (`d26c0f09`) và cách sửa
 
 | Điểm | Sửa | Hồi quy (bản nộp `candidate` còn lại sau khi tiến trình bị ngắt, mở lại kho, `tick` thật) |
