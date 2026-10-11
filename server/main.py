@@ -4944,6 +4944,9 @@ def settings_get():
     # Nguồn duy nhất là sổ đăng ký phía server: dashboard KHÔNG khai lại danh sách, nếu không
     # thì thêm ngôn ngữ mới phải nhớ sửa hai chỗ và chỗ bị quên hỏng trong im lặng.
     safe["lang_list"] = lang_registry.cho_giao_dien()
+    # Interface pickers also offer dashboard-only dictionaries (a community xx.json, 0.99.0); `lang_list` stays the
+    # languages the server itself speaks, which is what reply language and voice may choose from.
+    safe["ui_lang_list"] = safe["lang_list"] + lang_registry.dashboard_only_languages(DASHBOARD_PATH / "i18n")
     # Gói locale (múi giờ, tiền tệ, locale định dạng số). Dashboard KHÔNG tự suy nó từ ngôn
     # ngữ: hai thứ đó tách rời, người dùng đọc tiếng Anh mà vẫn ngồi ở UTC+7 là bình thường.
     safe["locale_fmt"] = localefmt.cho_giao_dien()
