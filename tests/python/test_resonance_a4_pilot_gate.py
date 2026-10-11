@@ -13,6 +13,8 @@ P2-2: kiểm bắt buộc hỏng thì không giữ chỗ, không gửi lượt n
 cũng vậy; đoạn điều phối thật dừng trước lượt 2 với từng tiền điều kiện hỏng.
 P2-3: phiên rỗng, tin revision cũ, tin mục tiêu khác, thiếu biên nhận, outbox đã gửi mà phiên không có tin, khoá lặp, tin
 chờ gửi đều không đạt; ca hợp lệ đạt.
+Sau pilot real-1: thẻ `turn:` host đặt sau lượt chat được nhận khi biên nhận khớp chính tin, phiên, mục tiêu và nối được
+sự kiện lập hay sửa mục tiêu cùng revision; không bao giờ thay tin outbox bắt buộc. Fixture là ba thẻ thật của lần chạy.
 """
 from _paths import ROOT, SERVER  # noqa: E402,F401
 import ast
@@ -45,8 +47,8 @@ def load(extra: dict) -> dict:
     ns = {"Path": Path, "os": os, "json": json, "time": time, "asyncio": asyncio, **extra}
     # `audit_notices` chưa có ở mã trước bản sửa: thiếu thì các ca P2-3 tương ứng báo hỏng, không làm sập test (để chạy
     # đối chứng trên head cũ).
-    body = [TOP["ChatLedger"], *([TOP["audit_notices"]] if "audit_notices" in TOP else []), FNS["check"], FNS["cut"],
-            FNS["ws_chat"], FNS["chat"]]
+    body = [TOP["ChatLedger"], *([TOP[n] for n in ("audit_notices", "read_notice_evidence") if n in TOP]),
+            FNS["check"], FNS["cut"], FNS["ws_chat"], FNS["chat"]]
     exec(compile(ast.Module(body=body, type_ignores=[]), str(SRC), "exec"), ns)
     return ns
 
@@ -394,6 +396,157 @@ with tempfile.TemporaryDirectory(prefix="a4-pilot-gate-r3-") as td:
         sent, bad = drive({"engine_turns_logged": rep.get("engine_turns_logged"),
                            "engine_turns_status": rep.get("engine_turns_status")})
         ok_(f"vòng 3 {name}: bộ điều phối dừng cả đợt sau ca đầu", sent == ["first"] and bad == ["first"], (sent, bad))
+
+# ═══════════ Sau pilot real-1 (11/10): thẻ turn của host trong đối chiếu tin báo ═══════════
+# Lần chạy thật duy nhất tại 5305687a báo technical_failed vì `audit_notices` đòi tập khoá phiên bằng đúng tập outbox,
+# trong khi host còn đặt thẻ `turn:<message_ref>` sau mỗi lượt chat lập hay sửa mục tiêu. Dry mô phỏng lượt chat nên
+# không có thẻ này. Fixture dưới đây là ĐÚNG ba thẻ của lần chạy đó (khoá, mục tiêu, revision, id tin, nội dung khối).
+RSID, RGID = "aa2c8660c01540a2b2e78487c4e3173d", "g_8163e17553dc"
+T1, T2 = f"turn:msg:{RSID}:1", f"turn:msg:{RSID}:4"
+REAL_CARDS = [  # (id tin, khoá, revision, câu)
+    (3, T1, 1, "Javis đã lập mục tiêu từ việc này."),
+    (6, T2, 2, "Javis đã cập nhật cách hiểu mục tiêu."),
+    (7, "outbox:3", 2, "Đã xong phần kiểm được của mục tiêu: ..."),
+]
+REAL_OUTBOX = [(1, "goal.created", 1), (2, "goal.revised", 2), (3, "goal.waiting_human", 2)]
+REAL_EVENTS = [(1, "created", f"msg:{RSID}:1"), (1, "submission_received", ""), (2, "reframe", f"msg:{RSID}:4"),
+               (2, "artifact_adopted", f"msg:{RSID}:4")]
+
+import sqlite3  # noqa: E402
+import resonance as R  # noqa: E402
+NS = load({})
+# Mã trước bản sửa không có read_notice_evidence: phần hàm thuần vẫn chạy bằng audit_notices cũ (để chạy đối chứng),
+# phần đọc SQLite báo hỏng.
+audit, reader = NS["audit_notices"], NS.get("read_notice_evidence")
+NK = R.NOTIFY_KINDS
+
+# 1) Hàm thuần: thẻ turn chỉ được thêm khi đủ chứng thực, không thay outbox bắt buộc.
+orow = lambda i, kind, rev, d=True: {"id": i, "kind": kind, "revision": rev, "delivered": d}
+ROWS = [orow(i, k, r) for i, k, r in REAL_OUTBOX]
+card = lambda key, rev, goal=RGID, rc=True, ev=None: {
+    "key": key, "goal_id": goal, "revision": rev, "receipt": rc,
+    "turn_event": (key.startswith("turn:") if ev is None else ev)}
+REAL = [card(T1, 1), card(T2, 2), card("outbox:3", 2)]
+PURE = {
+    "ba thẻ thật (turn r1, turn r2, outbox r2)": (ROWS, REAL, True, True),
+    "chỉ có turn, không có outbox": (ROWS, [card(T1, 1), card(T2, 2)], False, False),
+    "chỉ có turn, outbox rỗng": ([], [card(T1, 1)], False, False),
+    "turn không biên nhận": (ROWS, [card(T1, 1, rc=False), card(T2, 2), card("outbox:3", 2)], False, False),
+    "turn có biên nhận của tin khác (receipt không phải True)": (
+        ROWS, [card(T1, 1, rc=None), card(T2, 2), card("outbox:3", 2)], False, False),
+    "turn sai mục tiêu": (ROWS, [card(T1, 1, goal="g_khac"), card(T2, 2), card("outbox:3", 2)], False, False),
+    "turn không nối được sự kiện lập/sửa mục tiêu": (
+        ROWS, [card(T1, 1, ev=False), card(T2, 2), card("outbox:3", 2)], False, False),
+    "turn không có revision": (ROWS, [card(T1, None), card(T2, 2), card("outbox:3", 2)], False, False),
+    "turn revision vượt revision cuối": (ROWS, [card(T1, 1), card(T2, 3), card("outbox:3", 2)], False, False),
+    "turn lặp": (ROWS, [card(T1, 1), card(T1, 1), card(T2, 2), card("outbox:3", 2)], False, False),
+    "khoá lạ": (ROWS, REAL + [card("note:1", 2)], False, False),
+    "outbox lạ (tin không có trong outbox)": (ROWS, REAL + [card("outbox:99", 2)], False, False),
+    "outbox bắt buộc chỉ ở revision cũ": ([orow(3, "goal.waiting_human", 1)],
+                                         [card(T1, 1), card(T2, 2), card("outbox:3", 1)], True, False),
+    "thẻ outbox ghi sai revision của dòng outbox": (ROWS, [card(T1, 1), card(T2, 2), card("outbox:3", 1)],
+                                                   False, False),
+    "outbox còn tin chờ gửi": (ROWS + [orow(4, "goal.succeeded", 2, d=False)], REAL, False, False),
+    "outbox đã gửi mà phiên không có tin": (ROWS + [orow(5, "goal.succeeded", 2)], REAL, False, False),
+}
+for name, (rows, msgs, want_match, want_req) in PURE.items():
+    r = audit(rows, msgs, 2, RGID, NK)
+    ok_(f"real-1 {name}: matched={want_match}, required={want_req}",
+        r["matched_ok"] == want_match and r["required_ok"] == want_req, r)
+
+if reader is None:
+    ok_("real-1: bộ chạy có read_notice_evidence (đọc chỉ đọc, kiểm biên nhận và sự kiện của thẻ turn)", False)
+else:
+    # 2) Đọc dữ liệu: SQLite dựng theo đúng lược đồ và dữ liệu của lần chạy, mở chỉ đọc; từng biến thể làm hỏng một
+    #    mắt xích chứng thực của thẻ turn.
+    def build(td, name, mutate=None):
+        d = Path(td) / name
+        d.mkdir()
+        conv, goal = d / "conversations.db", d / "resonance.sqlite3"
+        s = sqlite3.connect(str(conv))
+        s.executescript("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT);"
+                        "CREATE TABLE report_receipts (session_id TEXT, report_key TEXT, goal_id TEXT, message_id "
+                        "INTEGER, PRIMARY KEY(session_id, report_key, goal_id));")
+        s.execute("INSERT INTO messages VALUES (1, ?, 'user', 'lượt 1')", (RSID,))
+        s.execute("INSERT INTO messages VALUES (2, ?, 'assistant', 'trả lời lượt 1')", (RSID,))
+        s.execute("INSERT INTO messages VALUES (4, ?, 'user', 'lượt 2')", (RSID,))
+        s.execute("INSERT INTO messages VALUES (5, ?, 'assistant', 'trả lời lượt 2')", (RSID,))
+        for mid, key, rev, text in REAL_CARDS:
+            block = json.dumps({"goal_id": RGID, "revision": rev, "report": key})
+            s.execute("INSERT INTO messages VALUES (?, ?, 'assistant', ?)",
+                      (mid, RSID, f"{text}\n<!-- JAVIS_RESONANCE: {block} -->"))
+            s.execute("INSERT INTO report_receipts VALUES (?, ?, ?, ?)", (RSID, key, RGID, mid))
+        g = sqlite3.connect(str(goal))
+        g.executescript("CREATE TABLE outbox (id INTEGER PRIMARY KEY, goal_id TEXT, kind TEXT, payload_json TEXT, "
+                        "delivered_at REAL);"
+                        "CREATE TABLE goal_events (id INTEGER PRIMARY KEY, goal_id TEXT, revision INTEGER, kind TEXT, "
+                        "message_ref TEXT NOT NULL DEFAULT '');")
+        for i, kind, rev in REAL_OUTBOX:
+            g.execute("INSERT INTO outbox VALUES (?, ?, ?, ?, ?)", (i, RGID, kind, json.dumps({"revision": rev}), 1.0))
+        for rev, kind, ref in REAL_EVENTS:
+            g.execute("INSERT INTO goal_events(goal_id, revision, kind, message_ref) VALUES (?, ?, ?, ?)",
+                      (RGID, rev, kind, ref))
+        try:
+            if mutate:
+                mutate(s, g)
+            s.commit()
+            g.commit()
+        finally:
+            s.close()
+            g.close()
+        return conv, goal
+
+    VARIANTS = {
+        "dữ liệu thật": (None, True, True),
+        "biên nhận turn r1 trỏ tin khác (tin 2)": (
+            lambda s, g: s.execute("UPDATE report_receipts SET message_id=2 WHERE report_key=?", (T1,)), False, False),
+        "biên nhận turn r2 ở phiên khác": (
+            lambda s, g: s.execute("UPDATE report_receipts SET session_id='phien-khac' WHERE report_key=?", (T2,)),
+            False, False),
+        "turn r2 mất biên nhận": (
+            lambda s, g: s.execute("DELETE FROM report_receipts WHERE report_key=?", (T2,)), False, False),
+        "sự kiện sửa mục tiêu của turn r2 ở revision khác": (
+            lambda s, g: g.execute("UPDATE goal_events SET revision=1 WHERE kind='reframe'"), False, False),
+        "sự kiện của turn r1 không phải lập/sửa mục tiêu": (
+            lambda s, g: g.execute("UPDATE goal_events SET kind='submission_received' WHERE kind='created'"),
+            False, False),
+        "thẻ turn trỏ message_ref của phiên khác": (
+            lambda s, g: (s.execute("UPDATE messages SET content=replace(content, ?, ?) WHERE id=3",
+                                    (T1, "turn:msg:phien-khac:1")),
+                          s.execute("UPDATE report_receipts SET report_key='turn:msg:phien-khac:1' WHERE report_key=?",
+                                    (T1,)),
+                          g.execute("UPDATE goal_events SET message_ref='msg:phien-khac:1' WHERE kind='created'")),
+            False, False),
+        "thẻ turn mang mục tiêu khác": (
+            lambda s, g: (s.execute("UPDATE messages SET content=replace(content, ?, 'g_khac') WHERE id=6", (RGID,)),
+                          s.execute("UPDATE report_receipts SET goal_id='g_khac' WHERE report_key=?", (T2,))),
+            False, False),
+        "thêm một thẻ turn lặp khoá": (
+            lambda s, g: s.execute("INSERT INTO messages VALUES (8, ?, 'assistant', (SELECT content FROM messages "
+                                   "WHERE id=3))", (RSID,)), False, False),
+        "outbox:3 mất tin trong phiên, chỉ còn turn": (
+            lambda s, g: (s.execute("DELETE FROM messages WHERE id=7"),
+                          s.execute("DELETE FROM report_receipts WHERE report_key='outbox:3'")), False, False),
+    }
+    with tempfile.TemporaryDirectory(prefix="a4-pilot-gate-real1-") as td:
+        for i, (name, (mut, want_match, want_req)) in enumerate(VARIANTS.items()):
+            conv, goal = build(td, f"v{i}", mut)
+            before = (conv.read_bytes(), goal.read_bytes())
+            rows, msgs = reader(conv, goal, RSID, RGID, R.parse_goal_blocks)
+            r = audit(rows, msgs, 2, RGID, NK)
+            ok_(f"real-1 đọc SQLite, {name}: matched={want_match}, required={want_req}",
+                r["matched_ok"] == want_match and r["required_ok"] == want_req, (r, msgs))
+            ok_(f"real-1 đọc SQLite, {name}: chỉ đọc, không đổi byte nào", (conv.read_bytes(), goal.read_bytes()) == before)
+        conv, goal = build(td, "keys")
+        _rows, msgs = reader(conv, goal, RSID, RGID, R.parse_goal_blocks)
+        ok_("real-1 đọc SQLite: đúng ba thẻ, biên nhận khớp chính tin, hai thẻ turn nối sự kiện",
+            [(m["key"], m["revision"], m["message_id"], m["receipt"], m["turn_event"]) for m in msgs]
+            == [(T1, 1, 3, True, True), (T2, 2, 6, True, True), ("outbox:3", 2, 7, True, False)], msgs)
+
+    # 3) Bộ chạy đọc qua hàm chỉ đọc mới, không còn tự dò phiên bằng report_receipt (không tách được tin).
+    na = ast.unparse(FNS["notice_audit"])
+    ok_("real-1: notice_audit dùng read_notice_evidence và audit_notices",
+        "read_notice_evidence(" in na and "audit_notices(" in na and "report_receipt(" not in na, na)
 
 if _fails:
     print(f"\n{len(_fails)} FAIL:", _fails)

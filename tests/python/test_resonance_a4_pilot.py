@@ -192,25 +192,93 @@ class ChatLedger:
 
 
 def audit_notices(rows: list, msgs: list, final_revision: int, goal_id: str, notify_kinds) -> dict:
-    """Đối chiếu tin báo của MỘT mục tiêu (review cổng pilot, P2-3). Hàm thuần để test.
+    """Đối chiếu tin báo của MỘT mục tiêu (review cổng pilot, P2-3; sửa sau pilot real-1). Hàm thuần để test.
 
     rows: dòng outbox của mục tiêu `{"id", "kind", "revision", "delivered"}`; msgs: thẻ có khoá báo cáo trong phiên trợ
-    lý `{"key", "goal_id", "receipt"}`. Chỉ xét loại tin host thật sự gửi (`notify_kinds`); tin nội bộ không được gửi
-    nên không đòi.
-    - matched_ok: có ít nhất một tin đã gửi (danh sách rỗng không đạt), không còn tin chờ gửi; mỗi tin đã gửi có ĐÚNG một tin trong phiên mang khoá `outbox:<id>`, đúng mục
-      tiêu, có biên nhận của host; phiên không có khoá báo cáo nào khác (tin cũ, mục tiêu khác, khoá lạ).
-    - required_ok: matched_ok VÀ có ít nhất một tin đã gửi ở đúng revision cuối của mục tiêu."""
+    lý `{"key", "goal_id", "receipt", "revision"?, "turn_event"?}` (đọc bằng `read_notice_evidence`). Chỉ xét loại tin
+    host thật sự gửi (`notify_kinds`); tin nội bộ không được gửi nên không đòi.
+    Phiên có HAI loại khoá host đặt, kiểm riêng:
+    - `outbox:<id>`: tin báo. Có ít nhất một tin đã gửi (danh sách rỗng không đạt), không còn tin chờ gửi; mỗi tin đã gửi
+      có ĐÚNG một tin trong phiên, đúng mục tiêu, có biên nhận của host (và đúng revision của dòng outbox khi thẻ ghi).
+    - `turn:<message_ref>`: thẻ "Em đang hướng tới" host đặt sau lượt chat lập hay sửa mục tiêu (`_resonance_push_card`).
+      Được có thêm, nhưng phải đúng mục tiêu, có biên nhận khớp CHÍNH tin đó, và nối được tới sự kiện lập hay sửa mục
+      tiêu cùng message_ref, cùng revision (`turn_event`). Thẻ turn không bao giờ thay tin outbox bắt buộc.
+    Khoá khác, khoá lặp đều không đạt. Pilot real-1 (11/10) cho thấy bản cũ đòi tập khoá bằng đúng tập outbox nên loại
+    nhầm thẻ turn hợp lệ; dry mô phỏng lượt chat nên không có thẻ này.
+    - matched_ok: cả hai nhóm đạt, không khoá lạ, không lặp.
+    - required_ok: matched_ok VÀ có ít nhất một tin outbox đã gửi ở đúng revision cuối của mục tiêu."""
     rows = [n for n in rows if n["kind"] in notify_kinds]
     pending = [n["id"] for n in rows if not n["delivered"]]
     delivered = {f"outbox:{n['id']}": n for n in rows if n["delivered"]}
     keys = [m["key"] for m in msgs]
-    matched = (bool(delivered) and not pending and len(keys) == len(set(keys)) and set(keys) == set(delivered)
-               and all(m["goal_id"] == goal_id and m["receipt"] for m in msgs))
+    outbox_msgs = [m for m in msgs if str(m["key"]).startswith("outbox:")]
+    turn_msgs = [m for m in msgs if str(m["key"]).startswith("turn:")]
+    strangers = [k for k in keys if not str(k).startswith(("outbox:", "turn:"))]
+    outbox_ok = (bool(delivered) and not pending and {m["key"] for m in outbox_msgs} == set(delivered)
+                 and all(m["goal_id"] == goal_id and m["receipt"] is True
+                         and m.get("revision") in (None, delivered[m["key"]]["revision"])
+                         for m in outbox_msgs if m["key"] in delivered))
+    turn_ok = all(m["goal_id"] == goal_id and m["receipt"] is True and m.get("turn_event") is True
+                  and type(m.get("revision")) is int and 1 <= m["revision"] <= final_revision for m in turn_msgs)
+    matched = outbox_ok and turn_ok and not strangers and len(keys) == len(set(keys))
     at_rev = [k for k, n in delivered.items() if n["revision"] == final_revision]
     return {"final_revision": final_revision,
             "outbox": [{k: n[k] for k in ("id", "kind", "revision", "delivered")} for n in rows],
             "pending": pending, "session_keys": sorted(keys), "messages_with_report": len(msgs),
+            "turn_keys": sorted(m["key"] for m in turn_msgs), "outbox_ok": bool(outbox_ok), "turn_ok": bool(turn_ok),
+            "stranger_keys": sorted(strangers),
             "required_keys": sorted(at_rev), "matched_ok": bool(matched), "required_ok": bool(matched and at_rev)}
+
+
+def read_notice_evidence(conv_db, goal_db, sid: str, goal_id: str, parse_blocks) -> tuple:
+    """Đọc CHỈ ĐỌC (SQLite `mode=ro`) dữ liệu cho `audit_notices`: dòng outbox của mục tiêu và các thẻ có khoá báo cáo
+    trong phiên trợ lý. Dùng chung cho bộ chạy (server đang chạy) và hậu kiểm offline trên bản sao sandbox: không dựng
+    server, không gọi model, không ghi gì.
+
+    - receipt: bảng biên nhận có ĐÚNG một dòng cho (khoá, mục tiêu), và dòng đó trỏ đúng phiên và đúng CHÍNH tin này
+      (biên nhận của tin khác, phiên khác không tính).
+    - turn_event (thẻ `turn:<message_ref>`): message_ref thuộc chính phiên này, và kho mục tiêu có sự kiện lập hay sửa
+      mục tiêu (`created`, `reframe`, `continued`, đúng các loại `route_request` dùng để đặt thẻ) của mục tiêu này với
+      cùng message_ref và cùng revision ghi trên thẻ."""
+    import sqlite3
+    from pathlib import Path as _P
+
+    def _ro(p):
+        return sqlite3.connect(_P(p).resolve().as_uri() + "?mode=ro", uri=True)
+
+    g = _ro(goal_db)
+    try:
+        rows = [{"id": r[0], "kind": r[1], "delivered": r[2] is not None,
+                 "revision": int((json.loads(r[3] or "{}") or {}).get("revision") or 0)}
+                for r in g.execute("SELECT id, kind, delivered_at, payload_json FROM outbox WHERE goal_id=? ORDER BY id",
+                                   (goal_id,))]
+        events = g.execute("SELECT revision, kind, message_ref FROM goal_events WHERE goal_id=? AND message_ref<>''",
+                           (goal_id,)).fetchall()
+    finally:
+        g.close()
+    s = _ro(conv_db)
+    try:
+        msgs = []
+        for mid, role, content in s.execute("SELECT id, role, content FROM messages WHERE session_id=? ORDER BY id",
+                                            (sid,)).fetchall():
+            if role != "assistant":
+                continue
+            for b in parse_blocks(content or ""):
+                key = b.get("report")
+                if not key:
+                    continue
+                gid, rev = str(b.get("goal_id") or ""), b.get("revision")
+                rc = s.execute("SELECT session_id, message_id FROM report_receipts WHERE report_key=? AND goal_id=?",
+                               (str(key), gid)).fetchall()
+                ref = str(key)[len("turn:"):] if str(key).startswith("turn:") else ""
+                linked = (bool(ref) and ref.startswith(f"msg:{sid}:") and gid == goal_id
+                          and any(e[0] == rev and e[1] in ("created", "reframe", "continued") and e[2] == ref
+                                  for e in events))
+                msgs.append({"key": key, "goal_id": gid, "revision": rev, "message_id": mid,
+                             "receipt": [tuple(x) for x in rc] == [(sid, mid)], "turn_event": linked})
+    finally:
+        s.close()
+    return rows, msgs
 
 
 # ───────────── Ca chạy (một tiến trình mỗi ca) ─────────────
@@ -453,18 +521,12 @@ def run_case(scen: str) -> int:
                  "revision": int((json.loads(r[3] or "{}") or {}).get("revision") or 0)} for r in rows]
 
     def notice_audit(goal_id) -> dict:
-        """Đọc outbox và phiên trợ lý rồi đối chiếu bằng `audit_notices`."""
+        """Đọc outbox và phiên trợ lý (chỉ đọc, `read_notice_evidence`) rồi đối chiếu bằng `audit_notices`."""
         g_now = store().get(owner, goal_id)
-        ss, msgs = sess(), []
-        for m in ss.get_messages(sid):
-            if m["role"] != "assistant":
-                continue
-            for b in R.parse_goal_blocks(m.get("content") or ""):
-                if b.get("report"):
-                    msgs.append({"key": b["report"], "goal_id": b.get("goal_id"),
-                                 "receipt": bool(ss.report_receipt(sid, b["report"], b.get("goal_id") or ""))})
+        rows, msgs = read_notice_evidence(state / "conversations.db", state / "resonance.sqlite3", sid, goal_id,
+                                          R.parse_goal_blocks)
         return {"final_status": g_now.status,
-                **audit_notices(notices(goal_id), msgs, g_now.revision, goal_id, R.NOTIFY_KINDS)}
+                **audit_notices(rows, msgs, g_now.revision, goal_id, R.NOTIFY_KINDS)}
 
     def reports() -> list:
         """(khoá báo cáo, có biên nhận) của mọi thẻ tin báo trong phiên trợ lý."""
