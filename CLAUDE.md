@@ -232,7 +232,7 @@ Two rules must be known UP FRONT because they are often broken:
   without distinguishing anything). Put full trigger examples in a `## When to use` section in
   the BODY, where nothing is truncated and which is only read once the skill is loaded. The
   index is for FINDING, the body is for DOING.
-- **Classify it yourself:** an agent carries `tags` (YAML list, one or more), a skill or workflow one `group`. First read what is IN USE (`agents/*.md` tags, `skills/*/SKILL.md` and `workflows/*.md` group), pick the closest; only add a new one, short and by domain (Marketing, Sales, Content, Finance, AI...), when none fits. **Never leave it empty.** A tag only sorts agents: it grants nothing and adds no one to a chat.
+- **Classify it yourself:** an agent carries `tags` (YAML list, one or more), a skill or workflow one `group`. First read what is IN USE (`agents/*.md` tags, `skills/*/SKILL.md` and `workflows/*.md` group), pick the closest; only add a new one, short and by domain (Marketing, Sales, Content, Finance, AI...), when none fits. **NEVER leave `group` empty, nor `tags`.** A tag only sorts agents: it grants nothing and adds no one to a chat.
 - A skill folder `slug` is **ASCII without diacritics** (e.g. "Viết email" → `viet-email`). You can create/edit through the `POST /skills` endpoint or by writing the file directly.
 
 **Rules:**
