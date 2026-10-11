@@ -47,7 +47,15 @@ tags:
 
 Mọi tag thuộc phạm vi **một brain** (thư mục `agents/` của brain đó). Đổi tên hay xoá tag ở brain này không chạm brain khác.
 
-**Đồng bộ ghi và event loop** (R4): mọi đường đọc, sửa, ghi frontmatter agent (`/capability/meta`, đổi tên, xoá tag, và `POST /agents` của form) chạy ở worker (`asyncio.to_thread`) và đọc `previous` rồi ghi trong CÙNG một khoá (`_AGENT_META_LOCK`). Thao tác nhiều agent không chặn event loop khi đĩa chậm; form lưu xen với thêm/bỏ tag không ghi đè nhau. Số đo trong test là I/O giả lập (ghi chậm 80 ms), không phải số đo máy thật.
+**Đồng bộ ghi và event loop** (R4, R5): mọi đường đọc, sửa, ghi hay XOÁ file agent chạy ở worker (`asyncio.to_thread`) và đi tuần tự qua CÙNG một khoá (`_AGENT_META_LOCK`):
+- `/capability/meta` (agent), đổi tên tag, xoá tag, `POST /agents` của form, sáu route tài liệu/link của agent (`/agents/{slug}/assets/...`), và `POST /agents/delete`.
+- Đọc `previous`, kiểm file còn tồn tại, rồi ghi, đều nằm trong khoá. Đợi khoá cũng ở worker, nên thao tác nhiều agent hay xoá đang đợi khoá không chặn event loop khi đĩa chậm.
+- Form lưu xen với thêm/bỏ tag không ghi đè nhau.
+- **Xoá agent không bị hoàn tác** (R5): thao tác ghi đang giữ khoá thì xoá đợi nó ghi xong rồi mới xoá. Thao tác tới sau lúc xoá thấy file đã mất và không tạo lại: `/capability/meta` và route tài liệu trả 404; đổi tên hay xoá tag hàng loạt bỏ qua agent đó (không vào `changed`, không vào `failed`).
+- `POST /agents` (form) vẫn là tạo-hoặc-sửa như trước: lưu form sau khi agent đã bị xoá là tạo một agent MỚI cùng tên, không mang tag hay vai cũ, và theo luật A1 phải bật lại Cộng hưởng.
+- Workflow giữ nguyên như trước 0.98.0: `/capability/meta` cho workflow sửa ngay trên event loop như các route workflow khác (lưu, bật/tắt, xoá), không qua worker hay khoá này.
+
+Số đo trong test là I/O giả lập (ghi chậm 80 ms, barrier giữ worker), không phải số đo máy thật.
 
 ## Chuyển đổi
 

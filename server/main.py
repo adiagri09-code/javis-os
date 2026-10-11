@@ -6528,27 +6528,45 @@ def _agent_tag_fields(meta) -> dict:
             "group": tags[0] if tags else NHOM_MAC_DINH}
 
 
+# Khoá chung cho MỌI thao tác đọc-sửa-ghi hay xoá file agent: tag (/capability/meta, đổi tên, xoá tag),
+# form lưu agent, tài liệu/link của agent, và xoá agent. Chỉ được giữ ở worker (asyncio.to_thread), không
+# bao giờ trên event loop. Xoá agent mà không vào khoá này thì một worker đã đọc file sẽ ghi lại đúng file
+# vừa xoá, agent sống lại sau khi xoá đã trả 200 (review PR #617 vòng 2, R5).
 _AGENT_META_LOCK = __import__("threading").Lock()
 
 
+class AgentGoneError(Exception):
+    """File agent không còn khi thao tác ghi đã vào khoá (bị xoá giữa lúc tìm thấy và lúc ghi). Không
+    ghi gì: ghi lúc này là tạo lại agent vừa xoá."""
+
+
+def _sua_meta_file(path, sua, chi_ghi_khi=None) -> dict:
+    """Đọc frontmatter một file agent hay workflow, `sua(meta)` sửa tại chỗ, rồi ghi lại nguyên tử; thân
+    prompt và mọi khoá khác giữ nguyên. Không tự giữ khoá: agent đi qua `_sua_meta_agent`. `chi_ghi_khi()`
+    trả False thì không ghi (không đổi gì thì không chạm file). Trả meta sau khi sửa."""
+    # Kiểm tồn tại ở ĐÂY, sau khi nơi gọi đã giữ khoá: kiểm trước khoá thì xoá vẫn chen vào được.
+    if not Path(path).is_file():
+        raise AgentGoneError(str(path))
+    meta, body = _read_md(path)
+    if not meta:
+        # Frontmatter có mà không đọc được (YAML sửa tay sai): ghi lại lúc này là xoá sạch mọi khoá
+        # của nó. Từ chối, để người dùng sửa file trước.
+        raw = Path(path).read_text(encoding="utf-8")
+        if raw.startswith("---") and len(raw.split("---", 2)) >= 3 and raw.split("---", 2)[1].strip():
+            raise ValueError("frontmatter_unreadable")
+    meta = dict(meta or {})
+    sua(meta)
+    if chi_ghi_khi is None or chi_ghi_khi():
+        _write_md(path, meta, body)
+    return meta
+
+
 def _sua_meta_agent(path, sua, chi_ghi_khi=None) -> dict:
-    """Đọc frontmatter một agent (hay workflow), `sua(meta)` sửa tại chỗ, rồi ghi lại nguyên tử; thân
-    prompt và mọi khoá khác giữ nguyên. Đọc và ghi trong cùng một khoá để hai thao tác thêm/bỏ tag đến
-    cùng lúc (hai tab) không ghi đè nhau. `chi_ghi_khi()` trả False thì không ghi (không đổi gì thì
-    không chạm file). Trả meta sau khi sửa."""
+    """`_sua_meta_file` cho file agent, trong `_AGENT_META_LOCK`: hai thao tác thêm/bỏ tag đến cùng lúc
+    (hai tab) không ghi đè nhau, và xoá agent không chen được giữa đọc và ghi. File đã bị xoá thì
+    `AgentGoneError`, không tạo lại. Chỉ gọi ở worker."""
     with _AGENT_META_LOCK:
-        meta, body = _read_md(path)
-        if not meta:
-            # Frontmatter có mà không đọc được (YAML sửa tay sai): ghi lại lúc này là xoá sạch mọi khoá
-            # của nó. Từ chối, để người dùng sửa file trước.
-            raw = Path(path).read_text(encoding="utf-8")
-            if raw.startswith("---") and len(raw.split("---", 2)) >= 3 and raw.split("---", 2)[1].strip():
-                raise ValueError("frontmatter_unreadable")
-        meta = dict(meta or {})
-        sua(meta)
-        if chi_ghi_khi is None or chi_ghi_khi():
-            _write_md(path, meta, body)
-        return meta
+        return _sua_meta_file(path, sua, chi_ghi_khi)
 
 
 def _loi_tag(code: str, status: int = 400):
@@ -6786,9 +6804,15 @@ async def delete_agent(slug: str = Form(...), brain: str = Form("brain")):
     # slug ghép thẳng vào tên file: phải hợp lệ, không thì `../x` xoá được file ngoài thư mục agents.
     if not skill_router.valid_file_slug(slug):
         return JSONResponse({"ok": False, "error": "slug không hợp lệ"}, status_code=400)
-    f = _agent_file(brain, slug)
-    if f:
-        f.unlink()
+    def _xoa():
+        # Tìm và xoá file TRONG khoá ghi agent, ở worker (R5): thao tác tag hay form đang giữ khoá thì xoá
+        # đợi nó ghi xong rồi mới xoá; thao tác tới sau thấy file đã mất và không tạo lại. Đợi khoá ở
+        # worker nên event loop không bị chặn (R4).
+        with _AGENT_META_LOCK:
+            f = _agent_file(brain, slug)
+            if f:
+                f.unlink()
+    await asyncio.to_thread(_xoa)
     # A1: xoá qua host thì mã Cộng hưởng của agent này nghỉ hẳn. Tạo lại cùng tên là agent MỚI, phải bật lại; mục
     # tiêu và phiên cũ giữ mã cũ. Chưa có kho thì không tạo kho chỉ để ghi việc này.
     try:
@@ -6839,16 +6863,19 @@ def _agent_assets_sua(brain: str, slug: str, doi):
     Gom một chỗ vì cả sáu route thêm/gỡ/ghim đều làm đúng ba bước này; chép sáu lần thì lần
     thứ bảy sẽ quên bước ghi hoặc quên giữ phần thân file.
     """
-    f = _agent_md_path(brain, slug)
-    if not f:
-        return None, JSONResponse({"error": "not found"}, status_code=404)
-    meta, body = _read_md(f)
-    try:
-        meta_moi, ket_qua = doi(meta)
-    except ValueError as e:
-        return None, JSONResponse({"error": str(e)}, status_code=400)
-    _write_md(f, meta_moi, body)
-    return ket_qua, None
+    # Tìm, đọc, ghi trong khoá ghi agent và ở worker (nơi gọi dùng asyncio.to_thread): xoá agent đang
+    # đợi khoá thì không bị lần ghi này tạo lại file, và thêm/bỏ tag cùng lúc không bị ghi đè (R5).
+    with _AGENT_META_LOCK:
+        f = _agent_md_path(brain, slug)
+        if not f:
+            return None, JSONResponse({"error": "not found"}, status_code=404)
+        meta, body = _read_md(f)
+        try:
+            meta_moi, ket_qua = doi(meta)
+        except ValueError as e:
+            return None, JSONResponse({"error": str(e)}, status_code=400)
+        _write_md(f, meta_moi, body)
+        return ket_qua, None
 
 
 @app.get("/agents/{slug}/assets")
@@ -6875,15 +6902,15 @@ async def agent_assets_add_file(slug: str, path: str = Form(...), name: str = Fo
     # thư mục thì "có tồn tại" - gắn được một hàng trỏ vào thư mục, ghim vào là đọc lỗi.
     if not alo.is_file():
         return JSONResponse({"error": localefmt.chu("Không tìm thấy file trong brain này", "File not found in this brain")}, status_code=404)
-    fid, loi = _agent_assets_sua(
-        brain, slug, lambda m: agent_assets.them_file(m, path, name or alo.name))
+    fid, loi = await asyncio.to_thread(
+        _agent_assets_sua, brain, slug, lambda m: agent_assets.them_file(m, path, name or alo.name))
     return loi or {"ok": True, "id": fid}
 
 
 @app.post("/agents/{slug}/assets/files/{file_id}/delete")
 async def agent_assets_del_file(slug: str, file_id: str, brain: str = Form("brain")):
     """GỠ KHỎI TRỢ LÝ, KHÔNG xoá file trên đĩa (xem agent_assets.go_file)."""
-    ok, loi = _agent_assets_sua(brain, slug, lambda m: agent_assets.go_file(m, file_id))
+    ok, loi = await asyncio.to_thread(_agent_assets_sua, brain, slug, lambda m: agent_assets.go_file(m, file_id))
     return loi or {"ok": bool(ok)}
 
 
@@ -6891,7 +6918,7 @@ async def agent_assets_del_file(slug: str, file_id: str, brain: str = Form("brai
 async def agent_assets_pin_file(slug: str, file_id: str, pinned: str = Form("1"),
                                 brain: str = Form("brain")):
     on = str(pinned).strip() in ("1", "true", "True", "on")
-    ok, loi = _agent_assets_sua(brain, slug, lambda m: agent_assets.ghim_file(m, file_id, on))
+    ok, loi = await asyncio.to_thread(_agent_assets_sua, brain, slug, lambda m: agent_assets.ghim_file(m, file_id, on))
     return loi or {"ok": bool(ok), "pinned": on}
 
 
@@ -6904,13 +6931,13 @@ async def agent_assets_add_link(slug: str, url: str = Form(...), label: str = Fo
     if not re.match(r"^https?://", u, re.I):
         return JSONResponse({"error": localefmt.chu("URL phải bắt đầu bằng http:// hoặc https://", "The URL must start with http:// or https://")},
                             status_code=400)
-    lid, loi = _agent_assets_sua(brain, slug, lambda m: agent_assets.them_link(m, u, label))
+    lid, loi = await asyncio.to_thread(_agent_assets_sua, brain, slug, lambda m: agent_assets.them_link(m, u, label))
     return loi or {"ok": True, "id": lid}
 
 
 @app.post("/agents/{slug}/assets/links/{link_id}/delete")
 async def agent_assets_del_link(slug: str, link_id: str, brain: str = Form("brain")):
-    ok, loi = _agent_assets_sua(brain, slug, lambda m: agent_assets.go_link(m, link_id))
+    ok, loi = await asyncio.to_thread(_agent_assets_sua, brain, slug, lambda m: agent_assets.go_link(m, link_id))
     return loi or {"ok": bool(ok)}
 
 
@@ -6918,7 +6945,7 @@ async def agent_assets_del_link(slug: str, link_id: str, brain: str = Form("brai
 async def agent_assets_pin_link(slug: str, link_id: str, pinned: str = Form("1"),
                                 brain: str = Form("brain")):
     on = str(pinned).strip() in ("1", "true", "True", "on")
-    ok, loi = _agent_assets_sua(brain, slug, lambda m: agent_assets.ghim_link(m, link_id, on))
+    ok, loi = await asyncio.to_thread(_agent_assets_sua, brain, slug, lambda m: agent_assets.ghim_link(m, link_id, on))
     return loi or {"ok": bool(ok), "pinned": on}
 
 
@@ -8536,8 +8563,17 @@ async def capability_meta(kind: str = Form(...), slug: str = Form(...),
         meta["updated"] = _today()
 
     try:
-        # Đọc, sửa, ghi (và đợi khoá) ở worker: không chặn event loop khi đĩa chậm (R4).
-        meta = await asyncio.to_thread(_sua_meta_agent, f, _sua)
+        if la_agent:
+            # Đọc, sửa, ghi (và đợi khoá) ở worker: không chặn event loop khi đĩa chậm (R4). File bị xoá
+            # trong lúc đợi khoá thì không ghi (R5).
+            meta = await asyncio.to_thread(_sua_meta_agent, f, _sua)
+        else:
+            # Workflow giữ đúng như trước 0.98.0: sửa ngay trên event loop như mọi route workflow khác
+            # (lưu, bật/tắt, xoá), nên không có worker nào chen được giữa chúng.
+            meta = _sua_meta_file(f, _sua)
+    except AgentGoneError:
+        return JSONResponse({"ok": False, "error": localefmt.chu(f"không thấy {kind} '{slug}'", f"{kind} '{slug}' not found")},
+                            status_code=404)
     except agent_tags.TagError as e:
         return _loi_tag(str(e), 409 if str(e) == "stale_client" else 400)
     except ValueError as e:
@@ -8568,6 +8604,9 @@ def _doi_tag_hang_loat(brain, sua_tags) -> dict:
             _sua_meta_agent(f, _sua, chi_ghi_khi=lambda: done.get("doi"))
             if done.get("doi"):
                 changed.append(f.stem)
+        except AgentGoneError:
+            # Agent bị xoá sau lúc liệt kê: không còn gì để đổi, không phải lỗi, và không tạo lại (R5).
+            continue
         except Exception as e:  # noqa: BLE001
             failed.append({"slug": f.stem, "error": f"{type(e).__name__}: {e}"[:200]})
     return {"ok": not failed, "changed": changed, "failed": failed}

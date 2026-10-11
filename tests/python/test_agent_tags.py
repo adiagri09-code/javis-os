@@ -445,6 +445,174 @@ try:
 finally:
     main._write_md = _goc2
 
+# ============================================================ Review PR #617 vòng 2: R5
+# Xoá agent và mọi thao tác ghi file agent đi tuần tự qua CÙNG một khoá, ở worker. Barrier xác định: giữ worker
+# ghi NGAY TRƯỚC _write_md (đã đọc file, đang giữ khoá), xoá qua API thật, nhả, đợi TẤT CẢ xong rồi mới kiểm
+# đĩa và GET /agents. Chỉ đợi sự kiện (có hạn giờ để không treo), không dùng sleep làm điều kiện đồng bộ.
+import httpx  # noqa: E402
+
+B8 = brain_moi("javis-tags-r5-")
+_goc5 = main._write_md
+
+
+def _seed5(slug, tags):
+    viet(B8, slug, f"type: agent\nname: {slug}\nslug: {slug}\nrole: x\ntags:\n" + "".join(f"- {t}\n" for t in tags))
+
+
+def _ma(r):
+    return getattr(r, "status_code", None) or f"{type(r).__name__}: {r}"[:120]
+
+
+def _aclient():
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://127.0.0.1")
+
+
+async def _danh_sach(ac):
+    return [a["slug"] for a in (await ac.get("/agents", params={"brain": str(B8), "prompt": "0"})).json()["agents"]]
+
+
+async def _giu_ghi_roi_xoa(slug, goi_sua):
+    """Thao tác ghi `goi_sua(ac)` bị giữ ngay trước khi ghi file `slug`; trong lúc đó xoá agent qua API và đo
+    event loop. Trả chi tiết sau khi mọi thao tác đã xong."""
+    target = B8 / "agents" / f"{slug}.md"
+    vao, nha = threading.Event(), threading.Event()
+
+    def giu(path, m, body):
+        if Path(path) == target:
+            vao.set()
+            if not nha.wait(5):
+                raise RuntimeError("barrier R5 hết giờ")
+        return _goc5(path, m, body)
+    tre, dung = [], [False]
+
+    async def nhip():
+        while not dung[0]:
+            t0 = time.perf_counter()
+            await asyncio.sleep(0.02)
+            tre.append(time.perf_counter() - t0 - 0.02)
+    main._write_md = giu
+    try:
+        async with _aclient() as ac:
+            sua = asyncio.create_task(goi_sua(ac))
+            toi_ghi = await asyncio.to_thread(vao.wait, 5)
+            xoa = asyncio.create_task(ac.post("/agents/delete", data={"brain": str(B8), "slug": slug}))
+            tk = asyncio.create_task(nhip())
+            # Trong 300 ms xoá phải ĐỢI khoá (worker kia đang giữ), event loop vẫn chạy nhịp đo.
+            await asyncio.wait({xoa}, timeout=0.3)
+            xoa_xong_khi_giu, con_file_khi_giu = xoa.done(), target.is_file()
+            dung[0] = True
+            await tk
+            nha.set()
+            r_sua, r_xoa = await asyncio.gather(sua, xoa, return_exceptions=True)
+            trong_ds = slug in await _danh_sach(ac)
+    finally:
+        nha.set()
+        main._write_md = _goc5
+    return {"toi_ghi": toi_ghi, "sua": _ma(r_sua), "xoa": _ma(r_xoa), "xoa_xong_khi_giu": xoa_xong_khi_giu,
+            "con_file_khi_giu": con_file_khi_giu, "mau": len(tre), "tre_ms": round(max(tre) * 1000) if tre else None,
+            "file_cuoi": target.is_file(), "trong_ds_cuoi": trong_ds}
+
+
+def _r5_dat(d):
+    # Đạt: thao tác ghi tới khoá trước nên ghi xong rồi xoá mới chạy; xoá không trả trước khi worker nhả; sau
+    # cùng agent vắng cả trên đĩa lẫn API; event loop có đủ mẫu đo và không bị chặn trong lúc xoá đợi khoá.
+    return (d["toi_ghi"] and d["sua"] == 200 and d["xoa"] == 200 and not d["xoa_xong_khi_giu"]
+            and d["con_file_khi_giu"] and not d["file_cuoi"] and not d["trong_ds_cuoi"]
+            and d["mau"] >= 5 and d["tre_ms"] is not None and d["tre_ms"] < 60)
+
+
+_ca5 = [
+    ("đổi tên tag", "r5-doi-ten", ["Cũ5"],
+     lambda ac: ac.post("/agents/tags/rename", data={"brain": str(B8), "from_tag": "Cũ5", "to_tag": "Mới5"})),
+    ("xoá tag", "r5-xoa-tag", ["Bỏ5"],
+     lambda ac: ac.post("/agents/tags/delete", data={"brain": str(B8), "tag": "Bỏ5"})),
+    ("/capability/meta thêm tag", "r5-meta", ["A5"],
+     lambda ac: ac.post("/capability/meta", data={"kind": "agent", "slug": "r5-meta", "brain": str(B8),
+                                                  "add_tags": J("B5")})),
+    ("/capability/meta ghim", "r5-ghim", ["A5"],
+     lambda ac: ac.post("/capability/meta", data={"kind": "agent", "slug": "r5-ghim", "brain": str(B8), "pinned": "1"})),
+    ("form lưu agent", "r5-form", ["A5"],
+     lambda ac: ac.post("/agents", data={"name": "R5 Form", "role": "vai", "slug": "r5-form", "brain": str(B8)})),
+    ("thêm link tài liệu của agent", "r5-link", ["A5"],
+     lambda ac: ac.post("/agents/r5-link/assets/links", data={"url": "https://example.com/r5", "brain": str(B8)})),
+]
+for ten, slug, tags, goi in _ca5:
+    _seed5(slug, tags)
+    d = asyncio.run(_giu_ghi_roi_xoa(slug, goi))
+    check(f"R5 {ten} đang ghi + xoá agent: xoá đợi khoá, agent vắng trên đĩa và API sau cùng, "
+          f"event loop {d['mau']} mẫu, trễ tối đa {d['tre_ms']} ms", _r5_dat(d), d)
+
+
+async def _xoa_xong_truoc(slug, goi_sua):
+    """Thao tác ghi đã qua bước tìm file nhưng CHƯA vào khoá; xoá agent qua API chạy trọn trước; rồi mới nhả
+    thao tác ghi. Barrier đặt ở `_sua_meta_agent` (điểm vào khoá)."""
+    target = B8 / "agents" / f"{slug}.md"
+    goc = main._sua_meta_agent
+    vao, nha = threading.Event(), threading.Event()
+
+    def cho(path, *a, **k):
+        if Path(path) == target:
+            vao.set()
+            if not nha.wait(5):
+                raise RuntimeError("barrier R5 hết giờ")
+        return goc(path, *a, **k)
+    main._sua_meta_agent = cho
+    try:
+        async with _aclient() as ac:
+            sua = asyncio.create_task(goi_sua(ac))
+            toi = await asyncio.to_thread(vao.wait, 5)
+            r_xoa = await ac.post("/agents/delete", data={"brain": str(B8), "slug": slug})
+            da_xoa = not target.is_file()
+            nha.set()
+            (r_sua,) = await asyncio.gather(sua, return_exceptions=True)
+            trong_ds = slug in await _danh_sach(ac)
+    finally:
+        nha.set()
+        main._sua_meta_agent = goc
+    j = r_sua.json() if hasattr(r_sua, "json") else {}
+    return {"toi": toi, "xoa": _ma(r_xoa), "da_xoa_truoc": da_xoa, "sua": _ma(r_sua), "j": j,
+            "file_cuoi": target.is_file(), "trong_ds_cuoi": trong_ds}
+
+
+_seed5("r5-sau-meta", ["A5"])
+d = asyncio.run(_xoa_xong_truoc("r5-sau-meta", lambda ac: ac.post(
+    "/capability/meta", data={"kind": "agent", "slug": "r5-sau-meta", "brain": str(B8), "add_tags": J("B5")})))
+check("R5 xoá xong trước, /capability/meta cũ tới sau: 404 có kiểm soát, không tạo lại",
+      d["toi"] and d["xoa"] == 200 and d["da_xoa_truoc"] and d["sua"] == 404 and not d["file_cuoi"]
+      and not d["trong_ds_cuoi"], d)
+_seed5("r5-sau-doi", ["Cũ6"])
+_seed5("r5-ban-doi", ["Cũ6"])
+d = asyncio.run(_xoa_xong_truoc("r5-sau-doi", lambda ac: ac.post(
+    "/agents/tags/rename", data={"brain": str(B8), "from_tag": "Cũ6", "to_tag": "Mới6"})))
+check("R5 xoá xong giữa lúc đổi tên hàng loạt: agent đã xoá bỏ qua (không đổi, không lỗi), agent khác vẫn đổi",
+      d["toi"] and d["xoa"] == 200 and d["sua"] == 200 and d["j"].get("changed") == ["r5-ban-doi"]
+      and d["j"].get("failed") == [] and not d["file_cuoi"] and not d["trong_ds_cuoi"]
+      and doc(B8, "r5-ban-doi")[0].get("tags") == ["Mới6"], d)
+
+# Tuần tự: xoá trước, thao tác cũ tới sau (tab khác còn hiện agent) không tạo lại file.
+_seed5("r5-tuan-tu", ["Cũ7"])
+r = client.post("/agents/delete", data={"brain": str(B8), "slug": "r5-tuan-tu"})
+r1 = meta(B8, "r5-tuan-tu", add_tags=J("X7"))
+r2 = client.post("/agents/tags/rename", data={"brain": str(B8), "from_tag": "Cũ7", "to_tag": "Mới7"})
+r3 = client.post("/agents/tags/delete", data={"brain": str(B8), "tag": "Cũ7"})
+r4 = client.post("/agents/r5-tuan-tu/assets/links", data={"url": "https://example.com/x", "brain": str(B8)})
+check("R5 xoá rồi mới sửa tag, đổi tên, xoá tag, thêm link: 404 hay không đổi gì, không tạo lại agent",
+      r.status_code == 200 and r1.status_code == 404 and r2.json().get("changed") == [] and r2.json().get("ok")
+      and r3.json().get("changed") == [] and r4.status_code == 404
+      and not (B8 / "agents" / "r5-tuan-tu.md").exists() and "r5-tuan-tu" not in [a["slug"] for a in ds(B8)],
+      [r1.status_code, r2.text, r3.text, r4.status_code])
+
+# Đối chứng: đổi tên rồi xoá tuần tự vẫn xoá đúng; form tạo lại cùng tên sau khi xoá là TẠO MỚI (như main).
+_seed5("r5-doi-chung", ["Cũ8"])
+client.post("/agents/tags/rename", data={"brain": str(B8), "from_tag": "Cũ8", "to_tag": "Mới8"})
+r = client.post("/agents/delete", data={"brain": str(B8), "slug": "r5-doi-chung"})
+check("R5 đối chứng: đổi tên rồi xoá tuần tự, agent bị xoá", r.status_code == 200
+      and not (B8 / "agents" / "r5-doi-chung.md").exists())
+r = client.post("/agents", data={"name": "R5 Mới", "role": "vai mới", "slug": "r5-doi-chung", "brain": str(B8)})
+m, _ = doc(B8, "r5-doi-chung")
+check("R5 đối chứng: form lưu sau khi xoá tạo agent mới, không mang tag hay vai cũ",
+      r.status_code == 200 and m.get("tags") == [] and m.get("role") == "vai mới", m)
+
 # ============================================================ Hàm thuần
 check("thuần: rename không có tag thì không đổi", agent_tags.rename(["A"], "B", "C") == (["A"], False))
 check("thuần: tags chuỗi đơn trong file đọc thành một tag", agent_tags.tags_of({"tags": "Marketing"}) == ["Marketing"])
