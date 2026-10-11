@@ -706,12 +706,12 @@ check("G7 thu hồi khi lượt nền đang gọi engine: lượt vẫn tính, b
       e7.queries == 1 and w.store.get(w.owner, g.id).calls_used == 1 and bg and bg[0]["status"] == "stale"
       and not w.target().exists(), bg)
 
-# ═══════════ G47, G28, G49: nâng kho từ 0.92.1; đóng băng legacy ═══════════
+# ═══════════ G47, G28, G49: nâng kho từ 0.92.2; đóng băng legacy ═══════════
 legacy_db = _STATE / "legacy.sqlite3"
 wl = World("legacy-src")
 mid, ref = wl.next()
 gl = wl.create(mid, ref, hold=False)
-# Dựng kho "0.92.1": xoá bảng A4 khỏi bản sao của kho này, giữ mục tiêu đang mở có trợ lý và đường sản phẩm.
+# Dựng kho "0.92.2": xoá bảng A4 khỏi bản sao của kho này, giữ mục tiêu đang mở có trợ lý và đường sản phẩm.
 src = sqlite3.connect(str(wl.store.path))
 dst = sqlite3.connect(str(legacy_db))
 src.backup(dst)

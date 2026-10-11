@@ -1,4 +1,4 @@
-"""Hạ Resonance về 0.92.1 bằng snapshot lúc nâng lên 0.93.0 (A4, thiết kế mục 7.4, D11).
+"""Hạ Resonance về 0.92.2 bằng snapshot lúc nâng lên 0.93.0 (A4, thiết kế mục 7.4, D11).
 
     python tools/resonance_restore_pre_a4.py --yes
     python tools/resonance_restore_pre_a4.py --state-dir /duong/dan/state --yes
@@ -10,8 +10,8 @@ file `.sqlite3`):
 2. Ghi đè kho bằng snapshot `resonance.sqlite3.pre-0.93.0` mà mã 0.93.0 tạo một lần lúc nâng.
 
 Hậu quả, cũng ghi trong ghi chú phát hành: mọi thay đổi của mục tiêu sau lúc nâng biến mất khỏi kho chạy (bản sao ở
-bước 1 vẫn đọc được). File đã đăng trong brain vẫn còn, và 0.92.1 có thể thấy chúng là drift so với mốc cũ (A2).
-Hạ về 0.92.1 mà KHÔNG khôi phục snapshot là không hỗ trợ: mã cũ không đọc bảng quyền, nên bấm Tiếp tục trên mục tiêu
+bước 1 vẫn đọc được). File đã đăng trong brain vẫn còn, và 0.92.2 có thể thấy chúng là drift so với mốc cũ (A2).
+Hạ về 0.92.2 mà KHÔNG khôi phục snapshot là không hỗ trợ: mã cũ không đọc bảng quyền, nên bấm Tiếp tục trên mục tiêu
 đã thu hồi là chạy lại.
 """
 from __future__ import annotations
