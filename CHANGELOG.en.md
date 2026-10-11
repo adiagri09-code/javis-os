@@ -8,9 +8,15 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
-## [0.99.0] - 2026-10-11
+## [0.99.0] - 2026-10-12
 ### Added
-- (in progress) German interface.
+- **German interface (first step).** With a German browser the dashboard shows German in the navigation, the Settings tabs and common messages. Anything not translated yet shows in English. Translation contributed by @sirschnake.
+- **"Deutsch" in the language pickers**, both under the side rail and in Settings, so you can switch back to German after choosing another language.
+
+### Fixed
+- **Readers of the German interface no longer get Vietnamese from Javis.** The server speaks only Vietnamese and English, so for a language that exists only in the dashboard, Telegram messages, background work, the voice and the default brain now use English. Before, they could fall back to Vietnamese.
+
+Thanks to @sirschnake for contributing the German translation (#618).
 
 ## [0.96.1] - 2026-10-11
 ### Fixed

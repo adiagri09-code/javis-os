@@ -6,9 +6,15 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.99.0] - 2026-10-11
+## [0.99.0] - 2026-10-12
 ### Thêm mới
-- (đang viết) Giao diện tiếng Đức.
+- **Giao diện tiếng Đức (bước đầu).** Trình duyệt để tiếng Đức thì dashboard tự hiện tiếng Đức ở thanh điều hướng, tab Cài đặt và các thông báo thường gặp. Chỗ chưa dịch hiện tiếng Anh. Bản dịch do @sirschnake đóng góp.
+- **Ô chọn ngôn ngữ có thêm "Deutsch"**, cả ở dưới thanh bên lẫn trong Cài đặt, nên chọn lại được tiếng Đức sau khi đã đổi sang thứ tiếng khác.
+
+### Sửa lỗi
+- **Người đọc giao diện tiếng Đức không bị Javis trả lời bằng tiếng Việt.** Server chỉ nói tiếng Việt và tiếng Anh, nên với thứ tiếng chỉ có ở dashboard, tin Telegram, việc nền, giọng đọc và brain mặc định sẽ dùng tiếng Anh. Trước đây những chỗ đó có thể rơi về tiếng Việt.
+
+Cảm ơn @sirschnake đã đóng góp bản dịch tiếng Đức (#618).
 
 ## [0.96.1] - 2026-10-11
 ### Sửa lỗi
