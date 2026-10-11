@@ -60,6 +60,7 @@ Mọi tag thuộc phạm vi **một brain** (thư mục `agents/` của brain đ
 
 ## Quay về
 
-- **Hạ về 0.96.1 (mã cũ):** mã cũ đọc `group`, nên agent hiện dưới nhóm = tag đầu tiên (gương), agent không còn tag hiện là "Chung". Khoá `tags` còn nguyên trong file, mã cũ giữ nó khi lưu (đã giữ mọi khoá lạ từ 0.59.x).
+- **Hạ về 0.96.1 (mã cũ):** mã cũ đọc `group`, nên agent hiện dưới nhóm = tag đầu tiên (gương), agent không còn tag hiện là "Chung". Khoá `tags` còn nguyên trong file, mã cũ giữ nó khi lưu (đã giữ mọi khoá lạ từ 0.59.x). Đã kiểm trên trình duyệt với `main` 0.96.1 mở bản sao dữ liệu đã chuyển.
+- **Giới hạn:** file agent có `tags` mà chưa từng được mã 0.98.0 lưu (người hay model ghi tay chỉ `tags`, hay gói nhập từ nơi khác) thì chưa có gương `group`, nên mã cũ hiện nó là "Chung" cho tới khi được lưu một lần bằng mã mới. Không mất tag.
 - **Nâng lại 0.98.0:** `tags` là nguồn chuẩn. Thay đổi nhóm làm bằng mã cũ trong lúc hạ phiên bản (sửa `group`) **không** được đưa vào tag; muốn giữ thì gắn lại tag. Đây là giới hạn đã biết, đổi lại tag đã bỏ không bao giờ sống lại từ `group`.
 - Không có bản sao file riêng: chuyển đổi chỉ thêm khoá `tags` và đồng bộ `group`, không xoá nội dung nào.
