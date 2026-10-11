@@ -1663,6 +1663,9 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   text-overflow: ellipsis; white-space: nowrap; }
 /* Tag của agent (0.98.0): chip xuống dòng trong cột, mỗi chip tự cắt chữ, không đẩy cột ra ngang. */
 .ws-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; min-width: 0; }
+/* Khối chữ mặc định chỉ rộng bằng dòng dài nhất, nên hai chip ngắn cũng bị đẩy xuống hai dòng: hàng
+   có chip thì khối chữ giãn hết phần còn lại của hàng. */
+.ws-item-text:has(> .ws-tags) { flex: 1 1 auto; }
 .ws-tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 11px; line-height: 16px; padding: 0 6px; border-radius: 8px;
   background: var(--surface-2); color: var(--text2); border: 1px solid var(--line, transparent); }

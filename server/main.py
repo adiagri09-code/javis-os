@@ -8570,10 +8570,16 @@ async def agent_tag_rename(brain: str = Form("brain"), from_tag: str = Form(...)
             raise agent_tags.TagError("bad_tags")
     except agent_tags.TagError as e:
         return _loi_tag(str(e))
-    da_co = {x.casefold() for a in agents_index(brain, kem_prompt=False) for x in a["tags"]}
+    da_co = {}
+    for a in agents_index(brain, kem_prompt=False):
+        for x in a["tags"]:
+            da_co.setdefault(x.casefold(), x)
     merged = d.casefold() in da_co and d.casefold() != s.casefold()
-    out = _doi_tag_hang_loat(brain, lambda cur: agent_tags.rename(cur, s, d))
-    out.update({"tag": d, "merged": merged})
+    # Gộp vào tag đã có thì dùng CÁCH VIẾT của tag đó (gõ "nội dung" gộp vào "Nội dung" là thành "Nội dung"),
+    # để mọi agent cùng một cách viết và thông báo nói đúng tên đang hiện.
+    dich = da_co[d.casefold()] if merged else d
+    out = _doi_tag_hang_loat(brain, lambda cur: agent_tags.rename(cur, s, dich))
+    out.update({"tag": dich, "merged": merged})
     if not out["ok"]:
         out["error"] = localefmt.chu("Đổi tên chưa xong: có agent không ghi được.",
                                      "Rename incomplete: some agents could not be saved.")

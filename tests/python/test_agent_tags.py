@@ -154,10 +154,13 @@ check("7 đổi tên giữ tag khác và vị trí", doc(B, "nd")[0]["tags"] == 
       and doc(B, "mk")[0]["tags"] == ["Marketing", "Nội dung"])
 check("7 đổi tên giữ nội dung file", doc(B, "nd")[1] == "Thân ND.")
 check("7 brain khác không bị chạm", doc(B2, "mk2")[0]["tags"] == ["Marketing"])
+viet(B, "kt", "type: agent\nname: KT\nslug: kt\nrole: x\ntags:\n- Kỹ thuật\n", "Thân KT.")
 r = client.post("/agents/tags/rename", data={"brain": str(B), "from_tag": "Kỹ thuật", "to_tag": "nội DUNG"})
 j = r.json()
 check("7 đổi tên sang tag đã có: gộp, báo merged, không nhân đôi",
       j["merged"] and doc(B, "nd")[0]["tags"] == ["Nội dung"], r.text)
+check("7 gộp dùng CÁCH VIẾT của tag đã có, kể cả agent chỉ mang tag cũ",
+      j["tag"] == "Nội dung" and doc(B, "kt")[0]["tags"] == ["Nội dung"], (j, doc(B, "kt")[0]))
 r = client.post("/agents/tags/delete", data={"brain": str(B), "tag": "nội dung"})
 check("7 xoá tag chỉ gỡ nhãn, agent còn nguyên",
       r.json()["ok"] and (B / "agents" / "nd.md").is_file() and doc(B, "nd")[0]["tags"] == []
