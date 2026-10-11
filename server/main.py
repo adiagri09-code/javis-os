@@ -56,6 +56,8 @@ _update_outcome = update_state.update_outcome
 import git_brain
 import engine
 import vision_input
+import borrowed_eyes   # mắt mượn: bộ não khác xem hộ ảnh khi model của bot không xem được (0.94.0)
+import image_vision
 import openai_oauth
 import claude_update   # tự chạy `claude update` hằng ngày để model mới hiện ra
 import claude_models   # model Claude LIVE cho provider anthropic-cli (hỏi bằng API key, nếu có)
@@ -18956,7 +18958,8 @@ def _anh_khong_gui_duoc(prov) -> str:
 def _bot_gan_anh(messages, prov, text, images):
     """Gắn ẢNH khách gửi vào tin user CUỐI của lượt (0.81.0). Trả (messages để gửi, True nếu đã gắn ảnh thật).
 
-    Chủ dự án chốt 05/10: ảnh đi THẲNG vào lượt chat, chính model đang chạy bot nhìn ảnh; không model thứ hai nào tả hộ.
+    Chủ dự án chốt 05/10: ảnh đi THẲNG vào lượt chat, chính model đang chạy bot nhìn ảnh. Từ 0.94.0 (chủ chốt 11/10) model
+    nào không nhìn được thì một bộ não khác đã kết nối xem hộ, xem `_bot_anh_mat_muon` và borrowed_eyes.py.
     Bộ não không có đường gửi ảnh (Antigravity, Grok Build) hoặc ảnh không đọc được thì nhận dòng nhãn thật thà "kèm một
     ảnh mà bạn không xem được", để model khỏi trả lời như thể đã thấy ảnh. Lịch sử giữ chữ trơn (xem `_bot_tra_loi`)."""
     if not images:
@@ -18971,6 +18974,84 @@ def _bot_bo_anh(messages, text):
     """Bản gửi lại khi model TỪ CHỐI ảnh (model chữ thuần trên Groq, Ollama...): bỏ ảnh, gắn nhãn thật thà."""
     import chatbot_runtime
     return messages[:-1] + [{"role": "user", "content": chatbot_runtime._KEM_ANH + str(text or "")}]
+
+
+async def _mat_muon_stream(prov, model, messages):
+    """Stream for ONE borrowed look at a customer's photo (0.94.0, see borrowed_eyes). No tools, reasoning off.
+
+    The ChatGPT candidate uses `image_vision.VISION_MODEL` as is: `_codex_safe_model` would swap a model missing from the saved
+    catalog for the catalog's first entry, which may be the very model that just refused the photo. Claude Code that is not
+    signed in answers with a short "Not logged in" text instead of an error; that is turned into an error so it is never taken
+    for a description of the photo."""
+    if prov == "openai-oauth" and model == image_vision.VISION_MODEL:
+        creds = openai_oauth.valid_creds() or {}
+        inner = engine.openai_responses_stream(creds.get("access_token", ""), creds.get("account_id", ""), model, messages, "off")
+    else:
+        inner = _api_stream(prov, aux_engine.api_key_for(prov), model, messages, "off")
+    parts, actual = [], model or "?"
+    async for ev in inner:
+        t = ev.get("type")
+        if t == "meta":
+            actual = ev.get("model") or actual
+        elif t == "usage":
+            usage_store.record(prov, actual, ev.get("input", 0), ev.get("output", 0))
+        elif t == "text":
+            parts.append(str(ev.get("content") or ""))
+        elif t == "error":
+            yield ev
+    text = "".join(parts)
+    if aux_engine.final_loi_dang_nhap(text):
+        yield {"type": "error", "content": text.strip()}
+    elif text:
+        yield {"type": "text", "content": text}
+
+
+def _mat_muon_ung_vien(prov, api_model):
+    """Brains the owner already connected that may look at a photo for this bot, in borrowed_eyes order."""
+    s = cfgmod.read_settings()
+    main = _effective_main(s)
+    try:
+        main_ok = bool(aux_engine.availability(main, s)[0])
+        if main["provider"] == "anthropic-cli":
+            main_ok = main_ok and bool(find_claude_cli())
+    except Exception:      # noqa: BLE001 - an unreadable setting only means one fewer pair of eyes
+        main_ok = False
+    try:
+        claude_ok = bool(find_claude_cli())
+    except Exception:      # noqa: BLE001
+        claude_ok = False
+    return borrowed_eyes.candidates(
+        prov, api_model, main_prov=main["provider"], main_model=main.get("model") or "", main_ok=main_ok,
+        chatgpt_ok=image_vision.connected(), chatgpt_model=image_vision.VISION_MODEL, claude_ok=claude_ok)
+
+
+async def _bot_xem_ho(images, text, prov, api_model, chat_id=""):
+    """Another connected brain describes the customer's photos. Returns (description, who, why it failed)."""
+    try:
+        res = await borrowed_eyes.describe(list(images or []), text, _mat_muon_ung_vien(prov, api_model), _mat_muon_stream)
+    except Exception as e:      # noqa: BLE001 - borrowed eyes failing must never cost the customer the reply
+        res = {"ok": False, "errors": [f"{type(e).__name__}: {e}"]}
+    if res.get("ok"):
+        print(f"[bot {prov} chat {chat_id}] ảnh khách gửi do {res.get('who')} xem hộ", file=sys.stderr)
+        return res["text"], res.get("who") or "", ""
+    why = "; ".join(res.get("errors") or [])[:300]
+    print(f"[bot {prov} chat {chat_id}] không bộ não nào xem hộ được ảnh: {why}", file=sys.stderr)
+    return "", "", why
+
+
+async def _bot_anh_mat_muon(messages, lich_su, text, images, prov, api_model, chat_id, ly_do):
+    """The bot's own model cannot see this turn's photos: let another brain describe them (0.94.0).
+
+    Returns (messages to send, warning for the bot card). With a description the last user turn carries it as photo content and
+    the history keeps a short version; without one the turn falls back to the old honest label, and the warning says why the
+    bot could not see the photo AND why no other brain could look for it."""
+    mo_ta, who, why = await _bot_xem_ho(images, text, prov, api_model, chat_id)
+    if not mo_ta:
+        return _bot_bo_anh(messages, text), f"{ly_do} Không bộ não nào khác xem hộ được: {why}"[:400]
+    n = len(images)
+    if lich_su:
+        lich_su[-1] = {"role": "user", "content": borrowed_eyes.history_text(text, mo_ta, n)}
+    return messages[:-1] + [{"role": "user", "content": borrowed_eyes.turn_text(text, mo_ta, n)}], ""
 
 
 def _bot_lich_su_chu(text, images):
@@ -19021,18 +19102,29 @@ async def _bot_tra_loi(text, *, sess, sysprompt, prov, api_key, api_model, reaso
     messages = [{"role": "system", "content": sysprompt}] + lich_su
     _bot_ghim_duong(runtime_trace, prov, api_model, messages)
     gui, co_anh = _bot_gan_anh(messages, prov, text, images)
-    canh_bao_anh = _anh_khong_gui_duoc(prov) if images and not co_anh else ""
+    canh_bao_anh = ""
+    if images and not co_anh:
+        # Bộ não này không có đường gửi ảnh: mượn mắt bộ não khác đã kết nối tả ảnh thành chữ (0.94.0).
+        gui, canh_bao_anh = await _bot_anh_mat_muon(messages, lich_su, text, images, prov, api_model, chat_id,
+                                                    _anh_khong_gui_duoc(prov))
 
     out, loi = await _bot_doc_stream(
         _api_stream(prov, api_key, api_model, gui, reasoning),
         progress=progress, runtime_trace=runtime_trace, prov=prov, api_model=api_model)
     if not out and co_anh:
-        canh_bao_anh = f"Bot không xem được ảnh khách gửi: model {api_model or prov} từ chối ảnh, đã trả lời chỉ bằng chữ."
-        # Model không nhận ảnh (model chữ thuần): trả lời lại bằng chữ, nói thật là không xem được ảnh.
-        print(f"[bot {prov} chat {chat_id}] model từ chối ảnh ({loi[0] if loi else '?'}), gửi lại chỉ chữ",
+        # Model nhận ảnh mà trả rỗng hoặc lỗi: mượn mắt bộ não khác rồi trả lời lại. Lỗi GỐC đi vào cảnh báo, vì trước 0.94.0
+        # mọi lỗi ở đây đều bị ghi chung là "từ chối ảnh" và không ai biết model thật sự nói gì.
+        goc = (loi[0] if loi else "không trả lời gì")[:200]
+        print(f"[bot {prov} chat {chat_id}] model không nhận ảnh ({goc}), mượn mắt bộ não khác",
               file=__import__('sys').stderr)
+        gui, canh_bao_anh = await _bot_anh_mat_muon(
+            messages, lich_su, text, images, prov, api_model, chat_id,
+            f"Bot không xem được ảnh khách gửi: model {api_model or prov} không nhận ảnh (lỗi gốc: {goc}).")
+        if not canh_bao_anh:
+            canh_bao_anh = (f"Model {api_model or prov} của bot không nhận ảnh (lỗi gốc: {goc}), "
+                            f"nên một bộ não khác đã xem hộ ảnh.")
         out, loi = await _bot_doc_stream(
-            _api_stream(prov, api_key, api_model, _bot_bo_anh(messages, text), reasoning),
+            _api_stream(prov, api_key, api_model, gui, reasoning),
             progress=progress, runtime_trace=runtime_trace, prov=prov, api_model=api_model)
 
     if not out:
@@ -19111,6 +19203,11 @@ class _BoQua(Exception):
     """Nhảy qua một khối try khi bước đó không áp cho lượt này (bot Toàn quyền bỏ nguồn chọn lọc)."""
 
 
+# Engines of the owner's channel that open an image FILE themselves (Claude Code's Read, Codex's image viewer). A full-access
+# bot on any other engine gets the borrowed-eyes description added to the turn as well (0.94.0).
+_MO_ANH_BANG_CONG_CU = ("anthropic-cli", "openai-oauth")
+
+
 def _bot_full_prompt(brain, sys_bot, lang, conv_sid=""):
     """Prompt của bot mức Toàn quyền (0.85.3): ĐỦ prompt của kênh admin (CLAUDE.md, bộ nhớ, kỹ năng,
     hướng dẫn điều phối) cho brain của bot, rồi VAI của Agent đè lên.
@@ -19164,7 +19261,11 @@ async def _bot_tra_loi_co_tool(text, *, sess, sysprompt, prov, api_key, api_mode
     _bot_cat_lich_su(lich_su)
     messages = [{"role": "system", "content": sysprompt}] + lich_su
     gui, co_anh = _bot_gan_anh(messages, prov, text, images)
-    canh_bao_anh = _anh_khong_gui_duoc(prov) if images and not co_anh else ""
+    canh_bao_anh = ""
+    if images and not co_anh:
+        # Bộ não này không có đường gửi ảnh: mượn mắt bộ não khác đã kết nối tả ảnh thành chữ (0.94.0).
+        gui, canh_bao_anh = await _bot_anh_mat_muon(messages, lich_su, text, images, prov, api_model, chat_id,
+                                                    _anh_khong_gui_duoc(prov))
 
     # vault_root = brain CỦA BOT. Đây là một tham số, không phải một quy ước - truyền nhầm brain
     # của chủ vào đây là mở toang đúng thứ cả tính năng này đang giữ.
@@ -19183,21 +19284,6 @@ async def _bot_tra_loi_co_tool(text, *, sess, sysprompt, prov, api_key, api_mode
               file=__import__('sys').stderr)
     _bot_ghim_duong(runtime_trace, prov, api_model, messages, tools)
 
-    out, loi = await _bot_doc_stream(
-        _bot_stream_co_tool(prov, api_key, api_model, gui, reasoning, tools, route,
-                            brain=brain, tag_bot=f"bot:{chat_id}", muc_quyen=muc_quyen),
-        progress=progress, runtime_trace=runtime_trace, prov=prov, api_model=api_model)
-    if not out and co_anh:
-        # Model không nhận ảnh: thử lại CÙNG vòng tool, chỉ chữ + nhãn thật thà (mất ảnh, không mất công cụ).
-        canh_bao_anh = f"Bot không xem được ảnh khách gửi: model {api_model or prov} từ chối ảnh, đã trả lời chỉ bằng chữ."
-        print(f"[bot {prov} chat {chat_id}] model từ chối ảnh ({loi[0] if loi else '?'}), gửi lại chỉ chữ",
-              file=__import__('sys').stderr)
-        gui = _bot_bo_anh(messages, text)
-        out, loi = await _bot_doc_stream(
-            _bot_stream_co_tool(prov, api_key, api_model, gui, reasoning, tools, route,
-                                brain=brain, tag_bot=f"bot:{chat_id}", muc_quyen=muc_quyen),
-            progress=progress, runtime_trace=runtime_trace, prov=prov, api_model=api_model)
-
     # Engine KHÔNG chạy nổi vòng tool: trả lời lại lượt này mà bỏ tool đi.
     #
     # Không phải phòng xa. Bản 0.24.0 nối mức Được ghi của gói ChatGPT vào
@@ -19210,26 +19296,50 @@ async def _bot_tra_loi_co_tool(text, *, sess, sysprompt, prov, api_key, api_mode
     # Nên đường lui: vẫn trả lời, chỉ là không có công cụ. Và tuyệt đối KHÔNG im lặng về việc
     # đó - chủ đặt mức Được ghi mà bot lặng lẽ chạy như mức Chỉ đọc là đúng kiểu hỏng tệ nhất.
     # Cảnh báo đi kèm câu trả lời, lên thẻ bot, và nói luôn việc cần làm.
-    canh_bao = ""
-    if not out and tools:
-        print(f"[bot {prov} chat {chat_id}] vòng tool rỗng ({loi[0] if loi else '?'}), "
-              f"trả lời lại KHÔNG tool", file=__import__('sys').stderr)
-        out, loi2 = await _bot_doc_stream(
-            _api_stream(prov, api_key, api_model, gui, reasoning),
+    async def _mot_lan(gui_):
+        """Một lần thử: vòng tool, rỗng thì chính lượt đó KHÔNG tool. Trả (out, loi, đã rơi về không-tool)."""
+        out_, loi_ = await _bot_doc_stream(
+            _bot_stream_co_tool(prov, api_key, api_model, gui_, reasoning, tools, route,
+                                brain=brain, tag_bot=f"bot:{chat_id}", muc_quyen=muc_quyen),
             progress=progress, runtime_trace=runtime_trace, prov=prov, api_model=api_model)
-        if out:
-            canh_bao = (f"Engine đang chạy ({_api_label(prov)}) không gọi được công cụ cho bot, "
-                        f"nên lượt vừa rồi trả lời ở mức Chỉ đọc chứ không phải mức "
-                        f"{chatbot_store.MUC_NHAN.get(muc_quyen, muc_quyen)} bạn đã đặt. "
-                        f"Cần bot làm việc thật thì đổi engine ở trang Models, hoặc hạ mức bot "
-                        f"xuống Chỉ đọc cho khỏi hiểu nhầm.")
-            loi = []
-        else:
-            # Gãy CẢ đường không-tool thì lỗi đáng báo là lỗi của đường đó, không phải lỗi vòng
-            # tool. Đường không-tool là lời gọi đơn giản nhất còn lại, nên nó nói đúng bệnh hơn:
-            # hết quota, sai token, mạng chết. Báo lỗi vòng tool trước là đẩy chủ đi tìm xem
-            # engine có hỗ trợ tool không, trong khi thứ hỏng là cái khác hẳn.
-            loi = loi2 + loi
+        if out_ or not tools:
+            return out_, loi_, False
+        print(f"[bot {prov} chat {chat_id}] vòng tool rỗng ({loi_[0] if loi_ else '?'}), "
+              f"trả lời lại KHÔNG tool", file=__import__('sys').stderr)
+        out2, loi2 = await _bot_doc_stream(
+            _api_stream(prov, api_key, api_model, gui_, reasoning),
+            progress=progress, runtime_trace=runtime_trace, prov=prov, api_model=api_model)
+        if out2:
+            return out2, [], True
+        # Gãy CẢ đường không-tool thì lỗi đáng báo là lỗi của đường đó, không phải lỗi vòng
+        # tool. Đường không-tool là lời gọi đơn giản nhất còn lại, nên nó nói đúng bệnh hơn:
+        # hết quota, sai token, mạng chết. Báo lỗi vòng tool trước là đẩy chủ đi tìm xem
+        # engine có hỗ trợ tool không, trong khi thứ hỏng là cái khác hẳn.
+        return "", loi2 + loi_, False
+
+    # Lần đầu GIỮ ẢNH cho cả đường không-tool (0.94.0). Trước đó vòng tool rỗng là ảnh bị đổ lỗi ngay: bot "Javis Vũ" trên gói
+    # ChatGPT bị ghi "từ chối ảnh" ở những lượt mà thứ hỏng thật là vòng tool (cùng ngày nó báo 129 lượt không gọi được công cụ).
+    out, loi, roi_tool = await _mot_lan(gui)
+    if not out and co_anh:
+        # Có ảnh mà vẫn rỗng cả khi bỏ tool: lỗi nằm ở ảnh. Mượn mắt bộ não khác (0.94.0), thử lại với ảnh đã thành chữ (không
+        # ai xem hộ được thì chỉ chữ + nhãn thật thà). Mất ảnh gốc, không mất công cụ. Lỗi GỐC đi vào cảnh báo.
+        goc = (loi[0] if loi else "không trả lời gì")[:200]
+        print(f"[bot {prov} chat {chat_id}] model không nhận ảnh ({goc}), mượn mắt bộ não khác",
+              file=__import__('sys').stderr)
+        gui, canh_bao_anh = await _bot_anh_mat_muon(
+            messages, lich_su, text, images, prov, api_model, chat_id,
+            f"Bot không xem được ảnh khách gửi: model {api_model or prov} không nhận ảnh (lỗi gốc: {goc}).")
+        if not canh_bao_anh:
+            canh_bao_anh = (f"Model {api_model or prov} của bot không nhận ảnh (lỗi gốc: {goc}), "
+                            f"nên một bộ não khác đã xem hộ ảnh.")
+        out, loi, roi_tool = await _mot_lan(gui)
+    canh_bao = ""
+    if roi_tool:
+        canh_bao = (f"Engine đang chạy ({_api_label(prov)}) không gọi được công cụ cho bot, "
+                    f"nên lượt vừa rồi trả lời ở mức Chỉ đọc chứ không phải mức "
+                    f"{chatbot_store.MUC_NHAN.get(muc_quyen, muc_quyen)} bạn đã đặt. "
+                    f"Cần bot làm việc thật thì đổi engine ở trang Models, hoặc hạ mức bot "
+                    f"xuống Chỉ đọc cho khỏi hiểu nhầm.")
 
     if not out:
         lich_su.pop()   # lượt hỏng thì đừng để câu hỏi treo lơ lửng không có câu trả lời
@@ -19340,6 +19450,12 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
                 # Telegram), nên đưa đường dẫn vào câu hỏi thay cho cổng ảnh riêng của bot.
                 text = (str(text or "") + "\n" + "\n".join(
                     f"[Người nhắn gửi kèm ảnh, đã lưu tại: {a}]" for a in _anh)).strip()
+                if prov not in _MO_ANH_BANG_CONG_CU:
+                    # Engine API chỉ nhận chữ từ công cụ đọc file, Antigravity và Grok Build không chắc mở được ảnh:
+                    # đưa luôn mô tả ảnh do bộ não khác xem hộ vào câu hỏi (0.94.0).
+                    _mo_ta, _who, _ly_do = await _bot_xem_ho(_anh, text, prov, api_model, chat_id)
+                    if _mo_ta:
+                        text = borrowed_eyes.turn_text(text, _mo_ta, len(_anh))
         elif _muc in chatbot_store.MUC_CO_TOOL:
             return await _bot_tra_loi_co_tool(
                 text, sess=sess, sysprompt=_sys_bot, prov=prov, api_key=api_key,

@@ -8,12 +8,21 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
-## [0.93.0] - 2026-10-11
+## [0.95.0] - 2026-10-11
 ### Added
 - **Resonance assistants only write to files you have allowed.** A new goal, or a switch to another file, makes the card ask "The assistant wants to write to ... Allow?" with the exact path. Once allowed, the assistant keeps working without asking again for each revision.
 - **What the assistant drafts before you allow it is kept as a draft.** Preview it, then Allow publishes exactly that version, with no new model call.
 - **Codex and API-key brains can also hand in their work during the chat**, through the same check as Claude: Javis reads, verifies and publishes the submission itself, and never overwrites a file you edited.
 - **A Revoke permission button on the goal card** stops the goal right away; press Resume to grant it again. To go back to 0.91.0, stop Javis and run `tools/resonance_restore_pre_a4.py`.
+
+## [0.94.0] - 2026-10-11
+### Improved
+- **Bots see customer photos whatever model runs them.** A bot whose model can see images still looks at the photo itself. When the model cannot (Antigravity, Grok Build, a text-only model) or returns nothing for a photo, another brain you already connected looks at it and describes it, copying prices, order codes and phone numbers exactly. The order: your main brain, then the ChatGPT plan, then Claude Code.
+- **Bots remember what the earlier photo showed.** When a customer follows up about "the thing in that photo", the bot still knows, because the description stays in the conversation.
+
+### Fixed
+- **Zalo photos are no longer dropped by mistake.** Zalo's photo server labels some photos as generic binary files instead of images, and Javis skipped them before the bot could see them. Javis now checks the file's own content to recognise an image.
+- **The bot card shows the real error when a model rejects a photo**, instead of a generic "refused the image". When no brain can look, the card says why each one could not.
 
 ## [0.92.2] - 2026-10-11
 ### Fixed

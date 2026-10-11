@@ -74,9 +74,11 @@ RT = (SERVER / "chatbot_runtime.py").read_text(encoding="utf-8")
 MAIN = (SERVER / "main.py").read_text(encoding="utf-8")
 check("nhật ký bot gộp lý do ảnh vào canh_bao", 'tl.get("canh_bao_link"), cfg.get("_anh_loi")) if x)' in RT)
 check("mỗi lượt xoá lý do của lượt trước", 'cfg.pop("_anh_loi", None)\n        text_engine, cfg["_anh"] = await anh_cho_bot(' in RT)
-check("bộ não không nhận ảnh: cả hai đường trả lời ghi cảnh báo",
-      MAIN.count('canh_bao_anh = _anh_khong_gui_duoc(prov) if images and not co_anh else ""') == 2)
-check("model từ chối ảnh: cả hai đường trả lời ghi cảnh báo", MAIN.count("từ chối ảnh, đã trả lời chỉ bằng chữ.") == 2)
+# 0.94.0: cả hai ca giờ mượn mắt bộ não khác trước (test_bot_mat_muon.py), cảnh báo vẫn ghi khi không ai xem hộ được.
+check("bộ não không nhận ảnh: cả hai đường trả lời mượn mắt, ghi cảnh báo khi không ai xem hộ",
+      MAIN.count("_anh_khong_gui_duoc(prov))") == 2)
+check("model từ chối ảnh: cả hai đường trả lời ghi LỖI GỐC vào cảnh báo",
+      MAIN.count("không nhận ảnh (lỗi gốc: {goc}).") == 2)
 
 import main  # noqa: E402
 check("câu cảnh báo bộ não không nhận ảnh chỉ đường đổi model", "không nhận ảnh" in main._anh_khong_gui_duoc("antigravity-cli")

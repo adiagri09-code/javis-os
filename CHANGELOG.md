@@ -6,12 +6,21 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.93.0] - 2026-10-11
+## [0.95.0] - 2026-10-11
 ### Thêm mới
 - **Trợ lý Cộng hưởng chỉ ghi vào file bạn đã cho phép.** Mục tiêu mới hay đổi sang file khác thì thẻ hỏi "Trợ lý muốn ghi vào ... Cho phép?" kèm đúng đường file. Đã cho phép thì trợ lý làm tiếp, không hỏi lại từng lần sửa.
 - **Bản trợ lý soạn trước khi bạn cho phép được giữ làm nháp.** Bấm Xem trước để đọc, bấm Cho phép là Javis đăng đúng bản đó, không gọi model viết lại.
 - **Codex và các bộ não dùng API key cũng giao được sản phẩm ngay trong cuộc trò chuyện**, qua cùng một cửa kiểm như Claude: Javis tự đọc, kiểm và đăng bản nộp, không ghi đè file bạn đã sửa.
 - **Nút Thu hồi quyền trên thẻ mục tiêu** dừng mục tiêu ngay; bấm Tiếp tục để cấp lại. Muốn quay về 0.91.0 thì tắt Javis và chạy `tools/resonance_restore_pre_a4.py`.
+
+## [0.94.0] - 2026-10-11
+### Cải thiện
+- **Bot xem được ảnh khách gửi dù chạy bằng model nào.** Model của bot nhìn được ảnh thì vẫn tự nhìn như cũ. Model không nhìn được ảnh (Antigravity, Grok Build, model chỉ đọc chữ) hoặc trả về rỗng khi có ảnh thì một bộ não khác bạn đã kết nối xem hộ và tả lại, chép đúng giá, mã đơn, số điện thoại trong ảnh. Thứ tự mượn: bộ não chính, rồi gói ChatGPT, rồi Claude Code.
+- **Bot nhớ ảnh lúc nãy có gì.** Khách hỏi tiếp "cái trong ảnh vừa rồi" thì bot vẫn biết, vì phần mô tả được giữ lại trong cuộc chat.
+
+### Sửa lỗi
+- **Ảnh Zalo không còn bị bỏ oan.** Máy chủ ảnh của Zalo gửi một số ảnh với nhãn "file nhị phân" thay vì nhãn ảnh, và Javis bỏ qua ảnh đó trước khi bot kịp thấy. Giờ Javis nhìn chính nội dung file để nhận ra ảnh.
+- **Thẻ bot ghi lỗi thật khi model không nhận ảnh**, thay vì câu chung chung "từ chối ảnh". Không bộ não nào xem hộ được thì thẻ nói rõ vì sao từng bộ não không xem được.
 
 ## [0.92.2] - 2026-10-11
 ### Sửa lỗi
