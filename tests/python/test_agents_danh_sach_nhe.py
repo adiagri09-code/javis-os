@@ -50,7 +50,7 @@ nhe = main.agents_index(str(BRAIN), kem_prompt=False)
 check("mặc định vẫn kèm prompt", all("prompt" in a for a in day))
 check("kem_prompt=False bỏ hẳn khoá prompt", all("prompt" not in a for a in nhe))
 check("bỏ prompt KHÔNG làm mất thứ cột trái cần",
-      all(set(a) == {"slug", "name", "role", "skills", "model", "group", "tags",
+      all(set(a) == {"slug", "name", "role", "skills", "model", "group", "tags", "tag_keys",
                      "model_provider", "pinned", "avatar", "last_chat_at"} for a in nhe))
 # 0.98.0: tag đi CÙNG danh sách nhẹ (cột trái lọc theo tag), không cần request riêng cho từng agent.
 check("danh sách nhẹ mang tag; file cũ chỉ có group đọc thành đúng một tag",
