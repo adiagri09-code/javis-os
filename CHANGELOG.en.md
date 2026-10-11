@@ -10,7 +10,11 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.95.1] - 2026-10-11
 ### Fixed
-- (in progress) Ollama (Local) no longer returns nothing after thinking too long.
+- **Ollama (Local) no longer "returns nothing" after thinking too long.** Models like qwen3 turn thinking on by themselves, and a job such as counting the rows of a file could spend the whole turn thinking without writing a word. Javis now switches thinking off for local models, with or without tools, so they answer directly.
+- **The Effort button no longer drags the local model along.** Leave Effort at Medium or Very high for Claude and the local model still answers directly, so switching between the two no longer means toggling it every time.
+- **When a model only thinks and never answers, Javis says exactly that**, with what to do (lower the thinking level or split the task), instead of a "returned nothing" that looks like a lost connection.
+
+Thanks to the user who reported this with a patch tested on a Mac.
 
 ## [0.94.0] - 2026-10-11
 ### Improved

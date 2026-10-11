@@ -8,7 +8,11 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.95.1] - 2026-10-11
 ### Sửa lỗi
-- (đang viết) Ollama (Local) hết trả về rỗng vì suy nghĩ quá lâu.
+- **Ollama (Local) hết báo "trả về rỗng" vì mải suy nghĩ.** Model như qwen3 tự bật chế độ suy nghĩ, gặp việc như đếm dòng file có thể nghĩ hết cả lượt mà không viết ra chữ nào. Giờ Javis tắt hẳn chế độ suy nghĩ cho model local, có dùng công cụ hay không cũng vậy, nên model trả lời thẳng.
+- **Nút Effort không còn kéo theo model local.** Để Effort ở mức Vừa hay Rất cao cho Claude thì model local vẫn trả lời thẳng, đổi qua lại giữa hai model không phải bật tắt lại nữa.
+- **Model chỉ suy nghĩ mà chưa trả lời thì Javis nói đúng như vậy**, kèm việc nên làm (hạ mức suy nghĩ hoặc chia việc nhỏ hơn), thay vì câu "trả về rỗng" dễ tưởng mất kết nối.
+
+Cảm ơn người dùng đã gửi báo lỗi kèm bản vá chạy thử trên Mac.
 
 ## [0.94.0] - 2026-10-11
 ### Cải thiện
