@@ -24,51 +24,59 @@ class TagError(ValueError):
     """Mã lỗi máy (`tag_too_long`, `too_many_tags`, `bad_tags`), giao diện dịch sang câu người đọc."""
 
 
-def normalize_tag(value) -> str:
-    """Dạng chuẩn của một tag, "" nếu không phải tag. NFC, bỏ ký tự điều khiển, gộp khoảng trắng."""
+def clean_tag(value) -> str:
+    """Dạng chuẩn của một tag, "" nếu không phải tag: NFC, bỏ ký tự điều khiển, gộp khoảng trắng.
+    KHÔNG áp giới hạn độ dài: dùng khi ĐỌC dữ liệu đang có và khi so khoá (review PR #617 vòng 1, R1)."""
     if not isinstance(value, str):
         return ""
     s = unicodedata.normalize("NFC", value)
     s = "".join(ch for ch in s if not unicodedata.category(ch).startswith("C") or ch in "\t\n\r")
-    s = _WS.sub(" ", s).strip()
+    return _WS.sub(" ", s).strip()
+
+
+def normalize_tag(value) -> str:
+    """Như `clean_tag`, cộng giới hạn độ dài: chỉ dùng cho tag người dùng THÊM MỚI hay đổi tên tới."""
+    s = clean_tag(value)
     if len(s) > TAG_MAX_CHARS:
         raise TagError("tag_too_long")
     return s
 
 
 def tag_key(value) -> str:
-    """Khoá so trùng: dạng chuẩn rồi casefold. Giữ dấu: "Viết" khác "Viet"."""
-    return normalize_tag(value).casefold()
+    """Khoá định danh của một tag, DÙNG CHUNG cho server và giao diện (API trả kèm `tag_keys`, giao diện
+    không tự tính): dạng chuẩn rồi Unicode casefold ("Straße" và "STRASSE" là một tag). Giữ dấu:
+    "Viết" khác "Viet". Không giới hạn độ dài, để bỏ hay đổi tên được cả tag cũ dài."""
+    return clean_tag(value).casefold()
 
 
-def normalize_tags(values, *, strict: bool = True) -> list:
-    """Danh sách tag chuẩn, bỏ trùng theo `tag_key`, giữ cách viết gặp trước.
-
-    `strict=False` (khi ĐỌC file): tag quá dài hay phần tử lạ thì bỏ qua thay vì ném lỗi, để một
-    file sửa tay sai không làm hỏng cả danh sách agent.
-    """
+def _dedupe(values) -> list:
     out, seen = [], set()
-    for v in values or []:
-        try:
-            t = normalize_tag(v)
-        except TagError:
-            if strict:
-                raise
-            continue
+    for v in values:
+        t = clean_tag(v)
         k = t.casefold()
-        if not t or k in seen:
-            continue
-        seen.add(k)
-        out.append(t)
+        if t and k not in seen:
+            seen.add(k)
+            out.append(t)
+    return out
+
+
+def read_tags(values) -> list:
+    """Tag ĐANG CÓ (file, gói nhập): chuẩn hoá, bỏ trùng theo khoá, giữ cách viết gặp trước, bỏ phần tử
+    không phải chuỗi hay rỗng. KHÔNG cắt theo độ dài hay số lượng: giới hạn chỉ dành cho đầu vào mới, còn
+    dữ liệu đã có thì giữ nguyên để thao tác khác (ghim, lưu form) không làm mất phân loại."""
+    return _dedupe(v for v in values or [] if isinstance(v, str))
+
+
+def normalize_tags(values) -> list:
+    """Tập tag MỚI do người dùng gửi (thay cả tập): chuẩn hoá, bỏ trùng, áp đủ giới hạn."""
+    out = _dedupe(normalize_tag(v) for v in values or [])
     if len(out) > TAGS_MAX:
-        if strict:
-            raise TagError("too_many_tags")
-        out = out[:TAGS_MAX]
+        raise TagError("too_many_tags")
     return out
 
 
 def tags_of(meta) -> list:
-    """Tag của một agent đọc từ frontmatter (luật đọc tương thích)."""
+    """Tag của một agent đọc từ frontmatter (luật đọc tương thích, không cắt dữ liệu đang có)."""
     meta = meta if isinstance(meta, dict) else {}
     if "tags" in meta:
         raw = meta.get("tags")
@@ -76,17 +84,18 @@ def tags_of(meta) -> list:
             raw = [raw]
         elif not isinstance(raw, (list, tuple)):
             raw = []
-        return normalize_tags(raw, strict=False)
+        return read_tags(raw)
     g = meta.get("group")
     if isinstance(g, str) and g.strip():
-        return normalize_tags([g], strict=False)
+        return read_tags([g])
     return []
 
 
 def write_tags(meta: dict, tags: list) -> dict:
     """Ghi dạng chuẩn vào `meta` (sửa tại chỗ và trả lại): `tags` + gương `group` để hạ phiên bản
-    vẫn có nhãn. Không còn tag thì xoá `group`, để mã cũ hiện "Chung" chứ không hiện tag đã bỏ."""
-    tags = normalize_tags(tags)
+    vẫn có nhãn. Không còn tag thì xoá `group`, để mã cũ hiện "Chung" chứ không hiện tag đã bỏ.
+    Ghi đúng tập đã cho (đã đọc hay đã kiểm ở nơi gọi), không cắt lại."""
+    tags = read_tags(tags)
     meta["tags"] = list(tags)
     if tags:
         meta["group"] = tags[0]
@@ -116,14 +125,21 @@ def parse_list(raw) -> list | None:
 
 
 def apply_ops(current: list, *, replace=None, add=None, remove=None) -> list:
-    """Tập tag mới: thay cả tập (nếu có), rồi thêm, rồi bỏ theo khoá. Không gửi gì thì giữ nguyên."""
-    out = normalize_tags(replace) if replace is not None else list(current or [])
+    """Tập tag mới: thay cả tập (nếu có), rồi thêm, rồi bỏ theo khoá. Không gửi gì thì giữ nguyên.
+
+    Giới hạn chỉ áp cho phần MỚI: tag thay cả tập và tag thêm vào phải hợp lệ; tag đang có giữ nguyên dù
+    dài hay nhiều hơn giới hạn (dữ liệu cũ). Thêm làm tập vượt `TAGS_MAX` thì từ chối; bỏ thì luôn được."""
+    out = normalize_tags(replace) if replace is not None else read_tags(current)
     if add:
-        out = normalize_tags(out + list(add))
+        co = {t.casefold() for t in out}
+        moi = [t for t in _dedupe(normalize_tag(x) for x in add) if t.casefold() not in co]
+        if moi and len(out) + len(moi) > TAGS_MAX:
+            raise TagError("too_many_tags")
+        out = out + moi
     if remove:
-        bo = {tag_key(x) for x in remove if tag_key(x)}
+        bo = {k for k in (tag_key(x) for x in remove) if k}
         out = [t for t in out if t.casefold() not in bo]
-    return normalize_tags(out)
+    return out
 
 
 def from_old_group(current: list, group: str) -> list:
@@ -138,13 +154,14 @@ def from_old_group(current: list, group: str) -> list:
 
 def rename(current: list, src: str, dst: str) -> tuple[list, bool]:
     """Đổi tag `src` thành `dst` trên một agent, giữ các tag khác và vị trí. Trả (tập mới, có đổi).
-    `dst` trùng khoá một tag khác của agent thì gộp, không nhân đôi."""
+    `src` so theo khoá (đổi được cả tag cũ dài); `dst` là tên mới nên phải hợp lệ. `dst` trùng khoá một
+    tag khác của agent thì gộp, không nhân đôi."""
     ks = tag_key(src)
     d = normalize_tag(dst)
     if not ks or not d:
         raise TagError("bad_tags")
-    if not any(t.casefold() == ks for t in current or []):
-        return list(current or []), False
-    out = [d if t.casefold() == ks else t for t in current]
-    out = normalize_tags(out)
-    return out, out != list(current)
+    cur = read_tags(current)
+    if not any(t.casefold() == ks for t in cur):
+        return cur, False
+    out = _dedupe(d if t.casefold() == ks else t for t in cur)
+    return out, out != cur

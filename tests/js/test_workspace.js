@@ -198,7 +198,8 @@ check("phan tram", W.phanTram(W.tienDoMoi(4)) === 0 && W.phanTram(st) === 100);
     nhomCua: (x) => (String((x && x.group) || "").trim()) || "Chung", NHOM_MD: "Chung", brain: () => "brain",
     nhomCua: (x) => (String((x && x.group) || "").trim()) || "Chung", NHOM_MD: "Chung", brain: () => "brain",
     // Tag của agent (0.98.0) cũng khai ở đầu module: mượn bản thật qua W.
-    tagsCua: W.tagsCua, demTag: W.demTag, coTag: W.coTag, khoaTag: W.khoaTag, TAG_NONE: W.TAG_NONE,
+    tagsCua: W.tagsCua, tagCap: W.tagCap, laKhoa: W.laKhoa, demTag: W.demTag, coTag: W.coTag,
+    khoaTag: W.khoaTag, dongChonTag: W.dongChonTag, TAG_NONE: W.TAG_NONE,
     TAB_PHAI: ["cai", "lichsu", "files"],
     luuChon() {}, moPhien() {}, heptLai: () => false, chatReady() {}, active: true, opening: 0,
     esc: (s) => String(s == null ? "" : s), t: (k) => k, ic: () => "<svg></svg>", avatar: () => "<i></i>",
@@ -265,9 +266,25 @@ check("phan tram", W.phanTram(W.tienDoMoi(4)) === 0 && W.phanTram(st) === 100);
     && !nodes["#wsList"].innerHTML.includes("Kế toán"));
   ctx.S.q = "";
   check("demTag dem dung so agent moi tag va so chua gan tag",
-    JSON.stringify(W.demTag(ds)) === JSON.stringify({ tags: [{ ten: "Marketing", n: 2 }, { ten: "Viết nội dung", n: 1 }], khong: 1 }));
+    JSON.stringify(W.demTag(ds).tags.map(g => [g.ten, g.n])) === JSON.stringify([["Marketing", 2], ["Viết nội dung", 1]])
+    && W.demTag(ds).khong === 1);
   ctx.S.nhom = "Tag-da-bi-xoa"; ctx.veTrai();
   check("tag dang loc khong con ai mang (doi ten/xoa o tab khac) thi ve Tat ca", ctx.S.nhom === "");
+  // Review PR #617 vòng 1, R2: tên tag là chữ người dùng gõ; "__proto__", "constructor" hợp lệ.
+  let demDacBiet = null, loiDem = "";
+  const dsDacBiet = [{ slug: "x", tags: ["Marketing", "__proto__", "constructor"] }, { slug: "y", tags: ["constructor"] }];
+  try { demDacBiet = W.demTag(dsDacBiet); } catch (e) { loiDem = e.message; }
+  check("R2 demTag dem duoc __proto__ va constructor, khong nem loi",
+    demDacBiet && demDacBiet.tags.some(g => g.ten === "__proto__" && g.n === 1)
+    && demDacBiet.tags.some(g => g.ten === "constructor" && g.n === 2), loiDem);
+  const dongY = W.dongChonTag(dsDacBiet[1], dsDacBiet);
+  check("R2 bo chon: dau tick dung voi ten dac biet (y chi mang constructor)",
+    dongY.filter(r => r.on).map(r => r.ten).join() === "constructor"
+    && dongY.some(r => r.ten === "__proto__" && !r.on));
+  check("R2 khong cham prototype", ({}).n === undefined && Object.prototype.n === undefined);
+  check("R3 loc bang khoa host: 'strasse' gom ca Straße va STRASSE",
+    W.loc([{ slug: "a", tags: ["Straße"], tag_keys: ["strasse"] }, { slug: "b", tags: ["STRASSE"], tag_keys: ["strasse"] }],
+          "", "STRASSE", true).length === 2);
   const chip = W.chipTagHtml({ tags: ['<img src=x onerror="a()">', "B", "C", "D", "E"] });
   check("chip tag escape ten do nguoi dung go (khong XSS)", chip.includes("&lt;img") && !chip.includes("<img"));
   check("chip tag toi da 3, phan con lai gop +n", (chip.match(/class="ws-tag"/g) || []).length === 3 && chip.includes("ws-tag-more"));

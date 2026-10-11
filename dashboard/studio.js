@@ -138,6 +138,8 @@
     editAgent: editAgent, editWorkflow: editWorkflow, exportItem: exportItem, importItems: importItems,
     // Trang Models gọi sau khi cắm/ngắt key: ô chọn model trong form trợ lý dựng từ /settings.
     quenForm: quenForm,
+    // Lọc/đếm tag của trang agent, để test chạy đúng mã thật (gọi lúc dùng: các hàm khai sau dòng này).
+    tags: () => ({ demTag, tagCap, locTheoNhom, khungNhomHtml, TAG_NONE }),
   };
   const _studioBtn = document.getElementById("studioOpenBtn");
   if (_studioBtn) _studioBtn.addEventListener("click", () => window.openStudio("workspace"));
@@ -190,13 +192,21 @@
   const TAG_NONE = " none";
   const tagsCua = (x) => (x && Array.isArray(x.tags)) ? x.tags.map(String)
     : ((g) => (g && g !== NHOM_MD ? [g] : []))(String((x && x.group) || "").trim());
+  // Khoá định danh do HOST cấp (`tag_keys`, Unicode casefold ở server), cùng định nghĩa với trang Cộng sự và
+  // server (review PR #617 vòng 1, R3). NFC + toLowerCase chỉ là đường lùi cho server cũ chưa trả `tag_keys`.
+  // `state.cat` của trang agent giữ KHOÁ; "ALL" viết hoa không thể là khoá casefold nên không trùng tag thật.
   const khoaTag = (s) => { let v = String(s == null ? "" : s); try { v = v.normalize("NFC"); } catch (e) {} return v.toLowerCase(); };
+  const tagCap = (x) => {
+    const tg = tagsCua(x);
+    const ks = x && Array.isArray(x.tag_keys) && x.tag_keys.length === tg.length ? x.tag_keys.map(String) : null;
+    return tg.map((g, i) => ({ ten: g, key: ks ? ks[i] : khoaTag(g) }));
+  };
   function demTag(items) {
     const m = new Map(); let khong = 0;
     (items || []).forEach(x => {
-      const tg = tagsCua(x);
-      if (!tg.length) khong++;
-      tg.forEach(g => { const k = khoaTag(g); if (!m.has(k)) m.set(k, { ten: g, n: 0 }); m.get(k).n++; });
+      const cap = tagCap(x);
+      if (!cap.length) khong++;
+      cap.forEach(p => { if (!m.has(p.key)) m.set(p.key, { ten: p.ten, key: p.key, n: 0 }); m.get(p.key).n++; });
     });
     return { tags: [...m.values()].sort((a, b) => a.ten.localeCompare(b.ten, LOC())), khong };
   }
@@ -207,10 +217,10 @@
     let cats, ten = (c) => c, so;
     if (o.laTag) {
       const d = demTag(items);
-      cats = ["ALL", TAG_NONE].concat(d.tags.map(g => g.ten));
-      const n = new Map(d.tags.map(g => [g.ten, g.n]));
-      so = (c) => c === TAG_NONE ? d.khong : n.get(c);
-      ten = (c) => c === TAG_NONE ? t("ws.tag_none") : c;
+      cats = ["ALL", TAG_NONE].concat(d.tags.map(g => g.key));
+      const n = new Map(d.tags.map(g => [g.key, g]));
+      so = (c) => c === TAG_NONE ? d.khong : (n.get(c) || { n: 0 }).n;
+      ten = (c) => c === TAG_NONE ? t("ws.tag_none") : (n.get(c) || { ten: c }).ten;
     } else {
       const dem = demNhom(items);
       cats = ["ALL"].concat(Object.keys(dem).sort((a, b) => a.localeCompare(b, LOC())));
@@ -232,7 +242,7 @@
     let list = items || [];
     if (laTag) {
       if (state.cat === TAG_NONE) list = list.filter(x => !tagsCua(x).length);
-      else if (state.cat !== "ALL") list = list.filter(x => tagsCua(x).some(g => khoaTag(g) === khoaTag(state.cat)));
+      else if (state.cat !== "ALL") list = list.filter(x => tagCap(x).some(p => p.key === state.cat));
     } else if (state.cat !== "ALL") list = list.filter(x => nhomCua(x) === state.cat);
     const nq = _spNoAccent((state.q || "").trim());
     if (nq) list = list.filter(x => nq.split(/\s+/).every(word => _spNoAccent(blob(x)).includes(word)));

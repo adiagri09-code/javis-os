@@ -126,28 +126,49 @@
     var g = String((x && x.group) || "").trim();
     return g && g !== NHOM_MD ? [g] : [];
   }
+  // ĐỊNH DANH tag do HOST cấp (review PR #617 vòng 1, R3): API trả `tag_keys` song song với `tags`, tính bằng
+  // Unicode casefold ở server ("Straße" và "STRASSE" là một tag; "Viết" và "Viet" là hai). Trang chỉ so khoá
+  // đó, không tự tính. `khoaTag` (NFC + toLowerCase) chỉ là đường lùi khi server cũ chưa trả `tag_keys`.
   function khoaTag(s) { var v = String(s == null ? "" : s); try { v = v.normalize("NFC"); } catch (e) {} return v.toLowerCase(); }
-  function coTag(x, tag) { var k = khoaTag(tag); return tagsCua(x).some(function (g) { return khoaTag(g) === k; }); }
-  // Mọi tag đang có trong danh sách: [{ten, n}] theo tên tiếng Việt, cộng số agent chưa gắn tag.
+  function tagCap(x) {
+    var tg = tagsCua(x);
+    var ks = x && Array.isArray(x.tag_keys) && x.tag_keys.length === tg.length ? x.tag_keys.map(String) : null;
+    return tg.map(function (g, i) { return { ten: g, key: ks ? ks[i] : khoaTag(g) }; });
+  }
+  function coTag(x, key) { return tagCap(x).some(function (p) { return p.key === key; }); }
+  // Giá trị lọc có thể là KHOÁ (trang tự đặt) hay TÊN (gõ, dữ liệu cũ): đổi về khoá theo dữ liệu host đang có.
+  function laKhoa(ds, v) {
+    var ra = null;
+    (ds || []).some(function (x) { return tagCap(x).some(function (p) { if (p.key === v) { ra = p.key; return true; } return false; }); });
+    if (ra != null) return ra;
+    (ds || []).some(function (x) { return tagCap(x).some(function (p) { if (p.ten === v) { ra = p.key; return true; } return false; }); });
+    return ra != null ? ra : khoaTag(v);
+  }
+  // Mọi tag đang có trong danh sách: [{ten, key, n}] theo tên tiếng Việt, cộng số agent chưa gắn tag. Dùng Map
+  // chứ không object `{}`: tên tag là chữ người dùng gõ, "__proto__" hay "constructor" là tag hợp lệ (R2).
   function demTag(ds) {
-    var m = {}, khong = 0;
+    var m = new Map(), khong = 0;
     (ds || []).forEach(function (x) {
-      var tg = tagsCua(x);
-      if (!tg.length) khong++;
-      tg.forEach(function (g) { var k = khoaTag(g); (m[k] = m[k] || { ten: g, n: 0 }).n++; });
+      var cap = tagCap(x);
+      if (!cap.length) khong++;
+      cap.forEach(function (p) {
+        if (!m.has(p.key)) m.set(p.key, { ten: p.ten, key: p.key, n: 0 });
+        m.get(p.key).n++;
+      });
     });
-    var ra = Object.keys(m).map(function (k) { return m[k]; });
+    var ra = Array.from(m.values());
     ra.sort(function (a, b) { return a.ten.localeCompare(b.ten, "vi"); });
     return { tags: ra, khong: khong };
   }
 
-  // `laTag`: lọc theo TAG của agent (nhom = tên tag, TAG_NONE = chưa gắn tag). Không truyền: lọc theo nhóm.
+  // `laTag`: lọc theo TAG của agent (nhom = khoá hay tên tag, TAG_NONE = chưa gắn tag). Không truyền: lọc theo nhóm.
   function loc(ds, q, nhom, laTag) {
     var nq = khongDau(q || "").trim();
+    var khoa = laTag && nhom && nhom !== TAG_NONE ? laKhoa(ds, nhom) : null;
     return ds.filter(function (x) {
       if (laTag) {
         if (nhom === TAG_NONE) { if (tagsCua(x).length) return false; }
-        else if (nhom && !coTag(x, nhom)) return false;
+        else if (khoa != null && !coTag(x, khoa)) return false;
       } else if (nhom && (x.group || "Chung") !== nhom) return false;
       if (!nq) return true;
       var text = khongDau([x.name, x.role, x.description, x.slug, laTag ? tagsCua(x).join(" ") : x.group].join(" "));
@@ -529,7 +550,12 @@
     return ds.sort(function (a, b) { return a.localeCompare(b, "vi"); });
   }
   function nhanNhom(g) { return !g ? t("ws.all_groups") : g === NHOM_MD ? t("ws.group_none") : g; }
-  function chonNhom(g) { S.nhom = g || ""; S.hien = TRANG; S.tagNote = null; veTrai(); }
+  // Ở tab trợ lý `S.nhom` giữ KHOÁ tag (không phải tên): truyền tên vào cũng được, đổi về khoá ngay ở đây.
+  function chonNhom(g) {
+    S.nhom = g || "";
+    if (S.loai === "agent" && S.nhom && S.nhom !== TAG_NONE) S.nhom = laKhoa(danhSach(), S.nhom);
+    S.hien = TRANG; S.tagNote = null; veTrai();
+  }
   function taoNhomMoi() {
     var ten = window.prompt(t("ws.group_ask"), "");
     if (ten == null) return;
@@ -605,7 +631,13 @@
   // ---------- thanh lọc TAG của agent (cùng khuôn thanh nhóm, khác dữ liệu) ----------
   // Không có nút "tạo tag" ở đây: một tag chỉ có nghĩa khi gắn lên agent, nên tạo tag nằm trong bộ
   // chọn "Gắn tag" của từng agent (veMenuTag). Đổi tên và xoá tag đi đường server một lần cho cả brain.
-  function nhanTag(g) { return !g ? t("ws.tag_all") : g === TAG_NONE ? t("ws.tag_none") : g; }
+  // Nhãn của giá trị lọc: `S.nhom` là KHOÁ; tên hiển thị lấy từ dữ liệu host (cách viết gặp trước).
+  function nhanTag(k) {
+    if (!k) return t("ws.tag_all");
+    if (k === TAG_NONE) return t("ws.tag_none");
+    var g = demTag(danhSach()).tags.find(function (x) { return x.key === k; });
+    return g ? g.ten : k;
+  }
   function veThanhTag(bar) {
     var ic0 = !S.nhom ? "layers" : S.nhom === TAG_NONE ? "circle" : "tag";
     bar.innerHTML =
@@ -631,18 +663,19 @@
     ];
     if (dem.tags.length) rows.push({ sep: true });
     dem.tags.forEach(function (g) {
-      rows.push({ label: g.ten, icon: "tag", right: String(g.n), on: S.nhom && S.nhom !== TAG_NONE && khoaTag(S.nhom) === khoaTag(g.ten),
-                  run: function () { chonNhom(g.ten); },
-                  acts: [{ icon: "ellipsis-vertical", title: t("ws.tag_acts"), run: function () { moChucNangTag(neo, g.ten); } }] });
+      rows.push({ label: g.ten, icon: "tag", right: String(g.n), on: S.nhom === g.key,
+                  run: function () { chonNhom(g.key); },
+                  acts: [{ icon: "ellipsis-vertical", title: t("ws.tag_acts"), run: function () { moChucNangTag(neo, g); } }] });
     });
     cs.menu(neo, rows);
   }
+  // `g` = {ten, key}: gửi server TÊN (server tự so theo khoá), giữ trạng thái trang theo KHOÁ.
   function moChucNangTag(neo, g) {
     var cs = window.JavisChatSide; if (!cs || !cs.menu) return;
     cs.menu(neo, [
-      { label: g, icon: "tag", wrap: true, run: function () { chonNhom(g); } },
+      { label: g.ten, icon: "tag", wrap: true, run: function () { chonNhom(g.key); } },
       { sep: true },
-      { label: t("ws.tag_only"), icon: "filter", run: function () { chonNhom(g); } },
+      { label: t("ws.tag_only"), icon: "filter", run: function () { chonNhom(g.key); } },
       { label: t("ws.tag_rename"), icon: "pencil", run: function () { doiTenTag(g); } },
       { label: t("ws.tag_delete"), icon: "trash-2", run: function () { xoaTag(g); } },
     ]);
@@ -657,29 +690,29 @@
       : ((r && r.error) || t("ws.err_meta")) };
   }
   async function doiTenTag(g) {
-    var moi = window.prompt(t("ws.tag_rename_ask", { ten: g }), g);
+    var moi = window.prompt(t("ws.tag_rename_ask", { ten: g.ten }), g.ten);
     if (moi == null) return;
     moi = String(moi).trim();
-    if (!moi || moi === g) return;
+    if (!moi || moi === g.ten) return;
     var r;
-    try { r = await api("/agents/tags/rename", { method: "POST", body: fd({ brain: brain(), from_tag: g, to_tag: moi }) }); }
+    try { r = await api("/agents/tags/rename", { method: "POST", body: fd({ brain: brain(), from_tag: g.ten, to_tag: moi }) }); }
     catch (e) { r = { ok: false, error: String((e && e.message) || e) }; }
-    if (S.nhom && khoaTag(S.nhom) === khoaTag(g)) S.nhom = (r && r.tag) || moi;
+    if (S.nhom === g.key && r && r.ok) S.nhom = r.tag_key || khoaTag(r.tag || moi);
     await taiDanhSach();
     if (!active) return;
     baoKetQuaTag(r, (r && r.tag) || moi);
     veTrai(); veGiua(dangChon());
   }
   async function xoaTag(g) {
-    var n = danhSach().filter(function (x) { return coTag(x, g); }).length;
-    if (n && !window.confirm(t("ws.tag_delete_ask", { ten: g, n: n }))) return;
+    var n = danhSach().filter(function (x) { return coTag(x, g.key); }).length;
+    if (n && !window.confirm(t("ws.tag_delete_ask", { ten: g.ten, n: n }))) return;
     var r;
-    try { r = await api("/agents/tags/delete", { method: "POST", body: fd({ brain: brain(), tag: g }) }); }
+    try { r = await api("/agents/tags/delete", { method: "POST", body: fd({ brain: brain(), tag: g.ten }) }); }
     catch (e) { r = { ok: false, error: String((e && e.message) || e) }; }
-    if (S.nhom && khoaTag(S.nhom) === khoaTag(g)) S.nhom = "";
+    if (S.nhom === g.key && r && r.ok) S.nhom = "";
     await taiDanhSach();
     if (!active) return;
-    baoKetQuaTag(r, g);
+    baoKetQuaTag(r, g.ten);
     veTrai(); veGiua(dangChon());
   }
 
@@ -689,7 +722,10 @@
     if (S.loai === "agent") {
       // Tag không có "tag trống": tag tồn tại khi có agent mang nó. Tag đang lọc vừa bị đổi tên hay
       // xoá (ở tab khác, sau F5) thì về "Tất cả agent".
-      if (S.nhom && S.nhom !== TAG_NONE && !danhSach().some(function (x) { return coTag(x, S.nhom); })) S.nhom = "";
+      if (S.nhom && S.nhom !== TAG_NONE) {
+        var kLoc = laKhoa(danhSach(), S.nhom);
+        S.nhom = danhSach().some(function (x) { return coTag(x, kLoc); }) ? kLoc : "";
+      }
     } else {
       var nhoms = demNhom();
       // Nhóm trống đã có người thì thành nhóm thật, bỏ khỏi sổ.
@@ -781,7 +817,8 @@
     if (!tg.length) return "";
     var hien = tg.slice(0, CHIP_TOI_DA), du = tg.length - hien.length;
     return '<span class="ws-tags" aria-label="' + esc(t("ws.tags_aria")) + '">' +
-      hien.map(function (g) { return '<span class="ws-tag">' + esc(g) + '</span>'; }).join("") +
+      // title = tên đầy đủ: tag cũ dài (dữ liệu trước 0.98.0 không cắt, R1) bị CSS cắt chữ thì vẫn đọc được.
+      hien.map(function (g) { return '<span class="ws-tag" title="' + esc(g) + '">' + esc(g) + '</span>'; }).join("") +
       (du > 0 ? '<span class="ws-tag ws-tag-more" title="' + esc(tg.slice(CHIP_TOI_DA).join(", ")) + '">' +
         esc(t("ws.tag_more", { n: du })) + '</span>' : "") + '</span>';
   }
@@ -993,12 +1030,18 @@
   // Bộ chọn TAG của một agent, ngay trong menu (như chọn nhóm). Bấm một tag là GẮN hoặc BỎ đúng tag đó
   // (add_tags/remove_tags: server đọc tập hiện có rồi sửa, nên tab khác vừa thêm tag cũng không mất);
   // ô "Tag mới" gắn thêm một tag. Menu mở tiếp để gắn nhiều tag một lượt.
+  // Các dòng của bộ chọn: mọi tag trong danh sách cộng tag riêng của agent, mỗi dòng {ten, key, on}. Dấu tick so
+  // theo KHOÁ host cấp, tập khoá là Set (tên "__proto__" hay "constructor" không đụng prototype; R2, R3).
+  function dongChonTag(item, ds) {
+    var cua = tagCap(item), coKhoa = new Set(cua.map(function (p) { return p.key; }));
+    var tatCa = demTag(ds).tags.map(function (g) { return { ten: g.ten, key: g.key }; });
+    var daCo = new Set(tatCa.map(function (g) { return g.key; }));
+    cua.forEach(function (p) { if (!daCo.has(p.key)) { daCo.add(p.key); tatCa.push({ ten: p.ten, key: p.key }); } });
+    tatCa.sort(function (a, b) { return a.ten.localeCompare(b.ten, "vi"); });
+    return tatCa.map(function (g) { return { ten: g.ten, key: g.key, on: coKhoa.has(g.key) }; });
+  }
   function veMenuTag(item, m, focusKhoa) {
-    var cua = tagsCua(item), coKhoa = {};
-    cua.forEach(function (g) { coKhoa[khoaTag(g)] = true; });
-    var tatCa = demTag(danhSach()).tags.map(function (g) { return g.ten; });
-    cua.forEach(function (g) { if (tatCa.every(function (x) { return khoaTag(x) !== khoaTag(g); })) tatCa.push(g); });
-    tatCa.sort(function (a, b) { return a.localeCompare(b, "vi"); });
+    var tatCa = dongChonTag(item, danhSach());
     m.innerHTML =
       '<button type="button" class="ws-menu-it quay" data-act="quay">' + ic("chevron-left") +
         '<span>' + esc(t("ws.tag_menu")) + '</span></button>' +
@@ -1006,10 +1049,10 @@
         'placeholder="' + esc(t("ws.tag_new_ph")) + '" aria-label="' + esc(t("ws.tag_new_ph")) + '">' +
         '<button type="submit" class="ws-btn">' + esc(t("ws.tag_add")) + '</button></form>' +
       tatCa.map(function (g) {
-        var on = !!coKhoa[khoaTag(g)];
-        return '<button type="button" role="menuitemcheckbox" aria-checked="' + on + '" class="ws-menu-it' +
-          (on ? " on" : "") + '" data-tag="' + esc(g) + '" title="' + esc(t(on ? "ws.tag_remove_title" : "ws.tag_add_title", { ten: g })) +
-          '">' + ic(on ? "check" : "tag") + '<span>' + esc(g) + '</span></button>';
+        return '<button type="button" role="menuitemcheckbox" aria-checked="' + g.on + '" class="ws-menu-it' +
+          (g.on ? " on" : "") + '" data-tag="' + esc(g.ten) + '" data-key="' + esc(g.key) + '" title="' +
+          esc(t(g.on ? "ws.tag_remove_title" : "ws.tag_add_title", { ten: g.ten })) +
+          '">' + ic(g.on ? "check" : "tag") + '<span>' + esc(g.ten) + '</span></button>';
       }).join("");
     var dang = false;
     async function doi(fields, giuKhoa) {
@@ -1021,7 +1064,7 @@
       catch (e) { r = { ok: false, error: String((e && e.message) || e) }; }
       dang = false;
       if (!r || !r.ok) { S.tagNote = { loi: true, msg: (r && r.error) || t("ws.err_meta") }; }
-      else { S.tagNote = null; item.tags = r.tags || []; }
+      else { S.tagNote = null; item.tags = r.tags || []; item.tag_keys = r.tag_keys; }
       await taiDanhSach();
       if (!active) return;
       veTrai(); veGiua(dangChon());
@@ -1038,12 +1081,12 @@
     m.querySelectorAll("[data-tag]").forEach(function (b) {
       b.onclick = function () {
         var g = b.dataset.tag, on = b.getAttribute("aria-checked") === "true";
-        doi(on ? { remove_tags: JSON.stringify([g]) } : { add_tags: JSON.stringify([g]) }, khoaTag(g));
+        doi(on ? { remove_tags: JSON.stringify([g]) } : { add_tags: JSON.stringify([g]) }, b.dataset.key);
       };
     });
     // Giữ chỗ bàn phím sau khi vẽ lại: ô nhập nếu vừa gắn tag mới, nút tag vừa bấm nếu vừa bật/tắt.
     var nhan = focusKhoa === "\u0001in" || focusKhoa == null ? o
-      : Array.prototype.find.call(m.querySelectorAll("[data-tag]"), function (b) { return khoaTag(b.dataset.tag) === focusKhoa; });
+      : Array.prototype.find.call(m.querySelectorAll("[data-tag]"), function (b) { return b.dataset.key === focusKhoa; });
     if (nhan) try { nhan.focus(); } catch (e) {}
   }
 
@@ -1507,7 +1550,8 @@
 
   window.JavisWorkspace = { render: render, roi: roi, openCommand: openCommand, openTab: openTab, onTurnDone: onTurnDone, canSend: function () { return !active || ready; }, dungKhiChuaCoTuDien: function () { return dungKhiChuaCoTuDien; }, onChatState: onChatState, chayQuyTrinh: chayQuyTrinh, onWfEvent: onWfEvent, sapXep: sapXep, loc: loc, tienDoMoi: tienDoMoi, apDung: apDung, phanTram: phanTram,
     dangChay: dangChay, tabPhai: chonTabPhai, gomNhom: gomNhom, nhomHtml: nhomHtml, chonNhom: chonNhom, state: function () { return S; },
-    tagsCua: tagsCua, demTag: demTag, coTag: coTag, khoaTag: khoaTag, chipTagHtml: chipTagHtml, TAG_NONE: TAG_NONE };
+    tagsCua: tagsCua, tagCap: tagCap, laKhoa: laKhoa, demTag: demTag, coTag: coTag, khoaTag: khoaTag,
+    dongChonTag: dongChonTag, chipTagHtml: chipTagHtml, TAG_NONE: TAG_NONE };
   // Sidebar lịch sử mở phiên trực tiếp qua JavisSessions.open, ngoài đường moPhien ở trên.
   // Ghi lại sau khi nó mở xong để lần dựng trang sau vẫn ở đúng cuộc đã chọn.
   window.addEventListener("javis:sessions-changed", function () {

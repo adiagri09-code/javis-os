@@ -6520,8 +6520,12 @@ def _nhom_cua(meta) -> str:
 # docs/dev/agent-tags.md. Workflow và skill vẫn dùng `group` ở trên. `group` trả về trong API chỉ để trang
 # cũ còn trong cache trình duyệt vẫn vẽ được (tag đầu tiên, hoặc "Chung" khi chưa gắn tag).
 def _agent_tag_fields(meta) -> dict:
+    # `tag_keys` (song song với `tags`): khoá định danh do HOST cấp (agent_tags.tag_key, Unicode casefold),
+    # để giao diện đếm, lọc, đánh dấu tick đúng như server so trùng, không tự tính bằng toLowerCase
+    # ("Straße" và "STRASSE" là một tag; review PR #617 vòng 1, R3).
     tags = agent_tags.tags_of(meta)
-    return {"tags": tags, "group": tags[0] if tags else NHOM_MAC_DINH}
+    return {"tags": tags, "tag_keys": [agent_tags.tag_key(t) for t in tags],
+            "group": tags[0] if tags else NHOM_MAC_DINH}
 
 
 _AGENT_META_LOCK = __import__("threading").Lock()
@@ -6733,41 +6737,49 @@ async def save_agent(name: str = Form(...), role: str = Form(""), skills: str = 
     # chứ không ghi vào file một nhà mà server không chạy được.
     mp = (model_provider or "").strip()
     path = _agents_dir(brain) / f"{slug}.md"
-    previous = _read_md(path)[0] if path.is_file() else None
-    try:
-        avatar = agent_avatar.for_save(previous, slug, avatar_shape, avatar_palette,
-                                       avatar_color, avatar_eye, avatar_eye_color,
-                                       avatar_eye_size)
-    except ValueError as exc:
-        return JSONResponse({"error": str(exc)}, status_code=400)
-    # GIỮ mọi khoá frontmatter KHÔNG nằm trong form. Trước đây meta được dựng lại từ đầu, nên
-    # mỗi lần bấm Lưu trong trình sửa là xoá sạch những khoá do chỗ khác ghi - `pinned` (ghim ở
-    # trang Cộng sự) mất ngay lần sửa kế tiếp, và mọi khoá tương lai cũng vậy.
-    # TAG (0.98.0, docs/dev/agent-tags.md): form sửa trợ lý KHÔNG có ô tag (gắn tag ở cột trái trang
-    # Cộng sự), nên không gửi `tags` nghĩa là GIỮ NGUYÊN tag đang có; gửi `tags` (JSON) là thay cả tập.
-    # Client cũ còn gửi `group` thì theo luật tương thích: không bao giờ thay nhiều tag bằng một.
     tags = tags if isinstance(tags, str) else None
     group = group if isinstance(group, str) else None
-    try:
-        moi_tags = agent_tags.parse_list(tags)
-        if moi_tags is not None and group is not None:
-            raise agent_tags.TagError("group_and_tags")
-        hien = agent_tags.tags_of(previous)
-        if moi_tags is not None:
-            hien = agent_tags.normalize_tags(moi_tags)
-        elif group is not None:
-            hien = agent_tags.from_old_group(hien, group)
-    except agent_tags.TagError as e:
-        return _loi_tag(str(e), 409 if str(e) == "stale_client" else 400)
-    meta = dict(previous or {})
-    meta.update({"type": "agent", "name": name, "slug": slug, "role": role,
-                 "skills": skills_list, "model": model, "avatar": avatar,
-                 "model_provider": mp if mp in AGENT_PROVIDERS else "",
-                 "updated": _today()})  # "" = mặc định theo CLI
-    agent_tags.write_tags(meta, hien)
-    with _AGENT_META_LOCK:
-        _write_md(_agents_dir(brain) / f"{slug}.md", meta, (prompt.strip() or role))
-    return {"ok": True, "slug": slug, "tags": hien}
+
+    def _luu():
+        # ĐỌC `previous` rồi GHI trong CÙNG một khoá với các đường tag (/capability/meta, đổi tên, xoá tag),
+        # và chạy ở worker. Đọc ngoài khoá rồi mới khoá lúc ghi thì một thao tác thêm/bỏ tag chen giữa sẽ
+        # bị snapshot cũ của form ghi đè (review PR #617 vòng 1, R4).
+        with _AGENT_META_LOCK:
+            previous = _read_md(path)[0] if path.is_file() else None
+            try:
+                avatar = agent_avatar.for_save(previous, slug, avatar_shape, avatar_palette,
+                                               avatar_color, avatar_eye, avatar_eye_color,
+                                               avatar_eye_size)
+            except ValueError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+            # GIỮ mọi khoá frontmatter KHÔNG nằm trong form. Trước đây meta được dựng lại từ đầu, nên
+            # mỗi lần bấm Lưu trong trình sửa là xoá sạch những khoá do chỗ khác ghi - `pinned` (ghim ở
+            # trang Cộng sự) mất ngay lần sửa kế tiếp, và mọi khoá tương lai cũng vậy.
+            # TAG (0.98.0, docs/dev/agent-tags.md): form sửa trợ lý KHÔNG có ô tag (gắn tag ở cột trái
+            # trang Cộng sự), nên không gửi `tags` nghĩa là GIỮ NGUYÊN tag đang có (kể cả tag cũ vượt giới
+            # hạn, không cắt); gửi `tags` (JSON) là thay cả tập. Client cũ còn gửi `group` thì theo luật
+            # tương thích: không bao giờ thay nhiều tag bằng một.
+            try:
+                moi_tags = agent_tags.parse_list(tags)
+                if moi_tags is not None and group is not None:
+                    raise agent_tags.TagError("group_and_tags")
+                hien = agent_tags.tags_of(previous)
+                if moi_tags is not None:
+                    hien = agent_tags.normalize_tags(moi_tags)
+                elif group is not None:
+                    hien = agent_tags.from_old_group(hien, group)
+            except agent_tags.TagError as e:
+                return _loi_tag(str(e), 409 if str(e) == "stale_client" else 400)
+            meta = dict(previous or {})
+            meta.update({"type": "agent", "name": name, "slug": slug, "role": role,
+                         "skills": skills_list, "model": model, "avatar": avatar,
+                         "model_provider": mp if mp in AGENT_PROVIDERS else "",
+                         "updated": _today()})  # "" = mặc định theo CLI
+            agent_tags.write_tags(meta, hien)
+            _write_md(path, meta, (prompt.strip() or role))
+            return {"ok": True, "slug": slug, "tags": hien}
+
+    return await asyncio.to_thread(_luu)
 
 @app.post("/agents/delete")
 async def delete_agent(slug: str = Form(...), brain: str = Form("brain")):
@@ -8524,7 +8536,8 @@ async def capability_meta(kind: str = Form(...), slug: str = Form(...),
         meta["updated"] = _today()
 
     try:
-        meta = _sua_meta_agent(f, _sua)
+        # Đọc, sửa, ghi (và đợi khoá) ở worker: không chặn event loop khi đĩa chậm (R4).
+        meta = await asyncio.to_thread(_sua_meta_agent, f, _sua)
     except agent_tags.TagError as e:
         return _loi_tag(str(e), 409 if str(e) == "stale_client" else 400)
     except ValueError as e:
@@ -8565,21 +8578,29 @@ async def agent_tag_rename(brain: str = Form("brain"), from_tag: str = Form(...)
     """Đổi tên một tag trên mọi agent của brain đang có nó; giữ các tag khác. Tên đích đã là tag của
     agent đó thì gộp, không nhân đôi. `merged`: tên đích đã có trong brain trước khi đổi."""
     try:
-        s, d = agent_tags.normalize_tag(from_tag), agent_tags.normalize_tag(to_tag)
+        # Tên NGUỒN so theo khoá, không áp giới hạn độ dài (đổi được cả tag cũ dài); tên ĐÍCH là tên mới.
+        s, d = agent_tags.clean_tag(from_tag), agent_tags.normalize_tag(to_tag)
         if not s or not d:
             raise agent_tags.TagError("bad_tags")
     except agent_tags.TagError as e:
         return _loi_tag(str(e))
-    da_co = {}
-    for a in agents_index(brain, kem_prompt=False):
-        for x in a["tags"]:
-            da_co.setdefault(x.casefold(), x)
-    merged = d.casefold() in da_co and d.casefold() != s.casefold()
-    # Gộp vào tag đã có thì dùng CÁCH VIẾT của tag đó (gõ "nội dung" gộp vào "Nội dung" là thành "Nội dung"),
-    # để mọi agent cùng một cách viết và thông báo nói đúng tên đang hiện.
-    dich = da_co[d.casefold()] if merged else d
-    out = _doi_tag_hang_loat(brain, lambda cur: agent_tags.rename(cur, s, dich))
-    out.update({"tag": dich, "merged": merged})
+
+    def _doi():
+        # Quét, đọc, ghi từng file (và đợi khoá) ở worker: đổi tên trên nhiều agent không chặn event loop (R4).
+        da_co = {}
+        for a in agents_index(brain, kem_prompt=False):
+            for x in a["tags"]:
+                da_co.setdefault(agent_tags.tag_key(x), x)
+        kd, ks = agent_tags.tag_key(d), agent_tags.tag_key(s)
+        merged = kd in da_co and kd != ks
+        # Gộp vào tag đã có thì dùng CÁCH VIẾT của tag đó (gõ "nội dung" gộp vào "Nội dung" là thành
+        # "Nội dung"), để mọi agent cùng một cách viết và thông báo nói đúng tên đang hiện.
+        dich = da_co[kd] if merged else d
+        out = _doi_tag_hang_loat(brain, lambda cur: agent_tags.rename(cur, s, dich))
+        out.update({"tag": dich, "tag_key": agent_tags.tag_key(dich), "merged": merged})
+        return out
+
+    out = await asyncio.to_thread(_doi)
     if not out["ok"]:
         out["error"] = localefmt.chu("Đổi tên chưa xong: có agent không ghi được.",
                                      "Rename incomplete: some agents could not be saved.")
@@ -8597,9 +8618,9 @@ async def agent_tag_delete(brain: str = Form("brain"), tag: str = Form(...)):
         return _loi_tag(str(e))
 
     def _bo(cur):
-        moi = [x for x in cur if x.casefold() != k]
+        moi = [x for x in cur if agent_tags.tag_key(x) != k]
         return moi, moi != cur
-    out = _doi_tag_hang_loat(brain, _bo)
+    out = await asyncio.to_thread(_doi_tag_hang_loat, brain, _bo)   # I/O ở worker (R4)
     if not out["ok"]:
         out["error"] = localefmt.chu("Xoá tag chưa xong: có agent không ghi được.",
                                      "Tag removal incomplete: some agents could not be saved.")

@@ -257,6 +257,194 @@ check("12 workflow vẫn chuyển nhóm như cũ", r.json().get("group") == "N�
 r = meta(B, "wf", kind="workflow", add_tags=J("X"))
 check("12 workflow không nhận tag (400)", r.status_code == 400 and r.json().get("code") == "tags_not_for_kind", r.text)
 
+# ============================================================ Review PR #617 vòng 1: R1 đến R4
+# R1. Dữ liệu ĐANG CÓ vượt giới hạn tag mới (nhóm cũ dài hơn 40 ký tự, file có hơn 20 tag) không bị cắt hay
+# xoá khi người dùng chỉ ghim, lưu form, nhập gói hay tải lại. Kiểm metadata nguồn trong file, không chỉ HTTP 200.
+B4 = brain_moi("javis-tags-r1-")
+DAI = "Marketing noi dung cho thi truong quoc te 2026"          # 46 ký tự, hợp lệ ở 0.96.1
+viet(B4, "dai", f"type: agent\nname: Dài\nslug: dai\nrole: x\ngroup: {DAI}\nmodel: sonnet\n", "Thân dài.")
+viet(B4, "thuong", "type: agent\nname: Thường\nslug: thuong\nrole: x\ngroup: Marketing\n", "Thân thường.")
+check("R1 nhóm cũ dài đọc thành đúng một tag (không bị lọc mất)", mot(B4, "dai")["tags"] == [DAI])
+r = meta(B4, "dai", pinned="1")
+m, body = doc(B4, "dai")
+check("R1 ghim agent nhóm cũ dài: giữ nguyên tag và gương group trong file",
+      r.status_code == 200 and m.get("tags") == [DAI] and m.get("group") == DAI and body == "Thân dài.", (r.text, m))
+r = client.post("/agents", data={"brain": str(B4), "slug": "dai", "name": "Dài 2", "role": "y", "model": "sonnet"})
+m, _ = doc(B4, "dai")
+check("R1 lưu form không gửi tags: giữ nguyên tag dài", r.status_code == 200 and m.get("tags") == [DAI]
+      and m.get("group") == DAI and m.get("name") == "Dài 2", (r.text, m))
+check("R1 tải lại (F5) vẫn đúng tag dài", mot(B4, "dai")["tags"] == [DAI])
+meta(B4, "thuong", pinned="1")
+check("R1 đối chứng: tên thường qua cùng đường vẫn đúng", doc(B4, "thuong")[0].get("tags") == ["Marketing"])
+r = meta(B4, "dai", remove_tags=J(DAI))
+check("R1 bỏ được tag cũ dài (so theo khoá, không áp giới hạn độ dài)", r.status_code == 200 and r.json()["tags"] == [], r.text)
+r = meta(B4, "dai", add_tags=J(DAI))
+check("R1 THÊM MỚI tag dài vẫn bị từ chối (giới hạn chỉ cho đầu vào mới)",
+      r.status_code == 400 and r.json().get("code") == "tag_too_long", r.text)
+viet(B4, "dai2", f"type: agent\nname: Dài 2\nslug: dai2\nrole: x\ngroup: {DAI}\n", "Thân.")
+r = client.post("/agents/tags/rename", data={"brain": str(B4), "from_tag": DAI, "to_tag": "Marketing QT"})
+check("R1 đổi tên được tag cũ dài sang tên hợp lệ", r.status_code == 200 and doc(B4, "dai2")[0]["tags"] == ["Marketing QT"], r.text)
+viet(B4, "dai3", f"type: agent\nname: Dài 3\nslug: dai3\nrole: x\ngroup: {DAI}\n", "Thân.")
+r = client.post("/agents/tags/delete", data={"brain": str(B4), "tag": DAI})
+check("R1 xoá được tag cũ dài", r.status_code == 200 and doc(B4, "dai3")[0]["tags"] == [], r.text)
+B5 = brain_moi("javis-tags-r1-nhap-")
+cu = f"---\ntype: agent\nname: Gói dài\nslug: goi-dai\nrole: x\ngroup: {DAI}\n---\nthân\n".encode("utf-8")
+share_bundle.import_bundle(cu, "goi-dai.md", agents_dir=B5 / "agents", workflows_dir=B5 / "workflows",
+                           skills_root=B5 / "skills")
+meta(B5, "goi-dai", pinned="1")
+check("R1 nhập gói cũ có nhóm dài rồi ghim: giữ đúng tag", doc(B5, "goi-dai")[0].get("tags") == [DAI]
+      and mot(B5, "goi-dai")["tags"] == [DAI])
+NHIEU = [f"t{i:02d}" for i in range(25)]
+viet(B4, "nhieu", "type: agent\nname: Nhiều\nslug: nhieu\nrole: x\ntags:\n" + "".join(f"- {x}\n" for x in NHIEU), "Thân.")
+check("R1 file có 25 tag: đọc đủ 25, không cắt", mot(B4, "nhieu")["tags"] == NHIEU)
+meta(B4, "nhieu", pinned="1")
+client.post("/agents", data={"brain": str(B4), "slug": "nhieu", "name": "Nhiều", "role": "z"})
+check("R1 ghim rồi lưu form: file vẫn đủ 25 tag", doc(B4, "nhieu")[0].get("tags") == NHIEU, doc(B4, "nhieu")[0].get("tags"))
+r = meta(B4, "nhieu", add_tags=J("moi"))
+check("R1 thêm tag thứ 26: từ chối, không đổi file", r.status_code == 400 and r.json().get("code") == "too_many_tags"
+      and doc(B4, "nhieu")[0].get("tags") == NHIEU, r.text)
+r = meta(B4, "nhieu", add_tags=J("T05"))
+check("R1 thêm tag đã có (khác hoa thường) khi đang quá 20: không lỗi, không đổi", r.status_code == 200
+      and r.json()["tags"] == NHIEU, r.text)
+r = meta(B4, "nhieu", remove_tags=J("t00"))
+check("R1 bỏ tag khi đang quá 20 luôn được", r.status_code == 200 and r.json()["tags"] == NHIEU[1:], r.text)
+
+# R2 + R3. Dữ liệu API THẬT đưa vào mã thật của trang Cộng sự và Studio (tests/js/agent_tags_ui_probe.js).
+import subprocess  # noqa: E402
+B6 = brain_moi("javis-tags-r3-")
+NFD = "Viết"
+for slug, tgs in (("a", ["Straße"]), ("b", ["STRASSE"]), ("c", ["Viết"]), ("d", ["VIẾT"]), ("e", ["Viet"]),
+                  ("f", [NFD]), ("g", ["__proto__", "constructor", "Marketing"]), ("h", ["constructor"])):
+    client.post("/agents", data={"brain": str(B6), "slug": slug, "name": slug.upper(), "role": "x",
+                                 "tags": json.dumps(tgs, ensure_ascii=False)})
+api = client.get("/agents", params={"brain": str(B6), "prompt": "0"}).json()
+# .get: chạy được cả trên mã chưa có `tag_keys` (đối chứng head cũ) để các ca sau vẫn chạy; thiếu thì ca này hỏng.
+khoa = {a["slug"]: a.get("tag_keys") for a in api["agents"]}
+check("R3 API trả khoá host: Straße và STRASSE cùng khoá casefold", khoa["a"] == khoa["b"] == ["strasse"], khoa)
+check("R3 API: Viết, VIẾT, Viết dạng NFD cùng khoá; Viet khác",
+      khoa["c"] == khoa["d"] == khoa["f"] and khoa["e"] != khoa["c"], khoa)
+check("R2 API nhận và trả nguyên tag __proto__, constructor", mot(B6, "g")["tags"] == ["__proto__", "constructor", "Marketing"])
+p = subprocess.run(["node", str(Path(ROOT) / "tests" / "js" / "agent_tags_ui_probe.js")], input=json.dumps(api),
+                   capture_output=True, text=True, encoding="utf-8", timeout=60)
+try:
+    ui = json.loads(p.stdout)
+except ValueError:
+    ui = None
+check("R2/R3 probe giao diện chạy được trên dữ liệu API", ui is not None, (p.returncode, p.stderr[-400:]))
+if ui:
+    # Kỳ vọng: nhóm agent theo khoá SERVER đã trả.
+    theo_server = {}
+    for a in api["agents"]:
+        for k in (agent_tags.tag_key(x) for x in a["tags"]):     # khoá server tính lại từ tên, không cần API trả
+            theo_server.setdefault(k, set()).add(a["slug"])
+    ws = {b.get("key"): b["n"] for b in ui["workspace"]["buckets"]}
+    st = {b.get("key"): b["n"] for b in ui["studio"]["buckets"]}
+    check("R3 Cộng sự đếm đúng theo khoá server (Straße/STRASSE = 2, Viết = 3, Viet = 1)",
+          ws == {k: len(v) for k, v in theo_server.items()}, ws)
+    check("R3 Studio đếm giống hệt Cộng sự và server", st == ws, st)
+    check("R3 lọc theo khoá ra đúng tập agent của server (Cộng sự và Studio)",
+          all(sorted(theo_server[k]) == ui["workspace"]["filter"].get(k) == ui["studio"]["filter"].get(k)
+              for k in theo_server), ui["workspace"]["filter"])
+    check("R3 lọc theo TÊN 'STRASSE' cũng ra cả hai agent", ui["workspace"]["filterByName"].get("STRASSE") == ["a", "b"],
+          ui["workspace"]["filterByName"])
+    check("R2/R3 dấu tick bộ chọn đúng khoá của chính agent (kể cả __proto__, constructor)",
+          ui["workspace"]["ticks"] is not None
+          and all(sorted(agent_tags.tag_key(x) for x in a["tags"]) == ui["workspace"]["ticks"].get(a["slug"])
+                  for a in api["agents"]), ui["workspace"]["ticks"])
+    check("R2 tag __proto__ và constructor được đếm, không làm hỏng prototype",
+          ws.get("__proto__") == 1 and ws.get("constructor") == 2 and ui["prototypeClean"], ws)
+r = meta(B6, "a", remove_tags=J("STRASSE"))
+check("R3 server bỏ 'STRASSE' trên agent mang 'Straße' (cùng khoá với giao diện)", r.json().get("tags") == [], r.text)
+r = client.post("/agents/tags/rename", data={"brain": str(B6), "from_tag": "viết", "to_tag": "Viết bài"})
+check("R3 đổi tên theo khoá: Viết, VIẾT, NFD cùng đổi; Viet giữ nguyên",
+      sorted(r.json()["changed"]) == ["c", "d", "f"] and doc(B6, "e")[0]["tags"] == ["Viet"]
+      and r.json().get("tag_key") == agent_tags.tag_key("Viết bài"), r.text)
+
+# R4. I/O của các đường tag chạy ở worker: event loop vẫn phản hồi khi đĩa chậm. Ghi chậm là GIẢ LẬP
+# (sleep trong _write_md), không phải số đo máy thật.
+B7 = brain_moi("javis-tags-r4-")
+for i in range(3):
+    viet(B7, f"cham{i}", f"type: agent\nname: C{i}\nslug: cham{i}\nrole: x\ntags:\n- Chậm\n", f"Thân {i}.")
+import time  # noqa: E402
+_goc2 = main._write_md
+
+
+def _ghi_cham(path, m, body):
+    time.sleep(0.08)
+    return _goc2(path, m, body)
+
+
+async def _do_tre(coro):
+    tre, dung = [], [False]
+
+    async def nhip():
+        while not dung[0]:
+            t0 = time.perf_counter()
+            await asyncio.sleep(0.02)
+            tre.append(time.perf_counter() - t0 - 0.02)
+    tk = asyncio.create_task(nhip())
+    # Cho nhịp đo CHẠY TRƯỚC (đang ngủ 20 ms) rồi mới gọi route: route đồng bộ chặn loop thì nhịp đó thức muộn
+    # và bị ghi lại. Không đợi ở đây thì route cũ chạy xong trước khi nhịp bắt đầu, không có mẫu nào.
+    await asyncio.sleep(0.005)
+    try:
+        kq = await coro
+    finally:
+        dung[0] = True
+        await tk
+    # Không có mẫu đo nào là phép đo hỏng, không phải "không trễ".
+    return kq, max(tre) if tre else float("inf")
+
+
+main._write_md = _ghi_cham
+try:
+    resp, tre = asyncio.run(_do_tre(main.agent_tag_rename(brain=str(B7), from_tag="Chậm", to_tag="Nhanh")))
+    j = json.loads(resp.body)
+    check(f"R4 đổi tên 3 agent khi mỗi lần ghi chậm 80 ms: event loop trễ tối đa {tre * 1000:.0f} ms (< 60 ms)",
+          tre < 0.06 and sorted(j["changed"]) == ["cham0", "cham1", "cham2"], (tre, j))
+    resp, tre = asyncio.run(_do_tre(main.agent_tag_delete(brain=str(B7), tag="Nhanh")))
+    check(f"R4 xoá tag 3 agent khi ghi chậm: event loop trễ tối đa {tre * 1000:.0f} ms (< 60 ms)",
+          tre < 0.06 and json.loads(resp.body)["ok"], tre)
+
+    def _cap(slug, **kw):
+        base = dict(kind="agent", slug=slug, brain=str(B7), pinned=None, group=None, tags=None, add_tags=None,
+                    remove_tags=None)
+        base.update(kw)
+        return main.capability_meta(**base)
+
+    def _form(slug, role):
+        return main.save_agent(name=slug.upper(), role=role, skills="", model="", slug=slug, prompt="", brain=str(B7),
+                               model_provider="", group=None, avatar_shape=None, avatar_palette=None,
+                               avatar_color=None, avatar_eye=None, avatar_eye_color=None, avatar_eye_size=None,
+                               tags=None)
+
+    async def _xen(form_truoc):
+        a = _form("cham0", "vai mới") if form_truoc else _cap("cham0", add_tags=J("Xen"))
+        b = _cap("cham0", add_tags=J("Xen")) if form_truoc else _form("cham0", "vai mới")
+        return await asyncio.gather(a, b)
+
+    for form_truoc in (True, False):
+        meta(B7, "cham0", tags="[]")
+        asyncio.run(_xen(form_truoc))
+        m, _ = doc(B7, "cham0")
+        check(f"R4 form lưu xen với thêm tag ({'form trước' if form_truoc else 'tag trước'}): giữ cả vai mới lẫn tag",
+              m.get("tags") == ["Xen"] and m.get("role") == "vai mới", m)
+    _goc3 = main._write_md
+
+    def _ghi_cham_hong(path, m, body):
+        if Path(path).stem == "cham1":
+            raise OSError("đĩa đầy")
+        return _goc3(path, m, body)
+    for i in range(3):
+        meta(B7, f"cham{i}", tags=J("Lỗi"))
+    main._write_md = _ghi_cham_hong
+    resp, tre = asyncio.run(_do_tre(main.agent_tag_delete(brain=str(B7), tag="Lỗi")))
+    j = json.loads(resp.body)
+    check("R4 lỗi một phần trên worker vẫn báo đúng đã đổi và chưa đổi",
+          resp.status_code == 500 and j["changed"] == ["cham0", "cham2"] and [f["slug"] for f in j["failed"]] == ["cham1"]
+          and doc(B7, "cham1")[0]["tags"] == ["Lỗi"], j)
+finally:
+    main._write_md = _goc2
+
 # ============================================================ Hàm thuần
 check("thuần: rename không có tag thì không đổi", agent_tags.rename(["A"], "B", "C") == (["A"], False))
 check("thuần: tags chuỗi đơn trong file đọc thành một tag", agent_tags.tags_of({"tags": "Marketing"}) == ["Marketing"])
