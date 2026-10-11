@@ -310,8 +310,9 @@ _ANH_CHO: Dict[tuple, tuple] = {}     # (bot_id, chat_id, user_id) -> (paths, ts
 async def anh_cho_bot(text_engine: str, meta: dict, cfg: dict) -> tuple:
     """The photos of this turn, put INTO the chat for the bot's own model (0.81.0). Returns (text, image paths).
 
-    Owner decision (2026-10-05): no second model describes the photo (0.74.1 used ChatGPT, so no ChatGPT meant no eyes for any
-    brain). The photo is saved in the bot's own brain (swept by media_gc) and sent as image input with this turn; main.py
+    Owner decision (2026-10-05): the bot's own model looks first; since 0.94.0 another connected brain describes the photo only
+    when that model cannot see it (main.py `_bot_anh_mat_muon`). In 0.74.1 ChatGPT always described, so no ChatGPT meant no eyes
+    for any brain. The photo is saved in the bot's own brain (swept by media_gc) and sent as image input with this turn; main.py
     `_bot_gan_anh` turns it into the provider's format, or into the honest "you cannot see this photo" label for a brain that
     cannot take images. Three sources:
       - the download line a gateway writes ("[... đã tải về: <path>]": Telegram, Zalo Bot, Slack, WhatsApp). The line is
