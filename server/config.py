@@ -1449,8 +1449,16 @@ def provision_admin_from_env():
 
     `auth.env_applied` keeps only a salted hash of the last applied env value, never the value.
     Returns "created", "reset" or "" (nothing done).
+
+    The marker is compared with the env value as typed AND as cleaned (0.96.1). From 0.92.1 the
+    value is cleaned of surrounding whitespace before use, but a marker written by an older
+    version holds the hash of the value WITH its whitespace. Comparing only the cleaned value
+    read that as "the env changed" and reset the account on the first boot after the update:
+    an owner who had set their own password in the dashboard was locked out with "Wrong username
+    or password" and their username turned into "admin" (many reports 2026-10-11).
     """
-    pw = clean_password(os.getenv("JAVIS_ADMIN_PASSWORD", ""))
+    raw = os.getenv("JAVIS_ADMIN_PASSWORD", "")
+    pw = clean_password(raw)
     if not pw:
         return ""
     user = (os.getenv("JAVIS_ADMIN_USER", "admin").strip() or "admin")
@@ -1465,9 +1473,23 @@ def provision_admin_from_env():
         return "created"
     applied = a.get("env_applied") if isinstance(a.get("env_applied"), dict) else {}
     if applied.get("hash"):
-        same = (applied.get("username") == user and secrets.compare_digest(
-            hash_password(pw, str(applied.get("salt") or ""))[0], str(applied["hash"])))
-        if same:
+        def _applied(value):
+            return secrets.compare_digest(hash_password(value, str(applied.get("salt") or ""))[0],
+                                          str(applied["hash"]))
+        if applied.get("username") == user and _applied(pw):
+            return ""
+        if applied.get("username") == user and raw != pw and _applied(raw):
+            # Same env value, applied with its whitespace by a version before 0.92.1: NOT a change
+            # by the owner, so never a reset. If the account still has exactly that password, store
+            # it clean so the owner can sign in without the invisible space (the typed form keeps
+            # working through `verify_password`). A password set in the dashboard since is kept.
+            # Username, 2FA and sessions are untouched either way.
+            if secrets.compare_digest(hash_password(raw, str(a.get("salt") or ""))[0],
+                                      str(a.get("password_hash") or "")):
+                a["password_hash"], a["salt"] = hash_password(pw)
+            a["env_applied"] = marker
+            cfg["auth"] = a
+            write_settings(cfg)
             return ""
     elif a.get("username") == user and verify_password(pw, cfg):
         # Upgrade from a version without the marker, and the env already matches the account:
