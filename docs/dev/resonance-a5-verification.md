@@ -2,7 +2,7 @@
 
 Đội một agent làm, một agent review. Thiết kế đã chốt: [2026-10-11-resonance-a5-maker-reviewer-design.md](../superpowers/specs/2026-10-11-resonance-a5-maker-reviewer-design.md) (`56f7ab50`; phương án A cho file sửa tay). Hướng dẫn: [resonance-a5-team.md](resonance-a5-team.md).
 
-**Trạng thái: mã chờ review (vòng 2: đã sửa ba P2 của review mã vòng 1, xem mục cuối).** Chưa pilot model thật, chưa merge, chưa phát hành, không đụng VPS. Mọi kiểm dưới đây dùng engine GIẢ; số lượt engine thật bằng 0.
+**Trạng thái: mã đạt review mã vòng 2 tại `05e9b065` (Codex, 12/10/2026), chờ duyệt pilot; A5 chưa nghiệm thu cuối, chưa phát hành.** Kịch bản và bộ chạy pilot: [resonance-a5-pilot.md](resonance-a5-pilot.md). Chưa pilot model thật, chưa merge, chưa phát hành, không đụng VPS. Mọi kiểm dưới đây dùng engine GIẢ; số lượt engine thật bằng 0.
 
 ## Test mới
 
