@@ -123,3 +123,15 @@ Ghi chú không chặn đã làm cùng đợt (tách khỏi ba P2): receipt củ
 - Engine giả; số lượt engine thật bằng 0; chưa pilot, chưa đo VPS.
 - Các lỗi cố định của `run_once` trước lời gọi (`output_scope`, `action_exists`, `invalid_action_id`) vẫn kết sổ `cancelled` theo A2, không hoàn lượt (không đổi ở vòng này; chúng là lỗi cố định, không phải ngoại lệ).
 - Pha chuẩn bị lỗi thì mục tiêu gác tới hẹn kiểm lại `ERROR_BACKOFF_S[0]` (một giờ); tin mới của người dùng vẫn mở lượt làm ngay.
+
+**Kết quả chạy vòng 2** (máy local, `.venv` của checkout gốc, mã tại `b10abf4b`):
+
+| Lệnh | Kết quả |
+|---|---|
+| `test_resonance_a5_team.py` / `_budget` / `_rollback` / `_api` / `_perf` | 86 / 31 / 11 / 10 / 5 ok, đều exit 0 |
+| `test_resonance_a5_code_r1.py` (mới) | 45 ok, exit 0 |
+| `node tests/js/test_resonance_a5_ui.js` / `test_resonance_a2_ui.js` | 36 / 10 ok, exit 0 |
+| Script reviewer bản chỉnh `--expect-fixed` | 6/6 PASS, exit 0 |
+| Script reviewer bản gốc `--expect-fixed` | 5/6, exit 1 (ca R1 đầu không chèn được lỗi, xem trên) |
+| Nhóm: resonance, route_table, i18n, version/changelog, tài liệu song ngữ, ignore_files, phiên bản, prompt_budget, prefix_slim, agent_tags, workspace | 63/64; đỏ duy nhất `test_ignore_files.py` vì file test mới lúc đó chưa `git add`; xanh trong lần chạy toàn repo sau commit |
+| Toàn repo `tests/run.py` | 641/655; 14 file đỏ trùng khít danh sách đỏ trên `main` sạch `a02663cb` (test phụ thuộc máy), không có đỏ mới |
