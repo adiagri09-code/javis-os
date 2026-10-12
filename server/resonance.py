@@ -3694,6 +3694,7 @@ def notice_text(goal: GoalRecord, kind: str, payload: dict, presentation: Option
         why = {
             "budget_maker": ("người làm đã dùng hết phần lượt của mình", "the maker used all of its calls"),
             "budget_reviewer": ("người review đã dùng hết phần lượt của mình", "the reviewer used all of its calls"),
+            "budget": ("đã chạm trần tổng lượt gọi của Cộng hưởng", "the overall Resonance call ceiling was reached"),
             "review_unknown": ("lượt review không ra kết luận đọc được sau các lần thử cho phép",
                                "the review gave no readable verdict within the allowed tries"),
             "too_large": ("bản quá dài để review", "the version is too long to review"),

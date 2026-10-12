@@ -94,8 +94,9 @@ check("câu báo sau lệnh", RS.noteFor("team_detach", { code: 200, j: { ok: tr
 const keys = Object.keys(vi).filter(function (k) { return /^resonance\.(a5_|st_review|st_budget_|st_reviewer|wake\.review|wake\.team|btn_reviewer|btn_team)/.test(k); });
 check("mọi khoá A5 có cả tiếng Việt và tiếng Anh", keys.length >= 39 && keys.every(function (k) { return en[k]; }),
       keys.filter(function (k) { return !en[k]; }).join(","));
-check("không có gạch dài trong chữ A5", keys.every(function (k) { return vi[k].indexOf("—") < 0
-      && en[k].indexOf("—") < 0; }));
+const DASH = String.fromCharCode(0x2014);
+check("không có gạch dài trong chữ A5", keys.every(function (k) { return vi[k].indexOf(DASH) < 0
+      && en[k].indexOf(DASH) < 0; }));
 check("wake label của mã mới không lộ mã thô", RS.wakeLabel("review_due") === vi["resonance.wake.review_due"]
       && RS.wakeLabel("review_changes") === vi["resonance.wake.review_changes"]);
 
