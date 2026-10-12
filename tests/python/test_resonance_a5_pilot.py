@@ -583,8 +583,10 @@ def run_case(scen: str) -> int:
                     and parts[3] == r["artifact_sha"] and parts[5] == rv["agent_key"]
                     and r["reviewer_agent_key"] == rv["agent_key"] and r["artifact_sha"] in maker_shas):
                 bundle_ok = False
+        # Mọi hàng review có mặt phải đúng bộ ghim; có hàng review thì phải có lượt làm thành công trước đó. Số hàng review
+        # đúng của từng nhánh (kể cả nhánh không có review, như `maker_not_met`) do `decide_acceptance` kiểm.
         check("mỗi lượt review đọc đúng bản đã tiếp nhận: revision, hash bytes đầu ra của lượt làm, mã reviewer",
-              bool(rows) and bundle_ok if works and works[0]["status"] == "succeeded" else not rows)
+              bundle_ok and (not rows or bool(works and works[0]["status"] == "succeeded")))
         valid = [r for r in rows if r["status"] in ("done", "failed") and r["reason_code"] not in ("stale",
                                                                                                     "review_mismatch")]
         verdicts = [r["verdict"] for r in valid]
