@@ -10,7 +10,12 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.102.1] - 2026-10-12
 ### Fixed
-- (in progress) Bots no longer apologise to people who did not ask them.
+- **Bots no longer apologise to people who did not ask them.** In Auto-judge mode a bot looks at group messages that do not name it. Before, when such a turn failed, the bot tagged the sender and posted its "I'm having technical trouble" apology to the whole group. Now it stays quiet, the error still goes to the bot log and the on-duty person is still told. Someone who called the bot and hit an error still gets the apology.
+- **Full-access bots no longer show technical text to customers.** Lines such as "error during the turn" or the model warning now appear only in the bot log, not in the reply.
+- **Full-access bots no longer change your main model.** When the Agent's model does not run on the ChatGPT plan, the bot still runs on a replacement, but no longer overwrites the model you picked on the Models page.
+
+### Improved
+- **The bot form says "Zalo Bot" or "personal Zalo".** The two share one logo but only personal Zalo can join groups. When a bot only has private-chat channels, the form says why there are no group options (Mentioned, Auto-judge, Every message) and which channel to add to get them.
 
 ## [0.102.0] - 2026-10-12
 ### Added

@@ -19078,11 +19078,21 @@ def _manual_session_undo(key: str, keep: int) -> None:
     _tg_ngat_mach(s)
 
 
-def _tg_ket(clean_out, files, canh_bao="", loi=()):
+def _tg_ket(clean_out, files, canh_bao="", loi=(), khach=False):
     """Gói câu trả lời Telegram: cảnh báo hệ thống lên đầu, lỗi giữa lượt xuống cuối.
 
     Lỗi giữa lượt KHÔNG huỷ câu trả lời (dashboard vốn coi lỗi là không chí mạng), nhưng cũng
-    không được giấu: giấu đi thì user tưởng lượt chạy sạch trong khi có tool đã hỏng."""
+    không được giấu: giấu đi thì user tưởng lượt chạy sạch trong khi có tool đã hỏng.
+
+    `khach=True` (a full-access dedicated bot, 0.102.1): the person reading is a CUSTOMER, not the owner.
+    The system warning and the mid-turn error then go to `canh_bao`, which the bot log shows the owner,
+    instead of being glued to the reply ("⚠ Có lỗi giữa lượt: ..." in a customer group)."""
+    if khach:
+        ghi_chu = [str(canh_bao or "").strip()] + (["Có lỗi giữa lượt: " + str(loi[0])] if loi else [])
+        ket = {"text": clean_out or "", "files": files or []}
+        if any(ghi_chu):
+            ket["canh_bao"] = " · ".join(x for x in ghi_chu if x)[:500]
+        return ket
     txt = (canh_bao or "") + (clean_out or "")
     if loi:
         txt += "\n\n⚠ Có lỗi giữa lượt: " + str(loi[0])
@@ -19910,12 +19920,15 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
         if api_model and actual_model != api_model:
             # Tự chữa như dashboard: ghi lại model đúng để lượt sau khỏi ép lại nữa, VÀ nói cho
             # user biết. Trước đây Telegram lặng lẽ đổi, user cứ tưởng đang chạy model mình chọn.
-            try:
-                _fix = cfgmod.read_settings()
-                _set_main_model(_fix, "openai-oauth", actual_model)
-                cfgmod.write_settings(_fix)
-            except Exception as _e:
-                print(f"[codex model self-heal] {_e}", file=__import__('sys').stderr)
+            # NOT for a dedicated bot (0.102.1): its model is the Agent's, and writing the owner's MAIN
+            # model because a customer bot's Agent named a stale model changed the owner's own brain.
+            if not _bot_full:
+                try:
+                    _fix = cfgmod.read_settings()
+                    _set_main_model(_fix, "openai-oauth", actual_model)
+                    cfgmod.write_settings(_fix)
+                except Exception as _e:
+                    print(f"[codex model self-heal] {_e}", file=__import__('sys').stderr)
             canh_bao = (f"⚠ Model '{api_model}' không chạy được qua Codex (tài khoản ChatGPT) - "
                         f"đã tự đổi sang '{actual_model}'. Đổi model khác ở trang Models nếu muốn.\n\n")
         openai_oauth.write_codex_auth()
@@ -20022,7 +20035,7 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
         clean_out = channel_context.strip_attached_media(
             channel_context.strip_control_blocks(out), files, _brain_root(brain)
         )
-        return _tg_ket(clean_out, files, canh_bao, loi)
+        return _tg_ket(clean_out, files, canh_bao, loi, khach=_bot_full)
     if (kind == "api" and api_key) or kind == "oauth":
         label = _api_label(prov)
         if sess["or"] is None:
@@ -20085,7 +20098,7 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
         clean_out = channel_context.strip_attached_media(
             channel_context.strip_control_blocks(out), files, _brain_root(brain)
         )
-        return _tg_ket(clean_out, files, "", loi)
+        return _tg_ket(clean_out, files, "", loi, khach=_bot_full)
     else:
         _goc = _brain_root(brain)
         if sess["cli"] is None or getattr(sess["cli"], "cwd", None) != _goc:
@@ -20189,7 +20202,7 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
         clean_out = channel_context.strip_attached_media(
             channel_context.strip_control_blocks(out), files, _brain_root(brain)
         )
-        return _tg_ket(clean_out, files, "", loi)
+        return _tg_ket(clean_out, files, "", loi, khach=_bot_full)
 
 
 async def _tg_help_text(brain):
