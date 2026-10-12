@@ -395,8 +395,9 @@ def run_case(scen: str) -> int:
 
     def snapshot(gid: str) -> dict:
         """Ảnh chụp kho của mục tiêu (chỉ đọc): trạng thái, sổ vai, hành động, hàng review, lịch."""
-        g = db_rows("SELECT status, run_state, block_reason, revision, calls_used, budget_calls FROM goals WHERE id=?",
-                    (gid,))[0]
+        g = db_rows("SELECT status, run_state, block_reason, revision, calls_used, budget_calls, "
+                    "lease_owner IS NOT NULL AND COALESCE(lease_until, 0) > ? AS leased FROM goals WHERE id=?",
+                    (time.time(), gid))[0]
         tc = {r["role"]: {"cap": r["cap"], "used": r["used"]}
               for r in db_rows("SELECT role, cap, used FROM team_calls WHERE goal_id=?", (gid,))}
         acts = db_rows("SELECT id, kind, revision, seq, status, intent_json, receipt_json, created_at FROM actions "
@@ -509,7 +510,7 @@ def run_case(scen: str) -> int:
         rep["phase_B_started"] = True
         rep["steps"]["start_B_s"] = round(srv.start("B", False, {"maker": CAPS["maker"], "reviewer": CAPS["reviewer"]},
                                                     ceiling), 1)
-        t0, last, trace = time.time(), None, []
+        t0, last, trace, quiet_seen = time.time(), None, [], 0
         stop_why = "wall"
         while time.time() - t0 < wall_s:
             time.sleep(POLL_S)
@@ -528,19 +529,29 @@ def run_case(scen: str) -> int:
             if lc["tripwire"]:
                 stop_why = "tripwire"
                 break
-            running = any(a["status"] == "running" for a in snap["actions"])
-            if running:
+            # Host còn đang làm khi: có lượt `running`, mục tiêu ở `running`, hay một lần thức còn giữ khoá mục tiêu (ví dụ
+            # vừa kết sổ lượt làm, chưa đăng bản và hẹn review: lịch thức tạm thời trống). Dry real-like tìm ra khe này:
+            # trước đây bộ chạy dừng sớm ở đúng khe đó.
+            busy = (any(a["status"] == "running" for a in snap["actions"]) or snap["goal"]["run_state"] == "running"
+                    or bool(snap["goal"]["leased"]))
+            if busy:
+                quiet_seen = 0
                 continue
             if snap["goal"]["status"] != "active":
                 stop_why = "goal_" + snap["goal"]["status"]
                 break
-            if lc["not_ok"] and not running:
+            if lc["not_ok"]:
                 stop_why = "ledger_halted"
                 break
             due = [float(w["due_at"]) for w in snap["wakes"] if w["kind"] == "work"]
             if not due or min(due) > time.time() + QUIET_S:
-                stop_why = "quiet"
-                break
+                # Im lặng phải đúng ở HAI lần quan sát liên tiếp, không dừng theo một ảnh chụp đơn lẻ.
+                quiet_seen += 1
+                if quiet_seen >= 2:
+                    stop_why = "quiet"
+                    break
+            else:
+                quiet_seen = 0
         rep["phase_B"] = {"stop": stop_why, "seconds": round(time.time() - t0, 1), "trace": trace}
         srv.kill()
         rep["brain_files_B"] = G.snapshot_diff(before_files, G.snapshot_files(brain))
