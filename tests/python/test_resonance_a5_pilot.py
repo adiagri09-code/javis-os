@@ -126,6 +126,9 @@ DRY_SCRIPTS = {
     "maker_not_met": {"work": ["# Tóm tắt cuộc họp\n\n## Kết luận\n\nRa mắt 20/11.\n"], "review": [_PASS]},
     # Engine của vai làm treo lâu hơn trần thời gian của giai đoạn việc nền (dry đặt trần 60 giây cho ca này).
     "timeout": {"work": [{"sleep": 900}], "review": [_PASS]},
+    "report_fault": {"work": [_V1], "review": [_PASS]},
+    "recovery_fault": {"work": [_V1], "review": ["Bản này ổn, không có JSON."]},
+    "report_fault_technical": {"work": [{"error": "lỗi engine giả của vai làm"}], "review": [_PASS]},
     # Khung final báo lỗi: host kết luận engine_result_error; sổ phải đóng.
     "final_is_error": {"work": [{"events": [{"type": "final", "is_error": True, "subtype": "error_during_execution",
                                              "content": "Engine báo lỗi."}]}], "review": [_PASS]},
@@ -730,28 +733,10 @@ def run_case(scen: str) -> int:
         except Exception:  # noqa: BLE001
             rep["commit"] = ""
         delete = PL.may_delete_sandbox(MODE, acc, pres, base, out_dir)
-        rep["sandbox_kept"] = not delete
-        txt = json.dumps(rep, ensure_ascii=True, indent=2) + "\n"
-        for secret in (str(base), str(Path.home())):
-            txt = txt.replace(json.dumps(secret)[1:-1], "<path>")
-        try:
-            (out_dir / f"a5-pilot-{MODE}-{scen or 'main'}.json").write_text(txt, encoding="utf-8", newline="\n")
-            if not delete:
-                # Đường khôi phục: sandbox giữ nguyên (state, log, brain) và bản sao bằng chứng trong hồ sơ.
-                (out_dir / "a5-pilot-recovery.txt").write_text(
-                    f"sandbox: {base}\nbản sao bằng chứng: {pres.get('dest') or '(không có)'}\n"
-                    f"kết luận: {acc}\nlý do: {'; '.join(why) or '-'}\n", encoding="utf-8", newline="\n")
-        except Exception as e:  # noqa: BLE001
-            delete = False
-            print(f"KHÔNG GHI ĐƯỢC BÁO CÁO: {type(e).__name__}: {e}")
-        if not delete:
-            print("A5_PILOT_KEPT " + str(base))
-        print("A5_PILOT " + json.dumps({k: rep.get(k) for k in ("mode", "scenario", "acceptance", "branch",
-                                                                 "model_turns", "ledger_status",
-                                                                 "engine_turns_logged", "engine_turns_status",
-                                                                 "sandbox_kept")},
-                                       ensure_ascii=False) + " PRESERVE " + json.dumps(pres["ok"])
-              + " LEDGER " + json.dumps(lc, ensure_ascii=False))
+        # Ghi hồ sơ cuối là một phần của kết luận (review cổng vòng 2): file đường khôi phục trước, báo cáo JSON sau cùng.
+        # Lần ghi bắt buộc nào lỗi thì kết luận thành technical_failed, sandbox giữ lại; dòng A5_PILOT, mã thoát và báo
+        # cáo (nếu ghi được) cùng một kết luận.
+        delete = PL.finalize_record(rep, MODE, scen, base, out_dir, pres, delete, lc, fault=PL.dry_fault(MODE, scen))
         if delete:
             shutil.rmtree(base, ignore_errors=True)
     return PL.EXIT_CODES.get(rep["acceptance"], 1)
@@ -780,6 +765,11 @@ DRY_CASES = {
     "save_error": ({}, "technical_failed", "pass_first", (1, 1), "A5_PILOT_KEPT"),
     "early_crash": ({}, "technical_failed", None, (0, 0), "FAIL bộ chạy không lỗi"),
     "ledger_corrupt": ({}, "technical_failed", None, (None, None), "FAIL sổ lượt pilot đọc được"),
+    # Lỗi ghi hồ sơ cuối (review cổng vòng 2), qua run_case thật: kết quả đạt, nghiệp vụ chưa đạt và lỗi kỹ thuật vốn có
+    # đều thành technical_failed, mã thoát 1, sandbox giữ; nhánh giữ nguyên.
+    "report_fault": ({}, "technical_failed", "pass_first", (1, 1), "KHÔNG GHI ĐƯỢC HỒ SƠ CUỐI"),
+    "recovery_fault": ({}, "technical_failed", "review_unknown", (1, 1), "KHÔNG GHI ĐƯỢC HỒ SƠ CUỐI"),
+    "report_fault_technical": ({}, "technical_failed", "maker_error", (1, 0), "KHÔNG GHI ĐƯỢC HỒ SƠ CUỐI"),
     # Bẫy: sổ đã giữ chỗ TRƯỚC khi dựng (bảo thủ) nên có một dòng `not_built`; không có lời gọi nào tới engine.
     "tripwire": ({}, "technical_failed", None, (1, 0), "FAIL dry: không chạm bẫy"),
     # Dừng ở cổng, trước mọi server có thể gọi model.
@@ -806,12 +796,14 @@ def _extra_checks(name: str, case_dir: Path, kept: str) -> list:
                 bad.append("sổ hỏng bị ghi đè")
     if name == "ledger_lost_end" and not isfile(case_dir / "a5-pilot-ledger.json.lost"):
         bad.append("sổ đổi tên không còn")
-    if name in ("save_error", "maker_error", "timeout", "early_crash", "ledger_corrupt", "ledger_lost_end"):
+    if name in ("save_error", "maker_error", "timeout", "early_crash", "ledger_corrupt", "ledger_lost_end",
+                "report_fault", "recovery_fault", "report_fault_technical"):
         if not kept or not os.path.isdir(PL._xp(kept)):
             bad.append("sandbox không được giữ")
         elif name != "early_crash" and not isfile(Path(kept) / "state" / "resonance.sqlite3"):
             bad.append("kho gốc trong sandbox không còn")
-        if not isfile(case_dir / "a5-pilot-recovery.txt"):
+        # Ca chặn chính file khôi phục: đường sandbox phải nằm trên stdout/stderr (câu "KHÔNG GHI ĐƯỢC HỒ SƠ CUỐI").
+        if name != "recovery_fault" and not isfile(case_dir / "a5-pilot-recovery.txt"):
             bad.append("thiếu đường khôi phục")
     if name not in PRESERVE_FAILS and name not in ("cost", "auth", "ledger_exists", "sha_mismatch"):
         dest = case_dir / "sandbox"
@@ -857,7 +849,27 @@ for name, (extra, want, want_branch, want_calls, needle) in DRY_CASES.items():
         pres, _s, tail = rest.partition(" LEDGER ")
         got, pres_ok, lcg = json.loads(head), json.loads(pres or "null"), json.loads(tail or "null")
     calls = (lcg["maker"], lcg["reviewer"]) if lcg else (None, None)
-    extra_bad = _extra_checks(name, case_dir, kept) if line else ["không có báo cáo"]
+    extra_bad = _extra_checks(name, case_dir, kept) if line else ["không có dòng A5_PILOT"]
+    # Các kênh kết quả phải nhất quán (review cổng vòng 2): mã thoát đúng hợp đồng của kết luận; báo cáo JSON bắt buộc có
+    # (trừ ca chèn lỗi ghi báo cáo, khi đó báo cáo KHÔNG được có) và nói cùng kết luận, nhánh, trạng thái giữ sandbox với
+    # dòng A5_PILOT; dòng KEPT có đúng khi sandbox được giữ.
+    want_exit = PL.EXIT_CODES.get(want, 1)
+    if cp.returncode != want_exit:
+        extra_bad.append(f"mã thoát {cp.returncode}, hợp đồng {want_exit}")
+    rpath = case_dir / f"a5-pilot-dry-{name}.json"
+    if PL.dry_fault("dry", name) == "report":
+        if os.path.exists(PL._xp(rpath)) or got.get("report_saved") is not False:
+            extra_bad.append("ca lỗi ghi báo cáo mà vẫn có báo cáo hay report_saved khác false")
+    elif not os.path.isfile(PL._xp(rpath)):
+        extra_bad.append("thiếu báo cáo JSON bắt buộc")
+    else:
+        with open(PL._xp(rpath), "rb") as f:
+            saved = json.loads(f.read().decode("utf-8"))
+        if (saved.get("acceptance"), saved.get("branch"), saved.get("sandbox_kept")) != (
+                got.get("acceptance"), got.get("branch"), got.get("sandbox_kept")) or got.get("report_saved") is not True:
+            extra_bad.append("báo cáo JSON khác dòng A5_PILOT")
+    if bool(kept) != bool(got.get("sandbox_kept")):
+        extra_bad.append("dòng KEPT không khớp sandbox_kept")
     ok = (got.get("acceptance") == want and needle in cp.stdout and got.get("engine_turns_logged") == 0
           and (got.get("model_turns") or {}).get("background_real", 1) == 0
           and (want_branch is None or got.get("branch") == want_branch)

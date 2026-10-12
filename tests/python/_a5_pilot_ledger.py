@@ -538,6 +538,90 @@ def may_delete_sandbox(mode: str, acceptance: str, preserve: dict, base: Path, o
             and not inside)
 
 
+# ───── ghi hồ sơ cuối ─────
+
+# Ca dry chèn lỗi ghi ở pha kết thúc (chỉ dry): tên ca -> file bị chặn.
+DRY_FAULTS = {"report_fault": "report", "report_fault_technical": "report", "recovery_fault": "recovery"}
+
+
+def dry_fault(mode: str, scen: str):
+    """Loại file bị chèn lỗi ghi ở pha kết thúc cho ca dry tương ứng; None ở real và mọi ca khác."""
+    return DRY_FAULTS.get(scen) if mode == "dry" else None
+
+
+def finalize_record(rep: dict, mode: str, scen: str, base, out_dir, pres: dict, delete: bool, lc, fault=None) -> bool:
+    """Ghi hồ sơ cuối và CHỐT kết luận theo kết quả ghi (review cổng pilot vòng 2). Trả True khi được dọn sandbox.
+
+    Thứ tự: khi giữ sandbox thì ghi `a5-pilot-recovery.txt` TRƯỚC, rồi ghi báo cáo JSON SAU CÙNG. Báo cáo là bản ghi
+    cuối nên không bao giờ có một báo cáo còn nói đạt mà file bắt buộc ghi sau nó lại hỏng.
+
+    Lần ghi bắt buộc nào lỗi (khôi phục hay báo cáo): kết luận thành `technical_failed`, `acceptance_why` thêm nguyên nhân
+    cụ thể, nhánh giữ nguyên, sandbox GIỮ (`sandbox_kept = true`), không dọn. Báo cáo lỗi thì ghi lại đường khôi phục với
+    kết luận mới và thử ghi báo cáo đúng một lần nữa; vẫn lỗi thì báo thất bại và đường sandbox ra stdout và stderr.
+    Không gọi engine, không đổi số lượt. Dòng `A5_PILOT` in SAU khi chốt, cùng kết luận và trạng thái giữ sandbox với
+    báo cáo (nếu đã ghi được) và mã thoát. `fault` (chỉ dry): "report" hay "recovery", chặn lần ghi tương ứng."""
+    import sys as _sys
+    base, out_dir = Path(base), Path(out_dir)
+    report = out_dir / f"a5-pilot-{mode}-{scen or 'main'}.json"
+    recovery = out_dir / "a5-pilot-recovery.txt"
+    keep = not delete
+    errors = []
+
+    def write(path, text, kind):
+        if fault == kind:
+            raise PermissionError(f"lỗi giả lập khi ghi {path.name}")
+        path.write_text(text, encoding="utf-8", newline="\n")
+
+    def downgrade(step, e):
+        msg = f"không ghi được {step}: {type(e).__name__}: {str(e)[:200]}"
+        if msg not in errors:
+            errors.append(msg)
+        rep["acceptance"] = "technical_failed"
+        rep["acceptance_why"] = [w for w in (rep.get("acceptance_why") or []) if w != msg] + [msg]
+        rep["record_errors"] = list(errors)
+
+    def report_text():
+        txt = json.dumps(rep, ensure_ascii=True, indent=2) + "\n"
+        for secret in (str(base), str(Path.home())):
+            txt = txt.replace(json.dumps(secret)[1:-1], "<path>")
+        return txt
+
+    saved = False
+    for _attempt in range(2):
+        rep["sandbox_kept"] = keep
+        if keep:
+            try:
+                write(recovery, f"sandbox: {base}\nbản sao bằng chứng: {pres.get('dest') or '(không có)'}\n"
+                                f"kết luận: {rep.get('acceptance')}\nlý do: "
+                                f"{'; '.join(rep.get('acceptance_why') or []) or '-'}\n", "recovery")
+            except Exception as e:  # noqa: BLE001
+                downgrade("file đường khôi phục", e)
+        rep["report_saved"] = True
+        try:
+            write(report, report_text(), "report")
+            saved = True
+            break
+        except Exception as e:  # noqa: BLE001
+            rep["report_saved"] = False
+            downgrade("báo cáo cuối", e)
+            keep = True
+    rep["sandbox_kept"] = keep
+    rep["report_saved"] = saved
+    if errors:
+        line = ("KHÔNG GHI ĐƯỢC HỒ SƠ CUỐI: " + "; ".join(errors) + f" | kết luận: {rep['acceptance']} | "
+                f"sandbox giữ tại: {base}")
+        print(line)
+        print(line, file=_sys.stderr)
+    if keep:
+        print("A5_PILOT_KEPT " + str(base))
+    print("A5_PILOT " + json.dumps({k: rep.get(k) for k in ("mode", "scenario", "acceptance", "branch", "model_turns",
+                                                             "ledger_status", "engine_turns_logged",
+                                                             "engine_turns_status", "sandbox_kept", "report_saved")},
+                                   ensure_ascii=False) + " PRESERVE " + json.dumps((pres or {}).get("ok"))
+          + " LEDGER " + json.dumps(lc, ensure_ascii=False))
+    return not keep
+
+
 # ───── kiểm nguồn trước khi có thể gọi model ─────
 
 def preflight_source(root: Path, approved_sha: str) -> dict:

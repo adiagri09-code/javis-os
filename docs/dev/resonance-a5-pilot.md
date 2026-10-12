@@ -106,6 +106,12 @@ Một hàm duy nhất, `decide_acceptance` (`tests/python/_a5_pilot_ledger.py`),
 
 Ca âm ở dry đạt kỳ vọng nghĩa là bộ chạy ra đúng `technical_failed` hay `stopped`. Đó là test của bộ chạy đạt, không phải một lần pilot kỹ thuật đạt.
 
+**Ghi hồ sơ cuối là một phần của kết luận** (`finalize_record`, review cổng vòng 2):
+- Khi giữ sandbox, `a5-pilot-recovery.txt` được ghi TRƯỚC; báo cáo JSON ghi SAU CÙNG. Vì vậy không bao giờ còn một báo cáo nói đạt mà file bắt buộc ghi sau nó lại hỏng.
+- Lần ghi bắt buộc nào lỗi: kết luận thành `technical_failed` (mã thoát 1, kể cả khi trước đó là `pending_content_review` hay `business_incomplete`), thêm nguyên nhân cụ thể, nhánh giữ nguyên, sandbox giữ (`sandbox_kept = true`).
+- Báo cáo lỗi thì ghi lại đường khôi phục với kết luận mới và thử ghi báo cáo đúng một lần nữa. Vẫn không ghi được thì in "KHÔNG GHI ĐƯỢC HỒ SƠ CUỐI" kèm đường sandbox ra stdout và stderr.
+- Dòng `A5_PILOT` in sau khi chốt, kèm `report_saved`. Dòng này, báo cáo (nếu có), mã thoát và trạng thái giữ sandbox luôn cùng một kết luận.
+
 ## Bảo toàn bằng chứng
 
 Trên MỌI nhánh, sau khi mọi server đã dừng, bộ chạy chép bằng chứng sang một thư mục MỚI `sandbox/` trong thư mục hồ sơ (không ghi đè gì có sẵn):
@@ -120,7 +126,7 @@ Kho và log của mọi server đã dựng là mục bắt buộc. Không chép 
 
 ## Dry
 
-`JAVIS_RESONANCE_A5_PILOT=dry python tests/python/test_resonance_a5_pilot.py` chạy 21 ca, mỗi ca một tiến trình con với server thật, đi qua đúng đường điều phối và hàm kết luận của real. Dry chặn đường tới engine thật ngay từ cấu hình và đường gọi, không chỉ đếm sau khi chạy:
+`JAVIS_RESONANCE_A5_PILOT=dry python tests/python/test_resonance_a5_pilot.py` chạy 24 ca, mỗi ca một tiến trình con với server thật, đi qua đúng đường điều phối, hàm kết luận và pha ghi hồ sơ của real. Một ca chỉ đạt khi mã thoát đúng hợp đồng của kết luận và báo cáo JSON bắt buộc có (trừ ca chặn ghi báo cáo) cùng kết luận, nhánh, trạng thái giữ sandbox với dòng `A5_PILOT`. Dry chặn đường tới engine thật ngay từ cấu hình và đường gọi, không chỉ đếm sau khi chạy:
 - settings dùng provider không tồn tại (`pilot-dry`);
 - launcher thay hàm dựng engine việc nền bằng engine giả đọc kịch bản; hàm dựng "thật" là bẫy;
 - không có lượt chat nào.
@@ -144,6 +150,9 @@ Mỗi ca còn xác minh sổ lượt engine của chính server sandbox (`usage.
 | `early_crash` | `technical_failed` | (0, 0) | bộ chạy lỗi trước bước lưu thông thường; log và kho vẫn được chép |
 | `ledger_corrupt` | `technical_failed` | sổ chưa xác minh | sổ hỏng trước B: không cấp lượt; file hỏng giữ nguyên bytes |
 | `tripwire` | `technical_failed` | (1, 0) | đường dựng engine "thật" bị gọi ở dry: bẫy ghi sự kiện |
+| `report_fault` | `technical_failed` | `pass_first` (1, 1) | ghi báo cáo cuối lỗi sau một kết quả đạt: mã thoát 1, không có báo cáo, sandbox giữ, có đường khôi phục |
+| `recovery_fault` | `technical_failed` | `review_unknown` (1, 1) | ghi đường khôi phục lỗi ở kết quả nghiệp vụ chưa đạt: mã thoát 1 (không phải 2); báo cáo nói technical_failed |
+| `report_fault_technical` | `technical_failed` | `maker_error` (1, 0) | lỗi kỹ thuật vốn có cộng lỗi ghi báo cáo: vẫn thất bại, sandbox giữ |
 | `cost`, `auth`, `ledger_exists`, `precondition`, `sha_mismatch` | `stopped` | | dừng ở cổng trước việc nền |
 
 Logic của sổ, kết cục lượt qua `_ask` thật, kết luận, bảo toàn, quyền dọn và kiểm nguồn có test riêng, không cần server: `tests/python/test_resonance_a5_pilot_gate.py`.

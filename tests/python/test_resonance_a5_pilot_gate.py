@@ -470,6 +470,92 @@ for label, args in (("real luôn giữ", ("real", "pending_content_review", ok_p
                     ("hồ sơ nằm trong sandbox giữ", ("dry", "pending_content_review", ok_pres, b, inside))):
     check(f"không dọn: {label}", PL.may_delete_sandbox(*args) is False)
 
+# ═════════ Review cổng vòng 2: ghi hồ sơ cuối là một phần của kết luận ═════════
+import contextlib  # noqa: E402
+import io  # noqa: E402
+from unittest.mock import patch  # noqa: E402
+
+
+def finish(name, mode, acceptance, fault=None, branch="pass_first", delete=None, patch_write=None, no_out=False):
+    """Chạy `finalize_record` thật trên fixture pha kết thúc (không engine). Trả kết quả và các kênh."""
+    root = TMP / f"fin-{name}"
+    base, out = root / "sandbox", root / "hs"
+    base.mkdir(parents=True)
+    if not no_out:
+        out.mkdir()
+    (base / "keep.txt").write_text("bằng chứng", encoding="utf-8")
+    rep = {"mode": mode, "scenario": "main", "acceptance": acceptance, "acceptance_why": [], "branch": branch,
+           "ledger_status": "verified", "engine_turns_logged": 0, "engine_turns_status": "verified",
+           "model_turns": {"background_real": 0}}
+    pres = {"ok": True, "dest": str(out / "sandbox")}
+    if delete is None:
+        delete = PL.may_delete_sandbox(mode, acceptance, pres, base, out)
+    so, se = io.StringIO(), io.StringIO()
+    ctx = patch.object(Path, "write_text", patch_write) if patch_write else contextlib.nullcontext()
+    with ctx, contextlib.redirect_stdout(so), contextlib.redirect_stderr(se):
+        deleted = PL.finalize_record(rep, mode, "main", base, out, pres, delete, {"maker": 1, "reviewer": 1},
+                                     fault=fault)
+    report = out / f"a5-pilot-{mode}-main.json"
+    saved = json.loads(report.read_text(encoding="utf-8")) if report.exists() else None
+    rec = (out / "a5-pilot-recovery.txt").read_text(encoding="utf-8") if (out / "a5-pilot-recovery.txt").exists() \
+        else None
+    line = next((x for x in so.getvalue().splitlines() if x.startswith("A5_PILOT ")), "")
+    head = json.loads(line[len("A5_PILOT "):].partition(" PRESERVE ")[0]) if line else {}
+    return {"rep": rep, "exit": PL.EXIT_CODES.get(rep["acceptance"], 1), "deleted": deleted, "saved": saved,
+            "rec": rec, "line": head, "stdout": so.getvalue(), "stderr": se.getvalue(), "base": base}
+
+
+r = finish("real-ok", "real", "pending_content_review")
+check("đối chứng real: lưu đủ: giữ kết luận và mã thoát 0; real giữ sandbox, ghi đường khôi phục; báo cáo khớp dòng",
+      r["exit"] == 0 and r["saved"]["acceptance"] == "pending_content_review" and r["deleted"] is False
+      and r["rec"] and r["line"]["acceptance"] == "pending_content_review" and r["line"]["sandbox_kept"] is True
+      and r["saved"]["sandbox_kept"] is True and r["saved"]["report_saved"] is True, r["rep"])
+r = finish("dry-ok", "dry", "pending_content_review")
+check("đối chứng dry: lưu đủ: mã thoát 0, được dọn, không cần đường khôi phục", r["exit"] == 0 and r["deleted"] is True
+      and r["rec"] is None and r["saved"]["sandbox_kept"] is False and r["line"]["sandbox_kept"] is False)
+for mode in ("real", "dry"):
+    r = finish(f"{mode}-report", mode, "pending_content_review", fault="report")
+    check(f"{mode}: ghi báo cáo cuối lỗi sau kết quả đạt: technical_failed, mã thoát 1, giữ sandbox, không có báo cáo "
+          "nói đạt, đường khôi phục ghi lại với kết luận mới, stdout và stderr báo kèm đường sandbox",
+          r["exit"] == 1 and r["rep"]["acceptance"] == "technical_failed" and r["deleted"] is False
+          and r["rep"]["sandbox_kept"] is True and r["saved"] is None and "technical_failed" in (r["rec"] or "")
+          and str(r["base"]) in r["stdout"] and str(r["base"]) in r["stderr"]
+          and "KHÔNG GHI ĐƯỢC HỒ SƠ CUỐI" in r["stderr"] and r["line"]["acceptance"] == "technical_failed"
+          and r["line"]["sandbox_kept"] is True and r["line"]["report_saved"] is False
+          and r["rep"]["branch"] == "pass_first" and any("báo cáo cuối" in w for w in r["rep"]["acceptance_why"]),
+          r["rep"])
+r = finish("real-recovery", "real", "pending_content_review", fault="recovery")
+check("real: ghi đường khôi phục lỗi: technical_failed, mã thoát 1; báo cáo (ghi SAU) nói technical_failed, không nói đạt",
+      r["exit"] == 1 and r["saved"]["acceptance"] == "technical_failed" and r["deleted"] is False
+      and any("đường khôi phục" in w for w in r["saved"]["acceptance_why"]), r["saved"])
+r = finish("biz-recovery", "real", "business_incomplete", fault="recovery", branch="review_unknown")
+check("nghiệp vụ chưa đạt + ghi đường khôi phục lỗi: không giữ mã thoát 2, thành technical_failed mã 1, nhánh giữ nguyên",
+      r["exit"] == 1 and r["saved"]["acceptance"] == "technical_failed" and r["saved"]["branch"] == "review_unknown")
+r = finish("tech-report", "dry", "technical_failed", fault="report", branch="maker_error")
+check("lỗi kỹ thuật vốn có + ghi báo cáo lỗi: vẫn thất bại, mã thoát 1, giữ sandbox", r["exit"] == 1
+      and r["deleted"] is False and r["rep"]["acceptance"] == "technical_failed" and r["rep"]["branch"] == "maker_error")
+_orig_wt = Path.write_text
+_seen = {"n": 0}
+
+
+def _flaky(path, *a, **kw):
+    if path.name == "a5-pilot-dry-main.json" and _seen["n"] == 0:
+        _seen["n"] = 1
+        raise OSError("ổ đĩa tạm khoá")
+    return _orig_wt(path, *a, **kw)
+
+
+r = finish("flaky", "dry", "pending_content_review", patch_write=_flaky)
+check("ghi báo cáo lỗi một lần rồi được: báo cáo lần hai ghi technical_failed (lỗi đã xảy ra), không bao giờ nói đạt",
+      r["saved"] and r["saved"]["acceptance"] == "technical_failed" and r["exit"] == 1 and r["deleted"] is False
+      and "technical_failed" in (r["rec"] or ""), r["saved"])
+r = finish("no-out", "real", "pending_content_review", no_out=True)
+check("nơi lưu hồ sơ không ghi được: technical_failed, mã thoát 1, stdout và stderr có đường sandbox để khôi phục",
+      r["exit"] == 1 and r["saved"] is None and str(r["base"]) in r["stderr"] and r["deleted"] is False)
+check("ca dry chèn lỗi ghi: chỉ ở dry, đúng ba ca", PL.dry_fault("real", "report_fault") is None
+      and PL.dry_fault("dry", "report_fault") == "report" and PL.dry_fault("dry", "recovery_fault") == "recovery"
+      and PL.dry_fault("dry", "main_pass") is None)
+
 # ═════════ Lưu ý 2: kiểm nguồn trước khi có thể gọi model ═════════
 import subprocess  # noqa: E402
 
