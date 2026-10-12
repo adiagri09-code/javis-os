@@ -36,21 +36,24 @@ Không chứng minh:
 
 | Bước | Server | Việc | Lượt model |
 |---|---|---|---|
-| 0 | không | Cổng chi phí (trần pilot ≤ số đã duyệt, đủ cho nhánh ngắn nhất), tạo sổ (từ chối nếu đã có), cổng engine và xác thực (engine việc nền đúng cấu hình đã duyệt; `claude auth status` là gói thuê bao gốc; không có apiKeyHelper, env chọn nhà cung cấp hay settings do quản trị đặt) | 0 |
+| 0 | không | Kiểm nguồn: HEAD đúng SHA đã duyệt (`JAVIS_RESONANCE_A5_APPROVED_SHA`) và cả checkout sạch, gồm mã sản phẩm, chính bộ chạy và không file lạ (`preflight_source`). Cổng chi phí: trần pilot ≤ số đã duyệt, đủ cho nhánh ngắn nhất. Tạo sổ (từ chối nếu đã có). Cổng engine và xác thực: engine việc nền đúng cấu hình đã duyệt; `claude auth status` là gói thuê bao gốc; không có apiKeyHelper, env chọn nhà cung cấp hay settings do quản trị đặt | 0 |
 | A | nhịp tạm dừng, trần kho 0, trần sổ 0 | Bật hai trợ lý qua `/resonance/agents/toggle`. Chọn người review qua `/resonance/agents/reviewer`. Lập mục tiêu (`form_goal`). Cho phép phạm vi qua lệnh `approve_scope` của thẻ. Kiểm đội đã gắn (ghim mã reviewer, 8 lượt chia 4/4, hai vòng), phạm vi đã cấp, chưa có file đích | 0 |
 | B | nhịp chạy, trần kho = trần tổng pilot, trần sổ theo vai | Tiền điều kiện (hai trợ lý còn bật, đội còn ghim đúng mã, không kiểm nào hỏng), cổng token (còn ít nhất 30 phút). Quan sát tới khi mục tiêu kết thúc, sổ đóng, hay không còn lịch làm việc trong 5 phút và không có lượt đang chạy; trần thời gian 30 phút | theo nhánh, tối đa 4 |
 | C | nhịp chạy, trần kho = số đã dùng, trần sổ 0 | Chờ khoảng 95 giây (hơn ba nhịp). Sổ không có lượt hay lần thử mới; hành động và hàng review không đổi. Tạm dừng mục tiêu nếu còn mở | 0 |
 
 **Nhánh có thể xảy ra** (bộ chạy đọc từ kho, ghi `branch`):
 
-| Nhánh | Diễn biến | Lượt làm / review | Kết cục |
+| Nhánh | Diễn biến | Lượt làm / review | Kết luận |
 |---|---|---|---|
-| `pass_first` | Làm, review pass, chốt đạt | 1 / 1 | `succeeded` |
-| `one_fix_then_pass` | Làm, review cần sửa, sửa theo góp ý, review pass, chốt đạt | 2 / 2 | `succeeded` |
-| `pilot_cap_after_two_reviews` | Hai lần cần sửa; lượt sửa thứ hai bị trần pilot chặn, không gọi model. Lớp chặn trước là trần kho, chặn ngay lúc giữ chỗ (`blocked/budget`, dry thấy đúng như vậy). Nếu trần kho không chặn thì sổ pilot chặn trước khi dựng engine (`blocked/engine_blocked`, host hoàn lượt) | 2 / 2 | mục tiêu mở, tạm dừng |
-| `review_unknown` | Review không đọc được; host hẹn thử lại sau một giờ, pilot không chờ | 1 / 1 | mục tiêu mở, tạm dừng |
-| `maker_error` | Lượt làm đầu lỗi; sổ đóng | 1 / 0 | mục tiêu mở, tạm dừng |
-| `no_review`, `other` | Không khớp các nhánh trên; ghi nguyên, không suy diễn | tối đa 2 / 2 | tạm dừng |
+| `pass_first` | Làm, review pass, chốt đạt | 1 / 1 | `pending_content_review` |
+| `one_fix_then_pass` | Làm, review cần sửa, sửa theo góp ý, review pass, chốt đạt | 2 / 2 | `pending_content_review` |
+| `pilot_cap_after_two_reviews` | Hai lần cần sửa; lượt sửa thứ hai bị trần pilot chặn, không gọi model. Lớp chặn trước là trần kho, chặn ngay lúc giữ chỗ (`blocked/budget`, dry thấy đúng như vậy). Nếu trần kho không chặn thì sổ pilot chặn trước khi dựng engine (`blocked/engine_blocked`, host hoàn lượt) | 2 / 2 | `business_incomplete` |
+| `review_unknown` | Review không đọc được (engine chạy bình thường); host hẹn thử lại sau một giờ, pilot không chờ | 1 / 1 | `business_incomplete` |
+| `maker_not_met` | Bản làm chưa đạt kiểm khách quan, chưa có review; host hẹn thử lại sau 15 phút, pilot không chờ | 1 / 0 | `business_incomplete` |
+| `maker_error`, `reviewer_error` | Lượt của vai làm hay vai review lỗi ở engine hay host (mọi kết cục lỗi, xem "Hạn mức"); sổ đóng | 1 / 0, 1 / 1 | `technical_failed` |
+| `no_review`, `other` | Không khớp các nhánh trên; ghi nguyên, không suy diễn | | `technical_failed` |
+
+Mục tiêu còn mở thì bộ chạy tạm dừng nó sau khi kiểm dựng lại.
 
 ## Hạn mức
 
@@ -68,7 +71,9 @@ Các lớp chặn (không lớp nào thay lớp nào):
 - **Sổ lượt theo vai của pilot** (`tests/python/_a5_pilot_ledger.py`, launcher `tests/python/_a5_pilot_server.py`).
   - Giữ chỗ và fsync TRƯỚC khi dựng engine cho mỗi lượt.
   - Có trần vai, trần tổng và trần theo giai đoạn (A và C là 0).
-  - Lượt lỗi, huỷ, ngoại lệ, không dựng được hay thiếu khung kết thúc vẫn tính, và sổ đóng ngay.
+  - Kết cục của lượt theo đúng luật lỗi của host (`GoalDeps._ask`): khung `error`; `final` có `is_error` hay `dua_token`; gọi công cụ trong lượt chỉ chữ (trước hay sau `final`); đầu ra rỗng, quá dài, hay là lời báo lỗi đăng nhập; ngoại lệ; huỷ khi host còn đọc (hết giờ); thiếu khung kết thúc; không dựng được. Lớp thứ hai bọc chính `_ask` của host: host kết luận lỗi sau khi đã gọi engine thì dòng sổ thành `host_<mã>`.
+  - `ok` chỉ là tạm: lỗi đến sau hạ nó xuống (ghi `downgraded_from`), không bao giờ nâng lỗi thành `ok`. Host ngừng đọc sau một `final` hợp lệ thì `ok` giữ nguyên.
+  - Mọi kết cục lỗi vẫn tính lượt, và sổ đóng ngay.
   - Bị chặn thì không chạm hàm dựng engine thật; host hoàn lượt theo đường not-run của A5. Sổ chỉ ghi một sự kiện `refused`.
   - Sổ đã có thì từ chối chạy; sổ hỏng thì không cấp lượt và không ghi đè.
 - **Trần kho** `JAVIS_RESONANCE_CALL_CEILING`, áp cho mọi tiến trình server.
@@ -88,36 +93,65 @@ Không thử lại, không nâng trần, không chuyển sang API trả phí. Se
 | Dựng lại không gọi thêm | `restart`: không có dòng sổ, sự kiện, hành động hay hàng review mới |
 | Không đụng file khác | Ảnh chụp brain trước và sau giai đoạn B: chỉ file đích đổi; ghi chú cũ còn nguyên |
 
-Kết luận của lần chạy real là `pending_content_review` (kỹ thuật đạt, chờ người đọc nội dung), `technical_failed` hay `stopped`. Không có kết luận "đạt" tự động về nội dung.
+## Kết luận của một lần chạy
+
+Một hàm duy nhất, `decide_acceptance` (`tests/python/_a5_pilot_ledger.py`), quyết kết luận từ bằng chứng CUỐI. Real và dry dùng cùng luật. Thiếu trường nào thì coi như không đạt.
+
+| Kết luận | Khi nào | Mã thoát |
+|---|---|---|
+| `stopped` | Dừng ở một cổng trước giai đoạn việc nền (không server nào có thể gọi model) | 1 |
+| `technical_failed` | Một trong: kiểm hỏng; dừng sau khi việc nền đã bắt đầu; giai đoạn việc nền dừng bất thường (hết giờ, sổ hỏng, bẫy); sổ ở lần đọc cuối không xác minh được; có lượt kết cục khác `ok`; sổ lượt engine của server không xác minh được; dựng lại chưa kiểm hay có lượt mới; nhánh lạ; số lượt (sổ, sổ vai của kho) khác số của nhánh; trạng thái mục tiêu khác của nhánh; thiếu đầu ra đã lưu của mỗi lượt làm, mỗi lượt review, hay file đích khi chốt; ảnh chụp review chưa băm lại đúng; bảo toàn bằng chứng lỗi | 1 |
+| `pending_content_review` | Kỹ thuật đạt trọn và mục tiêu chốt đạt (`pass_first`, `one_fix_then_pass`): chờ người đọc nội dung. Không có "đạt" tự động | 0 |
+| `business_incomplete` | Kỹ thuật đạt trọn, nhánh nghiệp vụ chưa đạt nhưng đã định nghĩa (`pilot_cap_after_two_reviews`, `review_unknown`, `maker_not_met`); giữ nguyên `branch` | 2 |
+
+Ca âm ở dry đạt kỳ vọng nghĩa là bộ chạy ra đúng `technical_failed` hay `stopped`. Đó là test của bộ chạy đạt, không phải một lần pilot kỹ thuật đạt.
+
+## Bảo toàn bằng chứng
+
+Trên MỌI nhánh, sau khi mọi server đã dừng, bộ chạy chép bằng chứng sang một thư mục MỚI `sandbox/` trong thư mục hồ sơ (không ghi đè gì có sẵn):
+- kho mục tiêu và kho hội thoại, chép bằng SQLite backup (nhất quán, gồm WAL);
+- sổ usage và settings (chỉ có tên provider/model);
+- log của mọi server, đã che khoá và token;
+- toàn bộ brain tạm (trợ lý, file đích, đầu ra các lượt làm) và kịch bản dry.
+
+Kho và log của mọi server đã dựng là mục bắt buộc. Không chép kho bí mật hay khoá mã hoá.
+
+**Sandbox gốc giữ nguyên** khi chạy real (luôn giữ), khi kết luận khác `pending_content_review`, khi bảo toàn lỗi, hay khi hồ sơ nằm trong sandbox. Khi đó bộ chạy in `A5_PILOT_KEPT <đường dẫn>` và ghi `a5-pilot-recovery.txt` (đường dẫn sandbox, bản sao, kết luận, lý do). Nguồn không bị sửa hay xoá; file hỏng chép nguyên bytes; sổ hỏng không bao giờ bị ghi đè. Người chạy không cần đặt biến nào thêm.
 
 ## Dry
 
-`JAVIS_RESONANCE_A5_PILOT=dry python tests/python/test_resonance_a5_pilot.py` chạy 12 ca, mỗi ca một tiến trình con với server thật. Dry chặn đường tới engine thật ngay từ cấu hình và đường gọi, không chỉ đếm sau khi chạy:
+`JAVIS_RESONANCE_A5_PILOT=dry python tests/python/test_resonance_a5_pilot.py` chạy 21 ca, mỗi ca một tiến trình con với server thật, đi qua đúng đường điều phối và hàm kết luận của real. Dry chặn đường tới engine thật ngay từ cấu hình và đường gọi, không chỉ đếm sau khi chạy:
 - settings dùng provider không tồn tại (`pilot-dry`);
 - launcher thay hàm dựng engine việc nền bằng engine giả đọc kịch bản; hàm dựng "thật" là bẫy;
 - không có lượt chat nào.
 
 Mỗi ca còn xác minh sổ lượt engine của chính server sandbox (`usage.json` và `usage-events.jsonl`) bằng 0.
 
-| Ca | Kỳ vọng |
-|---|---|
-| `main_pass`, `main_fix` | Nhánh `pass_first` (1, 1), `one_fix_then_pass` (2, 2); mọi kiểm bằng chứng đạt |
-| `fix_cap` | `pilot_cap_after_two_reviews` (2, 2); lượt sửa thứ ba bị trần kho chặn lúc giữ chỗ (`blocked/budget`), không gọi |
-| `ledger_cap` | Như `fix_cap` nhưng trần kho nâng lên 8 (chỉ dry): sổ pilot chặn lượt sửa thứ ba trước khi dựng engine (`refused cap_maker`), host hoàn lượt (làm còn 2 lượt đã dùng), `blocked/engine_blocked` |
-| `review_unknown`, `maker_error` | Đúng nhánh; không thử lại; dựng lại không gọi thêm |
-| `cost` | Hạn mức đã duyệt nhỏ hơn trần pilot: dừng trước mọi lượt |
-| `auth` | Xác thực không phải gói thuê bao: dừng trước mọi lượt |
-| `ledger_exists` | Sổ có từ trước: dừng, không đặt lại |
-| `precondition` | Người review bị tắt giữa A và B: dừng trước việc nền |
-| `ledger_corrupt` | Sổ hỏng trước B: không cấp lượt nào, dừng, sổ chưa xác minh |
-| `tripwire` | Đường dựng engine "thật" bị gọi ở dry: bẫy ghi sự kiện, dừng |
+| Ca | Kết luận | Nhánh, sổ (làm, review) | Kiểm thêm |
+|---|---|---|---|
+| `main_pass` | `pending_content_review` | `pass_first` (1, 1) | mọi kiểm bằng chứng |
+| `main_fix` | `pending_content_review` | `one_fix_then_pass` (2, 2) | lượt sửa riêng sau hàng cần sửa |
+| `fix_cap` | `business_incomplete` | `pilot_cap_after_two_reviews` (2, 2) | trần kho chặn lượt sửa thứ ba lúc giữ chỗ |
+| `ledger_cap` | `business_incomplete` | như trên (2, 2) | trần kho nâng lên 8 (chỉ dry); sổ chặn trước khi dựng engine, host hoàn lượt |
+| `review_unknown` | `business_incomplete` | `review_unknown` (1, 1) | không thử lại |
+| `maker_not_met` | `business_incomplete` | `maker_not_met` (1, 0) | không thử lại |
+| `maker_error`, `final_is_error` | `technical_failed` | `maker_error` (1, 0) | lỗi khung `error`, hay `final` có `is_error`; sổ đóng; sandbox giữ |
+| `reviewer_error` | `technical_failed` | `reviewer_error` (1, 1) | lỗi engine của vai review không gộp với review không đọc được |
+| `timeout` | `technical_failed` | `maker_error` (1, 0) | engine treo quá trần thời gian (60 giây ở ca này); lượt còn giữ chỗ là chưa xác minh |
+| `missing_output` | `technical_failed` | `pass_first` (1, 1) | đầu ra lượt làm không còn trước bước lưu |
+| `ledger_lost_end` | `technical_failed` | `pass_first`, sổ chưa xác minh | sổ mất ngay trước lần đọc cuối (đổi tên, còn file `.lost`) |
+| `save_error` | `technical_failed` | `pass_first` (1, 1) | lỗi lúc chép kho; bảo toàn lỗi; sandbox giữ, kho gốc còn, có đường khôi phục |
+| `early_crash` | `technical_failed` | (0, 0) | bộ chạy lỗi trước bước lưu thông thường; log và kho vẫn được chép |
+| `ledger_corrupt` | `technical_failed` | sổ chưa xác minh | sổ hỏng trước B: không cấp lượt; file hỏng giữ nguyên bytes |
+| `tripwire` | `technical_failed` | (1, 0) | đường dựng engine "thật" bị gọi ở dry: bẫy ghi sự kiện |
+| `cost`, `auth`, `ledger_exists`, `precondition`, `sha_mismatch` | `stopped` | | dừng ở cổng trước việc nền |
 
-Logic sổ (trần, sổ đóng, sổ hỏng, kết cục từng lượt, phân nhánh) có test riêng không cần server: `tests/python/test_resonance_a5_pilot_gate.py`.
+Logic của sổ, kết cục lượt qua `_ask` thật, kết luận, bảo toàn, quyền dọn và kiểm nguồn có test riêng, không cần server: `tests/python/test_resonance_a5_pilot_gate.py`.
 
 ## Chạy real (chỉ sau khi được duyệt)
 
 ```bash
-JAVIS_RESONANCE_A5_PILOT=real JAVIS_RESONANCE_PILOT_SETTINGS=<settings.json thật> JAVIS_RESONANCE_A5_OUT=<thư mục mới> JAVIS_RESONANCE_A5_APPROVED='{"aux": {"provider": "anthropic-cli", "model": "sonnet"}}' JAVIS_RESONANCE_A5_MAX_CALLS=4 JAVIS_RESONANCE_A5_INPUTS_SHA=<frozen_sha256> python tests/python/test_resonance_a5_pilot.py
+JAVIS_RESONANCE_A5_PILOT=real JAVIS_RESONANCE_PILOT_SETTINGS=<settings.json thật> JAVIS_RESONANCE_A5_OUT=<thư mục mới, ngoài checkout> JAVIS_RESONANCE_A5_APPROVED='{"aux": {"provider": "anthropic-cli", "model": "sonnet"}}' JAVIS_RESONANCE_A5_MAX_CALLS=4 JAVIS_RESONANCE_A5_INPUTS_SHA=<frozen_sha256> JAVIS_RESONANCE_A5_APPROVED_SHA=<SHA đã duyệt> python tests/python/test_resonance_a5_pilot.py
 ```
 
-Đúng một lần, trên một bản checkout sạch ở SHA đã duyệt. Báo cáo ghi `commit` và `server_dirty`; khác SHA đã duyệt hay cây bẩn thì kết quả không dùng được.
+Đúng một lần, trên một bản checkout sạch ở SHA đã duyệt. Bộ chạy tự kiểm (bước 0, trước mọi server) rằng HEAD đúng `JAVIS_RESONANCE_A5_APPROVED_SHA` và cả checkout sạch; sai hay không đọc được thì dừng, không lượt nào. Thư mục hồ sơ phải nằm ngoài checkout.

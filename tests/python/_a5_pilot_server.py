@@ -10,12 +10,16 @@ Biến môi trường (bộ chạy đặt; không có mặc định nào cho ph�
   (bộ lập mục tiêu, mọi lời dặn hệ thống khác) luôn là 0.
 - JAVIS_A5_PILOT_SCRIPT (chỉ dry): file JSON {"work": [...], "review": [...]} cho engine giả.
 
+Kết cục mỗi lượt theo đúng luật lỗi của host (xem `_a5_pilot_ledger.Counted`); thêm lớp bọc `GoalDeps._ask` để kết luận
+cuối của host (lỗi sau khi đã gọi engine) cũng hạ dòng sổ.
+
 Lượt bị chặn (sổ đóng, hết trần): hàm dựng trả (None, lý do) mà không chạm engine thật; host coi là engine chưa dựng được
 và hoàn lượt theo đường not-run của A5.
 
 dry: hàm dựng "thật" là BẪY (chạm tới là ghi sự kiện `tripwire` và trả None); engine giả chỉ đọc kịch bản; settings dry
 dùng provider không tồn tại. Không có đường nào tới engine thật.
 """
+import asyncio
 import json
 import os
 import sys
@@ -73,6 +77,14 @@ if MODE == "dry":
             if len(lst) > 1:
                 sc[key] = lst[1:]
                 SCRIPT.write_text(json.dumps(sc, ensure_ascii=False), encoding="utf-8")
+            if isinstance(item, dict) and item.get("sleep"):
+                # Ca dry hết giờ: engine treo lâu hơn trần thời gian của giai đoạn việc nền.
+                await asyncio.sleep(float(item["sleep"]))
+                return
+            if isinstance(item, dict) and item.get("events"):
+                for ev in item["events"]:
+                    yield ev
+                return
             if isinstance(item, dict) and item.get("error"):
                 yield {"type": "error", "content": item["error"]}
                 return
@@ -87,6 +99,8 @@ if MODE == "dry":
     main._resonance_engine = PL.wrap_factory(_fake_factory, LED, role_of)
 else:
     main._resonance_engine = PL.wrap_factory(main._resonance_engine, LED, role_of)
+# Lớp thứ hai: kết luận cuối của host (`GoalDeps._ask`) cho đúng lượt vừa dựng; host báo lỗi thì dòng sổ không còn `ok`.
+R.GoalDeps._ask = PL.wrap_ask(R.GoalDeps._ask, LED)
 
 print(f"[a5-pilot] mode={MODE} caps={CAPS} sổ đã gắn", file=sys.stderr)
 

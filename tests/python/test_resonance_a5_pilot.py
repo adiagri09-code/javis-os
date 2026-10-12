@@ -121,6 +121,14 @@ DRY_SCRIPTS = {
     "ledger_cap": {"work": [_V1, _V2, _V3], "review": [_CHANGES, _CHANGES, _PASS]},
     "review_unknown": {"work": [_V1], "review": ["Bản này ổn, không có JSON."]},
     "maker_error": {"work": [{"error": "lỗi engine giả của vai làm"}], "review": [_PASS]},
+    "reviewer_error": {"work": [_V1], "review": [{"error": "lỗi engine giả của vai review"}]},
+    # Bản làm thiếu mục "Việc tiếp theo": không đạt kiểm khách quan, không có review; host hẹn thử lại sau 15 phút.
+    "maker_not_met": {"work": ["# Tóm tắt cuộc họp\n\n## Kết luận\n\nRa mắt 20/11.\n"], "review": [_PASS]},
+    # Engine của vai làm treo lâu hơn trần thời gian của giai đoạn việc nền (dry đặt trần 60 giây cho ca này).
+    "timeout": {"work": [{"sleep": 900}], "review": [_PASS]},
+    # Khung final báo lỗi: host kết luận engine_result_error; sổ phải đóng.
+    "final_is_error": {"work": [{"events": [{"type": "final", "is_error": True, "subtype": "error_during_execution",
+                                             "content": "Engine báo lỗi."}]}], "review": [_PASS]},
 }
 
 
@@ -144,7 +152,8 @@ def read_ledger(path: Path) -> tuple:
     return st, ""
 
 
-from _a5_pilot_ledger import classify, ledger_counts  # noqa: E402  - hàm thuần, test ở test_resonance_a5_pilot_gate.py
+import _a5_pilot_ledger as PL  # noqa: E402  - hàm dùng chung, test ở test_resonance_a5_pilot_gate.py
+from _a5_pilot_ledger import classify, ledger_counts  # noqa: E402
 
 
 # ───────────── Ca chạy (một tiến trình mỗi ca) ─────────────
@@ -162,11 +171,16 @@ def run_case(scen: str) -> int:
     keep_sha = _sha_file(keep)
     deliv = brain / DELIV
 
-    out_dir = Path(os.environ.get("JAVIS_RESONANCE_A5_OUT") or (base / "out"))
+    # Hồ sơ nằm NGOÀI sandbox để sandbox dọn được mà không mất bằng chứng: real dùng thư mục chủ dự án chỉ định; dry do bộ
+    # điều phối cấp mỗi ca một thư mục mới; không có thì nằm trong sandbox (và sandbox không bao giờ bị dọn).
+    if MODE == "dry" and os.environ.get("JAVIS_RESONANCE_A5_DRY_DIR"):
+        out_dir = Path(os.environ["JAVIS_RESONANCE_A5_DRY_DIR"]) / scen
+    else:
+        out_dir = Path(os.environ.get("JAVIS_RESONANCE_A5_OUT") or (base / "out"))
     approved_max = int(os.environ.get("JAVIS_RESONANCE_A5_MAX_CALLS", str(CAPS["total"])))
     if MODE == "real":
         need = ("JAVIS_RESONANCE_A5_OUT", "JAVIS_RESONANCE_PILOT_SETTINGS", "JAVIS_RESONANCE_A5_APPROVED",
-                "JAVIS_RESONANCE_A5_MAX_CALLS", "JAVIS_RESONANCE_A5_INPUTS_SHA")
+                "JAVIS_RESONANCE_A5_MAX_CALLS", "JAVIS_RESONANCE_A5_INPUTS_SHA", "JAVIS_RESONANCE_A5_APPROVED_SHA")
         miss = [k for k in need if not os.environ.get(k)]
         if miss:
             print("FAIL pilot: real thiếu " + ", ".join(miss))
@@ -176,6 +190,9 @@ def run_case(scen: str) -> int:
             return 1
         if out_dir.exists():
             print("FAIL pilot: JAVIS_RESONANCE_A5_OUT đã tồn tại; mỗi lần chạy thật một thư mục mới")
+            return 1
+        if out_dir.resolve().is_relative_to(Path(ROOT).resolve()):
+            print("FAIL pilot: JAVIS_RESONANCE_A5_OUT phải nằm ngoài checkout (checkout phải sạch)")
             return 1
         _m = json.loads(Path(os.environ["JAVIS_RESONANCE_PILOT_SETTINGS"]).read_text(encoding="utf-8")).get("model") or {}
         model = {k: _m[k] for k in ("auxiliary", "main", "engine", "claude_model") if k in _m}
@@ -193,6 +210,7 @@ def run_case(scen: str) -> int:
     script = base / "dry-script.json"
     script.write_text(json.dumps(DRY_SCRIPTS.get(scen) or DRY_SCRIPTS["main_pass"], ensure_ascii=False),
                       encoding="utf-8", newline="\n")
+    wall_s = 60 if (MODE == "dry" and scen == "timeout") else PHASE_B_WALL_S
 
     os.environ["JAVIS_STATE_DIR"] = str(state)
     os.environ["BRAINS_DIR"] = str(brains)
@@ -396,7 +414,15 @@ def run_case(scen: str) -> int:
     gid = ""
     led = None
     try:
-        # ───────────── Bước 0: cổng chi phí, sổ, xác thực; TRƯỚC mọi server việc nền ─────────────
+        # ───────────── Bước 0: nguồn, cổng chi phí, sổ, xác thực; TRƯỚC mọi server ─────────────
+        # Nguồn: HEAD phải đúng SHA đã duyệt và cả checkout sạch (mã sản phẩm, chính bộ chạy, không file lạ). Real bắt
+        # buộc; dry chỉ kiểm khi có SHA đã duyệt (ca `sha_mismatch`), còn lại ghi lại để đối chiếu.
+        approved_sha = os.environ.get("JAVIS_RESONANCE_A5_APPROVED_SHA", "")
+        pf = PL.preflight_source(Path(ROOT), approved_sha)
+        rep["preflight"] = pf
+        if MODE == "real" or approved_sha:
+            if not check(f"nguồn: HEAD đúng SHA đã duyệt và checkout sạch ({pf['why'] or 'đạt'})", pf["ok"]):
+                raise SystemExit("dừng trước mọi lượt: nguồn không phải bản đã duyệt hay checkout không sạch")
         if not check(f"cổng chi phí: trần tổng pilot ({CAPS['total']}) không vượt số lượt đã duyệt ({approved_max}) và "
                      f"đủ cho nhánh ngắn nhất ({MIN_CALLS})",
                      MIN_CALLS <= CAPS["total"] <= approved_max and CAPS["maker"] + CAPS["reviewer"] == CAPS["total"]):
@@ -414,6 +440,9 @@ def run_case(scen: str) -> int:
 
         # ───────────── Bước 1 (server A, nhịp tạm dừng, trần kho 0, trần sổ 0): dựng đội và mục tiêu ─────────────
         rep["steps"]["start_A_s"] = round(srv.start("A", True, {"maker": 0, "reviewer": 0}, 0), 1)
+        if scen == "early_crash":
+            # Ca dry: bộ chạy lỗi giữa chừng, TRƯỚC bước lưu bằng chứng thông thường.
+            raise RuntimeError("lỗi giả lập của bộ chạy trước bước lưu bằng chứng")
         for slug in (MAKER, REVIEWER):
             code, _b = http("POST", "/resonance/agents/toggle", json={"slug": slug, "enabled": True})
             check(f"chủ dự án bật Cộng hưởng cho {slug} qua API trang trợ lý", code == 200, hard=True)
@@ -473,11 +502,13 @@ def run_case(scen: str) -> int:
         # Ca dry `ledger_cap`: trần kho nâng lên trần sản phẩm (8) để lượt sửa thứ ba đi tới sổ pilot; chứng minh sổ tự
         # chặn trước khi dựng engine khi lớp trần kho không chặn. Real luôn dùng trần tổng của pilot.
         ceiling = 8 if (MODE == "dry" and scen == "ledger_cap") else CAPS["total"]
+        # Từ đây một server có thể gọi model: mọi dừng sau mốc này là lỗi kỹ thuật, không phải "dừng ở cổng".
+        rep["phase_B_started"] = True
         rep["steps"]["start_B_s"] = round(srv.start("B", False, {"maker": CAPS["maker"], "reviewer": CAPS["reviewer"]},
                                                     ceiling), 1)
         t0, last, trace = time.time(), None, []
         stop_why = "wall"
-        while time.time() - t0 < PHASE_B_WALL_S:
+        while time.time() - t0 < wall_s:
             time.sleep(POLL_S)
             snap = snapshot(gid)
             sig = (snap["goal"]["status"], snap["goal"]["run_state"], snap["goal"]["block_reason"],
@@ -558,7 +589,7 @@ def run_case(scen: str) -> int:
                                                                                                     "review_mismatch")]
         verdicts = [r["verdict"] for r in valid]
         branch = classify(snap["goal"]["status"], verdicts, [a["status"] for a in works], lc["refused"],
-                          snap["goal"]["block_reason"])
+                          snap["goal"]["block_reason"], reviewer_failed="reviewer" in lc["not_ok_roles"])
         rep["branch"] = branch
         if scen == "ledger_cap":
             check("sổ pilot chặn lượt sửa thứ ba TRƯỚC khi dựng engine (cap_maker), host hoàn lượt (làm dùng 2)",
@@ -578,6 +609,11 @@ def run_case(scen: str) -> int:
         check("ngoài file đích, không file nào trong brain bị đổi; ghi chú cũ còn nguyên",
               set((rep["brain_files_B"] or {}).get("changed", []) + (rep["brain_files_B"] or {}).get("added", []))
               <= {DELIV} and not (rep["brain_files_B"] or {}).get("removed") and _sha_file(keep) == keep_sha)
+        if scen == "missing_output" and works:
+            # Ca dry: đầu ra lượt làm không còn ở chỗ host ghi (đổi tên, không xoá) trước bước lưu.
+            src0 = out_root / f"{works[0]['id']}.md"
+            if src0.is_file():
+                os.replace(src0, src0.with_name(src0.name + ".moved"))
         # Lưu nguyên vẹn đầu ra của từng lượt làm và từng lượt review (đọc bằng chứng đã mã hoá của host).
         saved = []
         for i, a in enumerate([a for a in works if a["status"] == "succeeded"], 1):
@@ -623,14 +659,18 @@ def run_case(scen: str) -> int:
         new_events = (lg2 or {}).get("events", [])[n_events:]
         rep["restart"] = {"new_ledger_events": new_events, "ledger_status": lerr2 or "verified",
                           "actions": len(snap2["actions"]) - n_actions, "reviews": len(snap2["reviews"]) - n_reviews}
-        check("dựng lại: không lượt nào được gọi hay thử gọi thêm (sổ, hành động, hàng review không đổi)",
-              lg2 is not None and len(lg2["calls"]) == n_calls and not new_events
-              and len(snap2["actions"]) == n_actions and len(snap2["reviews"]) == n_reviews)
+        rep["restart"]["ok"] = check(
+            "dựng lại: không lượt nào được gọi hay thử gọi thêm (sổ, hành động, hàng review không đổi)",
+            lg2 is not None and len(lg2["calls"]) == n_calls and not new_events
+            and len(snap2["actions"]) == n_actions and len(snap2["reviews"]) == n_reviews)
         if snap2["goal"]["status"] == "active":
             code, _b = http("POST", f"/goals/{gid}/commands", json={"command": "pause",
                                                                      "expected_revision": snap2["goal"]["revision"]})
             check("kết thúc: tạm dừng mục tiêu còn mở qua API, không còn việc nền", code == 200)
         rep["final"] = {"status": snapshot(gid)["goal"]}
+        if scen == "ledger_lost_end":
+            # Ca dry: sổ mất ngay trước lần đọc cuối (đổi tên, không xoá).
+            os.replace(ledger_path, ledger_path.with_name(ledger_path.name + ".lost"))
     except SystemExit as e:
         print(f"DỪNG: {e}")
         rep["stopped"] = str(e)
@@ -638,14 +678,16 @@ def run_case(scen: str) -> int:
         check(f"bộ chạy không lỗi ({type(e).__name__}: {e})", False)
     finally:
         srv.kill()
+        # Lần đọc sổ CUỐI quyết định: thiếu, hỏng hay lệch là chưa xác minh (không bao giờ là 0 lượt).
         lg, lerr = read_ledger(ledger_path)
         rep["ledger"] = lg
         rep["ledger_status"] = lerr or "verified"
         lc = ledger_counts(lg) if lg else None
+        rep["ledger_final_counts"] = lc
         rep["model_turns"] = {"chat": 0,
                               "background_real": (lc["total"] if lc else None) if MODE == "real" else 0,
                               "background_simulated": (lc["total"] if lc else None) if MODE == "dry" else 0}
-        # Sổ lượt engine của server sandbox (usage.json): dry phải ĐÃ XÁC MINH là 0; thiếu, hỏng, lệch là chưa xác minh.
+        # Sổ lượt engine của server sandbox (usage.json): phải đọc được và khớp nhau ở CẢ HAI chế độ; dry còn phải bằng 0.
         try:
             usage = json.loads((state / "usage.json").read_text(encoding="utf-8"))
             total = usage.get("total") if isinstance(usage, dict) else None
@@ -664,58 +706,120 @@ def run_case(scen: str) -> int:
         if MODE == "dry":
             check(f"dry: đã xác minh server không ghi lượt engine thật nào ({rep['engine_turns_status']})",
                   rep["engine_turns_logged"] == 0)
+        # Bảo toàn bằng chứng (mọi server đã dừng): kho, log đã che khoá, sổ usage, brain tạm, ra thư mục MỚI trong hồ sơ.
+        # Kho bắt buộc khi đã có server; log của mọi server đã dựng cũng bắt buộc.
+        required = (["resonance.sqlite3"] if rep.get("goal_id") else []) + \
+            [f"server-{x['n']}-{x['phase']}.log" for x in srv.started]
+        try:
+            pres = PL.preserve_sandbox(base, out_dir, required=required,
+                                       fault=(lambda name: name == "resonance.sqlite3") if scen == "save_error" else None)
+        except Exception as e:  # noqa: BLE001
+            pres = {"ok": False, "dest": "", "items": [], "error": f"{type(e).__name__}: {str(e)[:200]}"}
+        rep["preserve"] = {"ok": pres["ok"], "items": pres["items"], "error": pres.get("error", ""),
+                           "dest": Path(pres["dest"]).name if pres.get("dest") else ""}
         rep["servers"] = srv.started
         rep["seconds_total"] = round(time.time() - t_start, 1)
-        rep["acceptance"] = ("stopped" if rep.get("stopped") else "technical_failed" if fails else
-                             "pending_content_review" if MODE == "real" else "dry_ok")
         rep["checks"] = log
+        acc, why = PL.decide_acceptance(rep, fails, MODE)
+        rep["acceptance"], rep["acceptance_why"] = acc, why
         try:
             rep["commit"] = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(ROOT), capture_output=True, text=True,
                                            timeout=10).stdout.strip()
-            rep["server_dirty"] = bool(subprocess.run(["git", "status", "--porcelain", "--", "server", "system",
-                                                       "dashboard", "tests/python/_a5_pilot_server.py",
-                                                       "tests/python/_a5_pilot_ledger.py"], cwd=str(ROOT),
-                                                      capture_output=True, text=True, timeout=10).stdout.strip())
         except Exception:  # noqa: BLE001
-            rep["commit"], rep["server_dirty"] = "", None
+            rep["commit"] = ""
+        delete = PL.may_delete_sandbox(MODE, acc, pres, base, out_dir)
+        rep["sandbox_kept"] = not delete
         txt = json.dumps(rep, ensure_ascii=True, indent=2) + "\n"
         for secret in (str(base), str(Path.home())):
             txt = txt.replace(json.dumps(secret)[1:-1], "<path>")
-        (out_dir / f"a5-pilot-{MODE}-{scen or 'main'}.json").write_text(txt, encoding="utf-8", newline="\n")
-        if os.environ.get("JAVIS_RESONANCE_A5_DRY_DIR") and MODE == "dry":
-            dd = Path(os.environ["JAVIS_RESONANCE_A5_DRY_DIR"])
-            dd.mkdir(parents=True, exist_ok=True)
-            (dd / f"a5-pilot-dry-{scen}.json").write_text(txt, encoding="utf-8", newline="\n")
-        incident = rep.get("engine_turns_logged") != 0 and MODE == "dry"
-        if incident or os.environ.get("JAVIS_RESONANCE_A5_KEEP"):
+        try:
+            (out_dir / f"a5-pilot-{MODE}-{scen or 'main'}.json").write_text(txt, encoding="utf-8", newline="\n")
+            if not delete:
+                # Đường khôi phục: sandbox giữ nguyên (state, log, brain) và bản sao bằng chứng trong hồ sơ.
+                (out_dir / "a5-pilot-recovery.txt").write_text(
+                    f"sandbox: {base}\nbản sao bằng chứng: {pres.get('dest') or '(không có)'}\n"
+                    f"kết luận: {acc}\nlý do: {'; '.join(why) or '-'}\n", encoding="utf-8", newline="\n")
+        except Exception as e:  # noqa: BLE001
+            delete = False
+            print(f"KHÔNG GHI ĐƯỢC BÁO CÁO: {type(e).__name__}: {e}")
+        if not delete:
             print("A5_PILOT_KEPT " + str(base))
         print("A5_PILOT " + json.dumps({k: rep.get(k) for k in ("mode", "scenario", "acceptance", "branch",
                                                                  "model_turns", "ledger_status",
-                                                                 "engine_turns_logged", "engine_turns_status")},
-                                       ensure_ascii=False) + " LEDGER " + json.dumps(lc, ensure_ascii=False))
-        if not (incident or os.environ.get("JAVIS_RESONANCE_A5_KEEP")):
+                                                                 "engine_turns_logged", "engine_turns_status",
+                                                                 "sandbox_kept")},
+                                       ensure_ascii=False) + " PRESERVE " + json.dumps(pres["ok"])
+              + " LEDGER " + json.dumps(lc, ensure_ascii=False))
+        if delete:
             shutil.rmtree(base, ignore_errors=True)
-    return 0 if rep["acceptance"] in ("dry_ok", "pending_content_review") else 1
+    return PL.EXIT_CODES.get(rep["acceptance"], 1)
 
 
 # ───────────── dry: mọi ca, mỗi ca một tiến trình con; real: đúng một ca chính ─────────────
 
 DRY_CASES = {
-    # ca: (biến môi trường thêm, kết luận, nhánh, (lượt làm, lượt review) trong sổ, câu phải có trong output)
-    "main_pass": ({}, "dry_ok", "pass_first", (1, 1), "chốt đạt sau review pass"),
-    "main_fix": ({}, "dry_ok", "one_fix_then_pass", (2, 2), "vai làm có lượt sửa riêng"),
-    "fix_cap": ({}, "dry_ok", "pilot_cap_after_two_reviews", (2, 2), "dựng lại: không lượt nào"),
-    "ledger_cap": ({}, "dry_ok", "pilot_cap_after_two_reviews", (2, 2), "ok   sổ pilot chặn lượt sửa thứ ba"),
-    "review_unknown": ({}, "dry_ok", "review_unknown", (1, 1), "dựng lại: không lượt nào"),
-    "maker_error": ({}, "dry_ok", "maker_error", (1, 0), "dựng lại: không lượt nào"),
+    # ca: (biến môi trường thêm, kết luận, nhánh, (lượt làm, lượt review) trong sổ cuối, câu phải có trong output)
+    # Kỹ thuật đạt, mục tiêu chốt: chờ duyệt nội dung.
+    "main_pass": ({}, "pending_content_review", "pass_first", (1, 1), "chốt đạt sau review pass"),
+    "main_fix": ({}, "pending_content_review", "one_fix_then_pass", (2, 2), "vai làm có lượt sửa riêng"),
+    # Kỹ thuật đạt, nhánh nghiệp vụ chưa đạt (đã định nghĩa).
+    "fix_cap": ({}, "business_incomplete", "pilot_cap_after_two_reviews", (2, 2), "dựng lại: không lượt nào"),
+    "ledger_cap": ({}, "business_incomplete", "pilot_cap_after_two_reviews", (2, 2),
+                   "ok   sổ pilot chặn lượt sửa thứ ba"),
+    "review_unknown": ({}, "business_incomplete", "review_unknown", (1, 1), "dựng lại: không lượt nào"),
+    "maker_not_met": ({}, "business_incomplete", "maker_not_met", (1, 0), "dựng lại: không lượt nào"),
+    # Lỗi kỹ thuật qua đường điều phối thật (engine giả): technical_failed, giữ nhánh, giữ sandbox.
+    "maker_error": ({}, "technical_failed", "maker_error", (1, 0), "A5_PILOT_KEPT"),
+    "reviewer_error": ({}, "technical_failed", "reviewer_error", (1, 1), "A5_PILOT_KEPT"),
+    "final_is_error": ({}, "technical_failed", "maker_error", (1, 0), "A5_PILOT_KEPT"),
+    "timeout": ({}, "technical_failed", "maker_error", (1, 0), "A5_PILOT_KEPT"),
+    "missing_output": ({}, "technical_failed", "pass_first", (1, 1), "FAIL đầu ra mọi lượt làm"),
+    "ledger_lost_end": ({}, "technical_failed", "pass_first", (None, None), "A5_PILOT_KEPT"),
+    "save_error": ({}, "technical_failed", "pass_first", (1, 1), "A5_PILOT_KEPT"),
+    "early_crash": ({}, "technical_failed", None, (0, 0), "FAIL bộ chạy không lỗi"),
+    "ledger_corrupt": ({}, "technical_failed", None, (None, None), "FAIL sổ lượt pilot đọc được"),
+    # Bẫy: sổ đã giữ chỗ TRƯỚC khi dựng (bảo thủ) nên có một dòng `not_built`; không có lời gọi nào tới engine.
+    "tripwire": ({}, "technical_failed", None, (1, 0), "FAIL dry: không chạm bẫy"),
+    # Dừng ở cổng, trước mọi server có thể gọi model.
     "cost": ({"JAVIS_RESONANCE_A5_MAX_CALLS": "3"}, "stopped", None, None, "dừng trước mọi lượt: hạn mức"),
     "auth": ({}, "stopped", None, None, "dừng trước mọi lượt: không chứng minh"),
     "ledger_exists": ({}, "stopped", None, None, "sổ lượt pilot đã có từ lần chạy trước"),
     "precondition": ({}, "stopped", None, None, "kiểm bắt buộc hỏng: tiền điều kiện"),
-    "ledger_corrupt": ({}, "stopped", None, (None, None), "sổ lượt pilot đọc được"),
-    # Bẫy: sổ đã giữ chỗ TRƯỚC khi dựng (bảo thủ) nên có một dòng `not_built`; không có lời gọi nào tới engine.
-    "tripwire": ({}, "stopped", None, (1, 0), "không chạm bẫy"),
+    "sha_mismatch": ({"JAVIS_RESONANCE_A5_APPROVED_SHA": "0" * 40}, "stopped", None, None,
+                     "dừng trước mọi lượt: nguồn"),
 }
+# Bảo toàn bằng chứng phải đạt ở mọi ca, trừ ca chèn lỗi lúc lưu.
+PRESERVE_FAILS = {"save_error"}
+
+
+def _extra_checks(name: str, case_dir: Path, kept: str) -> list:
+    """Kiểm riêng của các ca sự cố: nguồn còn nguyên, file hỏng không bị ghi đè, có đường khôi phục."""
+    def isfile(p):
+        return os.path.isfile(PL._xp(p))
+
+    bad = []
+    if name == "ledger_corrupt":
+        with open(PL._xp(case_dir / "a5-pilot-ledger.json"), "rb") as f:
+            if f.read() != "{hỏng".encode("utf-8"):
+                bad.append("sổ hỏng bị ghi đè")
+    if name == "ledger_lost_end" and not isfile(case_dir / "a5-pilot-ledger.json.lost"):
+        bad.append("sổ đổi tên không còn")
+    if name in ("save_error", "maker_error", "timeout", "early_crash", "ledger_corrupt", "ledger_lost_end"):
+        if not kept or not os.path.isdir(PL._xp(kept)):
+            bad.append("sandbox không được giữ")
+        elif name != "early_crash" and not isfile(Path(kept) / "state" / "resonance.sqlite3"):
+            bad.append("kho gốc trong sandbox không còn")
+        if not isfile(case_dir / "a5-pilot-recovery.txt"):
+            bad.append("thiếu đường khôi phục")
+    if name not in PRESERVE_FAILS and name not in ("cost", "auth", "ledger_exists", "sha_mismatch"):
+        dest = case_dir / "sandbox"
+        logs = os.listdir(PL._xp(dest / "logs")) if os.path.isdir(PL._xp(dest / "logs")) else []
+        if not any(x.startswith("server-") for x in logs):
+            bad.append("bản sao bằng chứng thiếu log server")
+        if name != "early_crash" and not isfile(dest / "state" / "resonance.sqlite3"):
+            bad.append("bản sao bằng chứng thiếu kho")
+    return bad
+
 
 if SCEN:
     sys.exit(run_case(SCEN))
@@ -723,40 +827,57 @@ if MODE == "real":
     sys.exit(run_case("main"))
 
 only = [x for x in os.environ.get("JAVIS_RESONANCE_A5_DRY_ONLY", "").split(",") if x]
+dry_dir = Path(os.environ.get("JAVIS_RESONANCE_A5_DRY_DIR") or tempfile.mkdtemp(prefix="rsa5dry-"))
+os.environ["JAVIS_RESONANCE_A5_DRY_DIR"] = str(dry_dir)
 bad = []
 for name, (extra, want, want_branch, want_calls, needle) in DRY_CASES.items():
     if only and name not in only:
         continue
+    case_dir = dry_dir / name
+    if case_dir.exists():
+        print(f"FAIL ca {name}: thư mục hồ sơ đã có ({case_dir}); không ghi đè")
+        bad.append(name)
+        continue
     env = {**os.environ, "JAVIS_RESONANCE_A5_SCENARIO": name, "PYTHONIOENCODING": "utf-8", **extra}
     env.pop("JAVIS_RESONANCE_A5_OUT", None)
+    if "JAVIS_RESONANCE_A5_APPROVED_SHA" not in extra:
+        env.pop("JAVIS_RESONANCE_A5_APPROVED_SHA", None)
     cp = subprocess.run([sys.executable, str(HERE)], cwd=str(ROOT), env=env, capture_output=True, text=True,
-                        encoding="utf-8", timeout=1500)
-    if os.environ.get("JAVIS_RESONANCE_A5_DRY_DIR"):
-        dd = Path(os.environ["JAVIS_RESONANCE_A5_DRY_DIR"])
-        dd.mkdir(parents=True, exist_ok=True)
-        (dd / f"a5-pilot-dry-{name}.txt").write_text(cp.stdout + cp.stderr[-4000:], encoding="utf-8", newline="\n")
+                        encoding="utf-8", timeout=1800)
+    case_dir.mkdir(parents=True, exist_ok=True)
+    (case_dir / f"a5-pilot-dry-{name}.txt").write_text(cp.stdout + cp.stderr[-4000:], encoding="utf-8", newline="\n")
     line = next((x for x in cp.stdout.splitlines() if x.startswith("A5_PILOT ")), "")
-    got, lcg = {}, None
+    kept = next((x[len("A5_PILOT_KEPT "):].strip() for x in cp.stdout.splitlines()
+                 if x.startswith("A5_PILOT_KEPT ")), "")
+    got, pres_ok, lcg = {}, None, None
     if line:
-        head, _s, tail = line[len("A5_PILOT "):].partition(" LEDGER ")
-        got, lcg = json.loads(head), json.loads(tail or "null")
+        head, _s, rest = line[len("A5_PILOT "):].partition(" PRESERVE ")
+        pres, _s, tail = rest.partition(" LEDGER ")
+        got, pres_ok, lcg = json.loads(head), json.loads(pres or "null"), json.loads(tail or "null")
     calls = (lcg["maker"], lcg["reviewer"]) if lcg else (None, None)
+    extra_bad = _extra_checks(name, case_dir, kept) if line else ["không có báo cáo"]
     ok = (got.get("acceptance") == want and needle in cp.stdout and got.get("engine_turns_logged") == 0
           and (got.get("model_turns") or {}).get("background_real", 1) == 0
           and (want_branch is None or got.get("branch") == want_branch)
-          and (want_calls is None or calls == want_calls))
+          and (want_calls is None or calls == want_calls)
+          and pres_ok is (name not in PRESERVE_FAILS) and not extra_bad)
     print(("ok   " if ok else "FAIL ") + f"ca {name}: kết luận {got.get('acceptance')} (mong {want}), nhánh "
-          f"{got.get('branch')} (mong {want_branch}), sổ (làm, review) {calls} (mong {want_calls}), lượt engine "
-          f"server ghi {got.get('engine_turns_logged')}")
+          f"{got.get('branch')} (mong {want_branch}), sổ (làm, review) {calls} (mong {want_calls}), bảo toàn "
+          f"{pres_ok}, sandbox giữ {bool(kept)}, lượt engine server ghi {got.get('engine_turns_logged')}"
+          + (f", lỗi: {extra_bad}" if extra_bad else ""))
     if not ok:
         bad.append(name)
         print("\n".join("    " + x for x in cp.stdout.splitlines()[-30:]))
+    elif kept and pres_ok and Path(kept).is_dir() and not Path(kept).resolve().is_relative_to(case_dir.resolve()):
+        # Ca đúng kỳ vọng mà bằng chứng ĐÃ được chép đủ vào hồ sơ của ca: dọn bản sandbox trùng. Ca bảo toàn lỗi giữ lại.
+        shutil.rmtree(kept, ignore_errors=True)
     if got.get("engine_turns_logged") != 0 or (got.get("model_turns") or {}).get("background_real", 1) != 0:
         print(f"DỪNG CẢ ĐỢT: ca {name} có lượt engine {got.get('engine_turns_logged')!r} "
               f"({got.get('engine_turns_status') or 'không có báo cáo'}); không mở ca kế tiếp, không thử lại.")
         if name not in bad:
             bad.append(name)
         break
+print(f"\nhồ sơ dry: {dry_dir}")
 if bad:
     print(f"\n{len(bad)} FAIL:", bad)
     sys.exit(1)

@@ -239,7 +239,264 @@ st = {"calls": [{"n": 1, "role": "maker", "status": "ok"}, {"n": 2, "role": "rev
       "events": [{"kind": "refused", "why": "cap_maker"}, {"kind": "tripwire"}], "caps": CAPS}
 check("đếm: mọi kết cục đều tính theo vai; liệt kê kết cục khác ok, lần bị chặn, bẫy",
       PL.ledger_counts(st) == {"maker": 1, "reviewer": 1, "total": 2, "not_ok": ["engine_error"],
-                               "refused": ["cap_maker"], "tripwire": 1})
+                               "not_ok_roles": ["reviewer"], "refused": ["cap_maker"], "tripwire": 1})
+check("nhánh: lỗi engine của vai review khác với review không đọc được",
+      PL.classify("active", ["unknown"], ["succeeded"], [], "", reviewer_failed=True) == "reviewer_error")
+check("nhánh: bản làm chưa đạt kiểm khách quan, chưa có review",
+      PL.classify("active", [], ["succeeded"], []) == "maker_not_met")
+
+# ═════════ R1 (review cổng pilot vòng 1): kết cục của lượt theo đúng luật lỗi của host ═════════
+import resonance as R  # noqa: E402
+
+
+def through_host(name, events, verdict=PL.host_text_verdict, wrap_ask=False):
+    """Chạy MỘT lượt qua `GoalDeps._ask` THẬT của host với engine giả bọc sổ; trả (lỗi host, dòng sổ, lượt kế được
+    giữ chỗ không)."""
+    led = fresh(name)
+    factory = PL.wrap_factory(lambda s, t: (Eng(events), {"provider": "fake", "model": "fake"}), led, role_of, verdict)
+    deps = R.GoalDeps(factory, R.CallBudget(4))
+    ask = PL.wrap_ask(R.GoalDeps._ask, led) if wrap_ask else R.GoalDeps._ask
+    turn = asyncio.run(ask(deps, "W", "p"))
+    row = led.load()[0]["calls"][0]
+    nxt, _w = led.reserve("reviewer")
+    return turn.error_code, row, nxt
+
+
+code, row, nxt = through_host("h-ok", [{"type": "final", "content": "Một kết quả hợp lệ."}])
+check("đối chứng: final hợp lệ, host không lỗi, sổ ok, lượt kế được cấp", not code and row["status"] == "ok"
+      and nxt == 2, (code, row, nxt))
+for name, events, want in (
+        ("h-is-error", [{"type": "final", "is_error": True, "subtype": "error_during_execution", "content": "x"}],
+         "engine_result_error"),
+        ("h-race", [{"type": "final", "dua_token": True, "content": "Failed to refresh OAuth token"}],
+         "engine_session_race"),
+        ("h-final-error", [{"type": "final", "content": "Bản dở"}, {"type": "error", "content": "lỗi muộn"}],
+         "engine_error"),
+        ("h-tool-final", [{"type": "tool_call", "name": "Read"}, {"type": "final", "content": "Có gọi công cụ"}],
+         "tool_call_in_text_only"),
+        ("h-final-tool", [{"type": "final", "content": "Xong"}, {"type": "tool_call", "name": "Read"}],
+         "tool_call_in_text_only"),
+        ("h-empty", [{"type": "final", "content": "   "}], "empty_output")):
+    code, row, nxt = through_host(name, events)
+    check(f"{name}: host báo {code}; sổ ghi {row['status']} (không phải ok), lượt vẫn tính, sổ đóng",
+          code == want and row["status"] == want and nxt == 0, (code, row, nxt))
+code, row, nxt = through_host("h-final-error-row", [{"type": "final", "content": "Bản dở"},
+                                                    {"type": "error", "content": "lỗi muộn"}])
+check("ok tạm bị hạ khi lỗi đến sau final, có ghi downgraded_from", row.get("downgraded_from") == "ok", row)
+
+
+async def final_then(kind):
+    led = fresh("after-" + kind)
+    events = [{"type": "final", "content": "Xong"}, "sleep"] if kind != "exception" else \
+        [{"type": "final", "content": "Xong"}, {"type": "stream"}]
+    e, _ = PL.wrap_factory(real(Eng(events, raise_at=1 if kind == "exception" else None)), led, role_of)("W")
+    gen = e.query("p")
+    await gen.__anext__()                                    # host đã nhận final
+    if kind == "cancel":
+        # Host còn đọc (chờ khung kế) thì bị huỷ, như hết giờ của `_ask`.
+        t = asyncio.ensure_future(gen.__anext__())
+        await asyncio.sleep(0.05)
+        t.cancel()
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
+    elif kind == "exception":
+        # Host còn đọc thì engine ném lỗi sau final.
+        try:
+            await gen.__anext__()
+        except RuntimeError:
+            pass
+    else:                                                    # host ngừng đọc sau final (đối chứng)
+        pass
+    return led
+
+
+for kind, want in (("cancel", "cancelled"), ("exception", "exception"), ("stop", "ok")):
+    led = asyncio.run(final_then(kind))
+    check(f"final rồi {kind}: sổ {want}" + ("; host ngừng đọc thì ok vẫn giữ và cấp lượt kế" if kind == "stop" else
+                                             "; lỗi thắng ok tạm, sổ đóng"),
+          calls(led) == [("maker", want)] and (led.reserve("reviewer")[0] == (2 if want == "ok" else 0)), calls(led))
+
+led = fresh("no-upgrade")
+n, _ = led.reserve("maker")
+led.mark_bad(n, "engine_error")
+led.settle(n, "ok")
+led.mark_bad(n, "cancelled")
+check("không bao giờ nâng lỗi thành ok, không đổi lỗi này sang lỗi khác", calls(led) == [("maker", "engine_error")])
+code, row, nxt = through_host("h-ask", [{"type": "final", "content": "   "}], verdict=lambda t: "ok", wrap_ask=True)
+check("lớp hai: host báo lỗi mà luồng khung không thấy (bộ kiểm chữ bị thay), đối chiếu `_ask` vẫn hạ dòng sổ",
+      code == "empty_output" and row["status"] == "host_empty_output" and nxt == 0, (code, row))
+
+# ═════════ R2: kết luận của một lần chạy ═════════
+GOOD_REP = {"phase_B_started": True, "phase_B": {"stop": "goal_succeeded"}, "ledger_status": "verified",
+            "ledger_final_counts": {"maker": 1, "reviewer": 1, "total": 2, "not_ok": [], "tripwire": 0},
+            "engine_turns_status": "verified", "restart": {"ok": True}, "preserve": {"ok": True},
+            "branch": "pass_first",
+            "store_B": {"goal": {"status": "succeeded"}, "team_calls": {"maker": {"used": 1}, "reviewer": {"used": 1}}},
+            "saved": [{"role": "maker", "ok": True}, {"role": "reviewer", "ok": True},
+                      {"role": "deliverable", "ok": True}],
+            "snapshot_hash_ok": [True]}
+
+
+def with_(**kw):
+    r = json.loads(json.dumps(GOOD_REP))
+    for k, v in kw.items():
+        if v is None:
+            r.pop(k, None)
+        else:
+            r[k] = v
+    return r
+
+
+check("kết luận: đủ bằng chứng nhánh pass_first: chờ duyệt nội dung",
+      PL.decide_acceptance(GOOD_REP, [], "real") == ("pending_content_review", []))
+for label, rep, fails in (
+        ("có kiểm hỏng", GOOD_REP, ["x"]),
+        ("lượt lỗi engine (maker_error)", with_(branch="maker_error", ledger_final_counts={
+            "maker": 1, "reviewer": 0, "total": 1, "not_ok": ["engine_error"], "tripwire": 0}), []),
+        ("hết giờ, không lượt, không đầu ra", with_(phase_B={"stop": "wall"}, branch="no_review",
+                                                    ledger_final_counts={"maker": 0, "reviewer": 0, "total": 0,
+                                                                         "not_ok": [], "tripwire": 0}, saved=[]), []),
+        ("sổ mất ở lần đọc cuối", with_(ledger_status="unverified: missing", ledger_final_counts=None), []),
+        ("sổ usage không xác minh", with_(engine_turns_status="unverified: x"), []),
+        ("thiếu đầu ra lượt làm", with_(saved=[{"role": "reviewer", "ok": True}, {"role": "deliverable", "ok": True}]),
+         []),
+        ("thiếu file đích khi chốt", with_(saved=[{"role": "maker", "ok": True}, {"role": "reviewer", "ok": True}]), []),
+        ("ảnh chụp review chưa băm lại", with_(snapshot_hash_ok=[]), []),
+        ("chưa kiểm dựng lại", with_(restart=None), []),
+        ("bảo toàn bằng chứng lỗi", with_(preserve={"ok": False}), []),
+        ("sổ lệch số của nhánh", with_(ledger_final_counts={"maker": 2, "reviewer": 1, "total": 3, "not_ok": [],
+                                                           "tripwire": 0}), []),
+        ("sổ vai của kho lệch", with_(store_B={"goal": {"status": "succeeded"},
+                                               "team_calls": {"maker": {"used": 2}, "reviewer": {"used": 1}}}), []),
+        ("dừng sau khi việc nền đã bắt đầu", with_(stopped="dừng: x"), []),
+        ("nhánh lạ", with_(branch="other"), []),
+        ("báo cáo rỗng (đóng khi lỗi)", {"phase_B_started": True}, [])):
+    got = PL.decide_acceptance(rep, fails, "real")
+    check(f"kết luận real: {label}: technical_failed, có lý do", got[0] == "technical_failed" and got[1], got)
+check("kết luận: dừng ở cổng trước việc nền: stopped",
+      PL.decide_acceptance({"stopped": "dừng trước mọi lượt"}, ["x"], "real")[0] == "stopped")
+for br, calls_, goal in (("pilot_cap_after_two_reviews", (2, 2), "active"), ("review_unknown", (1, 1), "active"),
+                         ("maker_not_met", (1, 0), "active")):
+    rep = with_(branch=br, phase_B={"stop": "quiet"},
+                ledger_final_counts={"maker": calls_[0], "reviewer": calls_[1], "total": sum(calls_), "not_ok": [],
+                                     "tripwire": 0},
+                store_B={"goal": {"status": goal}, "team_calls": {"maker": {"used": calls_[0]},
+                                                                  "reviewer": {"used": calls_[1]}}},
+                saved=[{"role": "maker", "ok": True}] * calls_[0] + [{"role": "reviewer", "ok": True}] * calls_[1],
+                snapshot_hash_ok=[True] * calls_[1])
+    check(f"kết luận: nhánh nghiệp vụ {br} chạy đúng: business_incomplete, không gộp với lỗi kỹ thuật",
+          PL.decide_acceptance(rep, [], "real") == ("business_incomplete", []))
+check("mã thoát: chỉ duyệt nội dung là 0; nhánh nghiệp vụ 2; còn lại khác 0",
+      PL.EXIT_CODES == {"pending_content_review": 0, "business_incomplete": 2}
+      and PL.EXIT_CODES.get("technical_failed", 1) == 1)
+
+# ═════════ R3: bảo toàn bằng chứng và quyền dọn ═════════
+import sqlite3  # noqa: E402
+
+
+def sandbox(name):
+    b = TMP / f"sb-{name}"
+    (b / "state").mkdir(parents=True)
+    (b / "brains" / "Brain Default" / "Inbox").mkdir(parents=True)
+    c = sqlite3.connect(str(b / "state" / "resonance.sqlite3"))
+    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("CREATE TABLE goals(id TEXT)")
+    c.execute("INSERT INTO goals VALUES('g1')")
+    c.commit()
+    c.close()
+    (b / "state" / "usage.json").write_text('{"total": {}}', encoding="utf-8")
+    (b / "server-1-A.log").write_text("khởi động\nauthorization: Bearer abc.def.ghi\nsk-ant-oat01-XYZ\nxong\n",
+                                      encoding="utf-8")
+    (b / "brains" / "Brain Default" / "Inbox" / "f.md").write_text("bản", encoding="utf-8")
+    return b
+
+
+b = sandbox("ok")
+out = TMP / "out-ok"
+out.mkdir()
+(out / "sandbox").mkdir()                                     # đã có: không ghi đè, dùng thư mục mới
+src_before = (b / "state" / "resonance.sqlite3").read_bytes()
+pr = PL.preserve_sandbox(b, out, required=["resonance.sqlite3", "server-1-A.log"])
+dest = Path(pr["dest"])
+log_copy = (dest / "logs" / "server-1-A.log").read_text(encoding="utf-8")
+c = sqlite3.connect(str(dest / "state" / "resonance.sqlite3"))
+rows = c.execute("SELECT id FROM goals").fetchall()
+c.close()
+check("bảo toàn: thư mục MỚI (không ghi đè thư mục có sẵn), kho chép bằng backup đọc được, brain và sổ usage",
+      pr["ok"] and dest.name == "sandbox-2" and rows == [("g1",)]
+      and (dest / "brains" / "Brain Default" / "Inbox" / "f.md").is_file() and (dest / "state" / "usage.json").is_file(),
+      pr)
+check("bảo toàn: log che khoá và token, giữ nội dung khác", "Bearer abc" not in log_copy and "sk-ant" not in log_copy
+      and "khởi động" in log_copy and "xong" in log_copy, log_copy)
+check("bảo toàn: nguồn không bị sửa hay xoá", (b / "state" / "resonance.sqlite3").read_bytes() == src_before
+      and (b / "server-1-A.log").is_file())
+b2 = sandbox("fault")
+out2 = TMP / "out-fault"
+out2.mkdir()
+pr2 = PL.preserve_sandbox(b2, out2, required=["resonance.sqlite3"], fault=lambda n: n == "resonance.sqlite3")
+check("lỗi trong bước lưu: ok=False, ghi lỗi của mục đó, nguồn còn nguyên",
+      pr2["ok"] is False and any(it["name"] == "resonance.sqlite3" and it.get("error") for it in pr2["items"])
+      and (b2 / "state" / "resonance.sqlite3").is_file(), pr2)
+b3 = sandbox("missing")
+(b3 / "state" / "resonance.sqlite3").unlink()
+pr3 = PL.preserve_sandbox(b3, TMP / "out-missing", required=["resonance.sqlite3"]) if (TMP / "out-missing").mkdir() \
+    is None else None
+check("thiếu mục bắt buộc (kho): ok=False", pr3["ok"] is False)
+b4 = sandbox("corrupt")
+(b4 / "state" / "usage.json").write_bytes(b"{h\xc6\xa1ng")
+(TMP / "out-corrupt").mkdir()
+pr4 = PL.preserve_sandbox(b4, TMP / "out-corrupt")
+check("file hỏng chép NGUYÊN bytes, không sửa", (Path(pr4["dest"]) / "state" / "usage.json").read_bytes()
+      == b"{h\xc6\xa1ng")
+
+b5 = sandbox("deep")
+deep = TMP / ("hs-" + "d" * 60) / ("thu-muc-ho-so-" + "x" * 60) / ("con-" + "y" * 60) / ("chau-" + "z" * 60)
+import os  # noqa: E402
+os.makedirs(PL._xp(deep), exist_ok=True)
+pr5 = PL.preserve_sandbox(b5, deep, required=["resonance.sqlite3", "server-1-A.log"])
+check(f"bảo toàn khi thư mục hồ sơ sâu (đường dẫn {len(str(deep)) + 60} ký tự, vượt 260 của Windows)",
+      pr5["ok"] is True and os.path.isfile(PL._xp(Path(pr5["dest"]) / "state" / "resonance.sqlite3")), pr5)
+
+ok_pres = {"ok": True}
+outside, inside = TMP / "hs", b / "out"
+check("dọn sandbox: chỉ khi dry, kỹ thuật đạt, bảo toàn đủ, hồ sơ ngoài sandbox",
+      PL.may_delete_sandbox("dry", "pending_content_review", ok_pres, b, outside) is True)
+for label, args in (("real luôn giữ", ("real", "pending_content_review", ok_pres, b, outside)),
+                    ("technical_failed giữ", ("dry", "technical_failed", ok_pres, b, outside)),
+                    ("nhánh nghiệp vụ chưa đạt giữ", ("dry", "business_incomplete", ok_pres, b, outside)),
+                    ("bảo toàn lỗi giữ", ("dry", "pending_content_review", {"ok": False}, b, outside)),
+                    ("hồ sơ nằm trong sandbox giữ", ("dry", "pending_content_review", ok_pres, b, inside))):
+    check(f"không dọn: {label}", PL.may_delete_sandbox(*args) is False)
+
+# ═════════ Lưu ý 2: kiểm nguồn trước khi có thể gọi model ═════════
+import subprocess  # noqa: E402
+
+repo = TMP / "repo"
+repo.mkdir()
+
+
+def git(*a):
+    return subprocess.run(["git", *a], cwd=str(repo), capture_output=True, text=True).stdout.strip()
+
+
+git("init", "-q")
+git("config", "user.email", "t@example.com")
+git("config", "user.name", "t")
+(repo / "a.txt").write_text("a", encoding="utf-8")
+git("add", "a.txt")
+git("commit", "-q", "-m", "a")
+head = git("rev-parse", "HEAD")
+check("nguồn: đúng SHA, cây sạch: đạt", PL.preflight_source(repo, head)["ok"] is True)
+check("nguồn: SHA khác: không đạt", PL.preflight_source(repo, "0" * 40)["ok"] is False)
+check("nguồn: thiếu SHA đã duyệt: không đạt", PL.preflight_source(repo, "")["ok"] is False)
+(repo / "a.txt").write_text("b", encoding="utf-8")
+check("nguồn: file đã track bị sửa (kể cả chính bộ chạy): không đạt", PL.preflight_source(repo, head)["ok"] is False)
+git("checkout", "--", "a.txt")
+(repo / "la.txt").write_text("x", encoding="utf-8")
+check("nguồn: file lạ chưa track: không đạt", PL.preflight_source(repo, head)["ok"] is False)
+check("nguồn: không phải git: không đạt", PL.preflight_source(TMP / "khong-phai-git", head)["ok"] is False)
 
 print(f"\n{len(_fails)} FAIL: {_fails}" if _fails else "\nOK")
 raise SystemExit(1 if _fails else 0)
