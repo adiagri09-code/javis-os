@@ -13,6 +13,8 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 - **An assistant can have a reviewer (Resonance A5).** On the page of an assistant with Resonance on, pick another assistant in the **Reviewer** box. From then on, new goals of this assistant count as done only after the reviewer checks the exact published version and passes it. Existing goals do not change.
 - **When the review asks for changes, the assistant applies the feedback by itself**, at most twice. A goal with a team uses at most 8 calls, 4 per role; when the rounds or calls run out it stops and tells you, without extending them.
 - **The goal card shows who makes and who reviews**, which version was reviewed, who is being waited on and the calls left per role. **Turn the reviewer back on** and **Drop the review requirement** buttons appear when the goal is stuck.
+- Ongoing goals and discovery steps also wait for the reviewer to pass the version before reporting an update or a finished step; the same version is not reviewed again on schedule.
+- A call that fails before the model is reached is given back, not counted.
 - If a published file is edited by hand, a goal with a team waits instead of counting as done. To go back to 0.100.0: stop Javis and run `tools/resonance_restore_pre_a5.py`.
 
 ## [0.100.0] - 2026-10-12

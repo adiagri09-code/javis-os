@@ -19,7 +19,9 @@ from typing import Iterable, Optional
 # lượt đã giữ sẵn) và `TRIAL` (phép thử M5). Các tham số còn lại giữ nguyên như v1.
 # heartbeat.v3 (A5): mã của đội làm và review: `review_due` (START, lần review đầu của một bộ ghim), `review_retry`
 # (AUTO, thử lại sau `unknown` tạm thời), `review_changes` (lớp mới `FIX`: lượt sửa theo góp ý, dùng được lượt cuối của
-# vai làm, giới hạn bởi số vòng). Lỗi cố định thêm `too_large`, `snapshot_mismatch`. Tham số số giữ nguyên.
+# vai làm, giới hạn bởi số vòng). Lỗi cố định thêm `too_large`, `snapshot_mismatch`. Hẹn gỡ gác thêm `review_recheck` và
+# `prepare_recheck` (pha chuẩn bị của một lượt lỗi sau khi đã giữ chỗ: lượt được hoàn, kiểm lại bằng code). Tham số số giữ
+# nguyên.
 POLICY_VERSION = "heartbeat.v3"
 
 POLICY = {
@@ -55,7 +57,8 @@ REVIEW_CODES = ("review_due", "review_retry")
 REVIEW_MAX_CHARGED = 3
 # Nghĩa vụ (slot) của hẹn giờ: hẹn mới chỉ thay hẹn cũ cùng nghĩa vụ.
 RETRY_CODES = ("retry_not_met", "error_retry", "recovery")
-UNPARK_CODES = ("agent_recheck", "guard_recheck", "drift_recheck", "handoff_wait", "review_recheck")
+UNPARK_CODES = ("agent_recheck", "guard_recheck", "drift_recheck", "handoff_wait", "review_recheck",
+                "prepare_recheck")
 
 # Lỗi cố định: thử lại tự động không giúp gì (mục 4). Mã chưa biết coi là tạm thời, vẫn bị trần.
 FIXED_ERRORS = frozenset({"engine_build", "engine_blocked", "output_scope", "budget_exhausted", "invalid_action_id",
@@ -78,6 +81,9 @@ def slot_of(code: str) -> str:
     if code == "review_recheck":
         # A5: hẹn kiểm lại engine của lượt review có nghĩa vụ riêng, không thay hẹn thử lại hay hẹn kiểm của vai làm.
         return "review"
+    if code == "prepare_recheck":
+        # A5 (review mã vòng 1, R1): hẹn kiểm lại sau khi pha chuẩn bị của lượt việc lỗi; nghĩa vụ riêng.
+        return "prepare"
     return "check"
 
 

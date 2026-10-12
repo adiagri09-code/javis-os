@@ -765,6 +765,8 @@ to_applied(w, g.id)
 fid = [r["id"] for r in w.pending(g.id, "method_followup")]
 crashed = w.store.begin_action(P, g.id, w.g(g.id).revision, "work", lease_until=w.clock() + 5, now=w.clock(),
                                intent={"require_hold": True, "wake_reasons": fid, **R._agent_intent(w.g(g.id), w.deps)})
+# A5 R1: host thật ghi mốc engine ngay trước lời gọi engine; lượt chết GIỮA lời gọi đã qua mốc này.
+w.store.mark_engine(P, crashed["id"], w.clock())
 w.clock.t += 3600
 w.reopen()
 w.run_days(g.id, 1)

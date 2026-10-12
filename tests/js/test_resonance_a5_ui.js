@@ -45,7 +45,8 @@ check("người review đang chọn mà đã tắt vẫn hiện kèm nhãn để
 // ───────────── dòng đội trên thẻ ─────────────
 const base = { goal_id: "g_1", revision: 1, status: "active", understanding: "Bản tóm tắt", criteria: [],
   budget_calls: 8, calls_used: 3 };
-const team = { legacy: false, status: "active", maker: { slug: "lam" }, reviewer: { slug: "duyet" },
+const team = { legacy: false, status: "active", maker: { slug: "lam", agent_key: "ag_l" },
+  reviewer: { slug: "duyet", agent_key: "ag_d" },
   calls: { maker: { cap: 4, used: 2 }, reviewer: { cap: 4, used: 1 } }, max_rounds: 2, rounds_used: 1,
   latest: { verdict: "needs_changes", sha8: "abcd1234", criteria: [{ index: 0, ok: false, reason: "Thiếu kết luận" }],
             fixes: "Thêm mục Kết luận" } };
@@ -62,9 +63,13 @@ h = RS.viewHtml(Object.assign({}, base, { block_reason: "review_pending", run_st
   team: Object.assign({}, team, { latest: null }) }));
 check("đang chờ review: nói rõ bản đã đăng chưa nghiệm thu", h.includes("Đang chờ duyet xem bản đã tiếp nhận"));
 h = RS.viewHtml(Object.assign({}, base, { block_reason: "reviewer_off", run_state: "blocked", team: team }));
-check("người review tắt: nút Bật lại người review (đúng slug) và Bỏ yêu cầu review",
-      h.includes('data-act="reviewer_enable" data-key="duyet"') && h.includes('data-act="team_detach"')
-      && h.includes(vi["resonance.st_reviewer_off"]));
+check("người review tắt: nút Bật lại người review ghim MÃ BỀN của reviewer (không phải slug) và Bỏ yêu cầu review",
+      h.includes('data-act="reviewer_enable" data-key="ag_d"') && !h.includes('data-key="duyet"')
+      && h.includes('data-act="team_detach"') && h.includes(vi["resonance.st_reviewer_off"]));
+h = RS.viewHtml(Object.assign({}, base, { block_reason: "reviewer_off", run_state: "blocked",
+  team: Object.assign({}, team, { reviewer: { slug: "duyet" } }) }));
+check("thẻ không có mã bền của reviewer: không có nút Bật lại (không đoán theo slug)",
+      !h.includes('data-act="reviewer_enable"') && h.includes('data-act="team_detach"'));
 for (const code of ["review_rounds", "review_unknown", "review_input", "budget_maker", "budget_reviewer",
                     "reviewer_retired", "source_drift"]) {
   const x = RS.viewHtml(Object.assign({}, base, { block_reason: code, run_state: "blocked", team: team }));
@@ -84,21 +89,29 @@ check("không có đội: không có dòng đội", !RS.viewHtml(base).includes(
 let r = RS.requestFor("team_detach", Object.assign({}, base, { team: team }));
 check("Bỏ yêu cầu review: lệnh team_detach của chủ dự án trên đúng mục tiêu",
       r.url === "/goals/g_1/commands" && r.body.command === "team_detach");
-r = RS.requestFor("reviewer_enable", base, null, { key: "duyet" });
-check("Bật lại người review: đúng API bật Cộng hưởng cho slug người review",
-      r.url === "/resonance/agents/toggle" && r.body.slug === "duyet" && r.body.enabled === true);
+r = RS.requestFor("reviewer_enable", Object.assign({}, base, { team: team }), null, { key: "ag_d" });
+check("Bật lại người review: route của thẻ, gửi mã bền đang hiện (không gửi slug, không qua nút bật thông thường)",
+      r.url === "/goals/g_1/reviewer/enable" && r.body.agent_key === "ag_d" && !("slug" in r.body)
+      && r.body.expected_revision === 1);
+r = RS.requestFor("reviewer_enable", Object.assign({}, base, { team: team }), null, {});
+check("Bật lại người review: thiếu data-key thì lấy mã bền từ dữ liệu đội của thẻ", r.body.agent_key === "ag_d");
+check("thẻ cũ nhận 409: câu báo trạng thái đã đổi (thẻ vẽ lại theo dữ liệu mới)",
+      RS.noteFor("reviewer_enable", { code: 409, j: { ok: false } }) === vi["resonance.changed"]);
 check("câu báo sau lệnh", RS.noteFor("team_detach", { code: 200, j: { ok: true } }) === vi["resonance.a5_detached"]
       && RS.noteFor("reviewer_enable", { code: 200, j: { ok: true } }) === vi["resonance.a5_reviewer_enabled"]);
 
 // ───────────── từ điển ─────────────
-const keys = Object.keys(vi).filter(function (k) { return /^resonance\.(a5_|st_review|st_budget_|st_reviewer|wake\.review|wake\.team|btn_reviewer|btn_team)/.test(k); });
-check("mọi khoá A5 có cả tiếng Việt và tiếng Anh", keys.length >= 39 && keys.every(function (k) { return en[k]; }),
+const keys = Object.keys(vi).filter(function (k) { return /^resonance\.(a5_|st_review|st_budget_|st_reviewer|st_prepare|wake\.review|wake\.team|wake\.prepare|btn_reviewer|btn_team)/.test(k); });
+check("mọi khoá A5 có cả tiếng Việt và tiếng Anh", keys.length >= 41 && keys.every(function (k) { return en[k]; }),
       keys.filter(function (k) { return !en[k]; }).join(","));
 const DASH = String.fromCharCode(0x2014);
 check("không có gạch dài trong chữ A5", keys.every(function (k) { return vi[k].indexOf(DASH) < 0
       && en[k].indexOf(DASH) < 0; }));
 check("wake label của mã mới không lộ mã thô", RS.wakeLabel("review_due") === vi["resonance.wake.review_due"]
-      && RS.wakeLabel("review_changes") === vi["resonance.wake.review_changes"]);
+      && RS.wakeLabel("review_changes") === vi["resonance.wake.review_changes"]
+      && RS.wakeLabel("prepare_recheck") === vi["resonance.wake.prepare_recheck"]);
+h = RS.viewHtml(Object.assign({}, base, { block_reason: "prepare_error", run_state: "blocked" }));
+check("lượt làm chưa chạy được (R1): nhãn trạng thái dịch được", h.includes(vi["resonance.st_prepare_error"]));
 
 if (fails) { console.log("\n" + fails + " FAIL"); process.exit(1); }
 console.log("\nOK");

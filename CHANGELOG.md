@@ -11,6 +11,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - **Trợ lý có thể có người review (Cộng hưởng A5).** Ở trang trợ lý đã bật Cộng hưởng, chọn một trợ lý khác ở ô **Người review**. Từ đó mục tiêu mới của trợ lý này chỉ được coi là đạt khi người review xem đúng bản đã đăng và kết luận đạt. Mục tiêu đang có không đổi.
 - **Review đòi sửa thì trợ lý tự sửa theo góp ý**, tối đa hai lần. Mỗi mục tiêu có đội dùng tối đa 8 lượt, mỗi vai 4; hết vòng hay hết lượt thì dừng và báo, không tự nới.
 - **Thẻ mục tiêu cho biết ai làm, ai review**, bản nào đã được review, đang chờ ai và lượt còn của từng vai. Có nút **Bật lại người review** và **Bỏ yêu cầu review** khi mục tiêu bị kẹt.
+- Mục tiêu duy trì và bước khám phá cũng chờ người review đạt rồi mới báo đã cập nhật hay xong bước; cùng một bản không bị review lại theo lịch.
+- Lượt hỏng trước khi kịp gọi model được trả lại, không bị tính.
 - File đã đăng bị sửa tay thì mục tiêu có đội chờ, không tự coi là đạt. Muốn quay về 0.100.0: tắt Javis, chạy `tools/resonance_restore_pre_a5.py`.
 
 ## [0.100.0] - 2026-10-12

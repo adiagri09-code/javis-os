@@ -69,7 +69,7 @@
                  // A5: đội một agent làm, một agent review
                  "review_pending", "review_changes", "review_retry", "review_rounds", "review_unknown",
                  "review_input", "review_engine", "budget_maker", "budget_reviewer", "reviewer_off",
-                 "reviewer_missing", "reviewer_retired"];
+                 "reviewer_missing", "reviewer_retired", "prepare_error"];
     if (known.indexOf(r) >= 0) return "resonance.st_" + r;
     if (g.run_state === "running") return "resonance.st_running";
     if (g.run_state === "blocked") return "resonance.st_blocked";
@@ -110,7 +110,8 @@
     review_changes: "resonance.wake.review_changes",
     review_done: "resonance.wake.review_done",
     review_recheck: "resonance.wake.review_recheck",
-    team_detached: "resonance.wake.team_detached"
+    team_detached: "resonance.wake.team_detached",
+    prepare_recheck: "resonance.wake.prepare_recheck"
   };
 
   /* A3: dòng "cách làm đã học" trên thẻ, theo trạng thái bài học làn M của revision hiện tại. Khoá nguyên văn. */
@@ -303,7 +304,7 @@
 
   /* HTML của thẻ từ trạng thái GET /goals/{id}. Thuần: không đụng DOM, không gọi mạng. */
   /* A5: dòng đội của thẻ (thiết kế A5 mục 11). Chỉ hiển thị; kho mới là căn cứ. Hai nút của chủ dự án: Bật lại người
-     review (đúng API bật Cộng hưởng cho mã reviewer) và Bỏ yêu cầu review (lệnh `team_detach`). Không có nút nào cho
+     review (route riêng của thẻ, ghim mã bền reviewer) và Bỏ yêu cầu review (lệnh `team_detach`). Không có nút nào cho
      agent; tag không có ở đây. */
   var TEAM_BLOCKS = ["review_rounds", "review_unknown", "review_input", "review_engine", "budget_maker",
                      "budget_reviewer", "reviewer_off", "reviewer_missing", "reviewer_retired", "source_drift"];
@@ -344,8 +345,11 @@
     }
     if (active) {
       var btns = "";
-      if (g.block_reason === "reviewer_off" && rv) {
-        btns += '<button type="button" class="rs-act" data-act="reviewer_enable" data-key="' + esc(rv) + '">' +
+      // Nút ghim MÃ BỀN của reviewer đang hiện (review mã A5 vòng 1, R2): host chỉ bật đúng mã đó nếu mục tiêu vẫn ghim
+      // nó; agent mới cùng slug không bao giờ được bật qua nút này.
+      var rk = (t.reviewer || {}).agent_key || "";
+      if (g.block_reason === "reviewer_off" && rk) {
+        btns += '<button type="button" class="rs-act" data-act="reviewer_enable" data-key="' + esc(rk) + '">' +
           esc(tw("resonance.btn_reviewer_enable")) + "</button>";
       }
       if (TEAM_BLOCKS.indexOf(String(g.block_reason || "")) >= 0) {
@@ -477,8 +481,9 @@
         body: { action: "dismiss" } };
     }
     if (act === "reviewer_enable") {
-      // A5: Bật lại người review = đúng API bật Cộng hưởng của chủ dự án cho trợ lý đó (theo slug đang hiện).
-      return { url: "/resonance/agents/toggle", body: { slug: String((dir || {}).key || ""), enabled: true } };
+      // A5 (R2): Bật lại người review gửi mã bền đang hiện trên thẻ; thẻ cũ (mã khác) nhận 409 và vẽ lại.
+      var rvk = String((dir || {}).key || ((g.team || {}).reviewer || {}).agent_key || "");
+      return { url: "/goals/" + id + "/reviewer/enable", body: { agent_key: rvk, expected_revision: rev } };
     }
     if (act === "drop") {
       return { url: "/goals/" + id + "/commands", body: { command: "drop_directive", expected_revision: rev,

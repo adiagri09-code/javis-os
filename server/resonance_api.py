@@ -703,3 +703,33 @@ def register_a5(app, deps: ResonanceApiDeps):
         except RS.AgentStateError as e:
             return _err(409, f"Chưa chọn được người review: {e}", f"Could not set the reviewer: {e}")
         return {"ok": True, "pair": pr}
+
+    @app.post("/goals/{goal_id}/reviewer/enable")
+    async def goal_reviewer_enable(goal_id: str, request: Request, brain: str = "brain"):
+        """A5 (review mã vòng 1, R2): nút "Bật lại người review" trên thẻ. Gửi MÃ BỀN của reviewer mà thẻ đang hiện; kho
+        kiểm trong một giao dịch rằng mục tiêu vẫn ghim đúng mã đó và mã còn hoạt động rồi mới bật. Thẻ cũ (reviewer đã
+        nghỉ, agent mới cùng slug, đội đã bỏ) nhận 409 kèm trạng thái mới, không bật ai. Nút bật ở trang trợ lý vẫn đi
+        `/resonance/agents/toggle` như cũ."""
+        root, owner = _ctx(brain)
+        if root is None:
+            return _err(404, "Không tìm thấy brain", "Brain not found")
+        if not _store_exists():
+            return _err(404, "Không có mục tiêu này", "No such goal")
+        body = await _body(request)
+        key = str(body.get("agent_key") or "").strip()
+        store = deps.store()
+        cur = await asyncio.to_thread(store.agent_by_key, root, key) if key else None
+        if cur is not None and cur["status"] == "active" and deps.agent_file(root, cur["slug"]) is None:
+            await asyncio.to_thread(store.agent_mark_missing, root, key)
+            return _err(409, "File của người review không còn trong brain", "The reviewer file is missing from this brain",
+                        goal=await _view(store, owner, goal_id, root))
+        try:
+            a = await asyncio.to_thread(store.team_reviewer_enable, owner, goal_id, key)
+        except RS.ScopeError:
+            return _err(404, "Không có mục tiêu này", "No such goal")
+        except RS.ConflictError as e:
+            return _err(409, f"Người review trên thẻ không còn là người review của mục tiêu ({e})",
+                        f"The reviewer on this card is no longer the goal's reviewer ({e})",
+                        goal=await _view(store, owner, goal_id, root))
+        await asyncio.to_thread(store.wake_agent_goals, root, a["agent_key"])
+        return {"ok": True, "agent": a, "goal": await _view(store, owner, goal_id, root)}

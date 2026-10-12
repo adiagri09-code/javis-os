@@ -362,7 +362,8 @@ _WAKE_TEXT = {
     "scope_granted": "chủ dự án cho phép phạm vi",
     "review_due": "người review xem bản đã tiếp nhận", "review_retry": "thử lại lượt review",
     "review_changes": "sửa theo góp ý của người review", "review_done": "chốt theo kết luận review",
-    "review_recheck": "kiểm lại engine của lượt review", "team_detached": "chủ dự án bỏ yêu cầu review",
+    "review_recheck": "kiểm lại lượt review chưa chạy được", "team_detached": "chủ dự án bỏ yêu cầu review",
+    "prepare_recheck": "kiểm lại lượt việc chưa chạy được",
 }
 
 
@@ -1193,19 +1194,68 @@ class GoalStore:
             self._hb_save(c, st, now)
             return st
 
-    def abort_action(self, p: Principal, action_id: str, now: Optional[float] = None) -> bool:
-        """Huỷ một lượt việc đã ghi ý định mà CHƯA gọi model (lần thức bị huỷ ngay sau pha chuẩn bị). Một giao dịch:
-        action thành `cancelled`/`not_run`, trả lượt đã giữ, lý do lượt đó đã phục vụ trở lại `pending`, bỏ hẹn phục hồi
-        của nó, đóng lượt trong chuỗi bền mà không tính lỗi hay tiến bộ, đưa trạng thái `running` về `ready`.
-        Chỉ áp dụng cho action còn `running`; trả False nếu không phải."""
+    def abort_action(self, p: Principal, action_id: str, now: Optional[float] = None, code: str = "not_run",
+                     detail: str = "", recheck_at: Optional[float] = None) -> bool:
+        """Huỷ một lượt việc đã ghi ý định mà CHƯA gọi model (lần thức bị huỷ ngay sau pha chuẩn bị, hay pha chuẩn bị lỗi).
+        Một giao dịch: action thành `cancelled`/`not_run`, trả lượt đã giữ, lý do lượt đó đã phục vụ trở lại `pending`,
+        bỏ hẹn phục hồi của nó, đóng lượt trong chuỗi bền mà không tính lỗi hay tiến bộ, đưa trạng thái `running` về
+        `ready`. Chỉ áp dụng cho action còn `running`; trả False nếu không phải.
+
+        `recheck_at` (A5, review mã vòng 1, R1): pha chuẩn bị LỖI thì cùng giao dịch hoàn còn gác mục tiêu và hẹn kiểm lại
+        bằng code, để lỗi lặp lại không thành vòng thức liên tục. Lượt review: `blocked/review_engine` và hẹn
+        `review_recheck` (như engine review không dựng được). Lượt việc: `blocked/prepare_error` và hẹn `prepare_recheck`.
+        Chỉ gác khi mục tiêu còn active ở đúng revision của lượt."""
         now = time.time() if now is None else float(now)
         with self._Tx(self) as c:
             a = c.execute("SELECT a.* FROM actions a JOIN goals g ON g.id=a.goal_id WHERE a.id=? AND g.brain_id=?",
                           (action_id, p.brain_id)).fetchone()
             if a is None or a["status"] != "running" or a["kind"] not in ("work", "review"):
                 return False
-            return self._refund_not_run(c, a, now, "not_run",
-                                        "lần thức bị huỷ trước khi gọi model; lượt được trả lại")
+            ok = self._refund_not_run(c, a, now, code,
+                                      detail or "lần thức bị huỷ trước khi gọi model; lượt được trả lại")
+            if ok and recheck_at is not None:
+                g = c.execute("SELECT * FROM goals WHERE id=?", (a["goal_id"],)).fetchone()
+                if g is not None and g["status"] == "active" and int(g["revision"]) == int(a["revision"]):
+                    review = a["kind"] == "review"
+                    reason = "review_engine" if review else "prepare_error"
+                    c.execute("UPDATE goals SET run_state='blocked', block_reason=?, updated_at=? WHERE id=?",
+                              (reason, now, g["id"]))
+                    c.execute("INSERT INTO goal_events(goal_id,revision,kind,source,payload_json,by,created_at) "
+                              "VALUES(?,?,?,?,?,?,?)", (g["id"], int(g["revision"]), "run.blocked", "host",
+                                                        _j({"reason": reason, "code": code, "action_id": a["id"],
+                                                            "detail": str(detail or "")[:200]}), p.by, now))
+                    self._reason_timer(c, g["id"], g["brain_id"], "review_recheck" if review else "prepare_recheck",
+                                       float(recheck_at), int(g["revision"]), now)
+                    # Đã gác: lịch vật lý chỉ còn hẹn kiểm lại, không còn lý do vừa trả về (chúng đã quá giờ).
+                    self._recompute_wake(c, g["id"])
+            return ok
+
+    def mark_engine(self, p: Principal, action_id: str, now: Optional[float] = None) -> bool:
+        """Mốc "pha chuẩn bị xong, sắp gọi engine" của một lượt việc hay review (A5, review mã vòng 1, R1). Một giao dịch:
+        ghi `engine_at` vào ý định của hành động còn `running` và đưa mục tiêu sang `running` (khi còn active ở đúng
+        revision của lượt). Trả False khi hành động không còn `running` (đã hoàn hay đã đóng): người gọi KHÔNG gọi engine.
+
+        Đối soát dựa vào mốc này: hành động mang giao thức mốc (`engine_mark`) mà chưa có `engine_at` thì host CHẮC CHẮN
+        engine chưa chạy (lỗi hay tiến trình chết trong pha chuẩn bị, kể cả khi lần hoàn ngay lúc đó cũng lỗi), nên được
+        hoàn; đã có `engine_at` thì engine có thể đã chạy và lượt vẫn tính."""
+        now = time.time() if now is None else float(now)
+        with self._Tx(self) as c:
+            a = c.execute("SELECT a.* FROM actions a JOIN goals g ON g.id=a.goal_id WHERE a.id=? AND g.brain_id=?",
+                          (action_id, p.brain_id)).fetchone()
+            if a is None or a["status"] != "running":
+                return False
+            it = json.loads(a["intent_json"] or "{}")
+            c.execute("UPDATE actions SET intent_json=?, updated_at=? WHERE id=? AND status='running'",
+                      (_j({**it, "engine_at": now}), now, a["id"]))
+            g = c.execute("SELECT * FROM goals WHERE id=?", (a["goal_id"],)).fetchone()
+            if g is not None and g["status"] == "active" and int(g["revision"]) == int(a["revision"]):
+                if (g["run_state"], g["block_reason"]) != ("running", ""):
+                    c.execute("UPDATE goals SET run_state='running', block_reason='', updated_at=? WHERE id=?",
+                              (now, g["id"]))
+                    c.execute("INSERT INTO goal_events(goal_id,revision,kind,source,payload_json,by,created_at) "
+                              "VALUES(?,?,?,?,?,?,?)", (g["id"], int(g["revision"]), "run.running", "host",
+                                                        _j({"reason": ""}), p.by, now))
+            return True
 
     def _refund_not_run(self, c, a, now: float, code: str, detail: str) -> bool:
         """MỘT đường hoàn cho lượt mà host CHẮC CHẮN engine chưa chạy (A5 mục 6.2): huỷ trước lời gọi, hay engine không
@@ -1580,6 +1630,11 @@ class GoalStore:
             stored.pop("use_hold", None)
             stored.pop("require_hold", None)
             stored.pop("refunded", None)
+            stored.pop("engine_at", None)
+            if kind in ("work", "review"):
+                # A5 (review mã vòng 1, R1): lượt theo giao thức mốc engine. Chưa có `engine_at` (mark_engine) nghĩa là
+                # engine CHẮC CHẮN chưa chạy; hành động cũ không có cờ này giữ luật đối soát cũ (coi như có thể đã chạy).
+                stored["engine_mark"] = 1
             if role:
                 stored["role"] = role
             rid = ""
@@ -4380,6 +4435,32 @@ class GoalStore:
                 self._recompute_wake(c, goal_id)
             return True
 
+    def team_reviewer_enable(self, p: Principal, goal_id: str, agent_key: str) -> dict:
+        """Nút "Bật lại người review" trên thẻ (review mã A5 vòng 1, R2): bật Cộng hưởng cho ĐÚNG mã reviewer mà thẻ
+        đang hiện. Một giao dịch: đội của mục tiêu còn hiệu lực và vẫn ghim đúng mã đó, mã đó còn `active` trong brain;
+        rồi mới bật. Mã khác (agent mới cùng slug, reviewer đã nghỉ, đội đã bỏ) thì ConflictError, KHÔNG bật gì. Chỉ
+        owner. Lượt và vòng của đội không đổi; đã bật sẵn thì trả nguyên dòng."""
+        self._owner_only(p)
+        key = str(agent_key or "").strip()
+        now = time.time()
+        with self._Tx(self) as c:
+            row = self._goal_row(c, p, goal_id)
+            if row is None:
+                raise ScopeError("mục tiêu không tồn tại trong brain này")
+            team = self._team_row(c, goal_id)
+            if row["status"] != "active" or team is None or team["status"] != "active":
+                raise ConflictError("team_inactive")
+            if not key or team["reviewer_agent_key"] != key:
+                raise ConflictError("reviewer_changed")
+            r = c.execute("SELECT * FROM resonance_agents WHERE agent_key=? AND brain_id=?",
+                          (key, p.brain_id)).fetchone()
+            if r is None or r["status"] != "active":
+                raise ConflictError("reviewer_" + (r["status"] if r is not None else "missing"))
+            if bool(r["enabled"]):
+                return self._agent(r)
+            return self._bump_agent(c, r, "enabled", p.by, now, {"via": "team_reviewer_enable", "goal_id": goal_id},
+                                    enabled=1)
+
     def rearm_review_due(self, p: Principal, goal_id: str, bundle_ref: str, now: Optional[float] = None) -> bool:
         """`review_due` của một bộ ghim CHƯA có hàng review nào mà lý do đã bị phục vụ (ví dụ lần thức trước thấy bản chưa
         đạt kiểm khách quan): đặt lại thành chờ. Có hàng review rồi thì không (một bộ ghim chỉ một lần review đầu; thử lại
@@ -4529,6 +4610,10 @@ class GoalStore:
                         or int(rv["config_version"]) != int(r["reviewer_config_version"])):
                     reason = "stale"
             final = "done" if verdict in ("pass", "needs_changes") else "failed"
+            # Chẩn đoán của lượt engine (provider, model, usage, lỗi gốc) chỉ để truy vết ở pilot; không dự phần quyết định.
+            dg = (out or {}).get("diag") or {}
+            diag = {k: dg[k] for k in ("engine", "usage", "tool_calls_observed", "engine_error_code",
+                                       "engine_error_detail") if dg.get(k) not in (None, "", {}, [])}
             c.execute("UPDATE reviews SET status=?, verdict=?, reason_code=?, criteria_json=?, fixes=?, evidence_id=?, "
                       "finished_at=? WHERE id=? AND status='running'",
                       (final, verdict, reason[:40], _j((out or {}).get("criteria") or []),
@@ -4538,7 +4623,7 @@ class GoalStore:
                       ("succeeded" if final == "done" else "failed",
                        _j({"action_id": action_id, "review_id": r["id"], "verdict": verdict, "reason_code": reason,
                            "evidence_ids": [out.get("evidence_id")] if (out or {}).get("evidence_id") else [],
-                           **({"error_code": reason or "unknown"} if final == "failed" else {})}), now, action_id))
+                           **diag, **({"error_code": reason or "unknown"} if final == "failed" else {})}), now, action_id))
             c.execute("INSERT INTO goal_events(goal_id,revision,kind,source,payload_json,by,created_at) "
                       "VALUES(?,?,?,?,?,?,?)", (r["goal_id"], int(r["revision"]), "review_recorded", "host",
                                                 _j({"review_id": r["id"], "verdict": verdict, "reason_code": reason,
