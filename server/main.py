@@ -139,6 +139,7 @@ import tien_trinh_nen     # lệnh chạy ngầm engine bỏ lại: nhận theo 
 import chatbot_log       # nhật ký hội thoại khách + thống kê câu bot trả lời không nổi
 import chatbot_runtime   # bộ giám sát Bot chuyên trách (mỗi bot một poller Telegram)
 import agent_avatar
+import agent_tags   # tag của agent (0.100.0): nhiều tag, nhóm cũ thành một tag
 import cli_autoinstall   # trạng thái agy/grok do container Docker tự cài (0.85.1)
 import agent_assets      # tài liệu & link gắn vào MỘT trợ lý (lưu trong frontmatter agent)
 import workflow_chat     # persona_cua_phien: kênh agent:/workflow: đổi cách _do_turn chạy lượt
@@ -4943,6 +4944,9 @@ def settings_get():
     # Nguồn duy nhất là sổ đăng ký phía server: dashboard KHÔNG khai lại danh sách, nếu không
     # thì thêm ngôn ngữ mới phải nhớ sửa hai chỗ và chỗ bị quên hỏng trong im lặng.
     safe["lang_list"] = lang_registry.cho_giao_dien()
+    # Interface pickers also offer dashboard-only dictionaries (a community xx.json, 0.99.0); `lang_list` stays the
+    # languages the server itself speaks, which is what reply language and voice may choose from.
+    safe["ui_lang_list"] = safe["lang_list"] + lang_registry.dashboard_only_languages(DASHBOARD_PATH / "i18n")
     # Gói locale (múi giờ, tiền tệ, locale định dạng số). Dashboard KHÔNG tự suy nó từ ngôn
     # ngữ: hai thứ đó tách rời, người dùng đọc tiếng Anh mà vẫn ngồi ở UTC+7 là bình thường.
     safe["locale_fmt"] = localefmt.cho_giao_dien()
@@ -6515,6 +6519,72 @@ def _nhom_cua(meta) -> str:
     return (str(g).strip() or NHOM_MAC_DINH) if g is not None else NHOM_MAC_DINH
 
 
+# TAG CỦA AGENT (0.100.0): agent không còn dùng `group` làm phân loại mà dùng `tags` (nhiều tag), xem
+# docs/dev/agent-tags.md. Workflow và skill vẫn dùng `group` ở trên. `group` trả về trong API chỉ để trang
+# cũ còn trong cache trình duyệt vẫn vẽ được (tag đầu tiên, hoặc "Chung" khi chưa gắn tag).
+def _agent_tag_fields(meta) -> dict:
+    # `tag_keys` (song song với `tags`): khoá định danh do HOST cấp (agent_tags.tag_key, Unicode casefold),
+    # để giao diện đếm, lọc, đánh dấu tick đúng như server so trùng, không tự tính bằng toLowerCase
+    # ("Straße" và "STRASSE" là một tag; review PR #617 vòng 1, R3).
+    tags = agent_tags.tags_of(meta)
+    return {"tags": tags, "tag_keys": [agent_tags.tag_key(t) for t in tags],
+            "group": tags[0] if tags else NHOM_MAC_DINH}
+
+
+# Khoá chung cho MỌI thao tác đọc-sửa-ghi hay xoá file agent: tag (/capability/meta, đổi tên, xoá tag),
+# form lưu agent, tài liệu/link của agent, và xoá agent. Chỉ được giữ ở worker (asyncio.to_thread), không
+# bao giờ trên event loop. Xoá agent mà không vào khoá này thì một worker đã đọc file sẽ ghi lại đúng file
+# vừa xoá, agent sống lại sau khi xoá đã trả 200 (review PR #617 vòng 2, R5).
+_AGENT_META_LOCK = __import__("threading").Lock()
+
+
+class AgentGoneError(Exception):
+    """File agent không còn khi thao tác ghi đã vào khoá (bị xoá giữa lúc tìm thấy và lúc ghi). Không
+    ghi gì: ghi lúc này là tạo lại agent vừa xoá."""
+
+
+def _sua_meta_file(path, sua, chi_ghi_khi=None) -> dict:
+    """Đọc frontmatter một file agent hay workflow, `sua(meta)` sửa tại chỗ, rồi ghi lại nguyên tử; thân
+    prompt và mọi khoá khác giữ nguyên. Không tự giữ khoá: agent đi qua `_sua_meta_agent`. `chi_ghi_khi()`
+    trả False thì không ghi (không đổi gì thì không chạm file). Trả meta sau khi sửa."""
+    # Kiểm tồn tại ở ĐÂY, sau khi nơi gọi đã giữ khoá: kiểm trước khoá thì xoá vẫn chen vào được.
+    if not Path(path).is_file():
+        raise AgentGoneError(str(path))
+    meta, body = _read_md(path)
+    if not meta:
+        # Frontmatter có mà không đọc được (YAML sửa tay sai): ghi lại lúc này là xoá sạch mọi khoá
+        # của nó. Từ chối, để người dùng sửa file trước.
+        raw = Path(path).read_text(encoding="utf-8")
+        if raw.startswith("---") and len(raw.split("---", 2)) >= 3 and raw.split("---", 2)[1].strip():
+            raise ValueError("frontmatter_unreadable")
+    meta = dict(meta or {})
+    sua(meta)
+    if chi_ghi_khi is None or chi_ghi_khi():
+        _write_md(path, meta, body)
+    return meta
+
+
+def _sua_meta_agent(path, sua, chi_ghi_khi=None) -> dict:
+    """`_sua_meta_file` cho file agent, trong `_AGENT_META_LOCK`: hai thao tác thêm/bỏ tag đến cùng lúc
+    (hai tab) không ghi đè nhau, và xoá agent không chen được giữa đọc và ghi. File đã bị xoá thì
+    `AgentGoneError`, không tạo lại. Chỉ gọi ở worker."""
+    with _AGENT_META_LOCK:
+        return _sua_meta_file(path, sua, chi_ghi_khi)
+
+
+def _loi_tag(code: str, status: int = 400):
+    chu = {
+        "tag_too_long": ("Tag dài quá 40 ký tự.", "A tag can be at most 40 characters."),
+        "too_many_tags": ("Một agent gắn tối đa 20 tag.", "An agent can carry at most 20 tags."),
+        "bad_tags": ("Danh sách tag không hợp lệ.", "The tag list is not valid."),
+        "stale_client": ("Trang đã cũ so với dữ liệu (agent này có nhiều tag). Tải lại trang (F5) rồi thử lại.",
+                         "This page is out of date (the agent has several tags). Reload the page (F5) and try again."),
+        "group_and_tags": ("Không gửi cùng lúc nhóm và tag cho agent.", "Do not send a group and tags together for an agent."),
+        "tags_not_for_kind": ("Chỉ agent mới có tag.", "Only agents have tags."),
+    }.get(code, ("Không lưu được tag.", "The tags could not be saved."))
+    return JSONResponse({"ok": False, "code": code, "error": localefmt.chu(*chu)}, status_code=status)
+
+
 def _agents_dir(brain):
     return _brain_sub(_brain_root(brain), "agents", "Javis/agents")
 def _workflows_dir(brain):
@@ -6621,7 +6691,7 @@ def agents_index(brain: str, *, kem_prompt: bool = True) -> list:
         meta, body = _read_md(f)
         out.append({"slug": f.stem, "name": meta.get("name", f.stem),
                     "role": meta.get("role", ""), "skills": meta.get("skills", []) or [],
-                    "model": meta.get("model", ""), "group": _nhom_cua(meta),
+                    "model": meta.get("model", ""), **_agent_tag_fields(meta),
                     "model_provider": meta.get("model_provider", ""),
                     "pinned": bool(meta.get("pinned")),
                     "avatar": agent_avatar.for_agent(meta, f.stem)})
@@ -6666,7 +6736,7 @@ def agent_get(slug: str = Query(...), brain: str = Query("brain")):
     meta, body = _read_md(path)
     return {"slug": slug, "name": meta.get("name", slug), "role": meta.get("role", ""),
             "skills": meta.get("skills", []) or [], "model": meta.get("model", ""),
-            "group": _nhom_cua(meta), "model_provider": meta.get("model_provider", ""),
+            **_agent_tag_fields(meta), "model_provider": meta.get("model_provider", ""),
             "prompt": body, "pinned": bool(meta.get("pinned")),
             "avatar": agent_avatar.for_agent(meta, slug)}
 
@@ -6677,7 +6747,7 @@ async def save_agent(name: str = Form(...), role: str = Form(""), skills: str = 
                      group: str = Form(None), avatar_shape: str = Form(None),
                      avatar_palette: str = Form(None), avatar_color: str = Form(None),
                      avatar_eye: str = Form(None), avatar_eye_color: str = Form(None),
-                     avatar_eye_size: str = Form(None)):
+                     avatar_eye_size: str = Form(None), tags: str = Form(None)):
     # Trợ lý MỚI đặt tên file không dấu ("Bống Work" -> bong-work.md), đúng quy ước slug của Javis. Trước
     # 0.88.1 tên giữ nguyên dấu; các file đó vẫn đọc, sửa, xoá được nhờ skill_router.valid_file_slug.
     slug = slug or _ascii_slug(name)
@@ -6688,37 +6758,64 @@ async def save_agent(name: str = Form(...), role: str = Form(""), skills: str = 
     # chứ không ghi vào file một nhà mà server không chạy được.
     mp = (model_provider or "").strip()
     path = _agents_dir(brain) / f"{slug}.md"
-    previous = _read_md(path)[0] if path.is_file() else None
-    try:
-        avatar = agent_avatar.for_save(previous, slug, avatar_shape, avatar_palette,
-                                       avatar_color, avatar_eye, avatar_eye_color,
-                                       avatar_eye_size)
-    except ValueError as exc:
-        return JSONResponse({"error": str(exc)}, status_code=400)
-    # GIỮ mọi khoá frontmatter KHÔNG nằm trong form. Trước đây meta được dựng lại từ đầu, nên
-    # mỗi lần bấm Lưu trong trình sửa là xoá sạch những khoá do chỗ khác ghi - `pinned` (ghim ở
-    # trang Cộng sự) mất ngay lần sửa kế tiếp, và mọi khoá tương lai cũng vậy.
-    # NHÓM: form sửa trợ lý KHÔNG còn ô nhóm (0.62.0 - gom nhóm nay nằm ở thanh nhóm cột
-    # trái và menu "Chuyển sang nhóm"), nên `group` không gửi lên nghĩa là GIỮ NGUYÊN nhóm
-    # đang có. Mặc định cũ là "Chung", tức mỗi lần bấm Lưu là ném trợ lý về Chung, lặng lẽ.
-    # Client cũ vẫn gửi group thì vẫn theo nó.
-    meta = dict(previous or {})
-    meta.update({"type": "agent", "name": name, "slug": slug, "role": role,
-                 "group": (group or "").strip() or _nhom_cua(previous),
-                 "skills": skills_list, "model": model, "avatar": avatar,
-                 "model_provider": mp if mp in AGENT_PROVIDERS else "",
-                 "updated": _today()})  # "" = mặc định theo CLI
-    _write_md(_agents_dir(brain) / f"{slug}.md", meta, (prompt.strip() or role))
-    return {"ok": True, "slug": slug}
+    tags = tags if isinstance(tags, str) else None
+    group = group if isinstance(group, str) else None
+
+    def _luu():
+        # ĐỌC `previous` rồi GHI trong CÙNG một khoá với các đường tag (/capability/meta, đổi tên, xoá tag),
+        # và chạy ở worker. Đọc ngoài khoá rồi mới khoá lúc ghi thì một thao tác thêm/bỏ tag chen giữa sẽ
+        # bị snapshot cũ của form ghi đè (review PR #617 vòng 1, R4).
+        with _AGENT_META_LOCK:
+            previous = _read_md(path)[0] if path.is_file() else None
+            try:
+                avatar = agent_avatar.for_save(previous, slug, avatar_shape, avatar_palette,
+                                               avatar_color, avatar_eye, avatar_eye_color,
+                                               avatar_eye_size)
+            except ValueError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+            # GIỮ mọi khoá frontmatter KHÔNG nằm trong form. Trước đây meta được dựng lại từ đầu, nên
+            # mỗi lần bấm Lưu trong trình sửa là xoá sạch những khoá do chỗ khác ghi - `pinned` (ghim ở
+            # trang Cộng sự) mất ngay lần sửa kế tiếp, và mọi khoá tương lai cũng vậy.
+            # TAG (0.100.0, docs/dev/agent-tags.md): form sửa trợ lý KHÔNG có ô tag (gắn tag ở cột trái
+            # trang Cộng sự), nên không gửi `tags` nghĩa là GIỮ NGUYÊN tag đang có (kể cả tag cũ vượt giới
+            # hạn, không cắt); gửi `tags` (JSON) là thay cả tập. Client cũ còn gửi `group` thì theo luật
+            # tương thích: không bao giờ thay nhiều tag bằng một.
+            try:
+                moi_tags = agent_tags.parse_list(tags)
+                if moi_tags is not None and group is not None:
+                    raise agent_tags.TagError("group_and_tags")
+                hien = agent_tags.tags_of(previous)
+                if moi_tags is not None:
+                    hien = agent_tags.normalize_tags(moi_tags)
+                elif group is not None:
+                    hien = agent_tags.from_old_group(hien, group)
+            except agent_tags.TagError as e:
+                return _loi_tag(str(e), 409 if str(e) == "stale_client" else 400)
+            meta = dict(previous or {})
+            meta.update({"type": "agent", "name": name, "slug": slug, "role": role,
+                         "skills": skills_list, "model": model, "avatar": avatar,
+                         "model_provider": mp if mp in AGENT_PROVIDERS else "",
+                         "updated": _today()})  # "" = mặc định theo CLI
+            agent_tags.write_tags(meta, hien)
+            _write_md(path, meta, (prompt.strip() or role))
+            return {"ok": True, "slug": slug, "tags": hien}
+
+    return await asyncio.to_thread(_luu)
 
 @app.post("/agents/delete")
 async def delete_agent(slug: str = Form(...), brain: str = Form("brain")):
     # slug ghép thẳng vào tên file: phải hợp lệ, không thì `../x` xoá được file ngoài thư mục agents.
     if not skill_router.valid_file_slug(slug):
         return JSONResponse({"ok": False, "error": "slug không hợp lệ"}, status_code=400)
-    f = _agent_file(brain, slug)
-    if f:
-        f.unlink()
+    def _xoa():
+        # Tìm và xoá file TRONG khoá ghi agent, ở worker (R5): thao tác tag hay form đang giữ khoá thì xoá
+        # đợi nó ghi xong rồi mới xoá; thao tác tới sau thấy file đã mất và không tạo lại. Đợi khoá ở
+        # worker nên event loop không bị chặn (R4).
+        with _AGENT_META_LOCK:
+            f = _agent_file(brain, slug)
+            if f:
+                f.unlink()
+    await asyncio.to_thread(_xoa)
     # A1: xoá qua host thì mã Cộng hưởng của agent này nghỉ hẳn. Tạo lại cùng tên là agent MỚI, phải bật lại; mục
     # tiêu và phiên cũ giữ mã cũ. Chưa có kho thì không tạo kho chỉ để ghi việc này.
     try:
@@ -6769,16 +6866,19 @@ def _agent_assets_sua(brain: str, slug: str, doi):
     Gom một chỗ vì cả sáu route thêm/gỡ/ghim đều làm đúng ba bước này; chép sáu lần thì lần
     thứ bảy sẽ quên bước ghi hoặc quên giữ phần thân file.
     """
-    f = _agent_md_path(brain, slug)
-    if not f:
-        return None, JSONResponse({"error": "not found"}, status_code=404)
-    meta, body = _read_md(f)
-    try:
-        meta_moi, ket_qua = doi(meta)
-    except ValueError as e:
-        return None, JSONResponse({"error": str(e)}, status_code=400)
-    _write_md(f, meta_moi, body)
-    return ket_qua, None
+    # Tìm, đọc, ghi trong khoá ghi agent và ở worker (nơi gọi dùng asyncio.to_thread): xoá agent đang
+    # đợi khoá thì không bị lần ghi này tạo lại file, và thêm/bỏ tag cùng lúc không bị ghi đè (R5).
+    with _AGENT_META_LOCK:
+        f = _agent_md_path(brain, slug)
+        if not f:
+            return None, JSONResponse({"error": "not found"}, status_code=404)
+        meta, body = _read_md(f)
+        try:
+            meta_moi, ket_qua = doi(meta)
+        except ValueError as e:
+            return None, JSONResponse({"error": str(e)}, status_code=400)
+        _write_md(f, meta_moi, body)
+        return ket_qua, None
 
 
 @app.get("/agents/{slug}/assets")
@@ -6805,15 +6905,15 @@ async def agent_assets_add_file(slug: str, path: str = Form(...), name: str = Fo
     # thư mục thì "có tồn tại" - gắn được một hàng trỏ vào thư mục, ghim vào là đọc lỗi.
     if not alo.is_file():
         return JSONResponse({"error": localefmt.chu("Không tìm thấy file trong brain này", "File not found in this brain")}, status_code=404)
-    fid, loi = _agent_assets_sua(
-        brain, slug, lambda m: agent_assets.them_file(m, path, name or alo.name))
+    fid, loi = await asyncio.to_thread(
+        _agent_assets_sua, brain, slug, lambda m: agent_assets.them_file(m, path, name or alo.name))
     return loi or {"ok": True, "id": fid}
 
 
 @app.post("/agents/{slug}/assets/files/{file_id}/delete")
 async def agent_assets_del_file(slug: str, file_id: str, brain: str = Form("brain")):
     """GỠ KHỎI TRỢ LÝ, KHÔNG xoá file trên đĩa (xem agent_assets.go_file)."""
-    ok, loi = _agent_assets_sua(brain, slug, lambda m: agent_assets.go_file(m, file_id))
+    ok, loi = await asyncio.to_thread(_agent_assets_sua, brain, slug, lambda m: agent_assets.go_file(m, file_id))
     return loi or {"ok": bool(ok)}
 
 
@@ -6821,7 +6921,7 @@ async def agent_assets_del_file(slug: str, file_id: str, brain: str = Form("brai
 async def agent_assets_pin_file(slug: str, file_id: str, pinned: str = Form("1"),
                                 brain: str = Form("brain")):
     on = str(pinned).strip() in ("1", "true", "True", "on")
-    ok, loi = _agent_assets_sua(brain, slug, lambda m: agent_assets.ghim_file(m, file_id, on))
+    ok, loi = await asyncio.to_thread(_agent_assets_sua, brain, slug, lambda m: agent_assets.ghim_file(m, file_id, on))
     return loi or {"ok": bool(ok), "pinned": on}
 
 
@@ -6834,13 +6934,13 @@ async def agent_assets_add_link(slug: str, url: str = Form(...), label: str = Fo
     if not re.match(r"^https?://", u, re.I):
         return JSONResponse({"error": localefmt.chu("URL phải bắt đầu bằng http:// hoặc https://", "The URL must start with http:// or https://")},
                             status_code=400)
-    lid, loi = _agent_assets_sua(brain, slug, lambda m: agent_assets.them_link(m, u, label))
+    lid, loi = await asyncio.to_thread(_agent_assets_sua, brain, slug, lambda m: agent_assets.them_link(m, u, label))
     return loi or {"ok": True, "id": lid}
 
 
 @app.post("/agents/{slug}/assets/links/{link_id}/delete")
 async def agent_assets_del_link(slug: str, link_id: str, brain: str = Form("brain")):
-    ok, loi = _agent_assets_sua(brain, slug, lambda m: agent_assets.go_link(m, link_id))
+    ok, loi = await asyncio.to_thread(_agent_assets_sua, brain, slug, lambda m: agent_assets.go_link(m, link_id))
     return loi or {"ok": bool(ok)}
 
 
@@ -6848,7 +6948,7 @@ async def agent_assets_del_link(slug: str, link_id: str, brain: str = Form("brai
 async def agent_assets_pin_link(slug: str, link_id: str, pinned: str = Form("1"),
                                 brain: str = Form("brain")):
     on = str(pinned).strip() in ("1", "true", "True", "on")
-    ok, loi = _agent_assets_sua(brain, slug, lambda m: agent_assets.ghim_link(m, link_id, on))
+    ok, loi = await asyncio.to_thread(_agent_assets_sua, brain, slug, lambda m: agent_assets.ghim_link(m, link_id, on))
     return loi or {"ok": bool(ok), "pinned": on}
 
 
@@ -8407,11 +8507,16 @@ _META_KIND = {"agent": _agents_dir, "workflow": _workflows_dir}
 @app.post("/capability/meta")
 async def capability_meta(kind: str = Form(...), slug: str = Form(...),
                           brain: str = Form("brain"),
-                          pinned: str = Form(None), group: str = Form(None)):
-    """Ghim / bỏ ghim và chuyển nhóm cho một agent hoặc workflow.
+                          pinned: str = Form(None), group: str = Form(None),
+                          tags: str = Form(None), add_tags: str = Form(None),
+                          remove_tags: str = Form(None)):
+    """Ghim / bỏ ghim và chuyển nhóm cho một agent hoặc workflow; gắn và bỏ tag cho agent.
 
     `pinned`: "1"/"true" = ghim, "0"/"false" = bỏ ghim, không gửi = không đụng.
-    `group`: tên nhóm mới, rỗng = về nhóm mặc định. Không gửi = không đụng.
+    `group` (workflow): tên nhóm mới, rỗng = về nhóm mặc định. Không gửi = không đụng.
+    Agent (0.100.0, docs/dev/agent-tags.md): `add_tags`/`remove_tags` (JSON danh sách) thêm hay bỏ đúng
+    các tag đó trên tập hiện có; `tags` thay cả tập (`[]` = bỏ hết). `group` của client cũ theo luật
+    tương thích (agent nhiều tag thì 409, không thay nhiều tag bằng một).
     """
     thu_muc = _META_KIND.get((kind or "").strip())
     if not thu_muc:
@@ -8426,20 +8531,142 @@ async def capability_meta(kind: str = Form(...), slug: str = Form(...),
     # sẽ hiểu sai. Quy về None ngay: chỉ CHUỖI mới là giá trị người dùng gửi.
     pinned = pinned if isinstance(pinned, str) else None
     group = group if isinstance(group, str) else None
-    meta, body = _read_md(f)
-    meta = dict(meta or {})
-    if pinned is not None:
-        bat = str(pinned).strip().lower() in ("1", "true", "yes", "on")
-        if bat:
-            meta["pinned"] = True
+    tags, add_tags, remove_tags = (x if isinstance(x, str) else None for x in (tags, add_tags, remove_tags))
+    la_agent = (kind or "").strip() == "agent"
+    try:
+        thay = agent_tags.parse_list(tags)
+        them = agent_tags.parse_list(add_tags)
+        bo = agent_tags.parse_list(remove_tags)
+        co_tag = any(x is not None for x in (thay, them, bo))
+        if co_tag and not la_agent:
+            raise agent_tags.TagError("tags_not_for_kind")
+        if co_tag and group is not None:
+            raise agent_tags.TagError("group_and_tags")
+    except agent_tags.TagError as e:
+        return _loi_tag(str(e))
+
+    def _sua(meta):
+        if pinned is not None:
+            bat = str(pinned).strip().lower() in ("1", "true", "yes", "on")
+            if bat:
+                meta["pinned"] = True
+            else:
+                meta.pop("pinned", None)      # bỏ ghim thì XOÁ khoá, không để lại `pinned: false`
+        if la_agent:
+            # Đọc tag NGAY TRONG khoá ghi: hai tab thêm/bỏ khác tag cùng lúc đều được giữ. Mọi thao
+            # tác chạm agent (kể cả ghim) ghi dạng chuẩn, nên file cũ chỉ có `group` chuyển đúng một lần.
+            hien = agent_tags.tags_of(meta)
+            if co_tag:
+                hien = agent_tags.apply_ops(hien, replace=thay, add=them, remove=bo)
+            elif group is not None:
+                hien = agent_tags.from_old_group(hien, group)
+            agent_tags.write_tags(meta, hien)
+        elif group is not None:
+            meta["group"] = (group or "").strip() or NHOM_MAC_DINH
+        meta["updated"] = _today()
+
+    try:
+        if la_agent:
+            # Đọc, sửa, ghi (và đợi khoá) ở worker: không chặn event loop khi đĩa chậm (R4). File bị xoá
+            # trong lúc đợi khoá thì không ghi (R5).
+            meta = await asyncio.to_thread(_sua_meta_agent, f, _sua)
         else:
-            meta.pop("pinned", None)      # bỏ ghim thì XOÁ khoá, không để lại `pinned: false`
-    if group is not None:
-        meta["group"] = (group or "").strip() or NHOM_MAC_DINH
-    meta["updated"] = _today()
-    _write_md(f, meta, body)
-    return {"ok": True, "slug": slug, "pinned": bool(meta.get("pinned")),
-            "group": _nhom_cua(meta)}
+            # Workflow giữ đúng như trước 0.100.0: sửa ngay trên event loop như mọi route workflow khác
+            # (lưu, bật/tắt, xoá), nên không có worker nào chen được giữa chúng.
+            meta = _sua_meta_file(f, _sua)
+    except AgentGoneError:
+        return JSONResponse({"ok": False, "error": localefmt.chu(f"không thấy {kind} '{slug}'", f"{kind} '{slug}' not found")},
+                            status_code=404)
+    except agent_tags.TagError as e:
+        return _loi_tag(str(e), 409 if str(e) == "stale_client" else 400)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "code": str(e), "error": localefmt.chu(
+            "Phần đầu file (frontmatter) đang hỏng, chưa ghi gì. Sửa file trước rồi thử lại.",
+            "The file header (frontmatter) is broken; nothing was saved. Fix the file and try again.")},
+            status_code=422)
+    out = {"ok": True, "slug": slug, "pinned": bool(meta.get("pinned"))}
+    out.update(_agent_tag_fields(meta) if la_agent else {"group": _nhom_cua(meta)})
+    return out
+
+
+def _doi_tag_hang_loat(brain, sua_tags) -> dict:
+    """Áp `sua_tags(tags) -> (tags mới, có đổi)` lên mọi agent của MỘT brain. Ghi từng file; file nào
+    lỗi thì ghi vào `failed` và làm tiếp file khác. `ok` chỉ đúng khi không file nào lỗi."""
+    changed, failed = [], []
+    for f in sorted(_agents_dir(brain).glob("*.md")):
+        try:
+            done = {}
+
+            def _sua(m):
+                moi, doi = sua_tags(agent_tags.tags_of(m))
+                if doi:
+                    agent_tags.write_tags(m, moi)
+                    m["updated"] = _today()
+                done["doi"] = doi
+            # Đọc và quyết định trong cùng khoá ghi; file không đổi thì không ghi lại (xem _ghi_neu_doi).
+            _sua_meta_agent(f, _sua, chi_ghi_khi=lambda: done.get("doi"))
+            if done.get("doi"):
+                changed.append(f.stem)
+        except AgentGoneError:
+            # Agent bị xoá sau lúc liệt kê: không còn gì để đổi, không phải lỗi, và không tạo lại (R5).
+            continue
+        except Exception as e:  # noqa: BLE001
+            failed.append({"slug": f.stem, "error": f"{type(e).__name__}: {e}"[:200]})
+    return {"ok": not failed, "changed": changed, "failed": failed}
+
+
+@app.post("/agents/tags/rename")
+async def agent_tag_rename(brain: str = Form("brain"), from_tag: str = Form(...), to_tag: str = Form(...)):
+    """Đổi tên một tag trên mọi agent của brain đang có nó; giữ các tag khác. Tên đích đã là tag của
+    agent đó thì gộp, không nhân đôi. `merged`: tên đích đã có trong brain trước khi đổi."""
+    try:
+        # Tên NGUỒN so theo khoá, không áp giới hạn độ dài (đổi được cả tag cũ dài); tên ĐÍCH là tên mới.
+        s, d = agent_tags.clean_tag(from_tag), agent_tags.normalize_tag(to_tag)
+        if not s or not d:
+            raise agent_tags.TagError("bad_tags")
+    except agent_tags.TagError as e:
+        return _loi_tag(str(e))
+
+    def _doi():
+        # Quét, đọc, ghi từng file (và đợi khoá) ở worker: đổi tên trên nhiều agent không chặn event loop (R4).
+        da_co = {}
+        for a in agents_index(brain, kem_prompt=False):
+            for x in a["tags"]:
+                da_co.setdefault(agent_tags.tag_key(x), x)
+        kd, ks = agent_tags.tag_key(d), agent_tags.tag_key(s)
+        merged = kd in da_co and kd != ks
+        # Gộp vào tag đã có thì dùng CÁCH VIẾT của tag đó (gõ "nội dung" gộp vào "Nội dung" là thành
+        # "Nội dung"), để mọi agent cùng một cách viết và thông báo nói đúng tên đang hiện.
+        dich = da_co[kd] if merged else d
+        out = _doi_tag_hang_loat(brain, lambda cur: agent_tags.rename(cur, s, dich))
+        out.update({"tag": dich, "tag_key": agent_tags.tag_key(dich), "merged": merged})
+        return out
+
+    out = await asyncio.to_thread(_doi)
+    if not out["ok"]:
+        out["error"] = localefmt.chu("Đổi tên chưa xong: có agent không ghi được.",
+                                     "Rename incomplete: some agents could not be saved.")
+    return JSONResponse(out, status_code=200 if out["ok"] else 500)
+
+
+@app.post("/agents/tags/delete")
+async def agent_tag_delete(brain: str = Form("brain"), tag: str = Form(...)):
+    """Gỡ một tag khỏi mọi agent của brain. Không xoá agent, phiên chat, mục tiêu hay đội."""
+    try:
+        k = agent_tags.tag_key(tag)
+        if not k:
+            raise agent_tags.TagError("bad_tags")
+    except agent_tags.TagError as e:
+        return _loi_tag(str(e))
+
+    def _bo(cur):
+        moi = [x for x in cur if agent_tags.tag_key(x) != k]
+        return moi, moi != cur
+    out = await asyncio.to_thread(_doi_tag_hang_loat, brain, _bo)   # I/O ở worker (R4)
+    if not out["ok"]:
+        out["error"] = localefmt.chu("Xoá tag chưa xong: có agent không ghi được.",
+                                     "Tag removal incomplete: some agents could not be saved.")
+    return JSONResponse(out, status_code=200 if out["ok"] else 500)
 
 
 @app.post("/workflows/delete")
@@ -9926,7 +10153,8 @@ async def studio_seed(brain: str = Form("brain")):
     for ex in examples:
         slug = _ascii_slug(ex["name"])
         meta = {"type": "agent", "name": ex["name"], "slug": slug, "role": ex["role"],
-                "group": "Nội dung", "skills": ex["skills"], "model": "sonnet", "updated": _today()}
+                "skills": ex["skills"], "model": "sonnet", "updated": _today()}
+        agent_tags.write_tags(meta, ["Nội dung"])     # agent dùng tag từ 0.100.0 (docs/dev/agent-tags.md)
         _write_md(a / f"{slug}.md", meta, ex["prompt"])
     wf_meta = {"type": "workflow", "name": "Research → Write (có kiểm chứng)", "slug": "research-and-write",
                "status": "active", "group": "Nội dung",
@@ -11182,7 +11410,7 @@ def _gather_capabilities(brain: str, skills=None) -> dict:
         for f in sorted(ad.glob("*.md")):
             m, _ = _read_md(f)
             caps["agents"].append({"slug": f.stem, "name": m.get("name", f.stem), "role": m.get("role", ""),
-                                   "model": m.get("model", ""), "group": _nhom_cua(m),
+                                   "model": m.get("model", ""), "tags": agent_tags.tags_of(m),
                                    "skills": m.get("skills", []) or []})
     wd = _workflows_dir(brain)
     if wd.is_dir():
@@ -11260,11 +11488,13 @@ def _render_javis_index(caps: dict) -> str:
 
     L.append("## Agents")
     if caps["agents"]:
-        def _dong_agent(a):
+        # Agent gắn NHIỀU tag (0.100.0), nên không chia theo tag: chia thì agent hai tag hiện hai lần.
+        # Mỗi agent một dòng, tag ghi ngay trên dòng đó.
+        for a in caps["agents"]:
             mdl = f" · model {a['model']}" if a["model"] else ""
             sk = f" · skills: {', '.join(a['skills'])}" if a["skills"] else ""
-            return f"- **{a['name']}** (`{a['slug']}`) - {a['role']}{mdl}{sk}"
-        _do_nhom(caps["agents"], _dong_agent)
+            tg = f" · tags: {', '.join(a.get('tags') or [])}" if a.get("tags") else ""
+            L.append(f"- **{a['name']}** (`{a['slug']}`) - {a['role']}{mdl}{sk}{tg}")
     else:
         L.append("_(chưa có)_")
     L.append("\n## Skills")

@@ -6,9 +6,27 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.97.0] - 2026-10-11
+## [0.101.0] - 2026-10-12
 ### Thêm mới
 - **Đội hai trợ lý cho một mục tiêu (Cộng hưởng A5, đang thiết kế):** một trợ lý làm, một trợ lý review bản đã nộp trước khi chốt. Bản này mới giữ số phiên bản; mô tả đầy đủ viết khi mã xong.
+
+## [0.100.0] - 2026-10-12
+### Cải thiện
+- **Trợ lý gắn được nhiều tag.** Thay cho một nhóm, mỗi trợ lý giờ mang nhiều tag (Marketing, Viết nội dung, Kỹ thuật...). Nhóm cũ tự thành một tag, không mất gì.
+- **Gắn và bỏ tag ngay ở trang Cộng sự:** nút **...** trên trợ lý, mục **Gắn tag**. Bấm tag để gắn hay bỏ đúng tag đó, gõ tên để tạo tag mới. Thanh phía trên lọc theo **Tất cả agent**, **Chưa gắn tag** hay một tag; trợ lý nhiều tag chỉ hiện một lần.
+- **Đổi tên hay xoá một tag** áp cho mọi trợ lý mang nó; đổi sang tên đã có thì gộp làm một. Xoá tag chỉ gỡ nhãn, không xoá trợ lý hay cuộc trò chuyện.
+- Tag chỉ để phân loại: không thêm trợ lý vào nhóm chat, không cấp quyền. Quy trình vẫn xếp theo nhóm như cũ.
+- Quay về bản cũ hơn: trợ lý hiện dưới nhóm bằng tag đầu tiên của nó.
+
+## [0.99.0] - 2026-10-12
+### Thêm mới
+- **Giao diện tiếng Đức (bước đầu).** Trình duyệt để tiếng Đức thì dashboard tự hiện tiếng Đức ở thanh điều hướng, tab Cài đặt và các thông báo thường gặp. Chỗ chưa dịch hiện tiếng Anh. Bản dịch do @sirschnake đóng góp.
+- **Ô chọn ngôn ngữ có thêm "Deutsch"**, cả ở dưới thanh bên lẫn trong Cài đặt, nên chọn lại được tiếng Đức sau khi đã đổi sang thứ tiếng khác.
+
+### Sửa lỗi
+- **Người đọc giao diện tiếng Đức không bị Javis trả lời bằng tiếng Việt.** Server chỉ nói tiếng Việt và tiếng Anh, nên với thứ tiếng chỉ có ở dashboard, tin Telegram, việc nền, giọng đọc và brain mặc định sẽ dùng tiếng Anh. Trước đây những chỗ đó có thể rơi về tiếng Việt.
+
+Cảm ơn @sirschnake đã đóng góp bản dịch tiếng Đức (#618).
 
 ## [0.96.1] - 2026-10-11
 ### Sửa lỗi
