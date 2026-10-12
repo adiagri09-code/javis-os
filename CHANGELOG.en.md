@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.102.0] - 2026-10-12
+### Added
+- (in progress) Lark channel for chatbots.
+
 ## [0.100.0] - 2026-10-12
 ### Improved
 - **Assistants can carry several tags.** Instead of one group, each assistant now has any number of tags (Marketing, Writing, Engineering...). The old group becomes one tag; nothing is lost.

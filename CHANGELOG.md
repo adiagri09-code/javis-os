@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.102.0] - 2026-10-12
+### Thêm mới
+- (đang viết) Chatbot có kênh Lark.
+
 ## [0.100.0] - 2026-10-12
 ### Cải thiện
 - **Trợ lý gắn được nhiều tag.** Thay cho một nhóm, mỗi trợ lý giờ mang nhiều tag (Marketing, Viết nội dung, Kỹ thuật...). Nhóm cũ tự thành một tag, không mất gì.
