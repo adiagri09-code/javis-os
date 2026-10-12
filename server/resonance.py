@@ -1913,7 +1913,7 @@ REVIEW_INPUT_MAX_CHARS = 60000
 REVIEW_ROLE_MAX_CHARS = 4000
 REVIEW_FIXES_MAX = 4000
 # Lỗi của `_ask` TRƯỚC khi gọi engine: host chắc chắn model chưa chạy (lượt được hoàn, không tính lần thử).
-REVIEW_NOT_RUN = ("engine_build", "engine_blocked", "engine_unavailable")
+REVIEW_NOT_RUN = ("engine_not_ready", "engine_build", "engine_blocked", "engine_unavailable")
 # Engine không dựng được cho lượt review: hẹn kiểm lại bằng code sau khoảng này, không thức liên tục.
 REVIEW_ENGINE_RECHECK_S = float(HB.POLICY["ERROR_BACKOFF_S"][0])
 REVIEW_SYSTEM = ("Bạn là người review độc lập của Javis. Bạn KHÔNG viết hay sửa sản phẩm, chỉ đánh giá bản được đưa. "
@@ -2197,14 +2197,13 @@ def _team_review(g: "GoalRecord", a: "Assessment", team: dict, rv_snap: list, de
         store.serve_reasons(p, g.id, ids(mine), "decided", now)
         return None
     lastrow = rows[-1] if rows else None
-    if lastrow is not None and lastrow["status"] == "cancelled" and lastrow.get("reason_code") in REVIEW_NOT_RUN \
-            and float(lastrow.get("finished_at") or 0) + REVIEW_ENGINE_RECHECK_S > now:
-        # Engine của lượt review vừa không dựng được: lượt đã hoàn, không tính lần. Kiểm lại bằng code sau một khoảng,
-        # không thức liên tục.
-        until = float(lastrow.get("finished_at") or now) + REVIEW_ENGINE_RECHECK_S
-        store.set_run_state(p, g.id, "blocked", "review_engine", expect_revision=g.revision)
-        store.add_timer(p, g.id, "review_recheck", until, now, expect_revision=g.revision)
-        return ("done", a, "blocked", "engine của lượt review chưa dựng được; chờ kiểm lại", [])
+    if lastrow is not None and lastrow["status"] == "cancelled" and lastrow.get("reason_code") in REVIEW_NOT_RUN:
+        # Engine của lượt review vừa không dựng được: lượt đã hoàn, không tính lần. Chờ hẹn kiểm lại bằng code (đặt cùng
+        # đồng hồ với lần thức), không thức liên tục. Hẹn đã tới (hay không còn) thì thử dựng lại.
+        wait = [r for r in store.reasons(p, g.id) if r["code"] == "review_recheck" and float(r["due_at"]) > now]
+        if wait:
+            store.set_run_state(p, g.id, "blocked", "review_engine", expect_revision=g.revision)
+            return ("done", a, "blocked", "engine của lượt review chưa dựng được; chờ kiểm lại", [])
     err = st["snap"].get("error")
     if err:
         # Lỗi cố định (quá lớn, ảnh chụp lệch hash): phát hiện TRƯỚC khi giữ chỗ, không tốn lượt, không gọi engine.
@@ -2254,7 +2253,8 @@ class _ReservedCall:
         if self._taken:
             self._taken = False
             if self.action_id:
-                self.store.release_call(self.principal, self.goal_id, self.action_id)
+                # `_ask` chỉ trả lượt khi engine chưa dựng được hay chưa sẵn sàng: host chắc chắn model chưa chạy.
+                self.store.release_call(self.principal, self.goal_id, self.action_id, "engine_not_ready")
             else:
                 self.store.release_call(self.principal, self.goal_id)
 

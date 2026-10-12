@@ -1536,8 +1536,9 @@ class GoalStore:
             team = self._team_row(c, goal_id)
             role = ("maker" if kind == "work" else "reviewer") if team is not None and kind in ("work", "review") \
                 else ""
-            if role and (it.get("use_hold") or it.get("require_hold")):
-                # Làn M tắt khi có đội (mục 6.3): không có lượt giữ nào để tiếp quản.
+            if role and it.get("require_hold"):
+                # Làn M tắt khi có đội (mục 6.3): không có lượt giữ nào để dùng. `use_hold` (tin mới tiếp quản NẾU có)
+                # thì bỏ qua: lượt mới giữ chỗ như thường, trong sổ vai.
                 raise ConflictError("team_goal_no_hold")
             if kind == "review":
                 if team is None:
@@ -1550,7 +1551,7 @@ class GoalStore:
                 if why:
                     raise AgentStateError("reviewer_" + why)
             hold = None
-            if kind == "work" and (it.get("use_hold") or it.get("require_hold")):
+            if kind == "work" and not role and (it.get("use_hold") or it.get("require_hold")):
                 # A3 (mục 6.8): lượt làm sản phẩm, hay tin mới cùng revision TIẾP QUẢN, dùng lượt đã giữ còn hợp lệ.
                 # Mức tăng ròng 0: không giữ lượt mới nên không kiểm trần lại; lượt giữ đã tính trong calls_used.
                 hold = self._valid_hold(c, goal_id, int(revision))
