@@ -1,6 +1,6 @@
 # Resonance A5: một agent làm, một agent review (thiết kế)
 
-**Trạng thái:** bản thiết kế **vòng 2, chờ review thiết kế**. Đã sửa theo review vòng 1 (R1 đến R5, mục 0). Chưa có mã A5, chưa gọi model thật, chưa merge, không đụng VPS. Các mặc định ở mục 16 theo khuyến nghị của review vòng 1; đó là cấu hình sản phẩm đề xuất, **không phải cấp phép chạy pilot**.
+**Trạng thái:** bản thiết kế **vòng 3, chờ chốt trước khi code**. Đã sửa theo review vòng 1 (R1 đến R5) và review vòng 2 (P2 bộ đếm thử lại, lịch đối soát, hai vòng sửa); chủ dự án chọn phương án A cho file sửa tay (mục 0). Chưa có mã A5, chưa gọi model thật, chưa merge, không đụng VPS. Các mặc định ở mục 16 theo khuyến nghị của review vòng 1; đó là cấu hình sản phẩm đề xuất, **không phải cấp phép chạy pilot**.
 
 - **Nhánh:** `claude/resonance-a5-maker-reviewer`, PR nháp #616, giữ số **0.101.0** (0.97.0 cũ đã thấp hơn `main`).
 - **Nền:** `main` `a02663cb` (0.100.0). A1 0.87.0, A2 0.88.0, A3 0.89.0, A4 0.96.0 (`d36ebb3e`) đã phát hành; 0.100.0 thêm tag cho agent (mục 4.5).
@@ -8,7 +8,7 @@
   - [lộ trình agent](2026-10-08-resonance-agent-scope-roadmap.md) mục 7 và 8.
   - [thiết kế A4](2026-10-10-resonance-a4-handoff-grants-design.md): bất biến 5, mục 5.4 `narrow`, mục 12.5 các ca để lại cho A5.
   - [thiết kế A3](2026-10-09-resonance-a3-feedback-learning-design.md) mục 16.
-  - Review vòng 1: `exports/reviews/PR-616-A5-design-r1-review.md`.
+  - Review vòng 1: `exports/reviews/PR-616-A5-design-r1-review.md`; review vòng 2: `exports/reviews/PR-616-A5-design-r2-review.md`.
   - Mã hiện tại của `server/resonance*.py`, `server/main.py` (workflow, `_resonance_engine`), `system/plugins/javis-goal`.
 - **Mức bằng chứng:** đọc mã và tài liệu, cộng probe của reviewer chạy trên nền mới (mục 18). Chưa chạy thử gì cho A5.
 - **Số dòng mã:** dẫn theo `a02663cb`. `server/resonance*.py` không đổi từ `dc18942e`, nên số dòng ở các file đó giữ như vòng 1. `server/main.py` đã đổi theo PR tag.
@@ -22,6 +22,15 @@
 | R3 (P2) | Tắt rồi bật reviewer không tiếp tục được vì version luôn tăng | 4.2 (ghim mã bền, không ghim version), 5.5, 7.3 (đường phục hồi), 11 (thao tác trên thẻ) | T18, T42 đến T46 |
 | R4 (P2) | Ngân sách chưa phủ A3 (làn M) và không khớp lời hứa 4 + 4 | 6 (bảng mọi đường giữ, hoàn, tiếp quản; làn M tắt khi có đội; lớp `FIX`; bảng vết) | T5, T6, T47 đến T54 |
 | R5 (P2) | T10 review bản sửa tay mà không có snapshot hợp lệ | 5.5 (bản sửa ngoài luồng chặn chốt, không review), 4.3 (kiểm hash snapshot) | T10, T55 đến T58 |
+
+**Vòng 3 (theo review vòng 2):**
+
+| # | Điểm | Sửa ở mục | Ca nghiệm thu |
+|---|---|---|---|
+| P2 | Huỷ trước engine vẫn ăn số lần thử review: tách số thứ tự hàng (`seq`) khỏi số lần tính (`charged`); một hàm hoàn duy nhất cho `abort_action` và `release_call` | 5.6, 6.2, 6.4, 6.5 (V8), 9.1, 9.2 | T61 đến T65 |
+| Lịch | Hành động review chỉ hẹn `action_recovery` (đối soát bằng code, như mã nền cho hành động không phải `work`), không dùng `recovery` lớp AUTO của vai làm; `review_retry` chỉ thêm sau đối soát | 5.6, 9.2 | T66 |
+| Vòng | Bất đẳng thức chính xác: kết luận `needs_changes` hợp lệ thứ k sinh lượt sửa khi k ≤ 2, thứ 3 chặn; kết luận `mismatch` hay `stale` không tính, không sinh lượt sửa | 5.4, 5.1 | T4, T67 |
+| Quyết định | Chủ dự án chọn phương án A (12/10/2026): mục tiêu có đội không chốt trên bản sửa tay | 5.5, 16.2, D14 | T10, T55, T56 |
 
 Các điểm "lưu ý" của review vòng 1 cũng được ghi vào nội dung chính:
 - Lease không chặn chat maker: mục 7.2 và T59.
@@ -196,7 +205,7 @@ Trạng thái của mục tiêu vẫn là `run_state`/`block_reason` hiện có.
 | `waiting/human_confirmation` | Review đạt, còn chờ chủ xác nhận | Có tiêu chí `human_confirmation` | Như A4 hiện tại |
 | `waiting/source_drift` | File đích khác bản được tiếp nhận | Mục 5.5 | File khôi phục đúng bytes, hay một bản mới được tiếp nhận hợp lệ qua A4 |
 | `succeeded` | Đạt | Khách quan đạt, review hợp lệ `pass`, xác nhận người (nếu có) đạt, không sửa ngoài luồng | Cuối |
-| `blocked/review_rounds` | Hết vòng sửa | `needs_changes` khi đã dùng đủ `max_rounds` | Chủ dự án tách đội, huỷ, hay sửa mục tiêu (revision mới) |
+| `blocked/review_rounds` | Hết vòng sửa | Kết luận `needs_changes` hợp lệ thứ `max_rounds + 1` (thứ 3) của revision (mục 5.4) | Chủ dự án tách đội, huỷ, hay sửa mục tiêu (revision mới) |
 | `blocked/review_unknown` | Review không ra kết luận | `unknown` thử lại hết luật (mục 6.4) | Như trên |
 | `blocked/review_input` | Bản không review được bằng model | `too_large` hay `snapshot_mismatch` (lỗi cố định, mục 5.2) | Người xử lý: bản mới nhỏ hơn, sửa mục tiêu, tách đội |
 | `blocked/budget_maker`, `blocked/budget_reviewer` | Hết phần lượt của một vai | `begin_action` không giữ được chỗ cho vai đó | Như `review_rounds` |
@@ -261,7 +270,14 @@ Thứ tự này cố ý: **review chỉ chạy trên bản đã đạt kiểm kh
 ### 5.4 Số vòng và kết thúc
 
 - `max_rounds = 2`: bản đầu cộng hai lần sửa theo review. Ghim trong `goal_team` lúc tạo.
-- Mỗi kết luận `needs_changes` hợp lệ trên revision hiện tại tính một vòng. Bộ đếm là số hàng `reviews` `done` có `verdict='needs_changes'` của revision đó: bền, không lấy từ nhật ký hiển thị.
+- **Đếm vòng.** Khi ghi một kết luận `needs_changes` HỢP LỆ, host đếm `k` = số hàng `reviews` `done`, `verdict='needs_changes'`, `reason_code` rỗng của revision hiện tại, **tính cả hàng vừa ghi**. Bộ đếm bền, không lấy từ nhật ký hiển thị.
+  - `k ≤ max_rounds` (k = 1 hay 2): thêm `review_changes rc:<review_id>`. Hai kết luận `needs_changes` đầu cho lượt sửa thứ nhất và thứ hai.
+  - `k > max_rounds` (k = 3): `blocked/review_rounds`, không thêm lượt sửa.
+  - Kiểm `k ≤ max_rounds` sau khi đã đếm hàng vừa ghi. Không đếm trước rồi so `< 2`, vì như vậy mất lượt sửa thứ hai.
+- **Kết luận không hợp lệ không tính vòng:**
+  - `review_mismatch`: bộ ghim của kết luận lệch hành động.
+  - `stale`: lúc ghi, bộ ghim đã khác trạng thái hiện tại vì revision, mốc đăng hay version reviewer đã đổi.
+  - Hai loại này lưu với `reason_code` tương ứng, không tính vào `k`, không sinh `review_changes` cho bản đang dùng.
 - Revision mới (chủ dự án sửa mục tiêu trong chat) đếm lại vòng từ 0 nhưng **không** hoàn lượt đã dùng.
 - Hết vòng: `blocked/review_rounds`, tin `goal.review_exhausted` (loại phải gửi). Không tự nới vòng, không tự đổi reviewer.
 
@@ -311,17 +327,26 @@ Kho chống trùng lý do vĩnh viễn theo (`goal_id`, `code`, `source_ref`), k
 
 **Thời điểm được xét và lịch vật lý:**
 - `review_due` và `review_changes` là lý do sự kiện, đến hạn ngay (`due_at = now`).
-- `review_retry` hẹn theo `ERROR_BACKOFF_S[n-1]` như `error_retry` (n là số lần thử của bộ ghim).
+- `review_retry` hẹn theo `ERROR_BACKOFF_S[n-1]` như `error_retry`, với `n` là **số lần tính** của bộ ghim (định nghĩa ngay dưới).
 - Ba mã có nghĩa vụ (slot) riêng `review`, không thay hẹn `retry` hay `check` của vai làm.
 
 **Phục hồi sau khởi động lại:**
 - Lý do và hàng `reviews` đều bền.
-- `_reconcile` gặp hành động `review` còn `running` (khoá đã hết): hàng `reviews` thành `failed/interrupted`, lượt vẫn tính, thêm `review_retry rr:<id>` (idempotent theo ref).
+- Hành động `review` chỉ hẹn `action_recovery` lúc hết khoá: lịch **chỉ đối soát bằng code**, không bao giờ mở lượt model. Mã nền đã làm vậy cho mọi hành động không phải `work` (`resonance_store.py` :1524-1527). Không dùng `recovery` (lớp AUTO của vai làm), nên khởi động lại không gọi nhầm maker hay gọi review sớm.
+- Khi `action_recovery` thức, `_reconcile` gặp hành động `review` còn `running` (khoá đã hết, không xác định được engine đã chạy hay chưa):
+  - hàng `reviews` thành `failed/interrupted`, `charged` giữ 1 (vẫn tính lượt và tính lần);
+  - **sau đó** mới thêm `review_retry rr:<id>`, hẹn theo backoff (idempotent theo ref), và chỉ khi luật 6.4 còn cho.
 - Hai tiến trình đánh thức cùng lúc: CAS `claim_wake` và lease mục tiêu chỉ cho một hành động.
 
 **Phân lớp:** `CLASSES` vẫn ánh xạ một mã một lớp. Lần đầu và lần thử lại dùng hai mã riêng, không suy lớp từ dữ liệu.
 
-**Bộ đếm lần thử của một bộ ghim:** cột `reviews.attempt` (1, 2, ...), duy nhất theo (`bundle_ref`, `attempt`). Đếm từ kho, không từ nhật ký hiển thị.
+**Số thứ tự và số lần tính của một bộ ghim (vòng 3):** hai khái niệm tách riêng.
+- **`reviews.seq`**: số thứ tự hàng, tăng dần, duy nhất theo (`bundle_ref`, `seq`). Mỗi `begin_action(review)` chèn một hàng mới. Dùng cho audit và idempotency; không bao giờ tái dùng hay xoá.
+- **`reviews.charged`**: 1 khi hàng chèn (lượt đã giữ), về 0 **chỉ** khi host xác nhận engine chưa chạy, trong giao dịch hoàn (mục 6.2).
+- **Số lần tính** `n` của bộ ghim = số hàng `charged = 1` của `bundle_ref` đó. Đây là bộ đếm duy nhất cho trần thử (`n ≤ 3`) và chỉ số backoff.
+  - Hàng `cancelled/not_run` đã được host xác nhận thì bỏ ra.
+  - Hàng có thể đã gọi engine (`done`, lỗi sau engine, `failed/interrupted`, huỷ khi engine có thể đã chạy) thì không bao giờ bỏ.
+- Hoàn ngân sách, hạ `charged`, trả lý do về `pending` và đóng hành động nằm trong CÙNG một giao dịch, khoá bằng CAS trên hành động (`running` sang `cancelled`). Vì vậy hoàn lặp hay mở lại kho không trừ hai lần và không cấp thêm lần thử.
 
 ## 6. Hạn mức chia phần (R4)
 
@@ -346,18 +371,17 @@ Kho chống trùng lý do vĩnh viễn theo (`goal_id`, `code`, `source_ref`), k
 | `begin_action(kind='work')` dùng lượt giữ A3 (`use_hold`, `require_hold`) | 0 (tiếp quản) | 0 | Không xảy ra với mục tiêu có đội: làn M tắt nên không có lượt giữ (6.3). Kho kiểm lại: có đội mà có `use_hold` thì `ConflictError` |
 | `begin_experiment` (phép thử M5, lượt giữ `method_followup`) | Không đổi | Không | **Kho từ chối** khi có đội `active`: trả None, bài học `trial_pending` sang `skipped/team_goal` |
 | `begin_action(kind='trial')` | 0 (phép thử đã giữ trước) | Không | Không xảy ra: không có phép thử |
-| `release_call` (`_ReservedCall.release`, engine chưa được gọi) | −1 | vai trong ý định −1, cùng giao dịch | Đổi chữ ký sang theo `action_id`, để biết vai. `MAX(0, ...)` giữ như hiện tại |
-| `abort_action` (huỷ sau ý định, trước engine) | −1 (lượt thường) | vai trong ý định −1 | Mở rộng cho `kind='review'`. Hàng `reviews` thành `cancelled/not_run`; lý do đã phục vụ trở lại `pending` như hiện tại |
+| `abort_action` (huỷ sau ý định, trước engine) và `release_call(action_id)` (engine không dựng được hay bị chặn trước khi gọi, `_ReservedCall.release`) | −1 | vai trong ý định −1 | **Một hàm hoàn duy nhất** `_refund_not_run(c, action_id)` cho mục tiêu có đội, một giao dịch. CAS hành động `running` sang `cancelled/not_run`; không khớp thì không làm gì. Nếu khớp: trừ `calls_used` và vai; hàng `reviews` (nếu có) `running` sang `cancelled`, `charged = 0`; lý do đã phục vụ về `pending`; bỏ hẹn `action_recovery` của nó. Không bao giờ để hàng `running` sau khi đã hoàn. Mục tiêu không có đội giữ đường hiện tại |
 | `release_trial_call`, `finish_experiment(refund)`, `_release_hold` | Không xảy ra | Không | Chỉ có trên phép thử và lượt giữ, mà mục tiêu có đội không có |
 | Huỷ mục tiêu khi engine có thể đã chạy | Không hoàn | Không hoàn | Kết quả muộn không dùng |
-| `_reconcile` gặp hành động `running` đã hết khoá | Không hoàn | Không hoàn | `work`: lượt lỗi `interrupted` như A2. `review`: `failed/interrupted`, thêm `review_retry` |
+| `_reconcile` gặp hành động `running` đã hết khoá | Không hoàn | Không hoàn | `work`: lượt lỗi `interrupted` như A2. `review`: `failed/interrupted`, `charged` giữ 1, rồi mới thêm `review_retry` (mục 5.6) |
 | `team_detach` | Không đổi | Giữ nguyên làm hồ sơ, không xoá | Sau tách đội: mục tiêu chạy như A4 trong phần còn lại của `budget_calls` (8 − đã dùng); làn M chạy lại được theo luật A3 |
 | Lượt chat của agent làm (A1, A4) | Không tính (như hiện tại) | Không | Review bản nộp từ chat tính vào phần reviewer |
 | Reaction A3 trên thẻ | Không gọi model | Không | |
 
 **Không tính hai lần:**
 - Đường tiếp quản lượt giữ không có trên mục tiêu có đội.
-- Mọi hoàn là CAS trên đúng hành động (`running` sang `cancelled`), nên hoàn lặp không trừ hai lần.
+- Mọi hoàn đi qua `_refund_not_run`, là CAS trên đúng hành động (`running` sang `cancelled`), nên hoàn lặp, hoàn sau khi mở lại kho, hay `abort_action` sau `release_call` cùng hành động không trừ hai lần.
 
 ### 6.3 Làn M của A3 khi có đội
 
@@ -376,7 +400,7 @@ Luật A2 (`auto_allowed`): lượt `AUTO` chỉ chạy khi còn hơn `AUTO_RESE
 | `START` | Bản đầu (`created`), `review_due` | Có | Một lần cho mỗi bộ ghim |
 | `NEW` | Tin mới hay góp ý của người dùng (`feedback`) | Có | Như A2 |
 | `FIX` (mới) | `review_changes` | **Có** | `max_rounds = 2` mỗi revision |
-| `AUTO` | `retry_not_met`, `error_retry`, `recovery` (maker); `review_retry` (reviewer) | **Không**: phải còn ≥ 2 lượt của vai | maker: `ERROR_MAX_FAILS = 3` lỗi mỗi chuỗi, `STALL_AFTER = 2`. reviewer: tối đa 3 lần thử mỗi bộ ghim (`reviews.attempt ≤ 3`) |
+| `AUTO` | `retry_not_met`, `error_retry`, `recovery` (maker); `review_retry` (reviewer) | **Không**: phải còn ≥ 2 lượt của vai | maker: `ERROR_MAX_FAILS = 3` lỗi mỗi chuỗi, `STALL_AFTER = 2`. reviewer: tối đa 3 lần **tính** mỗi bộ ghim (số hàng `charged = 1`, mục 5.6); lượt huỷ trước engine không tính |
 
 **Vì sao `review_changes` là lớp `FIX`, không phải `AUTO`:**
 - Probe xác nhận: để `AUTO` thì vai còn đúng một lượt không chạy được lượt sửa, làm "hai lần sửa" thành lời hứa sai.
@@ -442,8 +466,8 @@ Hai lỗi làm mất một vòng sửa. Đây là hành vi đã nêu ở 6.4.
 | # | Vai | Lý do | Kết quả | (m, r, tổng) | Kế tiếp |
 |---|---|---|---|---|---|
 | 1 | maker | `created` | H1, đạt | (1, 0, 1) | |
-| 2 | reviewer | `review_due` (attempt 1) | `unknown/parse_error` | (1, 1, 2) | `review_retry rr:1`: còn 3 ≥ 2, attempt 1 < 3, được |
-| 3 | reviewer | `review_retry` (AUTO, attempt 2) | `pass` | (1, 2, 3) | `succeeded` |
+| 2 | reviewer | `review_due` (seq 1, lần tính 1) | `unknown/parse_error` | (1, 1, 2) | `review_retry rr:1`: còn 3 ≥ 2, n = 1 < 3, được |
+| 3 | reviewer | `review_retry` (AUTO, seq 2, lần tính 2) | `pass` | (1, 2, 3) | `succeeded` |
 
 **V5. Reviewer còn đúng một lượt khi gặp `unknown`**
 
@@ -459,10 +483,22 @@ Hai lỗi làm mất một vòng sửa. Đây là hành vi đã nêu ở 6.4.
 - (m, r) không đổi; `blocked/review_input`; không gọi engine; không tự thử lại.
 
 **V7. Huỷ, tiếp quản, tách đội, khởi động lại**
-- Huỷ trước engine review: `abort_action` hoàn (tổng −1, reviewer −1). Hàng review `cancelled/not_run`. `review_due` trở lại `pending`.
+- Huỷ trước engine review: `_refund_not_run` hoàn (tổng −1, reviewer −1). Hàng review `cancelled/not_run`, `charged = 0`. `review_due` trở lại `pending`.
 - Huỷ khi engine có thể đã chạy: không hoàn.
 - Khởi động lại khi review đang chạy: không hoàn, `failed/interrupted`, `review_retry` theo luật AUTO.
 - Tách đội ở trạng thái (3, 2, 5): `team_calls` giữ (3, 2). Mục tiêu còn 3 lượt theo luật A4/A3.
+
+**V8. Huỷ trước engine không ăn trần thử (vòng 3)**
+
+| Hành động | Kết quả | seq | charged | n (lần tính) | (m, r, tổng) | Kế tiếp |
+|---|---|---|---|---|---|---|
+| maker `created` | H1, đạt | | | | (1, 0, 1) | `review_due` |
+| review 1 | Huỷ trước engine (`_refund_not_run`) | 1 | 0 | 0 | (1, 0, 1) | `review_due` về `pending` |
+| review 2 | Engine không dựng được (`release_call(action_id)`) | 2 | 0 | 0 | (1, 0, 1) | `review_due` về `pending` |
+| review 3 | Engine chạy, `unknown/engine_error` | 3 | 1 | 1 | (1, 1, 2) | `review_retry rr:3` hẹn `ERROR_BACKOFF_S[0]`: reviewer còn 3 ≥ 2, n = 1 < 3, được |
+| review 4 (sau backoff) | `pass` | 4 | 1 | 2 | (1, 2, 3) | `succeeded` |
+
+Trước lần thử lại, `team_calls.reviewer.used = 1`: chỉ lần gọi engine thật được tính.
 
 ## 7. Quyền, engine và giới hạn phải nói thật
 
@@ -564,12 +600,15 @@ CREATE TABLE IF NOT EXISTS reviews (
   accepted_ref TEXT NOT NULL, artifact_sha TEXT NOT NULL, snapshot_evidence_id TEXT NOT NULL,
   criteria_hash TEXT NOT NULL,
   reviewer_agent_key TEXT NOT NULL, reviewer_config_version INTEGER NOT NULL,
-  action_id TEXT NOT NULL UNIQUE, attempt INTEGER NOT NULL,
+  action_id TEXT NOT NULL UNIQUE,
+  seq INTEGER NOT NULL,                          -- số thứ tự hàng, audit; không tái dùng
+  charged INTEGER NOT NULL DEFAULT 1 CHECK (charged IN (0,1)),  -- 0 chỉ khi host xác nhận chưa chạy engine
   status TEXT NOT NULL CHECK (status IN ('running','done','failed','cancelled')),
   verdict TEXT CHECK (verdict IN ('pass','needs_changes','unknown')),
   reason_code TEXT, criteria_json TEXT, fixes TEXT, evidence_id TEXT,
   created_at REAL NOT NULL, finished_at REAL,
-  UNIQUE (bundle_ref, attempt));
+  UNIQUE (bundle_ref, seq));
+CREATE INDEX IF NOT EXISTS reviews_bundle_charged ON reviews(bundle_ref, charged);
 CREATE INDEX IF NOT EXISTS reviews_goal_rev ON reviews(goal_id, revision, status);
 ```
 
@@ -582,13 +621,13 @@ Hành động review dùng bảng `actions` hiện có với `kind = 'review'`: 
   - lease mục tiêu;
   - cổng agent làm (như hiện tại) và cổng reviewer (mã, trạng thái, bật; version bằng version ghim trong ý định);
   - trần, `calls_used`, `team_calls` vai reviewer;
-  - chèn `reviews(status='running', attempt = số lần trước + 1)`;
+  - chèn `reviews(status='running', seq = seq lớn nhất của bộ ghim + 1, charged = 1)`;
   - phục vụ lý do;
-  - hẹn `recovery`.
+  - hẹn `action_recovery` (chỉ đối soát, mục 5.6), không phải `recovery`.
 
   Kiểm `too_large` và `snapshot_mismatch` chạy TRƯỚC giao dịch này, không giữ chỗ.
 - **Xong review:** lưu bằng chứng (đầu ra thô) trước. Rồi một giao dịch ghi kết luận (mục 5.2), đóng hành động, thêm lý do kế tiếp.
-- **Huỷ trước engine:** `abort_action` cho `review` (mục 6.2).
+- **Huỷ trước engine, hay engine không dựng được:** `_refund_not_run` (mục 6.2), dùng chung cho `abort_action` và `release_call(action_id)`.
 - **Khởi động lại:** `_reconcile` theo mục 5.6.
 - **Lỗi lưu bằng chứng:** `unknown/storage_error`, lượt tính.
 
@@ -676,9 +715,9 @@ Không thêm công cụ cho model: reviewer không gọi công cụ; agent làm 
 | T1 (H) | Làm, khách quan đạt, review `pass`, không xác nhận người | `succeeded` | (1, 1, 2) | 2 | Review `pass` của H1 |
 | T2 (H) | Như T1, có `human_confirmation` | `waiting/human_confirmation`, rồi `succeeded` khi chủ xác nhận đúng sha | (1, 1, 2) | 2 | Review và xác nhận cùng H1 |
 | T3 (H) | Review `needs_changes`, làm sửa, review bản mới `pass` | `succeeded`; hai hàng review gắn hai `bundle_ref` | (2, 2, 4) | 4 | Review của H2 |
-| T4 | Review `needs_changes` ba lần liên tiếp (vết V1 với lượt 6 là `needs_changes`) | `blocked/review_rounds`, tin `goal.review_exhausted` | (3, 3, 6) | 6 | Không |
-| T5 | Đầu ra review không phải JSON, thiếu trường, `pass` mâu thuẫn: ba lượt liên tiếp | `review_retry` hai lần (attempt 2, 3), rồi `blocked/review_unknown` (attempt ≤ 3) | (1, 3, 4) | 4 | Không bao giờ coi là đạt |
-| T6 | Lỗi engine ở lượt review, lần thử sau đạt (vết V4) | `succeeded` | (1, 2, 3) | 3 | Review attempt 2 |
+| T4 | Review `needs_changes` ba lần liên tiếp (vết V1 với lượt 6 là `needs_changes`): k = 1, 2 sinh lượt sửa; k = 3 chặn | `blocked/review_rounds`, tin `goal.review_exhausted` | (3, 3, 6) | 6 | Không |
+| T5 | Đầu ra review không phải JSON, thiếu trường, `pass` mâu thuẫn: ba lượt liên tiếp | `review_retry` hai lần (lần tính 2, 3), rồi `blocked/review_unknown` (n = 3) | (1, 3, 4) | 4 | Không bao giờ coi là đạt |
+| T6 | Lỗi engine ở lượt review, lần thử sau đạt (vết V4) | `succeeded` | (1, 2, 3) | 3 | Review lần tính 2 |
 | T7 | Hết phần reviewer khi còn phần maker | `blocked/budget_reviewer` | (k, 4, k+4) | k+4 | Không mượn phần maker |
 | T8 | Bản đầu và hai lần thử lại tự động đều chưa đạt khách quan; lượt thứ tư chỉ mở bởi tin mới của người dùng (`NEW`), vẫn chưa đạt | Sau lượt 3: chờ theo luật dự phòng A2, không tự thử. Sau lượt 4: `blocked/budget_maker` | (4, 0, 4) | 4 | Không review bản chưa đạt khách quan |
 | T9 | Trần chung chạm khi còn phần vai | Không giữ chỗ; chờ như hiện tại | không đổi | 0 thêm | Trần thắng phần vai |
@@ -693,7 +732,7 @@ Không thêm công cụ cho model: reviewer không gọi công cụ; agent làm 
 | T14 | Khởi động lại sau mỗi bước: giữ chỗ, đang gọi engine, đã có đầu ra chưa ghi kết luận, đã ghi kết luận chưa `settle` | Phục hồi đúng mục 5.6 và 9.2; không mất lượt, không nhân đôi kết luận | đúng sổ | đúng số | Như bước cuối đã bền |
 | T37 | Revision 2 giữ nguyên bytes và tiêu chí của revision 1 đã review | `review_due` mới được thêm và phục vụ (ref khác); không chờ mãi | (1, 2, 3) | 3 | Review của revision 2 |
 | T38 | Một sự kiện `review_due` gửi hai lần (hai lần `_settle` cùng bộ) | Một lý do, một lượt | (1, 1, 2) | 2 | Một review |
-| T39 | `unknown` rồi thử lại, khởi động lại giữa hai lần | Lần thử sau chạy đúng một lần sau khởi động; `attempt` liên tục | (1, 2, 3) | 3 | Review attempt 2 |
+| T39 | `unknown` rồi thử lại, khởi động lại giữa hai lần | Lần thử sau chạy đúng một lần sau khởi động; `seq` liên tục, `n` đúng | (1, 2, 3) | 3 | Review lần tính 2 |
 | T40 | Chủ dự án bật lại reviewer (version mới) sau `pass` | `review_due` mới với version mới chạy được | (1, 2, 3) | 3 | Review version mới |
 | T41 | Kiểm cả lý do chờ, lịch vật lý (`wake_reasons`, `wakeups`) và số lượt sau mỗi ca 37 đến 40 | Không có lý do treo, không có hẹn mồ côi | | | |
 | T22 | Hai lần đánh thức đồng thời (lý do làm và lý do review cùng đến hạn) | Một hành động chạy; cái kia chờ lease | đúng sổ | 1 | |
@@ -766,6 +805,18 @@ Mọi ca 15.6 kiểm thêm: hash của bytes thật sự gửi engine giả bằ
 | T60 | Đổi tên hay xoá một tag mà reviewer và maker đang mang | `team_pairs`, `goal_team` không đổi; ô Người review không đổi danh sách | không đổi | 0 | |
 | T30 | Nâng kho từ 0.100.0; khôi phục về 0.100.0 bằng script | Snapshot đúng một bản; mã 0.100.0 thật mở được kho khôi phục | | | Ghi nhận giới hạn hạ không khôi phục |
 
+### 15.8 Bộ đếm thử lại, lịch đối soát, vòng sửa (vòng 3)
+
+| Ca | Tình huống | Trạng thái, lý do cuối | Lượt | Model | Kết quả dùng được |
+|---|---|---|---|---|---|
+| T61 | Vết V8: hai lần huỷ trước engine (một `abort_action`, một `release_call` do engine không dựng được), rồi `unknown` ở lần gọi đầu | `review_retry` hợp lệ sau đúng `ERROR_BACKOFF_S[0]`; trước lần thử lại `reviewer.used = 1`, `n = 1`; seq 1 đến 4 | (1, 2, 3) | 2 | Review seq 4 |
+| T62 | Ba lần huỷ trước engine rồi `pass` | Không bị trần thử chặn; `n = 1` | (1, 1, 2) | 1 | Review lần gọi thật |
+| T63 | Huỷ sau khi engine có thể đã chạy; khởi động lại khi không xác định được đã gọi chưa | `charged = 1`, tính vào trần thử và ngân sách; `failed/cancelled` hay `failed/interrupted` | (k, +1) | +1 hoặc 0 thật | Không |
+| T64 | Hoàn lặp: `abort_action` hai lần, `release_call` rồi `abort_action` cùng hành động, mở lại kho rồi hoàn lại | Chỉ lần đầu có tác dụng; `calls_used`, `team_calls`, `charged`, lý do và trạng thái hàng nhất quán, không trừ hai lần | đúng sổ | 0 | |
+| T65 | Engine không dựng được ở lượt review | Hàng `cancelled`, `charged = 0`, không còn `running`; lý do về `pending`; không có hẹn `action_recovery` mồ côi | (k, 0) | 0 | |
+| T66 | Khởi động lại khi review đang chạy, rồi tới giờ `action_recovery` | Đối soát chỉ bằng code: không mở lượt `work` của maker, không gọi review trước backoff; `review_retry` thêm sau đối soát | (k, +1 đã tính) | 0 lúc đối soát | |
+| T67 | Một kết luận `needs_changes` ghi sau khi revision hay mốc đăng đã đổi (`stale`), và một kết luận `review_mismatch` | Không tính vào `k`, không sinh `review_changes`; bản đang dùng vẫn cần review của riêng nó | (k, +1) | +1 | Không |
+
 ## 16. Quyết định
 
 ### 16.1 Mặc định đề xuất
@@ -787,18 +838,15 @@ D1 đến D5 theo khuyến nghị của review vòng 1, Q1 đến Q5. Đây là 
 | D11 | Đội gắn trong giao dịch `create`. Mục tiêu cũ gán qua `assign_goal` không có đội | Sửa R1; không chia lại lượt đã tiêu |
 | D12 | Làn M của A3 tạm tắt trên mục tiêu có đội, kiểm ở kho | Sửa R4; không có đường lượt ngoài sổ vai |
 | D13 | Không có lượt review trong chat | Lượt chat dùng engine có công cụ gốc; không thực thi được "chỉ đọc" ở đó |
-| D14 | Bản sửa ngoài luồng không tự thành bản được tiếp nhận; mục tiêu có đội chờ, không chốt dù bản sửa đạt khách quan | Sửa R5; không mở rộng hợp đồng A4 |
+| D14 | Bản sửa ngoài luồng không tự thành bản được tiếp nhận; mục tiêu có đội chờ, không chốt dù bản sửa đạt khách quan. **Chủ dự án đã chọn (phương án A, 12/10/2026)** | Sửa R5; không mở rộng hợp đồng A4. Muốn giữ bản sửa tay thì chủ dự án bấm "Bỏ yêu cầu review" |
 | D15 | Tag không tham gia chọn reviewer, ghép cặp, quyền hay nhóm chat | Hợp đồng tag 0.100.0 |
 
-### 16.2 Điểm cần chủ dự án quyết
+### 16.2 Quyết định đã chốt
 
-Một điểm vượt khuyến nghị của review cần chủ dự án nói rõ, vì nó đổi một hành vi A2 đã phát hành cho đúng loại mục tiêu này:
+- **Bản sửa tay đạt kiểm khách quan trên mục tiêu có đội: phương án A** (chủ dự án chọn ngày 12/10/2026). Mục tiêu có đội không chốt trên bản sửa tay, chờ file về lại bản đã review hay một bản mới đi qua A4. Muốn giữ bản sửa tay thì chủ dự án bấm "Bỏ yêu cầu review" (`team_detach`). Không thêm tính năng tự nhận file sửa tay.
+- Q1 đến Q5 vòng 1 đã giải quyết theo khuyến nghị (D1 đến D5).
 
-**Bản sửa tay đạt kiểm khách quan trên mục tiêu có đội** (D14, mục 5.5). A2 hiện chốt đạt khi người dùng tự sửa file và bản sửa đạt kiểm. A5 đề xuất mục tiêu có đội KHÔNG chốt trong trường hợp đó, chờ tới khi file về lại bản đã review hay một bản mới đi qua A4. Muốn giữ bản sửa tay thì bấm "Bỏ yêu cầu review".
-- **Phương án A (đề xuất):** như trên. Review luôn gắn đúng bytes đang ở file khi chốt.
-- **Phương án B:** cho chốt đạt như A2 nhưng ghi rõ "đạt kiểm, chưa review bản này". Không cần thêm thao tác, nhưng "đạt" không còn nghĩa là đã review.
-
-Các điểm Q1 đến Q5 vòng 1 đã giải quyết theo khuyến nghị (D1 đến D5), không hỏi lại.
+Không còn điểm nào chờ chủ dự án quyết ở mức thiết kế. Các mặc định vẫn chưa phải cấp phép pilot.
 
 ## 17. Kế hoạch code và ranh giới bằng chứng
 
@@ -808,14 +856,14 @@ Các điểm Q1 đến Q5 vòng 1 đã giải quyết theo khuyến nghị (D1 �
    - `team_pairs`; `_attach_team` trong `create` (T31 đến T36 qua đường host).
    - `team_calls` trong `begin_action`; `release_call` theo `action_id`; `abort_action` cho `review`.
    - Từ chối `begin_experiment` khi có đội.
-   - Test kho: T7 đến T9, T14 phần kho, T15, T16, T30, T51 đến T54.
+   - Test kho: T7 đến T9, T14 phần kho, T15, T16, T30, T51 đến T54, T61 đến T65.
 2. **Review:**
    - `_review_prompt`, `parse_review`: test hàm thuần T5, T26, T28.
    - Dựng và kiểm ảnh chụp: T58.
    - `_review_step`, ghi kết luận có CAS (T12, T13), phục hồi (T14, T39).
 3. **Chốt và lịch:**
    - Nhánh team trong `_settle` gồm 5.5; cổng 7.3; mã, lớp `FIX` và lỗi cố định trong A2.
-   - Ca: T1 đến T4, T6, T10, T11, T17 đến T25, T27, T29, T37 đến T50, T55 đến T57, T59, T60.
+   - Ca: T1 đến T4, T6, T10, T11, T17 đến T25, T27, T29, T37 đến T50, T55 đến T57, T59, T60, T66, T67.
 4. **API và giao diện:**
    - Ô Người review, dòng đội và nút trên thẻ, `team_detach`.
    - Test JS và smoke sandbox bằng engine giả.
