@@ -2102,6 +2102,17 @@ def _drift_wait(goal: "GoalRecord", deps: "GoalDeps", now: float, sha: str) -> N
         store.add_timer(p, goal.id, "drift_recheck", now + step, now, expect_revision=goal.revision)
 
 
+def _disk_sha(goal: "GoalRecord", deps: "GoalDeps") -> Optional[str]:
+    """Hash bytes ĐANG Ở ĐĨA của bản sản phẩm (file đích, hay đầu ra mới nhất của revision khi không có file đích), để so
+    với bản được tiếp nhận (phương án A). Khác `current_artifact_ref`: hàm đó cố ý trả rỗng khi revision mới chưa có lượt
+    làm nào; ở đây cần đúng bytes trên đĩa. None khi chưa có file, "unreadable" khi không đọc được."""
+    rel = _deliverable_rel(goal)
+    if rel:
+        return _file_sha(_brain_file(deps.brain_root, rel))
+    _aid, path = _latest_output(goal, deps)
+    return _file_sha(path) if path else None
+
+
 def _team_settle(goal: "GoalRecord", deps: "GoalDeps", now: float, team: dict) -> tuple:
     """Cổng chốt của mục tiêu có đội (mục 5.1, 5.5): bản đang ở file đích phải đúng bản được tiếp nhận, và bộ ghim hiện
     tại phải có kết luận `pass` hợp lệ. Trả (False, "") khi đã đặt trạng thái chờ hay chặn; (True, review_id) khi được
@@ -2113,9 +2124,9 @@ def _team_settle(goal: "GoalRecord", deps: "GoalDeps", now: float, team: dict) -
         store.set_run_state(p, goal.id, "blocked", "review_input", notify="goal.review_blocked",
                             payload={"code": "no_accepted"}, idem=f"review_input:no_accepted:{rev}", expect_revision=rev)
         return False, ""
-    cur = current_artifact_ref(goal, deps)
+    cur = _disk_sha(goal, deps)
     if cur != st["snap"]["artifact_sha"]:
-        _drift_wait(goal, deps, now, cur)
+        _drift_wait(goal, deps, now, cur if cur not in (None, "unreadable") else "")
         return False, ""
     last = st["decisive"]
     if last is not None and last["verdict"] == "pass" and last["status"] == "done":

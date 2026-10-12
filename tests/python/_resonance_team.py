@@ -44,6 +44,7 @@ class Engine:
     def __init__(self, *script):
         self.script, self.queries, self.prompts, self.max_wall_s = list(script) or [GOOD], 0, [], None
         self.available = True
+        self.hook = None          # gọi ở đầu mỗi lượt: mô phỏng việc khác xảy ra TRONG LÚC engine chạy
 
     def is_available(self):
         return self.available
@@ -52,6 +53,10 @@ class Engine:
         item = self.script[min(self.queries, len(self.script) - 1)]
         self.queries += 1
         self.prompts.append(prompt)
+        if self.hook is not None:
+            res = self.hook(self)
+            if asyncio.iscoroutine(res):
+                await res
         if isinstance(item, dict) and item.get("error"):
             yield {"type": "error", "content": item["error"]}
             return
@@ -148,6 +153,27 @@ class Team:
         if approve:
             RA.approve(self.store, self.brain, g.id)
         return g
+
+    def chat_update(self, g, content, understanding="Bản tóm tắt cuộc họp, bản sửa trong chat"):
+        """Lượt chat của agent làm (đường A4 thật): sửa mục tiêu (revision mới, có bàn giao), nộp bản qua
+        `submit_deliverable`, kết thúc lượt rồi bàn giao cuối lượt. Trả (revision mới, kết quả nộp, kết quả bàn giao)."""
+        import turn_context
+        mid, ref = self.next()
+        a = self.ag()
+        pa = RS.Principal("agent", a["agent_key"], self.brain)
+        with RA.turn(a, self.sid, mid, USER, self.brain, slug=MAKER, store=self.store):
+            cur = self.store.get(self.owner, g.id)
+            g2 = R.revise_goal(self.store, pa, g.id, cur.revision,
+                               {"understanding": understanding, "relevant_quote": "Em lo giúp anh bản tóm tắt cuộc họp",
+                                "criteria": self.proposal()["criteria"]},
+                               {"message_ref": ref, "session_id": self.sid, "message_id": mid, "user_text": USER,
+                                "constraints": [], "user_unsure": False, "reason": "góp ý",
+                                "hold_until": self.clock() + R.HANDOFF_HOLD_S,
+                                "authority_seq": self.store.authority_seq(), "agent_key": a["agent_key"],
+                                "agent_version": a["config_version"]})[0]
+            sub = R.submit_deliverable(turn_context.current(), {"path": DELIV, "content": content}, self.deps())
+        ho = R.handoff_after_turn(g.id, ref, self.deps())
+        return g2, sub, ho
 
     # ── chạy ──
     def wake(self, g):

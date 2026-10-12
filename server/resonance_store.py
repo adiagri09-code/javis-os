@@ -1234,6 +1234,7 @@ class GoalStore:
         if a["kind"] == "review":
             c.execute("UPDATE reviews SET status='cancelled', charged=0, reason_code=?, finished_at=? WHERE action_id=? "
                       "AND status='running'", (str(code)[:40], now, aid))
+            self._drop_idle_action_recovery(c, gid, now)
         c.execute("UPDATE wake_reasons SET state='pending', settled_at=NULL, settled_by='' WHERE goal_id=? AND "
                   "state='served' AND settled_by=?", (gid, aid))
         if a["kind"] == "work":
@@ -4546,6 +4547,10 @@ class GoalStore:
             nxt = ""
             if reason not in ("review_mismatch", "stale") and team is not None and g["status"] == "active":
                 nxt = self._after_review(c, g, team, r, verdict, reason, now)
+            elif g["status"] == "active":
+                # Kết luận không dùng được: thức một lần (chỉ kiểm) để xét lại theo bộ ghim HIỆN TẠI, không gọi model.
+                self._reason_event(c, g["id"], g["brain_id"], "review_done", f"rd:{r['id']}", int(g["revision"]))
+            self._drop_idle_action_recovery(c, r["goal_id"], now)
             self._recompute_wake(c, r["goal_id"])
             return {"recorded": True, "review_id": r["id"], "verdict": verdict, "reason_code": reason, "next": nxt}
 
@@ -4592,6 +4597,15 @@ class GoalStore:
         return "unknown"
 
     @staticmethod
+    def _drop_idle_action_recovery(c, goal_id: str, now: float) -> None:
+        """Hẹn `action_recovery` (chỉ đối soát bằng code) không mang mã hành động. Khi mục tiêu không còn hành động nào
+        `running` thì không còn gì để đối soát: bỏ hẹn, để lịch vật lý đúng giờ của nghĩa vụ thật (ví dụ backoff)."""
+        if c.execute("SELECT 1 FROM actions WHERE goal_id=? AND status='running' LIMIT 1", (goal_id,)).fetchone():
+            return
+        c.execute("UPDATE wake_reasons SET state='superseded', settled_at=? WHERE goal_id=? AND origin='timer' AND "
+                  "state='pending' AND code='action_recovery'", (now, goal_id))
+
+    @staticmethod
     def _team_block(c, g, code: str, notify: str, payload: dict, idem: str, now: float) -> None:
         c.execute("UPDATE goals SET run_state='blocked', block_reason=?, updated_at=? WHERE id=?", (code, now, g["id"]))
         c.execute("INSERT INTO goal_events(goal_id,revision,kind,source,payload_json,by,created_at) VALUES(?,?,?,?,?,?,?)",
@@ -4629,5 +4643,8 @@ class GoalStore:
                 team = self._team_row(c, a["goal_id"])
                 if team is not None and g["status"] == "active" and int(g["revision"]) == int(r["revision"]):
                     nxt = self._after_unknown(c, g, team, r["bundle_ref"], r["id"], code, now)
+                elif g["status"] == "active":
+                    self._reason_event(c, g["id"], g["brain_id"], "review_done", f"rd:{r['id']}", int(g["revision"]))
+            self._drop_idle_action_recovery(c, a["goal_id"], now)
             self._recompute_wake(c, a["goal_id"])
             return {"ok": True, "next": nxt}
