@@ -135,3 +135,64 @@ Ghi chú không chặn đã làm cùng đợt (tách khỏi ba P2): receipt củ
 | Script reviewer bản gốc `--expect-fixed` | 5/6, exit 1 (ca R1 đầu không chèn được lỗi, xem trên) |
 | Nhóm: resonance, route_table, i18n, version/changelog, tài liệu song ngữ, ignore_files, phiên bản, prompt_budget, prefix_slim, agent_tags, workspace | 63/64; đỏ duy nhất `test_ignore_files.py` vì file test mới lúc đó chưa `git add`; xanh trong lần chạy toàn repo sau commit |
 | Toàn repo `tests/run.py` | 641/655; 14 file đỏ trùng khít danh sách đỏ trên `main` sạch `a02663cb` (test phụ thuộc máy), không có đỏ mới |
+
+## Review mã vòng 2 và cổng pilot
+
+**Review mã vòng 2 (Codex, 12/10/2026) đạt tại `05e9b065`.** Không có P1 hay P2 mới. Ba P2 của vòng 1 đã xử lý. Reviewer tự chạy:
+- script độc lập, bản chỉnh điểm chèn: 6/6;
+- năm kiểm bổ sung trên mục tiêu không có đội: 5/5;
+- `tests/run.py resonance_a5`: 7/7 file;
+- nhóm A2, A3, MVP, A2 UI, bảng route: 5/5 file.
+
+Reviewer không chạy lại toàn repo, và không lặp smoke trình duyệt.
+
+Giới hạn reviewer đã ghi nhận (không chặn cổng chuẩn bị pilot):
+- bước chuẩn bị lỗi thì mục tiêu chờ một giờ;
+- thẻ cũ chậm cập nhật;
+- ba lỗi cố định trước engine (`output_scope`, `action_exists`, `invalid_action_id`) giữ đường cũ;
+- hai vai dùng chung engine việc nền.
+
+**A5 chưa nghiệm thu cuối, chưa phát hành.**
+
+**Cổng pilot (không đổi mã sản phẩm).** Kịch bản, hạn mức và bằng chứng: [resonance-a5-pilot.md](resonance-a5-pilot.md). Các file mới, cùng commit `18b2ab60`:
+
+| File | Vai trò |
+|---|---|
+| `tests/python/_a5_pilot_ledger.py` | Sổ lượt theo vai: giữ chỗ trước khi dựng engine; có trần vai, trần tổng, trần giai đoạn; kết cục khác `ok` đóng sổ; sổ hỏng không cấp lượt; lần bị chặn ghi `refused`; phân nhánh |
+| `tests/python/_a5_pilot_server.py` | Chạy `main.app` của checkout, chỉ bọc `main._resonance_engine` bằng sổ; dry thay bằng engine giả, đường "thật" là bẫy |
+| `tests/python/test_resonance_a5_pilot.py` | Bộ chạy real và dry (đặt `JAVIS_RESONANCE_A5_PILOT` mới chạy) |
+| `tests/python/test_resonance_a5_pilot_gate.py` | Logic sổ, không cần server hay model |
+
+**Kết quả** (máy local, mã tại `18b2ab60`, mã sản phẩm bằng `05e9b065`):
+
+| Lệnh | Kết quả |
+|---|---|
+| `JAVIS_RESONANCE_A5_PILOT=dry python tests/python/test_resonance_a5_pilot.py` | 12/12 ca, exit 0. Mỗi ca: `commit 18b2ab60`, cây sạch, 0 lượt thật, sổ lượt engine của server sandbox đã xác minh bằng 0 |
+| `python tests/python/test_resonance_a5_pilot_gate.py` | 35 ok, exit 0 |
+| `tests/run.py resonance_a5 ignore_files tai_lieu_song_ngu version_khop_changelog nhat_ky_song_ngu route_table phien_ban_moi_nhat` | 15/15 file, exit 0 |
+
+Chi tiết các ca dry:
+
+| Ca dry | Nhánh | Sổ (làm, review) | Kết luận |
+|---|---|---|---|
+| `main_pass` | `pass_first` | (1, 1) | dry_ok |
+| `main_fix` | `one_fix_then_pass` | (2, 2) | dry_ok |
+| `fix_cap` | `pilot_cap_after_two_reviews`; trần kho chặn lượt sửa thứ ba lúc giữ chỗ | (2, 2) | dry_ok |
+| `ledger_cap` | như trên; trần kho nâng lên 8 (chỉ dry), sổ chặn trước khi dựng engine, host hoàn lượt | (2, 2) | dry_ok |
+| `review_unknown` | `review_unknown`; không thử lại | (1, 1) | dry_ok |
+| `maker_error` | `maker_error`; sổ đóng | (1, 0) | dry_ok |
+| `cost`, `auth`, `ledger_exists`, `precondition` | dừng trước việc nền | 0 | stopped |
+| `ledger_corrupt` | sổ hỏng, không cấp lượt; sổ chưa xác minh | chưa xác minh | stopped |
+| `tripwire` | bẫy ghi sự kiện; một dòng `not_built` vì sổ giữ chỗ trước khi dựng (bảo thủ) | (1, 0) | stopped |
+
+Bộ chạy tìm thấy, chưa từng chạy real:
+- Phân nhánh ban đầu không nhận lớp chặn là trần kho. Ca `fix_cap` cho thấy trần kho chặn trước sổ, nên mục tiêu thành `blocked/budget` mà sổ không thấy gì. Đã sửa hàm phân nhánh và thêm ca `ledger_cap` để vẫn chứng minh được lớp sổ.
+- Kiểm hash ban đầu sai đích (`accepted_ref` là mốc đăng, không phải lượt làm). Đã đổi sang hai kiểm: hash là bytes chuẩn hoá của một đầu ra lượt làm, và ảnh chụp reviewer đã đọc băm lại đúng hash.
+
+**Chưa chứng minh** (pilot thật mới trả lời được):
+- model thật trên cả hai vai;
+- nội dung review có ích;
+- độ trễ thật;
+- hành vi của engine việc nền `anthropic-cli` trong sandbox.
+
+Hiệu năng cục bộ không phải bằng chứng VPS.
