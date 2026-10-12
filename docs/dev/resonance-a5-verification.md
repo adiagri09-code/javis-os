@@ -2,7 +2,7 @@
 
 Đội một agent làm, một agent review. Thiết kế đã chốt: [2026-10-11-resonance-a5-maker-reviewer-design.md](../superpowers/specs/2026-10-11-resonance-a5-maker-reviewer-design.md) (`56f7ab50`; phương án A cho file sửa tay). Hướng dẫn: [resonance-a5-team.md](resonance-a5-team.md).
 
-**Trạng thái: mã đạt review mã vòng 2 tại `05e9b065` (Codex, 12/10/2026), chờ duyệt pilot; A5 chưa nghiệm thu cuối, chưa phát hành.** Kịch bản và bộ chạy pilot: [resonance-a5-pilot.md](resonance-a5-pilot.md). Chưa pilot model thật, chưa merge, chưa phát hành, không đụng VPS. Mọi kiểm dưới đây dùng engine GIẢ; số lượt engine thật bằng 0.
+**Trạng thái: mã đạt review mã vòng 2 tại `05e9b065` (Codex, 12/10/2026), cổng pilot chờ review vòng 2; A5 chưa nghiệm thu cuối, chưa phát hành.** Kịch bản và bộ chạy pilot: [resonance-a5-pilot.md](resonance-a5-pilot.md). Chưa pilot model thật, chưa merge, chưa phát hành, không đụng VPS. Mọi kiểm dưới đây dùng engine GIẢ; số lượt engine thật bằng 0.
 
 ## Test mới
 
@@ -196,3 +196,47 @@ Bộ chạy tìm thấy, chưa từng chạy real:
 - hành vi của engine việc nền `anthropic-cli` trong sandbox.
 
 Hiệu năng cục bộ không phải bằng chứng VPS.
+
+### Review cổng pilot vòng 1 (head `3378832d`): ba P2 ở bộ chạy, đã sửa
+
+Review: `exports/reviews/PR-616-A5-pilot-gate-r1-review.md`. Mã sản phẩm không đổi; review mã vòng 2 vẫn giữ. Sửa ở commit `2468919c`, chỉ đụng bộ chạy, test và tài liệu.
+
+| Lỗi | Sửa | Test |
+|---|---|---|
+| R1: sổ ghi `ok` cho kết quả mà host coi là lỗi (`final` có `is_error` hay `dua_token`, lỗi sau `final`, gọi công cụ trong lượt chỉ chữ) | `Counted` áp đúng luật lỗi của `_ask` trên từng khung. `ok` chỉ là tạm: lỗi đến sau hạ nó xuống, không bao giờ nâng ngược lại. Thêm lớp bọc `GoalDeps._ask` để đối chiếu kết luận cuối của host (`host_<mã>`). Host ngừng đọc sau một `final` hợp lệ thì `ok` giữ nguyên | Test cổng: các ca chạy qua `_ask` thật; `final` rồi huỷ, ngoại lệ hay ngừng đọc; không nâng lỗi; lớp đối chiếu thứ hai. Dry: `final_is_error`, `maker_error`, `reviewer_error` |
+| R2: kết luận real không loại lỗi engine, hết giờ hay sổ mất ở lần đọc cuối | Hàm `decide_acceptance` có hợp đồng rõ: `stopped`, `technical_failed`, `pending_content_review`, `business_incomplete`; mã thoát 1, 1, 0, 2; đòi đủ bằng chứng của đúng nhánh. Thêm hai nhánh `maker_not_met` và `reviewer_error`. Real cũng đòi sổ usage xác minh được | Test cổng: 15 ca `technical_failed`, 3 nhánh nghiệp vụ, đối chứng. Dry: các ca âm đi qua đường điều phối và hàm kết luận thật |
+| R3: dọn sandbox làm mất log và kho khi lỗi | `preserve_sandbox` chép kho (SQLite backup), log đã che khoá, sổ usage, brain tạm vào thư mục mới trên MỌI nhánh, sau khi server đã dừng; xử lý đường dẫn dài của Windows. Real luôn giữ sandbox; ngoài ra chỉ dọn khi kỹ thuật đạt trọn và bảo toàn đủ. Có `a5-pilot-recovery.txt` | Test cổng: bảo toàn, không ghi đè, che khoá, lỗi khi lưu, thiếu mục bắt buộc, file hỏng, đường dẫn trên 260 ký tự, quyền dọn. Dry: `save_error`, `early_crash`, `ledger_corrupt`, `ledger_lost_end`, `timeout` |
+| Lưu ý 1: đơn gộp nền checkout với `main` | Đơn tách dòng: nền checkout pilot là 0.100.0 (`a02663cb`), `main` hiện tại là 0.102.0 (`57c40348`); pilot không phải nghiệm thu bản tích hợp | đơn |
+| Lưu ý 2: SHA và cây sạch chỉ được ghi lại, không phải cổng | `preflight_source` ở bước 0, trước mọi server: HEAD phải đúng `JAVIS_RESONANCE_A5_APPROVED_SHA` và cả checkout phải sạch (gồm chính bộ chạy). Real bắt buộc | Test cổng: repo git tạm. Dry: `sha_mismatch` |
+
+**Script của reviewer.** Bản gốc chạy trên head mới: năm kiểm R1 (gọi thẳng API của sổ) PASS, rồi dừng ở `StopIteration`, vì phép gán `rep["acceptance"] = <biểu thức>` và điều kiện quanh `rmtree` đã thành lời gọi `decide_acceptance` và `may_delete_sandbox`. Bản chỉnh chỉ đổi adapter để gọi đúng hai lời gọi đó lấy từ AST của bộ chạy, có nhánh lùi về cấu trúc cũ:
+- Mẫu đối chứng thành công được bổ sung cho đủ bằng chứng của một lần `pass_first`.
+- Mỗi mẫu R2 áp đúng tình huống của nó lên lần chạy đủ bằng chứng đó.
+- Điều kiện dọn được thử với đầu vào dễ dọn nhất (bảo toàn đạt, hồ sơ ngoài sandbox).
+
+Không đổi tình huống hay kỳ vọng. Kết quả bản chỉnh:
+- trên `3378832d`: 9 tái hiện lỗi, 2 đối chứng đạt, exit 0, giống output gốc của reviewer;
+- trên head mới với `--expect-fixed`: 11/11, exit 0.
+
+**Đối chứng trên `3378832d`** (bản xuất `git archive`, chép test cổng mới vào, chạy từng khối): các khối R1, R2, R3 và kiểm nguồn ném lỗi vì thiếu API mới (`host_text_verdict`, `decide_acceptance`, `preserve_sandbox`, `preflight_source`, tham số `reviewer_failed`). Hành vi lỗi của các tình huống đó trên mã cũ đã được script tái hiện như trên.
+
+**Kết quả vòng này** (máy local, bộ chạy tại `f4b79b58`, mã sản phẩm bằng `05e9b065`):
+
+| Lệnh | Kết quả |
+|---|---|
+| `JAVIS_RESONANCE_A5_PILOT=dry python tests/python/test_resonance_a5_pilot.py` | 21/21 ca, exit 0. Mỗi báo cáo: `commit f4b79b58`, 0 lượt thật, sổ lượt engine của server đã xác minh bằng 0 |
+| `python tests/python/test_resonance_a5_pilot_gate.py` | 90 ok, exit 0 |
+| Script reviewer bản chỉnh `--expect-fixed` | 11/11, exit 0 |
+| `tests/run.py resonance_a5 ignore_files tai_lieu_song_ngu version_khop_changelog nhat_ky_song_ngu route_table phien_ban_moi_nhat` (tại `2468919c`) | 15/15 file, exit 0 |
+
+Kết luận của các ca dry:
+- 2 ca `pending_content_review`: (1, 1) và (2, 2);
+- 4 ca `business_incomplete`: `fix_cap`, `ledger_cap`, `review_unknown`, `maker_not_met`;
+- 10 ca `technical_failed`, nhánh được giữ nguyên;
+- 5 ca `stopped`.
+
+Ca `save_error` giữ nguyên sandbox gốc (kho cùng WAL còn) và có `a5-pilot-recovery.txt`. Các ca sự cố khác đều có bản sao kho, log và brain trong hồ sơ.
+
+Lỗi của bộ chạy mà dry tìm ra trong vòng này, đã sửa trước bản cuối:
+- bảo toàn lỗi khi thư mục hồ sơ nằm sâu (giới hạn 260 ký tự của Windows);
+- kiểm bộ ghim đòi hàng review cả ở nhánh không có review (`f4b79b58`).
