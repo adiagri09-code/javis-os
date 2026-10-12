@@ -2,7 +2,7 @@
 
 Đội một agent làm, một agent review. Thiết kế đã chốt: [2026-10-11-resonance-a5-maker-reviewer-design.md](../superpowers/specs/2026-10-11-resonance-a5-maker-reviewer-design.md) (`56f7ab50`; phương án A cho file sửa tay). Hướng dẫn: [resonance-a5-team.md](resonance-a5-team.md).
 
-**Trạng thái: mã đạt review mã vòng 2 tại `05e9b065` (Codex, 12/10/2026), cổng pilot chờ review vòng 2; A5 chưa nghiệm thu cuối, chưa phát hành.** Kịch bản và bộ chạy pilot: [resonance-a5-pilot.md](resonance-a5-pilot.md). Chưa pilot model thật, chưa merge, chưa phát hành, không đụng VPS. Mọi kiểm dưới đây dùng engine GIẢ; số lượt engine thật bằng 0.
+**Trạng thái: mã đạt review mã vòng 2 tại `05e9b065` (Codex, 12/10/2026), cổng pilot chờ review vòng 3; A5 chưa nghiệm thu cuối, chưa phát hành.** Kịch bản và bộ chạy pilot: [resonance-a5-pilot.md](resonance-a5-pilot.md). Chưa pilot model thật, chưa merge, chưa phát hành, không đụng VPS. Mọi kiểm dưới đây dùng engine GIẢ; số lượt engine thật bằng 0.
 
 ## Test mới
 
@@ -240,3 +240,54 @@ Ca `save_error` giữ nguyên sandbox gốc (kho cùng WAL còn) và có `a5-pil
 Lỗi của bộ chạy mà dry tìm ra trong vòng này, đã sửa trước bản cuối:
 - bảo toàn lỗi khi thư mục hồ sơ nằm sâu (giới hạn 260 ký tự của Windows);
 - kiểm bộ ghim đòi hàng review cả ở nhánh không có review (`f4b79b58`).
+
+### Review cổng pilot vòng 2 (head `4bcf3615`): một P2 ở pha ghi hồ sơ cuối, đã sửa
+
+Review: `exports/reviews/PR-616-A5-pilot-gate-r2-review.md`. Ba lỗi của vòng 1 và hai lưu ý đã được kiểm lại và đóng. Mã sản phẩm không đổi.
+
+**Lỗi.** Kết luận và quyền dọn sandbox được tính trước khi ghi báo cáo JSON và `a5-pilot-recovery.txt`. Lần ghi nào lỗi thì kết quả vẫn là `pending_content_review`, exit 0. Nếu file khôi phục hỏng, JSON đã ghi trước đó vẫn nói đạt. Ở dry, `sandbox_kept` còn ghi false trong khi sandbox thật được giữ.
+
+**Sửa** (`2eb79253`, chỉ bộ chạy, test, tài liệu): `finalize_record`.
+- Thứ tự ghi: file khôi phục trước, báo cáo JSON sau cùng.
+- Lần ghi bắt buộc nào lỗi thì kết luận thành `technical_failed`, mã thoát 1, có nguyên nhân cụ thể; nhánh giữ nguyên; sandbox giữ với `sandbox_kept = true`.
+- Báo cáo lỗi thì ghi lại file khôi phục với kết luận mới và thử ghi báo cáo đúng một lần nữa. Vẫn không được thì báo ra stdout và stderr kèm đường sandbox.
+- Dòng `A5_PILOT` in sau khi chốt, kèm `report_saved`.
+- Bộ điều phối dry đòi thêm: mã thoát đúng hợp đồng; báo cáo JSON bắt buộc có và khớp dòng `A5_PILOT`; dòng KEPT khớp `sandbox_kept`.
+
+**Test.**
+- Test cổng (100 kiểm) gọi `finalize_record` thật trên fixture pha kết thúc, real và dry, không engine. Các ca:
+  - đối chứng lưu thành công, giữ kết luận và exit 0;
+  - lỗi ghi báo cáo sau kết quả đạt;
+  - lỗi ghi file khôi phục;
+  - nghiệp vụ chưa đạt kèm lỗi ghi, không còn exit 2;
+  - lỗi kỹ thuật vốn có kèm lỗi ghi;
+  - lỗi tạm thời rồi ghi được: báo cáo lần hai vẫn nói `technical_failed`;
+  - nơi lưu không tồn tại.
+- Dry qua `run_case` với engine giả: `report_fault`, `recovery_fault`, `report_fault_technical`.
+
+**Đối chứng trên `4bcf3615`:**
+- Script finalization của reviewer ở chế độ tái hiện: 3 lỗi hành vi, 2 đối chứng, exit 0.
+- Test cổng mới chạy từng khối: chỉ khối pha kết thúc thiếu API `finalize_record`; các khối khác xanh.
+
+**Script của reviewer trên head mới:**
+- Script finalization vòng 2 không cần chỉnh: điểm neo `delete = PL.may_delete_sandbox(...)` vẫn giữ. Kết quả `--expect-fixed` 5/5, exit 0.
+- Script vòng 1 (adapter đã chỉnh ở vòng trước, không đổi thêm): `--expect-fixed` 11/11, exit 0.
+
+**Lỗi khác của bộ chạy mà dry đủ ca tìm ra trong vòng này, đã sửa (`7211d4b7`).** Điều kiện "im lặng" để dừng giai đoạn việc nền bị xét đúng khe chuyển trạng thái: lượt làm vừa kết sổ, nhưng host còn giữ khoá mục tiêu để đăng bản và hẹn review, nên lịch thức tạm trống. Bốn ca dừng sớm, ra nhánh `maker_not_met` sai. Giờ bộ chạy chỉ coi là im lặng khi:
+- không có lượt nào đang chạy;
+- mục tiêu không ở `running`;
+- không lần thức nào giữ khoá mục tiêu;
+- điều kiện đó đúng ở hai lần quan sát liên tiếp.
+
+Lần chạy thật cũng có thể gặp khe này.
+
+**Kết quả vòng này** (máy local, bộ chạy tại `7211d4b7`, mã sản phẩm bằng `05e9b065`):
+
+| Lệnh | Kết quả |
+|---|---|
+| `JAVIS_RESONANCE_A5_PILOT=dry python tests/python/test_resonance_a5_pilot.py` | 24/24 ca, exit 0. Mỗi ca: mã thoát đúng hợp đồng, báo cáo khớp dòng `A5_PILOT`, 0 lượt thật, sổ lượt engine của server đã xác minh bằng 0 |
+| `python tests/python/test_resonance_a5_pilot_gate.py` | 100 ok, exit 0 |
+| Script vòng 1 (adapter đã chỉnh) `--expect-fixed` | 11/11, exit 0 |
+| Script finalization vòng 2 `--expect-fixed` | 5/5, exit 0 |
+| Wrapper dry của reviewer (chặn ghi báo cáo `main_pass`, server thật, engine giả) | `technical_failed`, exit 1, sandbox giữ, không có báo cáo |
+| `tests/run.py resonance_a5 ignore_files tai_lieu_song_ngu version_khop_changelog nhat_ky_song_ngu route_table phien_ban_moi_nhat` | 15/15 file, exit 0 |
