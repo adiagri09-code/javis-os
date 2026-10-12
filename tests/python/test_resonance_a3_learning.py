@@ -324,7 +324,9 @@ check("decide: FOLLOWUP trước TRIAL trước AUTO; không đòi phần dư tr
 check("decide: lượt giữ không hợp lệ thì FOLLOWUP không mở lượt; phép thử không đủ thì không chạy",
       HB.decide([{"code": "method_followup"}, {"code": "method_trial"}], attempted=True, outcome="not_met", left=5,
                 chain=HB.Chain()).action == "evaluate")
-check("heartbeat.v2", HB.POLICY_VERSION == "heartbeat.v2")
+# A5 (0.101.0) nâng chính sách lên heartbeat.v3 (thêm mã của đội làm và review); các lớp của A3 giữ nguyên.
+check("heartbeat.v3 (A3 thêm v2, A5 thêm v3)", HB.POLICY_VERSION == "heartbeat.v3"
+      and HB.classify("method_followup") == HB.FOLLOWUP and HB.classify("method_trial") == HB.TRIAL)
 
 # ═══════════════════ Làn M: trọn vòng (R3a) ═══════════════════
 
