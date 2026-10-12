@@ -4437,7 +4437,7 @@ class GoalStore:
             if revision is not None:
                 q += " AND revision=?"
                 args.append(int(revision))
-            return [self._review(r) for r in c.execute(q + " ORDER BY created_at DESC, seq DESC LIMIT ?",
+            return [self._review(r) for r in c.execute(q + " ORDER BY created_at DESC, rowid DESC LIMIT ?",
                                                         (*args, int(limit))).fetchall()]
 
     def review_rounds(self, p: Principal, goal_id: str, revision: int) -> int:
