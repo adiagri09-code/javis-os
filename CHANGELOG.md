@@ -8,7 +8,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.103.0] - 2026-10-13
 ### Cải thiện
-- Đang viết.
+- **Quyền theo từng lệnh cho công cụ gộp.** Một công cụ MCP gộp nhiều lệnh, như công cụ nhãn của GitHub vừa tạo, vừa sửa, vừa xoá nhãn, giờ được xét quyền theo đúng lệnh đang gọi. Tạo và sửa chạy ở mức Ghi nháp, còn xoá vẫn cần Toàn quyền.
+- **Công cụ chỉ có lệnh ghi không còn hiện ở mức Chỉ đọc.** Trước đây chúng vẫn hiện ra rồi lần nào gọi cũng bị chặn. Giờ chúng chỉ hiện từ mức quyền chạy được, và câu báo chặn nêu đúng lệnh bị chặn.
 
 ## [0.102.1] - 2026-10-12
 ### Sửa lỗi
