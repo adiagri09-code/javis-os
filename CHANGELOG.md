@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.103.0] - 2026-10-13
+### Cải thiện
+- Đang viết.
+
 ## [0.102.1] - 2026-10-12
 ### Sửa lỗi
 - **Bot không còn xin lỗi người không hỏi nó.** Ở chế độ Tự đánh giá, bot tự xem cả những tin không gọi tên nó. Trước đây lượt đó mà hỏng thì bot tag người nhắn và đăng "Em đang gặp trục trặc kỹ thuật..." vào cả nhóm. Giờ bot im, lỗi vẫn ghi vào nhật ký bot và người trực vẫn được báo. Ai gọi bot mà gặp lỗi thì vẫn nhận câu xin lỗi như cũ.
