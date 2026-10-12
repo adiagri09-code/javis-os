@@ -8,7 +8,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.102.0] - 2026-10-12
 ### Thêm mới
-- (đang viết) Chatbot có kênh Lark.
+- **Chatbot có kênh Lark (và Feishu).** Ở trang Chatbot, thêm tài khoản kênh Lark bằng App ID và App Secret của một app Lark riêng, gắn vào bot là bot trả lời khách trên Lark, mọi cuộc chat vào Hộp thư và tiếp quản được như các kênh khác. Không cần tên miền: Javis tự mở kết nối ra Lark.
+- **Bot Lark vào được nhóm, gửi được ảnh và tài liệu**, nhìn được ảnh khách gửi, và chủ trả lời khách được ngay từ Hộp thư.
+- **Javis tự dò app thuộc Lark hay Feishu**, khỏi phải chọn. Dán nhầm app đang chạy kênh admin thì Javis báo ngay, vì hai bên dùng chung một app sẽ bị chia tin ngẫu nhiên.
+- **Hộp thư hiện tên khách và tên nhóm Lark** khi app được cấp quyền đọc danh bạ và thông tin nhóm. Thiếu quyền thì bot vẫn chạy, chỉ hiện mã.
 
 ## [0.100.0] - 2026-10-12
 ### Cải thiện

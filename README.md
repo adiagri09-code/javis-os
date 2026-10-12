@@ -179,7 +179,7 @@ Every brain can call your connected MCP servers, read and write the brain, run s
 - **Tasks (Kanban)**: hand over a goal in plain words. The AI writes the spec, picks a worker, runs it in the background and only calls you on exceptions.
 - **Loops and reminders**: background jobs on an interval, a clock time or a cron expression, each checking its own work.
 - **Agents and workflows**: specialist assistants with their own memory, chained into multi-step workflows with verification.
-- **Chatbots**: put an agent in front of your customers on its own Telegram, Slack, WhatsApp or Zalo bot, with a shared inbox you can take over.
+- **Chatbots**: put an agent in front of your customers on its own Telegram, Slack, WhatsApp, Lark or Zalo bot, with a shared inbox you can take over.
 
 ### 🔌 Connect anything
 - **MCP connection store** with several accounts per service and three permission levels that Javis **hard-enforces**.
