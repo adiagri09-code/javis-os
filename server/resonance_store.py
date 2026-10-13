@@ -304,9 +304,9 @@ _A4_SCHEMA = (
     "CREATE INDEX IF NOT EXISTS submissions_goal ON submissions(goal_id, revision, status)",
     "CREATE INDEX IF NOT EXISTS submissions_binding ON submissions(binding_id, status)",
 )
-# A5 (0.101.0): đội một agent làm, một agent review cho mỗi mục tiêu (thiết kế 2026-10-11-resonance-a5-maker-reviewer).
-# Chỉ thêm bảng; bản 0.100.0 bỏ qua chúng (hạ phiên bản chỉ hỗ trợ bằng khôi phục snapshot `.pre-0.101.0`).
-A5_BACKUP_SUFFIX = ".pre-0.101.0"
+# A5 (0.104.0): đội một agent làm, một agent review cho mỗi mục tiêu (thiết kế 2026-10-11-resonance-a5-maker-reviewer).
+# Chỉ thêm bảng; bản 0.103.0 bỏ qua chúng (hạ phiên bản chỉ hỗ trợ bằng khôi phục snapshot `.pre-0.104.0`).
+A5_BACKUP_SUFFIX = ".pre-0.104.0"
 A5_TABLES = ("team_pairs", "goal_team", "team_calls", "reviews")
 TEAM_DEFAULT_CALLS = 8                 # tổng lượt của mục tiêu có đội (mục 6.1)
 TEAM_ROLE_CAPS = (("maker", 4), ("reviewer", 4))
@@ -4326,7 +4326,7 @@ class GoalStore:
                                                 _j({"root_id": root["id"], **res}), p.by, now))
             return {"ok": True, "root_id": root["id"], **res}
 
-    # ═══════════════════ A5 (0.101.0): đội một agent làm, một agent review ═══════════════════
+    # ═══════════════════ A5 (0.104.0): đội một agent làm, một agent review ═══════════════════
     # Thiết kế: docs/superpowers/specs/2026-10-11-resonance-a5-maker-reviewer-design.md. Cặp lưu theo `agent_key` (không
     # theo slug hay tag); đội gắn trong giao dịch `create`; mọi lượt của hai vai đi qua sổ vai; kết luận review gắn đúng
     # bộ ghim và chỉ dùng được khi bộ ghim còn khớp lúc chốt. Tag không tham gia ở đâu cả (mục 4.5).
