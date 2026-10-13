@@ -6,7 +6,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.101.0] - 2026-10-12
+## [0.104.0] - 2026-10-13
 ### Thêm mới
 - **Trợ lý có thể có người review (Cộng hưởng A5).** Ở trang trợ lý đã bật Cộng hưởng, chọn một trợ lý khác ở ô **Người review**. Từ đó mục tiêu mới của trợ lý này chỉ được coi là đạt khi người review xem đúng bản đã đăng và kết luận đạt. Mục tiêu đang có không đổi.
 - **Review đòi sửa thì trợ lý tự sửa theo góp ý**, tối đa hai lần. Mỗi mục tiêu có đội dùng tối đa 8 lượt, mỗi vai 4; hết vòng hay hết lượt thì dừng và báo, không tự nới.
@@ -14,6 +14,27 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - Mục tiêu duy trì và bước khám phá cũng chờ người review đạt rồi mới báo đã cập nhật hay xong bước; cùng một bản không bị review lại theo lịch.
 - Lượt hỏng trước khi kịp gọi model được trả lại, không bị tính.
 - File đã đăng bị sửa tay thì mục tiêu có đội chờ, không tự coi là đạt. Muốn quay về 0.100.0: tắt Javis, chạy `tools/resonance_restore_pre_a5.py`.
+
+## [0.103.0] - 2026-10-13
+### Cải thiện
+- **Quyền theo từng lệnh cho công cụ gộp.** Một công cụ MCP gộp nhiều lệnh, như công cụ nhãn của GitHub vừa tạo, vừa sửa, vừa xoá nhãn, giờ được xét quyền theo đúng lệnh đang gọi. Tạo và sửa chạy ở mức Ghi nháp, còn xoá vẫn cần Toàn quyền.
+- **Công cụ chỉ có lệnh ghi không còn hiện ở mức Chỉ đọc.** Trước đây chúng vẫn hiện ra rồi lần nào gọi cũng bị chặn. Giờ chúng chỉ hiện từ mức quyền chạy được, và câu báo chặn nêu đúng lệnh bị chặn.
+
+## [0.102.1] - 2026-10-12
+### Sửa lỗi
+- **Bot không còn xin lỗi người không hỏi nó.** Ở chế độ Tự đánh giá, bot tự xem cả những tin không gọi tên nó. Trước đây lượt đó mà hỏng thì bot tag người nhắn và đăng "Em đang gặp trục trặc kỹ thuật..." vào cả nhóm. Giờ bot im, lỗi vẫn ghi vào nhật ký bot và người trực vẫn được báo. Ai gọi bot mà gặp lỗi thì vẫn nhận câu xin lỗi như cũ.
+- **Bot Toàn quyền không còn để lộ chữ kỹ thuật cho khách.** Các dòng như "Có lỗi giữa lượt" hay cảnh báo model giờ chỉ hiện ở nhật ký bot, không dính vào câu trả lời.
+- **Bot Toàn quyền không còn tự đổi model chính của bạn.** Model của Agent không chạy được qua gói ChatGPT thì bot vẫn chạy bằng model thay thế, nhưng không ghi đè model bạn đã chọn ở trang Models.
+
+### Cải thiện
+- **Form bot ghi rõ "Zalo Bot" hay "Zalo cá nhân".** Hai kênh dùng chung một logo nhưng chỉ Zalo cá nhân vào được nhóm. Khi bot chỉ có kênh nhắn riêng, form nói thẳng vì sao không có tùy chọn nhóm (Được gọi tên, Tự đánh giá, Mọi tin) và cần gắn kênh nào để có.
+
+## [0.102.0] - 2026-10-12
+### Thêm mới
+- **Chatbot có kênh Lark (và Feishu).** Ở trang Chatbot, thêm tài khoản kênh Lark bằng App ID và App Secret của một app Lark riêng, gắn vào bot là bot trả lời khách trên Lark, mọi cuộc chat vào Hộp thư và tiếp quản được như các kênh khác. Không cần tên miền: Javis tự mở kết nối ra Lark.
+- **Bot Lark vào được nhóm, gửi được ảnh và tài liệu**, nhìn được ảnh khách gửi, và chủ trả lời khách được ngay từ Hộp thư.
+- **Javis tự dò app thuộc Lark hay Feishu**, khỏi phải chọn. Dán nhầm app đang chạy kênh admin thì Javis báo ngay, vì hai bên dùng chung một app sẽ bị chia tin ngẫu nhiên.
+- **Hộp thư hiện tên khách và tên nhóm Lark** khi app được cấp quyền đọc danh bạ và thông tin nhóm. Thiếu quyền thì bot vẫn chạy, chỉ hiện mã.
 
 ## [0.100.0] - 2026-10-12
 ### Cải thiện
