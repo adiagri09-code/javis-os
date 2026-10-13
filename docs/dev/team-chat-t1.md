@@ -61,6 +61,15 @@ Một dòng mỗi lời gọi model. Lỗi trước mốc gọi engine thì hoà
 - **Bỏ qua thẻ đề xuất** chỉ ẩn trong tab đang mở.
 - Route ghi gọi kho trên vòng sự kiện (mỗi lệnh một ghi có chỉ mục); route đọc chạy trong luồng phụ. Đo ở T4.
 
+## Review cuối (người review mới, model mạnh nhất)
+
+Kết luận "sẵn sàng sau khi sửa": 0 lỗi nghiêm trọng, 5 lỗi quan trọng, đã sửa hết, mỗi lỗi có test đỏ trước rồi xanh.
+- Trưởng nhóm giao theo tên hiển thị ("Minh") bị bỏ và việc báo xong khi chưa ai làm: giờ khớp cả tên, không phân biệt hoa thường; mọi lệnh giao đều hỏng thì việc bị chặn.
+- Sửa yêu cầu của việc @ nhiều người chỉ làm lại phần một người: giờ mọi người được giao còn thiếu kết quả bản mới đều làm lại.
+- Tạm dừng rồi tiếp tục ngay làm kẹt nhóm; lỗi bất ngờ để việc treo `team_running`; vòng nền chạy phục hồi nhầm ở máy cài mới: đều đã sửa.
+- Sửa thêm (nâng mức theo tác động): lượt trả lời không chạy khi nhóm đã tạm dừng, lưu trữ huỷ cả việc đang treo, bước không tiến triển thành bước lỗi để Chạy lại, khoá bận không kẹt khi huỷ, phiên nhóm không hiện trong ô tìm của khung chat chính.
+- Để lại (ghi trong sổ phán quyết): bài học từ lượt đến muộn vẫn ghi vào bộ nhớ agent; trần ngày có thể vượt vài lượt khi nhiều lượt cùng lúc; khoá bận không gia hạn sau 15 phút; chữ lý do từ server chỉ có tiếng Việt; dựng tên thành viên tốn đọc file mỗi lượt (đo ở T4).
+
 ## Nâng, hạ phiên bản
 
 - Lần đầu 0.111.0 mở `kanban.sqlite3` và `conversations.db` có từ trước, mỗi kho được chụp một bản `<tên>.pre-0.111.0` bằng SQLite backup, trước khi thêm cột. Kho mới tinh thì không chụp.
