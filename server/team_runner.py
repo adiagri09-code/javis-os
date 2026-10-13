@@ -49,6 +49,8 @@ BUSY_LEASE_S = 900.0          # hạn khoá bận một lượt; tiến trình c
 NEW_MSG_LIMIT = 20            # tin mới trong khối nhóm (spec 11.2)
 NEW_MSG_CHARS = 8000
 INPUT_CHARS = 4000            # mỗi đầu vào của bước
+DECISION_LIMIT = 20           # sổ quyết định (spec 11.2)
+DECISION_CHARS = 500
 REMIND_AFTER_S = 24 * 3600    # nhắc việc bị chặn quá 24 giờ (spec 8.4)
 
 EngineFn = Callable[[dict], Awaitable[dict]]
@@ -292,6 +294,10 @@ class TeamRunner:
             lines.append(f"- {self._name(team, m['agent_key'])} [{m['agent_key']}]{tag}{me}")
         lines.append(f"Vai của bạn trong lượt này: {ROLE_LABEL.get(role, role)}")
         sid = team["session_id"]
+        decisions = self.sessions.team_decisions(sid, DECISION_LIMIT)
+        if decisions:
+            lines.append("\n## Sổ quyết định (chủ nhóm ghim, luôn theo)")
+            lines.extend(f"- [#{m['id']}] {m['content'][:DECISION_CHARS]}" for m in decisions)
         after = self.sessions.last_message_id_by(sid, agent_key)
         fresh = self.sessions.team_messages_after(sid, after, NEW_MSG_LIMIT)
         rendered, size = [], 0
@@ -360,7 +366,12 @@ class TeamRunner:
         if task and self.teams.count_task_turns(task_id) >= int(team["caps"]["task_turns"]):
             return {"status": "cap", "cap": "task_turns"}
         turn_id = self.teams.reserve_turn(team_id, task_id, step_id, agent_key, role)
-        if not await self._acquire(team, agent_key, turn_id):
+        try:
+            got = await self._acquire(team, agent_key, turn_id)
+        except asyncio.CancelledError:
+            self.teams.refund_turn(turn_id)
+            raise
+        if not got:
             self.teams.refund_turn(turn_id)
             return {"status": "busy_long", "turn_id": turn_id}
         try:
@@ -590,6 +601,10 @@ class TeamRunner:
                     self.teams.cancel_open_steps(task_id, "việc đã huỷ")
                 return task["status"] if task else "missing"
             team = self._team(task["team_id"])
+            if team["status"] == "archived":
+                # Lưu trữ = tạm dừng + huỷ việc (spec 11.4): việc đang chạy dừng ở điểm điều phối này.
+                self.cancel_job(task_id, "nhóm đã lưu trữ")
+                return "cancelled"
             if team["status"] != "active":
                 return "paused"
             self.tasks.team_heartbeat(task_id, self.worker_id)
@@ -747,7 +762,8 @@ class TeamRunner:
             if not pending:
                 break
             for res in await asyncio.gather(*pending, return_exceptions=True):
-                if isinstance(res, BaseException):
+                # Việc bị chủ huỷ giữa lượt (cancel_job) kết thúc bằng CancelledError: đó là kết cục đúng, không phải lỗi.
+                if isinstance(res, BaseException) and not isinstance(res, asyncio.CancelledError):
                     errors.append(res)
         self._jobs = {}
         if errors:
@@ -759,6 +775,34 @@ class TeamRunner:
         await self.wait_jobs()
 
     # ───────────── lệnh của chủ, phục hồi ─────────────
+
+    def cancel_job(self, task_id: str, reason: str = "chủ nhóm huỷ") -> Optional[str]:
+        """Huỷ việc (spec 7.6). Lượt đang gọi engine bị ngắt (tính một lần, `interrupted`); bước chưa chạy huỷ theo.
+        Trả trạng thái trước khi huỷ, None nếu việc đã kết thúc hay không thuộc làn team."""
+        prev = self.tasks.team_cancel(task_id, reason)
+        if prev is None:
+            return None
+        job = self._jobs.get(task_id)
+        try:
+            me = asyncio.current_task()
+        except RuntimeError:
+            me = None
+        if job is not None and not job.done() and job is not me:
+            job.cancel()
+        self.teams.cancel_open_steps(task_id, "việc đã huỷ")
+        for s in self.teams.steps(task_id):
+            if s["status"] == "running":
+                self.teams.set_step_status(s["step_id"], "cancelled", "việc đã huỷ")
+        task = self.tasks.get_task(task_id)
+        if task:
+            self._state(task["team_id"])
+        return prev
+
+    async def resume_team(self, team_id: str) -> None:
+        """Nhóm tiếp tục sau tạm dừng: việc đang `team_running` của nhóm chạy tiếp từ điểm điều phối."""
+        ids = [t["id"] for t in self.tasks.team_queue(team_id)["running"] if t["id"] not in self._jobs]
+        for tid in ids:
+            self._jobs[tid] = asyncio.ensure_future(self.run_job(tid))
 
     def unblock(self, task_id: str, action: str = "resume") -> bool:
         """Gỡ chặn: `retry` chạy lại bước lỗi hay bị ngắt (bước mới, lượt mới); `resume` cho chạy tiếp như cũ."""

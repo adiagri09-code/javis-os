@@ -497,6 +497,36 @@ tx2 = ts.get_task(jx2["task_id"])
 check("chờ khoá bận quá hạn: agent_busy_long, lượt hoàn", tx2["block_kind"] == "agent_busy_long"
       and [t["status"] for t in tm.turns(X["team_id"]) if t["task_id"] == jx2["task_id"]] == ["refunded"])
 
+# ---------- TC20: huỷ việc khi lượt đang gọi engine ----------
+ss, ts, tm, fake, r, pub, inbox, gone = world("cancel")
+T = make_team(tm, ss, "Huỷ")
+
+
+async def never(req):
+    await asyncio.Event().wait()
+
+
+fake.say("ag_minh", "work", never)
+jq = r.submit(T["team_id"], "Việc dài", mentions=["ag_minh"], as_job=True, client_msg_id="q1")
+
+
+async def cancel_mid_turn():
+    await r.dispatch_once(wait=False)
+    await asyncio.sleep(0.05)
+    prev = r.cancel_job(jq["task_id"])
+    await r.wait_jobs()
+    return prev
+
+
+prev = run(cancel_mid_turn())
+st = tm.steps(jq["task_id"])
+check("TC20 huỷ giữa lượt: ngắt lượt, lượt tính một lần (interrupted), bước huỷ, nhả khoá, không đăng kết quả",
+      prev == "team_running" and ts.get_task(jq["task_id"])["status"] == "cancelled"
+      and [t["status"] for t in tm.turns(T["team_id"])] == ["interrupted"] and [s["status"] for s in st] == ["cancelled"]
+      and tm.busy_of("ag_minh") is None and not [m for m in msgs(ss, T) if m["author_kind"] == "agent"])
+check("huỷ việc chờ (không chạy): trả trạng thái trước", r.cancel_job(r.submit(
+    T["team_id"], "Việc chờ", as_job=True, client_msg_id="q2")["task_id"]) == "team_queued")
+
 # ---------- TC17: restart ----------
 ss, ts, tm, fake, r, pub, inbox, gone = world("restart")
 T = make_team(tm, ss, "Restart")

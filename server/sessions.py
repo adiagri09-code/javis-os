@@ -662,6 +662,18 @@ class SessionStore:
                           (session_id, str(author_ref or "")))
         return int(rows[0][0] or 0) if rows else 0
 
+    def team_messages_of_task(self, session_id: str, task_id: str, limit: int = 200) -> List[Dict[str, Any]]:
+        """Tin của một việc nhóm (lọc khung chat theo việc, chi tiết việc; spec 7.7), cũ trước."""
+        rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND task_id = ? "
+                          "ORDER BY id DESC LIMIT ?", (session_id, str(task_id), max(1, min(int(limit), 500))))
+        return [self._team_msg(r) for r in reversed(rows)]
+
+    def team_decisions(self, session_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Tin chủ nhóm ghim làm quyết định ("Sổ quyết định", spec 11.2), cũ trước, tối đa `limit` tin gần nhất."""
+        rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND meta_json LIKE ? "
+                          "ORDER BY id DESC LIMIT ?", (session_id, '%"decision": true%', max(1, int(limit))))
+        return [m for m in (self._team_msg(r) for r in reversed(rows)) if m["meta"].get("decision") is True]
+
     def update_team_message_meta(self, session_id: str, message_id: int, patch: Dict[str, Any]) -> bool:
         """Gộp `patch` vào meta của một tin nhóm (vd. gắn nhãn "Kết quả việc" khi việc xong)."""
         def _do(conn):

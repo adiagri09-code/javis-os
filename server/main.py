@@ -6830,7 +6830,11 @@ async def delete_agent(slug: str = Form(...), brain: str = Form("brain")):
     # tiêu và phiên cũ giữ mã cũ. Chưa có kho thì không tạo kho chỉ để ghi việc này.
     try:
         if _RESONANCE_STORE is not None or (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
-            _resonance_store().agent_retire(resonance_store.Principal("owner", "owner", _brain_key(brain)), slug)
+            gone = _resonance_store().agent_retire(resonance_store.Principal("owner", "owner", _brain_key(brain)), slug)
+            # Nhóm chat team (spec 11.4): mã nghỉ thì thành viên thành `agent_gone` ở mọi nhóm của brain, xử lý như bỏ
+            # thành viên. Chưa có kho nhóm thì không tạo kho.
+            if gone and _TEAM_API.exists():
+                _TEAM_API.teams().mark_agent_gone(_brain_key(brain), gone["agent_key"])
     except Exception as e:  # noqa: BLE001
         print(f"[resonance agent retire] {type(e).__name__}: {e}", file=sys.stderr)
     return {"ok": True}
@@ -22064,6 +22068,72 @@ resonance_api.register_learning(app, _RESONANCE_API_DEPS)
 resonance_api.register_a4(app, _RESONANCE_API_DEPS)
 # A5: chọn người review cho một trợ lý làm (đăng ký cuối, bảng route chỉ thêm ở cuối).
 resonance_api.register_a5(app, _RESONANCE_API_DEPS)
+
+
+# ── Nhóm chat team (T1, spec docs/superpowers/specs/2026-10-13-team-chat-design.md) ──
+import team_api  # noqa: E402
+
+
+def _team_agent_info(root, agent_key):
+    """Thành viên theo mã bền: slug hiện tại, tên, lời nhắc hệ thống của agent (vai, bộ nhớ, luật chủ dặn, bài học) và
+    model riêng. None khi mã đã nghỉ, file mất hay chưa có sổ danh tính: bộ chạy coi như thành viên đã rời."""
+    try:
+        if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+            return None
+        reg = _resonance_store().agent_by_key(root, agent_key)
+    except Exception:  # noqa: BLE001
+        return None
+    if not reg or reg.get("status") != "active" or not _agent_md_path(root, reg["slug"]):
+        return None
+    name, system, model, provider = _workflow_agent_helpers(root, None)[1](reg["slug"])
+    return {"slug": reg["slug"], "name": name, "system": system, "model": model or "", "model_provider": provider or ""}
+
+
+def _team_engine_for(team, agent_key, role):
+    """Engine CHỈ CHỮ cho một lượt nhóm (phán quyết R3 của kế hoạch T1): thư mục trống, không MCP, cổng từ chối mọi công
+    cụ. Agent có model Claude riêng (`model` + provider anthropic-cli) thì chạy model đó; còn lại dùng model việc nền như
+    lượt Cộng hưởng, không tự đổi provider. JAVIS_LESSON / JAVIS_RULE xử lý như chat agent (`_ket_luot_agent`)."""
+    root = team["brain_id"]
+    info = _team_agent_info(root, agent_key) or {}
+    model = info.get("model") or ""
+    own_claude = bool(model) and _agent_model_provider(model, info.get("model_provider") or "") == "anthropic-cli"
+
+    async def run(req):
+        tag = f"team-{str(req['team_id'])[-8:]}"
+        if own_claude:
+            eng = _reply_policy_sandbox_engine(req["system"], tag, cwd_name="team_cwd")
+            eng.model = model
+        else:
+            eng, why = _resonance_engine(req["system"], tag)
+            if eng is None:
+                raise RuntimeError(f"model việc nền chưa chạy được lượt chỉ chữ: {why.get('reason') or why}")
+        final, tin, tout = "", None, None
+        async for ev in eng.query(req["prompt"]):
+            et = ev.get("type")
+            if et == "final":
+                final = ev.get("content", "") or ""
+            elif et == "usage":
+                tin = int(ev.get("input_tokens") or 0)
+                tout = int(ev.get("output_tokens") or 0)
+            elif et == "error":
+                raise RuntimeError(str(ev.get("content") or "lỗi engine")[:300])
+        if info.get("slug"):
+            final = await asyncio.to_thread(_ket_luot_agent, root, info["slug"], "", final)
+        return {"text": final, "tokens_in": tin, "tokens_out": tout}
+
+    return ("anthropic-cli" if own_claude else "aux"), model, run
+
+
+async def _team_notify(session_id, text):
+    await _bo_vao_hom_thu(f"{WEB_CHAT_PREFIX}{session_id}", text, kind="report",
+                          label=localefmt.chu("Nhóm", "Team"), source="team")
+
+
+_TEAM_API = team_api.register(app, team_api.TeamApiDeps(
+    brain_key=lambda b: _brain_key(b), session_store=lambda: get_store(),
+    task_store=lambda: tasks_feature.store, resonance_store=lambda: _resonance_store(),
+    agents_meta=_resonance_agents_meta, agent_info=_team_agent_info, engine_for=_team_engine_for,
+    broadcast=lambda ev: _CHAT_RUNTIME.publish(ev), notify=_team_notify))
 
 
 if __name__ == "__main__":
