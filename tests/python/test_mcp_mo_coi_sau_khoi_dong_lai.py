@@ -40,13 +40,13 @@ def check(name, cond, them=""):
         _fails.append(name)
 
 
-def _cho_chet(pid, giay=10.0):
-    het = time.time() + giay
-    while time.time() < het:
-        if not mcp_orphans.pid_alive(pid):
-            return True
-        time.sleep(0.2)
-    return False
+async def _cho_chet_con(proc, giay=10.0):
+    """Our own child: wait through asyncio, which also collects it (no zombie left behind)."""
+    try:
+        await asyncio.wait_for(proc.wait(), giay)
+        return True
+    except Exception:
+        return not mcp_orphans.pid_alive(proc.pid)
 
 
 def _pid_da_chet():
@@ -74,13 +74,12 @@ async def chay():
 
     # ---- 2. server chủ đã chết: đời sau dọn -------------------------------------------
     s2 = await _mo("zalo-b", "b")
-    pid2 = s2.proc.pid
     so = mcp_orphans._load()
     so["zalo-b"].update(owner="doi-truoc", server_pid=_pid_da_chet())     # như sau một lần crash
     mcp_orphans._save(so)
     mcp_orphans._reset_for_tests()
     da_don = await asyncio.to_thread(mcp_orphans.reap_all)
-    check("CANARY: tiến trình đời trước để lại bị dọn", da_don == ["zalo-b"] and _cho_chet(pid2), da_don)
+    check("CANARY: tiến trình đời trước để lại bị dọn", da_don == ["zalo-b"] and await _cho_chet_con(s2.proc), da_don)
     check("và rời khỏi sổ", "zalo-b" not in mcp_orphans._load())
 
     # ---- 3. server chủ CÒN SỐNG: không đụng -------------------------------------------
@@ -131,7 +130,7 @@ async def chay():
         asyncio.create_subprocess_exec = goc
     check("phiên đóng giữa lúc tạo tiến trình thì báo lỗi", bool(loi), loi)
     check("CANARY: và tiến trình vừa tạo cũng chết, không thành mồ côi",
-          sinh and _cho_chet(sinh[0].pid), sinh)
+          sinh and await _cho_chet_con(sinh[0]), sinh)
     check("không ghi sổ một tiến trình đã giết", "zalo-e" not in mcp_orphans._load(), mcp_orphans._load())
 
 

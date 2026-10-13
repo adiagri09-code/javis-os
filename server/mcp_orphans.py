@@ -123,13 +123,17 @@ def pid_alive(pid: int) -> bool:
             return True
     try:
         os.kill(pid, 0)
-        return True
     except ProcessLookupError:
         return False
     except PermissionError:
         return True
     except OSError:
         return False
+    try:      # a zombie answers kill(0) but is dead: it only waits for its parent to collect it
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8", errors="replace")
+        return stat.rsplit(")", 1)[1].split()[0] != "Z"
+    except (OSError, IndexError):
+        return True
 
 
 def _cmdline_posix(pid: int) -> str:
