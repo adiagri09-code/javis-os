@@ -10,7 +10,9 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.110.0] - 2026-10-13
 ### Improved
-- **Turn Resonance on or off right on the assistant list** of the Collaborators page.
+- **Turn Resonance on or off right on the assistant list.** On the Collaborators page each assistant shows "Resonance: On/Off" with a switch. It only changes once the server confirms; if it cannot, it says why and shows the real state.
+- **One place to switch it.** The right-hand panel now only shows the state, and Settings only shows how many assistants have it on, with a link to the Collaborators page.
+- **Two open tabs update together** without reloading. An assistant that needs confirming again says "Needs confirmation" on its row.
 
 ## [0.109.0] - 2026-10-13
 ### Added

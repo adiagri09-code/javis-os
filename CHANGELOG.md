@@ -8,7 +8,9 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.110.0] - 2026-10-13
 ### Cải thiện
-- **Bật, tắt Cộng hưởng ngay trên danh sách trợ lý** ở trang Cộng sự.
+- **Bật, tắt Cộng hưởng ngay trên danh sách trợ lý.** Ở trang Cộng sự, mỗi trợ lý có dòng "Cộng hưởng: Bật/Tắt" kèm công tắc. Chỉ đổi khi máy chủ xác nhận; không đổi được thì báo lý do và hiện đúng trạng thái thật.
+- **Một nơi duy nhất để bật, tắt.** Khung bên phải chỉ còn hiện trạng thái, trang Cài đặt chỉ còn số trợ lý đang bật kèm nút sang trang Cộng sự.
+- **Mở hai tab thì cả hai cùng cập nhật**, không cần tải lại trang. Trợ lý cần xác nhận lại thì dòng của nó ghi rõ "Cần xác nhận".
 
 ## [0.109.0] - 2026-10-13
 ### Thêm mới
