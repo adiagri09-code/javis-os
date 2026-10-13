@@ -2,7 +2,7 @@
 
 Đội một agent làm, một agent review. Thiết kế đã chốt: [2026-10-11-resonance-a5-maker-reviewer-design.md](../superpowers/specs/2026-10-11-resonance-a5-maker-reviewer-design.md) (`56f7ab50`; phương án A cho file sửa tay). Hướng dẫn: [resonance-a5-team.md](resonance-a5-team.md).
 
-**Trạng thái: mã đạt review mã vòng 2 tại `05e9b065` (Codex, 12/10/2026), cổng pilot chờ review vòng 3; A5 chưa nghiệm thu cuối, chưa phát hành.** Kịch bản và bộ chạy pilot: [resonance-a5-pilot.md](resonance-a5-pilot.md). Chưa pilot model thật, chưa merge, chưa phát hành, không đụng VPS. Mọi kiểm dưới đây dùng engine GIẢ; số lượt engine thật bằng 0.
+**Trạng thái: mã đạt review mã vòng 2 tại `05e9b065` (Codex, 12/10/2026); cổng pilot đạt review vòng 3 tại `33cec518`; pilot thật real-2 tại `33cec518` được reviewer chấp nhận trong phạm vi một mẫu `pass_first` (1 lượt làm, 1 lượt review, 0 chat; chưa chứng minh vòng sửa bằng model thật). A5 chưa phát hành.** Kịch bản và bộ chạy pilot: [resonance-a5-pilot.md](resonance-a5-pilot.md). Chưa merge, chưa phát hành, không đụng VPS. Các mục kiểm mã dùng engine GIẢ; lượt model thật chỉ có ở mục [Pilot thật](#pilot-thật-13102026).
 
 ## Test mới
 
@@ -291,3 +291,72 @@ Lần chạy thật cũng có thể gặp khe này.
 | Script finalization vòng 2 `--expect-fixed` | 5/5, exit 0 |
 | Wrapper dry của reviewer (chặn ghi báo cáo `main_pass`, server thật, engine giả) | `technical_failed`, exit 1, sandbox giữ, không có báo cáo |
 | `tests/run.py resonance_a5 ignore_files tai_lieu_song_ngu version_khop_changelog nhat_ky_song_ngu route_table phien_ban_moi_nhat` | 15/15 file, exit 0 |
+
+## Pilot thật (13/10/2026)
+
+Commit chạy: `33cec5184c7d825dfc08ba84a3ddf07f3b1d1424`, trên một checkout tách riêng, sạch trước và sau mỗi lần chạy; nền 0.100.0 (`a02663cb`), chưa tích hợp `main`. Đơn: bản cổng vòng 3 (review cổng vòng 3 đạt). Mỗi lần chạy có một lời duyệt riêng của chủ dự án.
+
+| | |
+|---|---|
+| Đầu vào đóng băng | `d15720546f4d53d611735e9cf3bf0096f02b711f15bf246086a441f50e5f609e` |
+| Engine | việc nền `anthropic-cli/sonnet`, gói thuê bao Claude (`claude.ai`, `firstParty`, `max`); không API trả phí |
+| Trần | làm 2, review 2, tổng 4; 0 lượt chat |
+| Bằng chứng | `exports/reviews/a5-pilot-real-1/` và `exports/reviews/a5-pilot-real-2/` (ngoài repo): báo cáo JSON, sổ, đầu ra từng lượt, đường khôi phục, `sandbox/` (bản sao kho, log đã che khoá, brain tạm) |
+
+### real-1: `stopped` ở cổng token
+
+Qua cổng nguồn, chi phí, xác thực và giai đoạn A (0 lượt). Cổng token trước việc nền hỏng: token gói thuê bao đã hết hạn 163 giây, cổng đòi còn ít nhất 30 phút. Kết luận `stopped`, mã thoát 1, **0 lượt model**; giai đoạn việc nền không bắt đầu. Hậu kiểm offline 19/19 kiểm. Lời duyệt của lần này đã dùng; real-2 có lời duyệt riêng sau khi chủ dự án làm mới đăng nhập.
+
+| File | sha256 |
+|---|---|
+| `a5-pilot-real-1/a5-pilot-real-main.json` | `bb5a4b50184b20d8740b0536695e3d5fa3023587628dca523c7bdc97c661deb4` |
+| `a5-pilot-real-1/a5-pilot-ledger.json` (rỗng) | `f588a20b079ca1d16a25d2c57d6ee07aa74ae07c1f1139fc9f63d0ad917e26dc` |
+| `a5-pilot-real-1-console.txt` | `58426d373afb028e21c5de14fa0a3f9fa1d74b03c406d504d61fed891fc04009` |
+
+### real-2: `pending_content_review`, nhánh `pass_first`
+
+Token còn 28698 giây ở cổng. Vai làm viết bản tóm tắt; vai review (mã ghim, khác agent làm) đọc ảnh chụp đúng hash và revision, cho `pass`; host đăng đúng bytes vào file đích, mục tiêu `succeeded`. Giai đoạn việc nền 95,7 giây. Dựng lại server (trần sổ 0): không có dòng sổ, hành động hay hàng review mới. Bộ chạy: 26 kiểm đều đạt, mã thoát 0. Hậu kiểm offline 33/33; reviewer chạy lại độc lập, 33/33.
+
+| Lượt | Vai | Kết cục | Token vào / ra |
+|---|---|---|---|
+| 1 | làm (`nguoi-lam-tom-tat`) | ok | 18447 / 291 |
+| 2 | review (`nguoi-duyet-tom-tat`) | ok | 18651 / 258 |
+
+Sổ pilot = sổ vai của kho (làm 1/4, review 1/4) = `calls_used` 2; một hàng review tính lượt.
+
+| File | sha256 |
+|---|---|
+| `a5-maker-1.md` (đầu ra lượt làm) | `a37808c46962a97075cc63b51b5be11fde0dff78c18ee2f0f3e96c42fce3e253` |
+| `a5-deliverable-final.md` (bản cuối, trùng bytes bản làm) | `a37808c46962a97075cc63b51b5be11fde0dff78c18ee2f0f3e96c42fce3e253` |
+| `a5-reviewer-1.txt` (đầu ra thô lượt review) | `5c5a7b19d3b332e6b924545defbb5e1b7965fafa0a2dc9d80b4047c55d93da20` |
+| `a5-pilot-real-main.json` | `3b935c3b23bc5f8f12b89c2c941214ea37219e0bce31262a91b4b037800e2b7b` |
+| `a5-pilot-ledger.json` | `f8d406063b917899ceb04cf45b8672839bda36c4ca24daaff082f387ae29dc65` |
+| `a5-pilot-real-2-console.txt` | `fe462dc6db1371ad9559a3f04d4b95d87c0556f690cb13910efcc6d7fe0e8c79` |
+
+Báo cáo JSON, sổ, đầu ra và bản cuối của cả hai lần giữ nguyên như bộ chạy ghi; hậu kiểm là biên bản riêng, không sửa chúng.
+
+### Review nội dung
+
+Reviewer chấp nhận real-2 **trong phạm vi một mẫu `pass_first`**: bốn dữ kiện của cuộc họp (ra mắt 20/11; chị Lan gửi kế hoạch truyền thông trước thứ Sáu; anh Minh gửi bảng ngân sách quảng cáo trước thứ Năm; cả nhóm họp lại thứ Hai tuần sau) được giữ đúng người, việc và hạn.
+
+Hai góp ý câu chữ, không chặn:
+1. "Kế hoạch truyền thông và ngân sách quảng cáo sẽ được hoàn thiện trước cuộc họp tới" là suy diễn: lời giao chỉ nói hạn gửi.
+2. "để rà soát tiến độ" là mục đích buổi họp do vai làm thêm, nguồn không nêu.
+
+"Cả nhóm" làm người phụ trách việc họp lại là chấp nhận được (lời giao nói "cả nhóm họp lại"), nhưng không có nghĩa đã xác định người tổ chức. Bản pilot giữ nguyên làm bằng chứng; không sửa nó rồi dùng bản sửa để tuyên bố đạt.
+
+**Giới hạn của vai review trong A5 hiện tại.** `_review_prompt` chỉ đưa mô tả vai, cách hiểu mục tiêu, tiêu chí, ràng buộc và bản cần review; không đưa lời giao gốc (đúng thiết kế, mục 4.3 và D8: không đưa lịch sử chat). Trong pilot, cách hiểu mục tiêu chỉ mô tả cấu trúc bản tóm tắt, nên các dữ kiện vai review thấy đến từ chính bản cần kiểm. Kết quả `pass` **không** có nghĩa vai review đã đối chiếu trung thành với nguồn, hay đã phát hiện thông tin thêm vào.
+
+**Usage.** Sổ usage chung của server (`usage.json`) ghi 0 vì chỉ đếm lượt chat; lượt việc nền của Cộng hưởng nằm ở hành động và receipt của kho, và ở sổ pilot (2 lượt thật). Sổ usage chung báo 0 không có nghĩa lần chạy không tốn model.
+
+### Giới hạn còn lại
+
+- Một mẫu, nhánh đạt ngay. Nhánh yêu cầu sửa, chạm trần, review không đọc được và lỗi engine chỉ có bằng chứng bằng engine giả.
+- Hai vai dùng chung model việc nền: độc lập về vai và ngữ cảnh, không phải hai model khác nhau.
+- 0 lượt chat: không kiểm bộ não chat tự định tuyến tới `javis_goal`.
+- Máy local, nền 0.100.0; chưa đo hiệu năng VPS. Tích hợp `main` là diff riêng, review riêng.
+
+### Hai việc cải tiến riêng (chưa triển khai, ngoài PR này)
+
+1. Nguồn yêu cầu tối thiểu do host ghim đúng mục tiêu và revision, đưa cho vai review để đối chiếu việc thêm hay bớt dữ kiện. Không phải toàn bộ lịch sử chat, và vẫn không cho xem suy luận của vai làm.
+2. Đưa lượt và token việc nền của Cộng hưởng vào màn hình usage chung, không đếm trùng với sổ chat.
