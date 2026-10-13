@@ -144,7 +144,7 @@ def _cmdline_posix(pid: int) -> str:
         pass
     try:      # macOS and other systems without /proc
         r = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True,
-                           text=True, timeout=5)
+                           text=True, timeout=5, creationflags=winproc.no_window())
         return r.stdout or ""
     except Exception:      # noqa: BLE001
         return ""
@@ -168,7 +168,8 @@ def _group_members_posix(pgid: int) -> List[int]:
                 continue
         return out
     try:
-        r = subprocess.run(["ps", "-A", "-o", "pid=,pgid="], capture_output=True, text=True, timeout=5)
+        r = subprocess.run(["ps", "-A", "-o", "pid=,pgid="], capture_output=True, text=True, timeout=5,
+                           creationflags=winproc.no_window())
         for line in (r.stdout or "").splitlines():
             parts = line.split()
             if len(parts) == 2 and parts[1] == str(pgid):

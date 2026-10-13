@@ -300,13 +300,6 @@ class McpStdioSession:
     _STREAM_LIMIT = 16 * 1024 * 1024
 
     async def start(self):
-        kwargs = {}
-        if os.name == "nt":
-            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        else:
-            # Nhóm tiến trình RIÊNG cho cả cây con - xem docstring _kill_tree (vụ 15/08:
-            # uvx bị kill nhưng server thật thành mồ côi, 96 tiến trình ăn hết RAM VPS).
-            kwargs["start_new_session"] = True
         if self._closed:
             raise ConnectionError("phiên đã đóng")
         # First stdio start of this server lifetime: kill what an earlier lifetime left running
@@ -316,6 +309,13 @@ class McpStdioSession:
             await asyncio.to_thread(mcp_orphans.reap_all)
         except Exception as e:      # noqa: BLE001 - cleanup must never block a session
             print(f"[mcp orphans] {type(e).__name__}: {e}", file=sys.stderr)
+        kwargs = {}
+        if os.name == "nt":
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        else:
+            # Nhóm tiến trình RIÊNG cho cả cây con - xem docstring _kill_tree (vụ 15/08:
+            # uvx bị kill nhưng server thật thành mồ côi, 96 tiến trình ăn hết RAM VPS).
+            kwargs["start_new_session"] = True
         env = dict(os.environ)
         env.update(self.env)
         self.proc = await asyncio.create_subprocess_exec(
