@@ -52,4 +52,47 @@ check("đủ khoá tiếng Anh", keys.length >= 11 && keys.every(function (k) { 
       keys.filter(function (k) { return !en[k]; }).join(","));
 check("không em dash trong chuỗi mới", keys.every(function (k) { return !/—/.test(vi[k] + en[k]); }));
 
-process.exit(fails ? 1 : 0);
+// ───────────── toggleAgent: chỉ báo thành công khi server xác nhận; luôn phát sự kiện để tải trạng thái thật ─────────────
+const events = [];
+global.window = { dispatchEvent: function (e) { events.push(e.type); },
+  JavisSessions: { brain: function () { return "brain"; } } };
+global.CustomEvent = function (type) { this.type = type; };
+let reply = { status: 200, body: { ok: true, agent: { slug: "viet-bai", enabled: true, status: "active" } } };
+const sent = [];
+global.fetch = function (url, init) {
+  sent.push([url, JSON.parse(init.body)]);
+  return Promise.resolve({ status: reply.status, json: function () { return Promise.resolve(reply.body); } });
+};
+(async function () {
+  let r = await RA.toggleAgent("viet-bai", true);
+  check("200: ok, gửi đúng route và thân, không kèm session_id", r.ok
+        && sent[0][0].indexOf("/resonance/agents/toggle?brain=brain") === 0 && sent[0][1].slug === "viet-bai"
+        && sent[0][1].enabled === true && !("session_id" in sent[0][1]), JSON.stringify(sent));
+  check("200: phát sự kiện tải lại", events.indexOf("javis:resonance-agents-changed") >= 0);
+  events.length = 0;
+  reply = { status: 409, body: { ok: false, error: "cần xác nhận" } };
+  r = await RA.toggleAgent("viet-bai", true);
+  check("409: không ok, mang lỗi của server, VẪN phát sự kiện để tải trạng thái thật", !r.ok
+        && r.error === "cần xác nhận" && events.indexOf("javis:resonance-agents-changed") >= 0);
+  events.length = 0;
+  global.fetch = function () { return Promise.reject(new Error("mạng")); };
+  r = await RA.toggleAgent("viet-bai", false);
+  check("rớt mạng: không ok, không ném lỗi, vẫn phát sự kiện", !r.ok && typeof r.error === "string" && r.error
+        && events.indexOf("javis:resonance-agents-changed") >= 0);
+
+  const WS = fs.readFileSync(path.join(ROOT, "dashboard", "workspace.js"), "utf8").replace(/\s+/g, " ");
+  check("trang Cộng sự đọc /resonance/agents MỘT lần cùng lúc với /agents; lỗi của nó không làm hỏng danh sách",
+        /Promise\.all\(\[api\("\/agents\?brain=" \+ b \+ "&prompt=0"\), api\("\/workflows\?brain=" \+ b\), api\("\/resonance\/agents\?brain=" \+ b\)\.catch\(function \(\) \{ return null; \}\)\]\)/.test(WS));
+  check("dòng trợ lý vẽ công tắc qua rowToggleHtml, nối dây ws-rs-toggle và ws-rs-confirm",
+        WS.includes("rowToggleHtml(") && WS.includes(".ws-rs-toggle") && WS.includes(".ws-rs-confirm") && WS.includes("toggleAgent("));
+  check("trang Cộng sự nghe sự kiện đồng bộ", WS.includes("javis:resonance-agents-changed"));
+  const APP = fs.readFileSync(path.join(ROOT, "dashboard", "app.js"), "latin1");
+  check("app.js đổi gói WS resonance_agents thành sự kiện", APP.includes('"resonance_agents"')
+        && APP.includes("javis:resonance-agents-changed"));
+  const SRC = fs.readFileSync(path.join(ROOT, "dashboard", "resonance-agent.js"), "utf8");
+  check("trang Cài đặt không còn trình nghe công tắc cũ, có nút sang trang Cộng sự",
+        !SRC.includes("rsa-set-toggle") && SRC.includes('JavisNav.go("workspace")'));
+  const CSS = fs.readFileSync(path.join(ROOT, "dashboard", "console.css"), "utf8");
+  check("CSS có .ws-rs và luật [hidden] riêng", CSS.includes(".ws-rs{") && CSS.includes(".ws-rs[hidden]"));
+  process.exit(fails ? 1 : 0);
+})();

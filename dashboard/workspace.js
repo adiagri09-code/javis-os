@@ -256,6 +256,8 @@
   var TRANG = 20;
   var S = { loai: "agent", q: "", nhom: "", thu: docThu(), agents: [], workflows: [], chon: { agent: null, workflow: null },
             el: null, tienDo: {}, sessionCuaPhien: {}, tabPhai: "lichsu",
+            // T0 nhóm chat team: trạng thái Cộng hưởng theo slug, và các dòng đang chờ server trả lời.
+            rs: {}, rsSaving: {},
             // Tab cột phải NHỚ RIÊNG theo loại. Trợ lý mở ở Lịch sử (chốt 16/09, xem TAB_PHAI);
             // quy trình mở ở Cài đặt vì nút Chạy nằm ở đó (chủ dự án chốt 17/09). Dùng chung
             // một ô nhớ thì vừa xem xong hội thoại của một trợ lý, sang quy trình là Lịch sử
@@ -299,6 +301,19 @@
   // danh sách của brain đó (rỗng). Brain thật về thì trang dựng lại và tải đúng. Nhưng lượt tải cũ vẫn
   // đang bay, và nếu nó về SAU lượt mới thì nó đè danh sách đúng bằng danh sách rỗng: màn "Chưa có
   // cộng sự nào" dù brain có cả chục trợ lý. Trả lỗi kiểu {"error"} cũng từng bị coi là danh sách rỗng.
+  // T0: GET /resonance/agents -> { slug: mục } để dòng trợ lý vẽ công tắc. Dữ liệu hỏng thì bản đồ rỗng.
+  function banDoCongHuong(j) {
+    var m = {};
+    ((j && Array.isArray(j.agents)) ? j.agents : []).forEach(function (a) { if (a && a.slug) m[a.slug] = a; });
+    return m;
+  }
+  async function taiCongHuong() {
+    var b0 = brain();
+    var j = await api("/resonance/agents?brain=" + encodeURIComponent(b0)).catch(function () { return null; });
+    if (b0 !== brain()) return false;
+    S.rs = banDoCongHuong(j); S.rsSaving = {};
+    return true;
+  }
   async function taiDanhSach() {
     var lan = lanDung, b0 = brain();
     var b = encodeURIComponent(b0);
@@ -306,11 +321,14 @@
     // còn 2.9 KB - 99% số byte là thứ cột trái không bao giờ hiện. Qua mạng nhà, 366 KB là cả
     // giây cột trái trống trơn mỗi lần mở trang (chủ dự án 22/09: mở trang Cộng sự từ linh vật
     // vẫn lag). Prompt của ĐÚNG trợ lý đang sửa do studio.js lấy riêng qua /agents/get.
-    var r = await Promise.all([api("/agents?brain=" + b + "&prompt=0"), api("/workflows?brain=" + b)]);
+    // T0 nhóm chat team: trạng thái Cộng hưởng của MỌI trợ lý trong cùng một lượt (một request, không gọi theo từng
+    // dòng). Request này lỗi thì danh sách vẫn hiện, chỉ là dòng không có công tắc (không đoán trạng thái).
+    var r = await Promise.all([api("/agents?brain=" + b + "&prompt=0"), api("/workflows?brain=" + b), api("/resonance/agents?brain=" + b).catch(function () { return null; })]);
     if (lan !== lanDung || b0 !== brain()) return false;
     if (!r[0] || !Array.isArray(r[0].agents) || !r[1] || !Array.isArray(r[1].workflows)) {
       throw new Error((r[0] && r[0].error) || (r[1] && r[1].error) || "list");
     }
+    S.rs = banDoCongHuong(r[2]);
     S.agents = sapXep(r[0].agents, "last_chat_at");
     S.workflows = sapXep(r[1].workflows.filter(function (w) { return w.status === "active"; }), "last_run_at");
     daTai = true;
@@ -843,6 +861,9 @@
       // Dấu ghim đứng NGOÀI khối chữ: trong đó nó bị ellipsis của cái tên cắt mất.
       (x.pinned ? '<span class="ws-item-pin" title="' + esc(t("ws.pinned")) + '">' + ic("pin") + '</span>' : "") +
       '</button>' +
+      // T0 nhóm chat team: công tắc Cộng hưởng của trợ lý, ngang hàng với hai nút (không lồng trong nút chọn mục).
+      (S.loai === "agent" && window.JavisResonanceAgent
+        ? window.JavisResonanceAgent.rowToggleHtml(S.rs[x.slug], { saving: !!S.rsSaving[x.slug] }) : "") +
       '<button type="button" class="ws-item-more" data-more="' + esc(x.slug) + '" title="' +
         esc(t("ws.manage")) + '" aria-label="' + esc(t("ws.manage")) + '">' + ic("ellipsis-vertical") + '</button>' +
       '</div>';
@@ -874,6 +895,36 @@
     });
     host.querySelectorAll("[data-gmore]").forEach(function (b) {
       b.onclick = function (e) { e.stopPropagation(); moMenuCuaNhom(b.dataset.gmore, b); };
+    });
+    // T0 nhóm chat team: công tắc Cộng hưởng trên dòng. Khoá trong lúc chờ server (bấm hai lần không gửi hai lệnh);
+    // chỉ server xác nhận mới đổi; lỗi thì nói lý do và vẽ lại theo trạng thái thật (toggleAgent luôn phát sự kiện).
+    host.querySelectorAll(".ws-rs-toggle").forEach(function (box) {
+      box.onclick = function (e) { e.stopPropagation(); };
+      box.onchange = function () {
+        var slug = box.dataset.rs, row = S.rs[slug];
+        var RA = window.JavisResonanceAgent;
+        if (!RA || !row || S.rsSaving[slug]) { box.checked = !box.checked; return; }
+        var muon = box.checked;
+        var hoi = muon ? "" : RA.offConfirmText(row);
+        if (hoi && !window.confirm(hoi)) { box.checked = !muon; return; }
+        S.rsSaving[slug] = true; veDanhSach();
+        RA.toggleAgent(slug, muon).then(function (kq) {
+          if (!kq.ok) {
+            S.tagNote = { loi: true, msg: t("resonance.t0_failed", { error: kq.error }) };
+            veTrai();
+          }
+        });
+      };
+    });
+    // Trợ lý `missing` hay `retired`: mở bảng bên phải của trợ lý đó, nơi có hai nút xác nhận của A1.
+    host.querySelectorAll(".ws-rs-confirm").forEach(function (b) {
+      b.onclick = function (e) {
+        e.stopPropagation();
+        S.chon[S.loai] = b.dataset.rsOpen; luuChon(); veDanhSach(); moPhien(dangChon(), false);
+        chonTabPhai("cai");
+        var page = S.el && S.el.querySelector("#wsPage");
+        if (page && window.matchMedia("(max-width: 1060px)").matches) page.classList.add("right-open");
+      };
     });
   }
 
@@ -1556,5 +1607,11 @@
   // Ghi lại sau khi nó mở xong để lần dựng trang sau vẫn ở đúng cuộc đã chọn.
   window.addEventListener("javis:sessions-changed", function () {
     if (active && ready && window.JavisSessions) luuViTri(window.JavisSessions.current());
+  });
+  // T0 nhóm chat team: trạng thái Cộng hưởng vừa đổi (tab này, tab khác qua gói WS resonance_agents, hay trang Cài
+  // đặt): đọc lại trạng thái THẬT của host rồi vẽ lại danh sách. Không giữ trạng thái người dùng vừa bấm.
+  window.addEventListener("javis:resonance-agents-changed", function () {
+    if (!active) return;
+    taiCongHuong().then(function (ok) { if (ok && active && S.loai === "agent") veDanhSach(); });
   });
 })();

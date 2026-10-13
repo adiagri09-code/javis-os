@@ -2326,7 +2326,8 @@ def _resonance_agents_meta(root):
 _RESONANCE_API_DEPS = resonance_api.ResonanceApiDeps(
     store=lambda: _resonance_store(), brain_key=lambda b: _brain_key(b),
     engine_factory=lambda s, t="resonance": _resonance_engine(s, t), session_store=lambda: get_store(),
-    agents_meta=_resonance_agents_meta, agent_file=lambda root, slug: _agent_md_path(root, slug))
+    agents_meta=_resonance_agents_meta, agent_file=lambda root, slug: _agent_md_path(root, slug),
+    broadcast=lambda ev: _CHAT_RUNTIME.publish(ev))
 resonance_api.register(app, _RESONANCE_API_DEPS)
 _RESONANCE_TICK_BUSY = [False]
 

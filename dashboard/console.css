@@ -1923,6 +1923,15 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .ws-item-pin { flex: none; display: inline-flex; margin-left: auto; margin-right: 22px;
   color: var(--accent); }
 .ws-item-pin svg { width: 14px; height: 14px; }
+/* T0 nhóm chat team: công tắc Cộng hưởng của trợ lý, một dải nhỏ ngay dưới tên, thẳng hàng với chữ (sau ảnh 42px).
+   Nằm NGOÀI nút chọn mục (nút trong nút là HTML sai). Trạng thái luôn có chữ, không chỉ màu. */
+.ws-rs{display:flex;align-items:center;gap:8px;margin:-6px 30px 6px 64px;font-size:11.5px;color:var(--text3);
+  min-height:28px;white-space:nowrap;cursor:pointer;background:none;border:0;padding:0;text-align:left}
+.ws-rs[hidden]{display:none}
+.ws-rs .ws-rs-text{overflow:hidden;text-overflow:ellipsis}
+.ws-rs .toggle{flex:none}
+.ws-rs-confirm{color:var(--warning, #b7791f);text-decoration:underline;text-underline-offset:2px}
+@media (max-width: 600px){ .ws-rs{min-height:44px;margin-left:58px} }
 /* Cả hàng ghim mang một vạch màu bên trái - dấu ghim nhỏ, vạch mới là thứ đọc được khi liếc. */
 .ws-item-wrap.ghim > .ws-item { border-left: 3px solid var(--accent); border-radius: 9px; }
 /* Nhãn nhóm "Đã ghim" / "Còn lại", cùng bộ mặt với nhãn nhóm ngày của cột lịch sử. */

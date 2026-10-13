@@ -86,8 +86,10 @@ check("cài đặt: không có mục tiêu chờ gán thì không vẽ mục đ�
 check("brain chưa có trợ lý: chỉ đường tạo ở trang Cộng sự", RA.settingsHtml({ agents: [] }, []).includes(vi["resonance.a1_settings_empty"]));
 
 // ───────────── dây nối ─────────────
-check("API công tắc đi đúng route chủ dự án, kèm phiên đang mở",
-      SRC.includes("/resonance/agents/toggle") && /session_id: currentSession()/.test(SRC) && SRC.includes("/goals/\" + q("));
+// T0 nhóm chat team: công tắc trên dòng trợ lý không gửi session_id; trạng thái của phiên đang mở vẫn do bảng bên phải
+// hỏi lại host (GET /resonance/agents kèm session_id), nên P2 của review A1 vẫn được giữ.
+check("API công tắc đi đúng route chủ dự án; bảng bên phải hỏi host trạng thái của phiên đang mở",
+      SRC.includes("/resonance/agents/toggle") && /"&session_id=" \+ q\(sid\)/.test(SRC) && SRC.includes("/goals/\" + q("));
 check("không còn đọc hay ghi công tắc brain cũ ở giao diện", !CR.includes("/resonance/settings") && !SRC.includes("/resonance/settings")
       && !HTML.includes('id="resonanceEnabled"'));
 check("trang Cài đặt có chỗ cho danh sách trợ lý, nạp resonance-agent.js sau chat-resonance.js",
