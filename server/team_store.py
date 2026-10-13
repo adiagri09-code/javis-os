@@ -79,6 +79,14 @@ class TeamError(Exception):
     """Thao tác không hợp lệ với trạng thái hiện tại của nhóm (route trả 409 hay 400)."""
 
 
+class TurnCapReached(TeamError):
+    """Giữ chỗ lượt bị từ chối vì chạm trần (`cap` là "daily_turns" hay "task_turns"). Không có dòng nào được ghi."""
+
+    def __init__(self, cap: str):
+        super().__init__(cap)
+        self.cap = cap
+
+
 def _j(v: Any) -> str:
     return json.dumps(v, ensure_ascii=False, sort_keys=True)
 
@@ -93,6 +101,10 @@ class TeamStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._conn()) as c:
             c.executescript(_SCHEMA)
+            cols = {r[1] for r in c.execute("PRAGMA table_info(team_turns)").fetchall()}
+            if "committed_at" not in cols:
+                # Mốc ghi bài học của lượt vào bộ nhớ agent (chỉ một lần, chỉ khi đầu ra được chấp nhận).
+                c.execute("ALTER TABLE team_turns ADD COLUMN committed_at REAL")
 
     def _conn(self) -> sqlite3.Connection:
         c = sqlite3.connect(str(self.path), timeout=10, isolation_level=None)
@@ -145,6 +157,11 @@ class TeamStore:
                                                  session_id, now, now))
             self._event(c, tid, "created", by, None, {"name": name})
         return self.get(tid)
+
+    def open_teams(self) -> list:
+        """Mọi nhóm chưa lưu trữ, ở mọi brain (đối soát lúc khởi động)."""
+        with closing(self._conn()) as c:
+            return [self._team(r) for r in c.execute("SELECT * FROM teams WHERE status != 'archived'").fetchall()]
 
     def get(self, team_id: str) -> Optional[dict]:
         with closing(self._conn()) as c:
@@ -397,11 +414,22 @@ class TeamStore:
     # ───────────── sổ lượt ─────────────
 
     def reserve_turn(self, team_id: str, task_id: Optional[str], step_id: Optional[str], agent_key: str,
-                     role: str) -> str:
+                     role: str, *, daily_cap: Optional[int] = None, day_start: float = 0.0,
+                     task_cap: Optional[int] = None) -> str:
+        """Giữ chỗ một lượt. Có trần thì đếm và ghi trong CÙNG một giao dịch BEGIN IMMEDIATE: hai lượt giữ chỗ đồng thời
+        (hai luồng, hai tiến trình) không cùng lọt qua chỗ trống cuối cùng. Chạm trần thì ném `TurnCapReached`."""
         if role not in TURN_ROLES:
             raise TeamError("vai lượt không hợp lệ")
         tid = "tu_" + secrets.token_hex(8)
         with self._Tx(self) as c:
+            if daily_cap is not None and int(c.execute(
+                    "SELECT COUNT(*) FROM team_turns WHERE team_id=? AND status != 'refunded' AND created_at >= ?",
+                    (team_id, float(day_start))).fetchone()[0]) >= int(daily_cap):
+                raise TurnCapReached("daily_turns")
+            if task_id and task_cap is not None and int(c.execute(
+                    "SELECT COUNT(*) FROM team_turns WHERE task_id=? AND status != 'refunded'",
+                    (task_id,)).fetchone()[0]) >= int(task_cap):
+                raise TurnCapReached("task_turns")
             c.execute("INSERT INTO team_turns(turn_id,team_id,task_id,step_id,agent_key,role,created_at) "
                       "VALUES(?,?,?,?,?,?,?)", (tid, team_id, task_id, step_id, agent_key, role, time.time()))
         return tid
@@ -429,6 +457,13 @@ class TeamStore:
             if r["engine_at"] is not None:
                 raise TeamError("lượt đã gọi engine, không hoàn được")
             c.execute("UPDATE team_turns SET status='refunded', settled_at=? WHERE turn_id=?", (time.time(), turn_id))
+
+    def claim_commit(self, turn_id: str) -> bool:
+        """Giành quyền ghi bài học của lượt `turn_id` vào bộ nhớ agent: True đúng một lần, cho lượt đã chốt `ok`.
+        Lượt bị xử lý lặp (gọi lại, phục hồi) không ghi lần hai."""
+        with self._Tx(self) as c:
+            return c.execute("UPDATE team_turns SET committed_at=? WHERE turn_id=? AND status='ok' "
+                             "AND committed_at IS NULL", (time.time(), turn_id)).rowcount == 1
 
     def turn(self, turn_id: str) -> Optional[dict]:
         with closing(self._conn()) as c:

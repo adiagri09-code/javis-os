@@ -6821,7 +6821,9 @@ async def delete_agent(slug: str = Form(...), brain: str = Form("brain")):
         # Tìm và xoá file TRONG khoá ghi agent, ở worker (R5): thao tác tag hay form đang giữ khoá thì xoá
         # đợi nó ghi xong rồi mới xoá; thao tác tới sau thấy file đã mất và không tạo lại. Đợi khoá ở
         # worker nên event loop không bị chặn (R4).
-        with _AGENT_META_LOCK:
+        # Nhóm chat team (review T1, R3): xoá trong khoá chấp nhận đầu ra của bộ chạy nhóm, nên một lượt nhóm đang về
+        # không thể ghi bài học vào agent vừa bị xoá.
+        with _TEAM_API.guard(), _AGENT_META_LOCK:
             f = _agent_file(brain, slug)
             if f:
                 f.unlink()
@@ -22072,6 +22074,7 @@ resonance_api.register_a5(app, _RESONANCE_API_DEPS)
 
 # ── Nhóm chat team (T1, spec docs/superpowers/specs/2026-10-13-team-chat-design.md) ──
 import team_api  # noqa: E402
+import team_runner  # noqa: E402
 
 
 def _team_agent_info(root, agent_key):
@@ -22092,35 +22095,60 @@ def _team_agent_info(root, agent_key):
 def _team_engine_for(team, agent_key, role):
     """Engine CHỈ CHỮ cho một lượt nhóm (phán quyết R3 của kế hoạch T1): thư mục trống, không MCP, cổng từ chối mọi công
     cụ. Agent có model Claude riêng (`model` + provider anthropic-cli) thì chạy model đó; còn lại dùng model việc nền như
-    lượt Cộng hưởng, không tự đổi provider. JAVIS_LESSON / JAVIS_RULE xử lý như chat agent (`_ket_luot_agent`)."""
+    lượt Cộng hưởng, không tự đổi provider.
+
+    Review T1:
+    - R4: engine được DỰNG xong (và báo sẵn sàng) rồi mới gọi `req["engine_started"]`, mốc tính lượt của bộ chạy; dựng
+      hỏng thì ném EngineUnavailable trước mốc, lượt được hoàn.
+    - R1: kết cục đọc theo hợp đồng chỉ chữ (`team_runner.TextOnlyOutcome`): final lỗi, lỗi đăng nhập, lỗi sau final,
+      gọi công cụ, thiếu final, câu trả lời rỗng đều là lượt lỗi, không bao giờ thành sản phẩm.
+    - R3: JAVIS_LESSON / JAVIS_RULE chỉ được BÓC ở đây (không ghi gì). Việc ghi vào bộ nhớ agent là `commit`, bộ chạy chỉ
+      gọi sau khi kiểm đầu ra còn hợp lệ; `commit` kiểm lại danh tính (mã bền còn trỏ đúng slug) ngay trước khi ghi."""
     root = team["brain_id"]
     info = _team_agent_info(root, agent_key) or {}
     model = info.get("model") or ""
     own_claude = bool(model) and _agent_model_provider(model, info.get("model_provider") or "") == "anthropic-cli"
 
-    async def run(req):
-        tag = f"team-{str(req['team_id'])[-8:]}"
+    def _build(system, tag):
         if own_claude:
-            eng = _reply_policy_sandbox_engine(req["system"], tag, cwd_name="team_cwd")
+            eng = _reply_policy_sandbox_engine(system, tag, cwd_name="team_cwd")
             eng.model = model
         else:
-            eng, why = _resonance_engine(req["system"], tag)
+            eng, why = _resonance_engine(system, tag)
             if eng is None:
-                raise RuntimeError(f"model việc nền chưa chạy được lượt chỉ chữ: {why.get('reason') or why}")
-        final, tin, tout = "", None, None
-        async for ev in eng.query(req["prompt"]):
-            et = ev.get("type")
-            if et == "final":
-                final = ev.get("content", "") or ""
-            elif et == "usage":
-                tin = int(ev.get("input_tokens") or 0)
-                tout = int(ev.get("output_tokens") or 0)
-            elif et == "error":
-                raise RuntimeError(str(ev.get("content") or "lỗi engine")[:300])
-        if info.get("slug"):
-            final = await asyncio.to_thread(_ket_luot_agent, root, info["slug"], "", final)
-        return {"text": final, "tokens_in": tin, "tokens_out": tout}
+                raise team_runner.EngineUnavailable(
+                    f"model việc nền chưa chạy được lượt chỉ chữ: {(why or {}).get('reason') or why}")
+        avail = getattr(eng, "is_available", None)
+        if callable(avail) and not avail():
+            raise team_runner.EngineUnavailable("engine chưa sẵn sàng (kiểm tra trang Models)")
+        return eng
 
+    async def run(req):
+        tag = f"team-{str(req['team_id'])[-8:]}"
+        eng = await asyncio.to_thread(_build, req["system"], tag)
+        await req["engine_started"]()
+        outcome = team_runner.TextOnlyOutcome()
+        async for ev in eng.query(req["prompt"]):
+            outcome.note(ev)
+        res = outcome.result()
+        slug = info.get("slug") or ""
+        # JAVIS_RULE trong lượt nhóm không có chủ nói trực tiếp với agent: hạ thành bài học (như bước workflow).
+        rules, text = agent_rules.extract_rules(res["text"])
+        lessons, clean = _boc_bai_hoc(text)
+        lessons = list(lessons) + list(rules)
+
+        def commit():
+            now = _team_agent_info(root, agent_key) or {}
+            if not slug or now.get("slug") != slug:
+                raise RuntimeError("agent đã đổi danh tính, không ghi bài học")
+            if lessons:
+                _ghi_bai_hoc(root, slug, lessons)
+            _log_agent_run(root, slug, "", clean)
+
+        return {"text": clean, "tokens_in": res["tokens_in"], "tokens_out": res["tokens_out"],
+                "lessons": lessons, "commit": commit}
+
+    run.marks_engine = True
     return ("anthropic-cli" if own_claude else "aux"), model, run
 
 

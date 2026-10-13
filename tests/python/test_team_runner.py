@@ -517,7 +517,11 @@ jq = r.submit(T["team_id"], "Việc dài", mentions=["ag_minh"], as_job=True, cl
 
 async def cancel_mid_turn():
     await r.dispatch_once(wait=False)
-    await asyncio.sleep(0.05)
+    # Chờ tới khi lượt ĐANG ở engine (không ngủ một khoảng cố định: I/O ở luồng phụ, máy bận thì lâu hơn 50 ms).
+    for _ in range(500):
+        if fake.by("ag_minh"):
+            break
+        await asyncio.sleep(0.01)
     prev = r.cancel_job(jq["task_id"])
     await r.wait_jobs()
     return prev

@@ -155,4 +155,168 @@ NEW_TS.TaskStore(fresh / "kanban.sqlite3").close()
 NEW_SS.SessionStore(db_path=fresh / "conversations.db")._conn.close()
 check("kho mới tinh: không có snapshot", not list(fresh.glob("*" + TM.SNAPSHOT_SUFFIX)))
 check("công cụ báo rõ khi không có snapshot", RESTORE.restore(str(fresh))["ok"] is False)
+
+
+# ═════════════ R6 (review T1 vòng 1): vòng hạ, nâng với NHÓM THẬT, cả bộ ba kho ═════════════
+import asyncio  # noqa: E402
+
+import team_runner as NEW_TR  # noqa: E402
+import team_store as NEW_TEAM  # noqa: E402
+
+
+def fake_engine_for(team, key, role):
+    async def run_(req):
+        return {"text": f"{key} trả lời"}
+    return "fake", "fake", run_
+
+
+def old_state(prefix):
+    """Mã 0.109.0 thật lập kho Kanban (một việc) và kho phiên (một tin)."""
+    st = Path(tempfile.mkdtemp(prefix=prefix))
+    o = OLD_TS.TaskStore(st / "kanban.sqlite3")
+    kid = o.enqueue(B, "Việc cũ", "Việc cũ", status="ready")
+    o.close()
+    oss = OLD_SS.SessionStore(db_path=st / "conversations.db")
+    sid = oss.create_session(brain="B", channel="web")
+    oss.append_message(sid, "user", "tin cũ")
+    oss._conn.close()
+    return st, kid, sid
+
+
+def t1_world(st):
+    ss = NEW_SS.SessionStore(db_path=st / "conversations.db")
+    ts = NEW_TS.TaskStore(st / "kanban.sqlite3")
+    tm = NEW_TEAM.TeamStore(st / "team.sqlite3")
+    r = NEW_TR.TeamRunner(teams=tm, tasks=ts, sessions=ss, engine_for=fake_engine_for,
+                          agent_info=lambda root, key: {"slug": key, "name": key, "system": ""})
+    return ss, ts, tm, r
+
+
+def t1_team(ss, tm, r, name="Nhóm thật"):
+    """Một nhóm thật: phiên team:, hai thành viên, trưởng nhóm, một lượt trò chuyện và một việc nhóm đã xong."""
+    tid = NEW_TEAM.new_team_id()
+    sid = ss.create_session(brain="B", channel=f"team:{tid}", title=name)
+    tm.create_team(B, name, "", sid, team_id=tid)
+    for k in ("ag_a", "ag_b"):
+        tm.add_member(tid, k, k)
+    tm.set_leader(tid, "ag_a")
+    asyncio.run(r.run_replies(r.submit(tid, "Chào nhóm", client_msg_id="hello")))
+    job = r.submit(tid, "Việc nhóm", mentions=["ag_b"], as_job=True, client_msg_id="job")["task_id"]
+    asyncio.run(r.dispatch_once())
+    return tid, sid, job
+
+
+def close(ss, ts):
+    ss._conn.close()
+    ts.close()
+
+
+def count(db, sql):
+    with sqlite3.connect(str(db)) as c:
+        return c.execute(sql).fetchone()[0]
+
+
+# R6.1 Vòng đầy đủ: 0.109.0 -> T1 có nhóm thật -> khôi phục -> 0.109.0 -> T1 lại.
+st, k6, s6 = old_state("state-r6-round-")
+ss, ts, tm, r = t1_world(st)
+tid6, tsid6, job6 = t1_team(ss, tm, r)
+check("R6 dựng nhóm thật trên kho đã nâng: có tin trả lời và việc nhóm xong",
+      ts.get_task(job6)["status"] == "done" and len(ss.get_team_messages_page(tsid6, limit=50)["messages"]) >= 4)
+close(ss, ts)
+res = RESTORE.restore(str(st))
+team_db = st / "team.sqlite3"
+kept_team = [Path(p) for p in res["kept"] if Path(p).name.startswith("team.sqlite3.post-0.111.0-")]
+check("R6 khôi phục cả bộ: ok, gỡ team.sqlite3 khỏi chỗ chạy, giữ bản sao của cả ba kho",
+      res["ok"] and not team_db.exists() and str(team_db) in res.get("removed", []) and len(res["kept"]) == 3
+      and len(kept_team) == 1, res)
+check("R6 bản sao kho nhóm còn nguyên nhóm, thành viên, sổ lượt để đối chiếu",
+      kept_team and count(kept_team[0], "SELECT COUNT(*) FROM teams") == 1
+      and count(kept_team[0], "SELECT COUNT(*) FROM team_members") == 2
+      and count(kept_team[0], "SELECT COUNT(*) FROM team_turns WHERE status='ok'") >= 2)
+ot = OLD_TS.TaskStore(st / "kanban.sqlite3")
+os_ = OLD_SS.SessionStore(db_path=st / "conversations.db")
+check("R6 sau khôi phục, mã 0.109.0: việc và tin cũ còn, không còn việc, phiên nhóm",
+      ot.get_task(k6) is not None and ot.get_task(job6) is None and os_.get_session(tsid6) is None
+      and [m["content"] for m in os_.get_messages(s6)] == ["tin cũ"])
+ot.close()
+os_._conn.close()
+ss, ts, tm, r = t1_world(st)
+check("R6 nâng lại: không có nhóm nào sống trỏ vào phiên đã mất", tm.get(tid6) is None and tm.list_teams(B) == [])
+try:
+    r.submit(tid6, "Gửi lại", client_msg_id="again")
+    err6 = None
+except Exception as ex:  # noqa: BLE001
+    err6 = type(ex).__name__
+check("R6 gửi vào nhóm cũ sau nâng lại: lỗi nghiệp vụ rõ (TeamError), không phải lỗi khoá ngoại", err6 == "TeamError",
+      err6)
+tid6b, tsid6b, job6b = t1_team(ss, tm, r, "Nhóm mới sau nâng lại")
+check("R6 nâng lại: tạo nhóm mới, trò chuyện, chạy việc bình thường", ts.get_task(job6b)["status"] == "done")
+close(ss, ts)
+
+# R6.2 Kho nhóm còn mà kho phiên đã về bản cũ (công cụ khôi phục cũ, hay chép tay): nhóm mồ côi bị lưu trữ, không sống.
+st, k7, s7 = old_state("state-r6-orphan-")
+ss, ts, tm, r = t1_world(st)
+tid7, tsid7, _ = t1_team(ss, tm, r)
+open7 = r.submit(tid7, "Việc còn chờ", as_job=True, client_msg_id="wait")["task_id"]
+close(ss, ts)
+for name in ("kanban.sqlite3", "conversations.db"):
+    RESTORE._backup(st / (name + TM.SNAPSHOT_SUFFIX), st / name)   # đúng hành vi công cụ cũ: để nguyên team.sqlite3
+ss, ts, tm, r = t1_world(st)
+check("R6 tình huống mồ côi tái hiện: nhóm còn trong kho nhóm, phiên đã mất", tm.get(tid7) is not None
+      and ss.get_session(tsid7) is None)
+try:
+    r.submit(tid7, "Hello", client_msg_id="orphan")
+    err7 = None
+except Exception as ex:  # noqa: BLE001
+    err7 = type(ex).__name__
+check("R6 nhóm mồ côi: gửi tin trả TeamError, không IntegrityError", err7 == "TeamError", err7)
+import team_api as NEW_API  # noqa: E402
+
+api = NEW_API.TeamApi(NEW_API.TeamApiDeps(
+    brain_key=lambda b: b, session_store=lambda: ss, task_store=lambda: ts, resonance_store=lambda: None,
+    agents_meta=lambda root: [], agent_info=lambda root, key: None, engine_for=fake_engine_for,
+    spawn=lambda coro: coro.close() if asyncio.iscoroutine(coro) else None, store_path=st / "team.sqlite3"))
+api.prime()
+asyncio.run(api.tick())
+t7 = api.teams().get(tid7)
+check("R6 khởi động có nhóm mồ côi: vòng nền lưu trữ nhóm, ghi sự kiện session_missing, huỷ việc còn mở",
+      t7["status"] == "archived" and any(e["kind"] == "session_missing" for e in api.teams().events(tid7))
+      and (ts.get_task(open7) is None or ts.get_task(open7)["status"] == "cancelled"), t7)
+check("R6 dữ liệu nhóm mồ côi giữ nguyên để đối chiếu (không xoá)", len(api.teams().members(tid7)) == 2
+      and len(api.teams().turns(tid7)) >= 2)
+close(ss, ts)
+
+# R6.3 Thiếu snapshot của một kho đã nâng: không đụng kho nào, không báo thành công.
+st, k8, s8 = old_state("state-r6-missing-")
+ss, ts, tm, r = t1_world(st)
+tid8, _, _ = t1_team(ss, tm, r)
+close(ss, ts)
+(st / ("kanban.sqlite3" + TM.SNAPSHOT_SUFFIX)).unlink()
+before = sorted(p.name for p in st.iterdir())
+res = RESTORE.restore(str(st))
+check("R6 thiếu snapshot kanban: không khôi phục, báo rõ kho thiếu", res["ok"] is False and "kanban" in res["error"]
+      and res["restored"] == [], res)
+check("R6 thiếu snapshot: không ghi gì (không bản sao, không gỡ kho nhóm, kho vẫn là bản đã nâng)",
+      sorted(p.name for p in st.iterdir()) == before and (st / "team.sqlite3").is_file()
+      and "author_kind" in cols(st / "conversations.db", "messages") and "lane" in cols(st / "kanban.sqlite3", "tasks"))
+
+# R6.4 Hỏng giữa chừng: trả mọi kho đã đụng về bản trước khi khôi phục, báo lỗi; chạy lại thì xong.
+st, k9, s9 = old_state("state-r6-partial-")
+ss, ts, tm, r = t1_world(st)
+tid9, tsid9, job9 = t1_team(ss, tm, r)
+close(ss, ts)
+try:
+    res = RESTORE.restore(str(st), _fail_on="conversations.db")
+except TypeError:   # công cụ không có chỗ giả lập hỏng: không kiểm được đường trả về
+    res = {"ok": None, "restored": None, "error": "không có chỗ giả lập hỏng"}
+check("R6 hỏng khi ghi kho thứ hai: báo lỗi, không báo thành công", res["ok"] is False and res["restored"] == []
+      and "khôi phục dở" in res["error"], res)
+ss, ts, tm, r = t1_world(st)
+check("R6 hỏng giữa chừng: kanban đã ghi được trả về bản sau nâng (còn việc nhóm), kho nhóm trả về chỗ, nhóm vẫn chạy",
+      "lane" in cols(st / "kanban.sqlite3", "tasks") and ts.get_task(job9) is not None
+      and tm.get(tid9) is not None and ss.get_session(tsid9) is not None)
+close(ss, ts)
+res = RESTORE.restore(str(st))
+check("R6 chạy lại sau lần hỏng: khôi phục cả bộ xong", res["ok"] and not (st / "team.sqlite3").exists()
+      and "lane" not in cols(st / "kanban.sqlite3", "tasks"), res)
 raise SystemExit(1 if fails else 0)

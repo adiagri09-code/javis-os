@@ -3,14 +3,23 @@
     python tools/team_chat_restore_pre.py --yes
     python tools/team_chat_restore_pre.py --state-dir /duong/dan/state --yes
 
-CHẠY KHI JAVIS ĐÃ TẮT. Với từng kho có snapshot (`kanban.sqlite3`, `conversations.db`), script làm đúng hai bước, đều
-bằng SQLite backup API (lấy cả phần còn trong WAL, không chép thô file):
-1. Chép kho HIỆN TẠI sang `<tên>.post-0.111.0-<thời điểm>` để giữ hồ sơ sau nâng (việc nhóm, tin nhóm).
-2. Ghi đè kho bằng snapshot `<tên>.pre-0.111.0` mà mã 0.111.0 tạo một lần lúc nâng.
+CHẠY KHI JAVIS ĐÃ TẮT. Khôi phục CẢ BỘ ba kho liên quan, nhất quán với nhau (review T1, R6):
+- `kanban.sqlite3`, `conversations.db`: về snapshot `<tên>.pre-0.111.0` mà mã 0.111.0 tạo một lần lúc nâng.
+- `team.sqlite3`: trước 0.111.0 không có kho này, nên trạng thái trước nâng là KHÔNG CÓ. Kho được cất sang bên (bản sao
+  bằng chứng) rồi gỡ khỏi chỗ chạy. Nhờ vậy nâng lại lần sau không có nhóm nào trỏ vào phiên đã mất.
 
-Hậu quả, cũng ghi trong ghi chú phát hành: mọi việc Kanban và tin chat sau lúc nâng biến mất khỏi kho chạy (bản sao ở
-bước 1 vẫn đọc được). `team.sqlite3` để nguyên: mã cũ không đọc nó. Hạ KHÔNG khôi phục vẫn chạy được: mã cũ không nhặt
-việc nhóm, nhưng trang Việc hiện các dòng `team_*` với trạng thái lạ và phiên `team:` hiện như phiên thường.
+Thứ tự, để không bao giờ báo thành công cho một lần khôi phục dở:
+1. Kiểm trước điều kiện của cả bộ, chưa ghi gì: kho nào đã được nâng (có cột mới) thì PHẢI có snapshot hợp lệ (snapshot
+   chưa có cột mới). Thiếu hay hỏng một snapshot là dừng, không đụng kho nào.
+2. Chép MỌI kho hiện tại sang `<tên>.post-0.111.0-<thời điểm>` bằng SQLite backup API (lấy cả phần còn trong WAL): hồ sơ
+   sau nâng (việc nhóm, tin nhóm, nhóm, sổ lượt) giữ nguyên để đọc lại.
+3. Gỡ `team.sqlite3` (cùng file -wal, -shm) khỏi chỗ chạy.
+4. Ghi đè từng kho bằng snapshot. Một bước hỏng thì trả các kho đã ghi (và `team.sqlite3`) về đúng bản ở bước 2, báo lỗi.
+
+Mất khỏi kho chạy: mọi việc Kanban, tin chat và nhóm sau lúc nâng. Giữ: các bản `.post-0.111.0-<thời điểm>` cạnh file
+kho, và snapshot `.pre-0.111.0` (nâng lại dùng lại đúng snapshot này, không chụp đè). Hạ KHÔNG khôi phục vẫn chạy được:
+mã cũ không nhặt việc nhóm, nhưng trang Việc hiện các dòng `team_*` với trạng thái lạ và phiên `team:` hiện như phiên
+thường.
 """
 from __future__ import annotations
 
@@ -23,43 +32,116 @@ from contextlib import closing
 from pathlib import Path
 
 SNAPSHOT_SUFFIX = ".pre-0.111.0"
-# (file kho, bảng, cột chỉ có từ 0.111.0): kiểm snapshot đúng là bản trước nâng.
+POST_TAG = ".post-0.111.0-"
+# (file kho, bảng, cột chỉ có từ 0.111.0): kiểm kho đã nâng và snapshot đúng là bản trước nâng.
 STORES = (("kanban.sqlite3", "tasks", "lane"), ("conversations.db", "messages", "author_kind"))
+TEAM_STORE = "team.sqlite3"
 
 
 def _backup(src: Path, dst: Path) -> None:
     with closing(sqlite3.connect(str(src), timeout=10)) as s, closing(sqlite3.connect(str(dst), timeout=10)) as d:
         s.backup(d)
+    with closing(sqlite3.connect(str(dst), timeout=10)) as c:
+        c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
 
-def restore(state_dir: str) -> dict:
-    """Khôi phục các snapshot trước 0.111.0 trong `state_dir`. Trả {ok, restored, kept, error}."""
+def _columns(path: Path, table: str) -> set:
+    with closing(sqlite3.connect(str(path), timeout=10)) as c:
+        return {r[1] for r in c.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def _remove_db(path: Path) -> None:
+    for p in (path, path.with_name(path.name + "-wal"), path.with_name(path.name + "-shm")):
+        if p.exists():
+            p.unlink()
+
+
+def plan(state_dir: str) -> dict:
+    """Bước 1: kiểm cả bộ kho, không ghi gì. Trả {ok, todo: [(kho, snapshot)], team: đường dẫn | None, error}."""
     root = Path(state_dir)
-    restored, kept = [], []
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    todo = [(root / f, t, c) for f, t, c in STORES if (root / (f + SNAPSHOT_SUFFIX)).is_file()]
+    todo, problems = [], []
+    for name, table, marker in STORES:
+        store, snap = root / name, root / (name + SNAPSHOT_SUFFIX)
+        try:
+            upgraded = store.is_file() and marker in _columns(store, table)
+        except sqlite3.Error as ex:
+            problems.append(f"không đọc được {name}: {ex}")
+            continue
+        if snap.is_file():
+            try:
+                snap_cols = _columns(snap, table)
+            except sqlite3.Error as ex:
+                problems.append(f"snapshot {snap.name} hỏng: {ex}")
+                continue
+            if marker in snap_cols:
+                problems.append(f"{snap.name} đã có cột {marker}; không phải bản trước 0.111.0")
+                continue
+            if not snap_cols:
+                problems.append(f"{snap.name} không có bảng {table}")
+                continue
+            todo.append((store, snap))
+        elif upgraded:
+            problems.append(f"{name} đã được 0.111.0 nâng mà thiếu snapshot {snap.name}")
+    team = root / TEAM_STORE
+    if problems:
+        return {"ok": False, "todo": [], "team": None, "error": "; ".join(problems)}
     if not todo:
-        return {"ok": False, "restored": [], "kept": [],
+        return {"ok": False, "todo": [], "team": None,
                 "error": "không có snapshot .pre-0.111.0: kho chưa từng được 0.111.0 nâng lên, không có gì để khôi phục"}
-    for store, table, marker in todo:
-        snap = store.with_name(store.name + SNAPSHOT_SUFFIX)
-        with closing(sqlite3.connect(str(snap), timeout=10)) as c:
-            if marker in {r[1] for r in c.execute(f"PRAGMA table_info({table})").fetchall()}:
-                return {"ok": False, "restored": restored, "kept": kept,
-                        "error": f"{snap.name} đã có cột {marker}; không phải bản trước 0.111.0"}
-        if store.is_file():
-            post = store.with_name(f"{store.name}.post-0.111.0-{stamp}")
+    return {"ok": True, "todo": todo, "team": team if team.is_file() else None, "error": ""}
+
+
+def restore(state_dir: str, *, _fail_on: str = "") -> dict:
+    """Khôi phục cả bộ kho trong `state_dir` về trước 0.111.0. Trả {ok, restored, kept, removed, error}.
+
+    `_fail_on` (chỉ cho test): tên kho mà bước ghi đè giả lập hỏng, để kiểm đường trả về bản trước khi khôi phục."""
+    p = plan(state_dir)
+    if not p["ok"]:
+        return {"ok": False, "restored": [], "kept": [], "removed": [], "error": p["error"]}
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    kept: dict = {}
+    # Bước 2: bản sao bằng chứng của mọi kho hiện có.
+    currents = [store for store, _ in p["todo"] if store.is_file()] + ([p["team"]] if p["team"] else [])
+    try:
+        for store in currents:
+            post = store.with_name(f"{store.name}{POST_TAG}{stamp}")
             _backup(store, post)
-            kept.append(str(post))
-        _backup(snap, store)
-        with closing(sqlite3.connect(str(store), timeout=10)) as c:
-            c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        restored.append(str(store))
-    return {"ok": True, "restored": restored, "kept": kept}
+            kept[store] = post
+    except Exception as ex:  # noqa: BLE001
+        return {"ok": False, "restored": [], "kept": [str(v) for v in kept.values()], "removed": [],
+                "error": f"không chép được bản sao trước khi khôi phục: {type(ex).__name__}: {ex}"}
+    restored, removed = [], []
+    try:
+        # Bước 3: gỡ kho nhóm khỏi chỗ chạy (đã có bản sao).
+        if p["team"]:
+            _remove_db(p["team"])
+            removed.append(str(p["team"]))
+        # Bước 4: ghi đè từng kho bằng snapshot.
+        for store, snap in p["todo"]:
+            if _fail_on and store.name == _fail_on:
+                raise OSError(f"giả lập hỏng khi ghi {store.name}")
+            _backup(snap, store)
+            restored.append(store)
+    except Exception as ex:  # noqa: BLE001
+        back = []
+        for store in restored + ([p["team"]] if p["team"] else []):
+            src = kept.get(store)
+            try:
+                if src is not None:
+                    _remove_db(store)
+                    _backup(src, store)
+                    back.append(store.name)
+            except Exception as ex2:  # noqa: BLE001
+                back.append(f"{store.name} (KHÔNG trả về được: {ex2})")
+        return {"ok": False, "restored": [], "kept": [str(v) for v in kept.values()], "removed": [],
+                "error": f"khôi phục dở ở {type(ex).__name__}: {ex}; đã trả về bản trước khi khôi phục: "
+                         + (", ".join(back) or "không có kho nào cần trả")}
+    return {"ok": True, "restored": [str(s) for s in restored], "kept": [str(v) for v in kept.values()],
+            "removed": removed}
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="Khôi phục kho Kanban và kho phiên về snapshot trước 0.111.0 "
+    ap = argparse.ArgumentParser(description="Khôi phục kho Kanban, kho phiên và kho nhóm về trước 0.111.0 "
                                              "(chạy khi Javis đã tắt).")
     ap.add_argument("--state-dir", default=os.environ.get("JAVIS_STATE_DIR", ""),
                     help="thư mục state của Javis (mặc định JAVIS_STATE_DIR)")
@@ -69,15 +151,16 @@ def main(argv=None) -> int:
         print("Thiếu --state-dir (hay biến JAVIS_STATE_DIR).", file=sys.stderr)
         return 2
     if not a.yes:
-        print("Tắt Javis trước, rồi chạy lại với --yes. Việc Kanban và tin chat sau lúc nâng lên 0.111.0 sẽ không còn "
-              "trong kho chạy; bản sao kho hiện tại được giữ cạnh file kho.", file=sys.stderr)
+        print("Tắt Javis trước, rồi chạy lại với --yes. Việc Kanban, tin chat và nhóm sau lúc nâng lên 0.111.0 sẽ không "
+              "còn trong kho chạy; bản sao các kho hiện tại được giữ cạnh file kho.", file=sys.stderr)
         return 2
     res = restore(a.state_dir)
     if not res["ok"]:
         print("Không khôi phục được: " + res["error"], file=sys.stderr)
         return 1
-    print("Đã khôi phục: " + ", ".join(res["restored"]) +
-          (". Kho trước khi khôi phục giữ ở: " + ", ".join(res["kept"]) if res["kept"] else ""))
+    print("Đã khôi phục: " + ", ".join(res["restored"])
+          + (". Đã gỡ kho nhóm: " + ", ".join(res["removed"]) if res["removed"] else "")
+          + (". Bản sao trước khi khôi phục giữ ở: " + ", ".join(res["kept"]) if res["kept"] else ""))
     return 0
 
 
