@@ -83,6 +83,10 @@ def _j(v: Any) -> str:
     return json.dumps(v, ensure_ascii=False, sort_keys=True)
 
 
+def new_team_id() -> str:
+    return "tm_" + secrets.token_hex(8)
+
+
 class TeamStore:
     def __init__(self, path: Optional[Path] = None):
         self.path = Path(path) if path else Path(cfgmod.STATE_DIR) / "team.sqlite3"
@@ -127,11 +131,13 @@ class TeamStore:
         c.execute("INSERT INTO team_events(team_id,kind,by,before_json,after_json,created_at) VALUES(?,?,?,?,?,?)",
                   (team_id, kind, by, _j(before or {}), _j(after or {}), time.time()))
 
-    def create_team(self, brain_id: str, name: str, description: str, session_id: str, by: str = "owner") -> dict:
+    def create_team(self, brain_id: str, name: str, description: str, session_id: str, by: str = "owner",
+                    team_id: Optional[str] = None) -> dict:
+        """`team_id` cho trước khi phiên hội thoại đã tạo với kênh `team:<team_id>` (xem `new_team_id`)."""
         name = str(name or "").strip()
         if not name:
             raise TeamError("thiếu tên nhóm")
-        tid = "tm_" + secrets.token_hex(8)
+        tid = team_id or new_team_id()
         now = time.time()
         with self._Tx(self) as c:
             c.execute("INSERT INTO teams(team_id,brain_id,name,description,session_id,created_at,updated_at) "
@@ -178,6 +184,34 @@ class TeamStore:
                       (*[str(v) for v in fields.values()], time.time(), team_id))
             self._event(c, team_id, "updated", by, before, fields)
         return self.get(team_id)
+
+    def set_caps(self, team_id: str, caps: dict, by: str = "owner") -> dict:
+        """Chủ nhóm đổi trần (spec 12.3). Chỉ nhận khoá có trong DEFAULT_CAPS, giá trị số không âm."""
+        bad = set(caps or {}) - set(DEFAULT_CAPS)
+        if bad:
+            raise TeamError(f"trần không có: {sorted(bad)}")
+        clean = {}
+        for k, v in (caps or {}).items():
+            try:
+                num = float(v)
+            except (TypeError, ValueError):
+                raise TeamError(f"trần {k} phải là số")
+            if num < 0:
+                raise TeamError(f"trần {k} không được âm")
+            clean[k] = num if k == "busy_wait_s" else int(num)
+        with self._Tx(self) as c:
+            r = c.execute("SELECT caps_json FROM teams WHERE team_id=?", (team_id,)).fetchone()
+            if r is None:
+                raise TeamError("không có nhóm này")
+            before = json.loads(r["caps_json"] or "{}")
+            after = dict(before, **clean)
+            c.execute("UPDATE teams SET caps_json=?, updated_at=? WHERE team_id=?", (_j(after), time.time(), team_id))
+            self._event(c, team_id, "caps_set", by, before, after)
+        return self.get(team_id)
+
+    def log_event(self, team_id: str, kind: str, by: str, before: Any = None, after: Any = None) -> None:
+        with self._Tx(self) as c:
+            self._event(c, team_id, kind, by, before, after)
 
     def touch(self, team_id: str) -> None:
         with self._Tx(self) as c:

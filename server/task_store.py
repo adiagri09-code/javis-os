@@ -1396,6 +1396,29 @@ class TaskStore:
                 self._db.rollback()
                 raise
 
+    def team_set_coordinator(self, task_id: str, coordinator_key: str) -> bool:
+        """Đổi trưởng nhóm điều phối của một việc chưa kết thúc (trưởng nhóm đổi giữa chừng, spec 6.3)."""
+        with self._lock:
+            cur = self._db.execute(
+                f"""UPDATE tasks SET coordinator_key=?, updated_at=?
+                    WHERE id=? AND lane='team' AND status IN ({','.join('?' for _ in TEAM_OPEN_STATUS)})""",
+                (str(coordinator_key or ""), now(), task_id, *TEAM_OPEN_STATUS),
+            )
+            if cur.rowcount == 1:
+                self._event(task_id, "coordinator_changed", str(coordinator_key or ""))
+            self._db.commit()
+            return cur.rowcount == 1
+
+    def team_tasks_by_status(self, status: str) -> list[dict]:
+        """Mọi việc nhóm (mọi nhóm) ở một trạng thái `team_*`, cho việc nhắc chặn lâu và phục hồi."""
+        if status not in TEAM_OPEN_STATUS:
+            return []
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT * FROM tasks WHERE lane='team' AND status=? ORDER BY updated_at", (status,)
+            ).fetchall()
+        return [self._task_from_row(r) for r in rows]
+
     def team_running_tasks(self) -> list[dict]:
         """Mọi việc nhóm đang `team_running` (mọi nhóm), cho bộ chạy nhóm khôi phục sau restart."""
         with self._lock:

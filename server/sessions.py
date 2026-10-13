@@ -655,6 +655,30 @@ class SessionStore:
                           (session_id, int(message_id)))
         return self._team_msg(rows[0]) if rows else None
 
+    def last_message_id_by(self, session_id: str, author_ref: str) -> int:
+        """Mã tin mới nhất do `author_ref` (agent_key) viết trong phiên nhóm; 0 nếu chưa có. Khối ngữ cảnh nhóm lấy tin
+        mới kể từ đây (spec 11.2)."""
+        rows = self._read("SELECT MAX(id) FROM messages WHERE session_id = ? AND author_ref = ?",
+                          (session_id, str(author_ref or "")))
+        return int(rows[0][0] or 0) if rows else 0
+
+    def update_team_message_meta(self, session_id: str, message_id: int, patch: Dict[str, Any]) -> bool:
+        """Gộp `patch` vào meta của một tin nhóm (vd. gắn nhãn "Kết quả việc" khi việc xong)."""
+        def _do(conn):
+            row = conn.execute("SELECT meta_json FROM messages WHERE session_id=? AND id=?",
+                               (session_id, int(message_id))).fetchone()
+            if row is None:
+                return False
+            try:
+                meta = json.loads(row[0]) if row[0] else {}
+            except Exception:
+                meta = {}
+            meta.update(patch or {})
+            conn.execute("UPDATE messages SET meta_json=? WHERE session_id=? AND id=?",
+                         (json.dumps(meta, ensure_ascii=False), session_id, int(message_id)))
+            return True
+        return self._write(_do)
+
     def message_by_client_id(self, session_id: str, client_msg_id: str) -> Optional[Dict[str, Any]]:
         rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND client_msg_id = ?",
                           (session_id, str(client_msg_id)))
