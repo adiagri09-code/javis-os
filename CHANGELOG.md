@@ -6,7 +6,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.104.0] - 2026-10-13
+## [0.106.0] - 2026-10-13
 ### Thêm mới
 - **Trợ lý có thể có người review (Cộng hưởng A5).** Ở trang trợ lý đã bật Cộng hưởng, chọn một trợ lý khác ở ô **Người review**. Từ đó mục tiêu mới của trợ lý này chỉ được coi là đạt khi người review xem đúng bản đã đăng và kết luận đạt. Mục tiêu đang có không đổi.
 - **Review đòi sửa thì trợ lý tự sửa theo góp ý**, tối đa hai lần. Mỗi mục tiêu có đội dùng tối đa 8 lượt, mỗi vai 4; hết vòng hay hết lượt thì dừng và báo, không tự nới.
@@ -14,6 +14,12 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - Mục tiêu duy trì và bước khám phá cũng chờ người review đạt rồi mới báo đã cập nhật hay xong bước; cùng một bản không bị review lại theo lịch.
 - Lượt hỏng trước khi kịp gọi model được trả lại, không bị tính.
 - File đã đăng bị sửa tay thì mục tiêu có đội chờ, không tự coi là đạt. Muốn quay về 0.103.0: tắt Javis, chạy `tools/resonance_restore_pre_a5.py`.
+
+## [0.105.0] - 2026-10-13
+### Sửa lỗi
+- **Tự học không còn làm agent quên luật bạn đã dặn.** Trước đây mỗi lần tự học sửa một agent là viết lại cả lời dặn của nó, nên luật như "nhắn Zalo thì không dùng markdown" có thể biến mất sau vài vòng. Giờ tự học chỉ được thêm luật mới vào cuối, phần bạn viết giữ nguyên.
+- **Luật dặn trong chat được giữ vĩnh viễn.** Khi bạn dặn agent một luật lâu dài, nó vào mục **Luật chủ dặn** trong bộ nhớ của agent. Mục này không bị đẩy ra như các bài học tự rút (chỉ giữ 15 bài mới nhất).
+- **Chốt chặn cuối.** Lần ghi nào làm mất dù một dòng bạn đã viết trong agent hay bộ nhớ của nó thì Javis không ghi.
 
 ## [0.103.0] - 2026-10-13
 ### Cải thiện
