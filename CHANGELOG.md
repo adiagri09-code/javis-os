@@ -13,7 +13,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - **Thẻ mục tiêu cho biết ai làm, ai review**, bản nào đã được review, đang chờ ai và lượt còn của từng vai. Có nút **Bật lại người review** và **Bỏ yêu cầu review** khi mục tiêu bị kẹt.
 - Mục tiêu duy trì và bước khám phá cũng chờ người review đạt rồi mới báo đã cập nhật hay xong bước; cùng một bản không bị review lại theo lịch.
 - Lượt hỏng trước khi kịp gọi model được trả lại, không bị tính.
-- File đã đăng bị sửa tay thì mục tiêu có đội chờ, không tự coi là đạt. Muốn quay về 0.105.0: tắt Javis, chạy `tools/resonance_restore_pre_a5.py`.
+- File đã đăng bị sửa tay thì mục tiêu có đội chờ, không tự coi là đạt. Muốn quay về 0.107.0: tắt Javis, chạy `tools/resonance_restore_pre_a5.py`.
 
 ## [0.107.0] - 2026-10-13
 ### Sửa lỗi

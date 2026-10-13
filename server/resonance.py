@@ -1902,7 +1902,7 @@ def _work_prompt(goal: GoalRecord, intent_text: str, last: Optional[Assessment],
     return "\n\n".join(parts)
 
 
-# ═════════════════════════ A5 (0.106.0): đội một agent làm, một agent review ═════════════════════════
+# ═════════════════════════ A5 (0.109.0): đội một agent làm, một agent review ═════════════════════════
 #
 # Thiết kế: docs/superpowers/specs/2026-10-11-resonance-a5-maker-reviewer-design.md. Review chỉ chạy ở việc nền, bằng
 # engine chỉ chữ chung (cùng model với vai làm, khác danh tính, lời dặn và dữ liệu), trên ẢNH CHỤP của bản đã tiếp nhận
