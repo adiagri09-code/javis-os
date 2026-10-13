@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.105.0] - 2026-10-13
+### Sửa lỗi
+- **Tự học không còn làm agent quên luật bạn đã dặn.** (đang viết)
+
 ## [0.103.0] - 2026-10-13
 ### Cải thiện
 - **Quyền theo từng lệnh cho công cụ gộp.** Một công cụ MCP gộp nhiều lệnh, như công cụ nhãn của GitHub vừa tạo, vừa sửa, vừa xoá nhãn, giờ được xét quyền theo đúng lệnh đang gọi. Tạo và sửa chạy ở mức Ghi nháp, còn xoá vẫn cần Toàn quyền.
