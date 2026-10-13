@@ -10,12 +10,12 @@ Chủ dự án chọn một agent Cộng hưởng khác làm người review cho
 
 | Phần | File |
 |---|---|
-| Bốn bảng A5, snapshot `.pre-0.104.0`, gắn đội trong `create`, sổ vai trong `begin_action`, một đường hoàn `_refund_not_run`, `release_call` theo `action_id`, từ chối `begin_experiment` khi có đội, chốt chặn trong `finish`, `record_review`, `review_interrupted`, `team_detach`, `team_pair_set`, `team_reviewer_enable`, mốc `mark_engine` và `abort_action(..., recheck_at)`, `wake_agent_goals` cho reviewer | `server/resonance_store.py` (mục "A5" cuối class, cùng các chỗ nối) |
+| Bốn bảng A5, snapshot `.pre-0.106.0`, gắn đội trong `create`, sổ vai trong `begin_action`, một đường hoàn `_refund_not_run`, `release_call` theo `action_id`, từ chối `begin_experiment` khi có đội, chốt chặn trong `finish`, `record_review`, `review_interrupted`, `team_detach`, `team_pair_set`, `team_reviewer_enable`, mốc `mark_engine` và `abort_action(..., recheck_at)`, `wake_agent_goals` cho reviewer | `server/resonance_store.py` (mục "A5" cuối class, cùng các chỗ nối) |
 | `parse_review`, `accepted_snapshot`, `bundle_ref`, `_review_state`, `_team_review`, `_team_settle`, `_review_pre`/`_review_step`/`_review_post`, cổng người review trong `_gate`, nhánh đội trong `_wake_work` và `_settle`, góp ý vào `_work_prompt`, `_prepare_failed`, khối `team` của goal view, câu báo `goal.review_*`, lệnh `team_detach` | `server/resonance.py` |
 | `heartbeat.v3`: mã `review_due` (START), `review_retry` (AUTO), `review_changes` (lớp mới `FIX`), `review_recheck`, `prepare_recheck`; lỗi cố định `too_large`, `snapshot_mismatch` | `server/resonance_heartbeat.py` |
 | `POST /resonance/agents/reviewer` và `POST /goals/{id}/reviewer/enable` (đăng ký cuối, `register_a5`), trường `reviewer` của danh sách trợ lý | `server/resonance_api.py`, `server/main.py` |
 | Ô Người review; dòng đội, góp ý, nút Bật lại người review và Bỏ yêu cầu review trên thẻ; khoá i18n | `dashboard/resonance-agent.js`, `dashboard/chat-resonance.js`, `dashboard/i18n/vi.json`, `en.json` |
-| Hạ về 0.103.0 | `tools/resonance_restore_pre_a5.py` |
+| Hạ về 0.105.0 | `tools/resonance_restore_pre_a5.py` |
 
 ## Vòng đời
 
@@ -47,7 +47,7 @@ Chủ dự án chọn một agent Cộng hưởng khác làm người review cho
 
 **Tách đội.** `team_detach` (chỉ chủ dự án, nút Bỏ yêu cầu review): `goal_team` thành `detached`, `team_calls` giữ làm hồ sơ, gỡ chặn thuộc đội, bỏ lý do review đang chờ, thức một lần; từ đó mục tiêu chốt theo luật A4/A2.
 
-## Hành vi đổi so với 0.103.0
+## Hành vi đổi so với 0.105.0
 
 - Agent có người review: mục tiêu mới có 8 lượt (4/4) thay vì 6, và chỉ chốt sau review `pass`.
 - Mục tiêu có đội không chốt trên file bị sửa ngoài Javis dù bản sửa đạt kiểm (phương án A); muốn giữ thì Bỏ yêu cầu review.
@@ -57,4 +57,4 @@ Chủ dự án chọn một agent Cộng hưởng khác làm người review cho
 
 ## Hạ phiên bản
 
-Tắt Javis, chạy `python tools/resonance_restore_pre_a5.py --yes` (giữ bản kho hiện tại `post-0.104.0-<thời điểm>`, rồi ghi snapshot `.pre-0.104.0`), chạy 0.103.0. Hạ KHÔNG khôi phục là không hỗ trợ: mã 0.103.0 bỏ qua bảng A5 nên chốt đạt mục tiêu có đội mà không có review (test `test_resonance_a5_rollback.py` ghi nhận đúng điều này).
+Tắt Javis, chạy `python tools/resonance_restore_pre_a5.py --yes` (giữ bản kho hiện tại `post-0.106.0-<thời điểm>`, rồi ghi snapshot `.pre-0.106.0`), chạy 0.105.0. Hạ KHÔNG khôi phục là không hỗ trợ: mã 0.105.0 bỏ qua bảng A5 nên chốt đạt mục tiêu có đội mà không có review (test `test_resonance_a5_rollback.py` ghi nhận đúng điều này).

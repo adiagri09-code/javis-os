@@ -213,7 +213,7 @@ t.wake(g)
 check("R1e chết sau mốc gọi engine: đối soát ghi failed/interrupted charged=1; lượt reviewer vẫn tính",
       rows(t, g)[0] == (1, "failed", "unknown", "interrupted", 1) and t.calls(g)[1] >= 1, (rows(t, g), t.calls(g)))
 
-# R1f: hành động CŨ (trước 0.104.0, không mang giao thức mốc) còn dở: luật đối soát cũ giữ nguyên (coi như có thể đã chạy).
+# R1f: hành động CŨ (trước 0.106.0, không mang giao thức mốc) còn dở: luật đối soát cũ giữ nguyên (coi như có thể đã chạy).
 t = T.Team(_STATE, "r1f", pair=False)
 g = t.create()
 held = R._agent_intent(t.store.get(t.owner, g.id), t.deps())

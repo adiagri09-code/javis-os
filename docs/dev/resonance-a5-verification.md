@@ -10,7 +10,7 @@
 |---|---|---|
 | `tests/python/test_resonance_a5_team.py` | Luồng chính, gắn đội qua đường host thật (plugin `javis_goal`, route `/goal-requests`), bộ ghim và lịch, đồng thời, khởi động lại, tắt/bật/mất/nghỉ reviewer, file sửa tay và ảnh chụp, quyền và dừng, tag | T1 tới T4, T10 tới T14, T17 tới T29, T31 tới T46, T55 tới T60; parse đóng khi lỗi (T5, T26) |
 | `tests/python/test_resonance_a5_budget.py` | Sổ vai, bảng vết V1, V2, V3, V5, V8, hoàn lượt, bộ đếm thử lại, lịch đối soát, vòng sửa | T5 tới T9, T15, T16, T47 tới T54, T61 tới T67 |
-| `tests/python/test_resonance_a5_rollback.py` | Mã 0.103.0 THẬT (`eb733834`, qua `git show`; trước tích hợp `main` là 0.100.0 `a02663cb`): nâng, hạ không khôi phục (ghi nhận giới hạn), script khôi phục, nâng lại | T30 |
+| `tests/python/test_resonance_a5_rollback.py` | Mã 0.105.0 THẬT (`1dd593ba`, qua `git show`; trước tích hợp `main` là 0.100.0 `a02663cb`): nâng, hạ không khôi phục (ghi nhận giới hạn), script khôi phục, nâng lại | T30 |
 | `tests/python/test_resonance_a5_api.py` | Route thật: chọn và bỏ chọn người review, từ chối trợ lý chưa bật hay chính nó, khối `team` của goal view, lệnh `team_detach` | 4.2, 11, 12 |
 | `tests/python/test_resonance_a5_perf.py` | 200 mục tiêu có đội so với 200 không đội; timer 10 ms khi review lưu bằng chứng chậm | 14 |
 | `tests/js/test_resonance_a5_ui.js` | Ô Người review (chỉ trợ lý đã bật, không theo tag), dòng đội, góp ý, hai nút và request của chúng, i18n | 11 |
@@ -34,7 +34,7 @@ Ca đi qua đường host thật dùng kho SQLite thật, `form_goal` thật (to
 | Reviewer không có quyền ghi; trường lạ không đổi quyền hay hạn mức | T1 (file đích là bản của vai làm), T26 |
 | Làn M của A3 bị kho chặn trên mục tiêu có đội | T51, T8 (không đề xuất phép thử) |
 | I/O không chặn event loop; huỷ chờ pha ghi xong | perf (timer 10 ms); T16 (huỷ trong lúc gọi engine) |
-| Hạ về 0.103.0 bằng snapshot | T30 |
+| Hạ về 0.105.0 bằng snapshot | T30 |
 
 ## Kết quả chạy (máy local, `.venv` của checkout gốc, mã tại `0ae4cc2b`)
 

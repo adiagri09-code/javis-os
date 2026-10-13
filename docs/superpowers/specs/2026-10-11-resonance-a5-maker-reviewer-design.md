@@ -2,8 +2,8 @@
 
 **Trạng thái:** thiết kế **đã chốt** (review thiết kế vòng 3 đạt tại `56f7ab50`); **mã đạt review vòng 2 tại `05e9b065`; pilot thật real-2 tại `33cec518` được reviewer chấp nhận trong phạm vi một mẫu `pass_first` (1 lượt làm, 1 lượt review, 0 chat; chưa chứng minh vòng sửa bằng model thật); chưa phát hành** (hướng dẫn [resonance-a5-team](../../dev/resonance-a5-team.md), biên bản [resonance-a5-verification](../../dev/resonance-a5-verification.md)). Phần dưới giữ nguyên nội dung đã chốt; đã sửa theo review vòng 1 (R1 đến R5) và review vòng 2 (P2 bộ đếm thử lại, lịch đối soát, hai vòng sửa); chủ dự án chọn phương án A cho file sửa tay (mục 0). Mã A5 đạt review mã vòng 2 tại `05e9b065` (biên bản, kịch bản pilot [resonance-a5-pilot](../../dev/resonance-a5-pilot.md)); pilot thật real-2 dùng 2 lượt model việc nền trong trần 4; chưa merge, không đụng VPS. Review mã vòng 1 làm rõ hai điểm đã nằm trong thiết kế: cổng review áp cho MỌI bản đạt kiểm của mục tiêu có đội (cả `maintain` và bước khám phá, mục 4.2, 5.1), và lượt chưa tới mốc gọi engine là lượt chắc chắn chưa chạy (mục 5.6, 6.2). Các mặc định ở mục 16 theo khuyến nghị của review vòng 1; đó là cấu hình sản phẩm đề xuất, **không phải cấp phép chạy pilot**.
 
-- **Nhánh:** `claude/resonance-a5-maker-reviewer`, PR nháp #616, số **0.104.0** sau khi tích hợp `main` 0.103.0 (lúc thiết kế giữ 0.101.0; 0.97.0 cũ đã thấp hơn `main`).
-- **Nền:** lúc thiết kế và review mã là `main` `a02663cb` (0.100.0); tích hợp `main` `eb733834` (0.103.0) trước merge. A1 0.87.0, A2 0.88.0, A3 0.89.0, A4 0.96.0 (`d36ebb3e`) đã phát hành; 0.100.0 thêm tag cho agent (mục 4.5).
+- **Nhánh:** `claude/resonance-a5-maker-reviewer`, PR nháp #616, số **0.106.0** sau khi tích hợp `main` 0.105.0 (lúc thiết kế giữ 0.101.0; 0.97.0 cũ đã thấp hơn `main`).
+- **Nền:** lúc thiết kế và review mã là `main` `a02663cb` (0.100.0); tích hợp `main` `1dd593ba` (0.105.0) trước merge. A1 0.87.0, A2 0.88.0, A3 0.89.0, A4 0.96.0 (`d36ebb3e`) đã phát hành; 0.100.0 thêm tag cho agent (mục 4.5).
 - **Đầu vào:**
   - [lộ trình agent](2026-10-08-resonance-agent-scope-roadmap.md) mục 7 và 8.
   - [thiết kế A4](2026-10-10-resonance-a4-handoff-grants-design.md): bất biến 5, mục 5.4 `narrow`, mục 12.5 các ca để lại cho A5.
@@ -667,23 +667,23 @@ Hành động review dùng bảng `actions` hiện có với `kind = 'review'`: 
 
 | Thay đổi | File |
 |---|---|
-| Bảng `_A5_SCHEMA`, nâng kho, snapshot `.pre-0.104.0` | `server/resonance_store.py` |
+| Bảng `_A5_SCHEMA`, nâng kho, snapshot `.pre-0.106.0` | `server/resonance_store.py` |
 | `team_pair_set`/`team_pair_get`, `_attach_team` trong `create`, `team_calls` trong `begin_action`/`release_call` (theo `action_id`)/`abort_action`, từ chối `begin_experiment` khi có đội, `record_review`, `team_detach`, `wake_agent_goals` cho reviewer | `server/resonance_store.py` |
 | `_review_prompt`, `parse_review` (hàm thuần), dựng và kiểm ảnh chụp, cổng 7.3, nhánh team trong `_settle` (gồm 5.5), `_review_step`, `_reconcile` cho `review`, `_ReservedCall` theo `action_id` | `server/resonance.py` |
 | Mã lý do, lớp `FIX`, lỗi cố định mới, `heartbeat.v3` | `server/resonance_heartbeat.py` |
 | `GET/PUT /resonance/agents/{slug}/reviewer`, `POST .../team-detach`, trường `team` trong goal view | `server/resonance_api.py` |
 | Ô Người review; dòng đội và nút trên thẻ; khoá i18n | `dashboard/` (trang agent, `chat-resonance.js`), `dashboard/i18n/vi.json`, `en.json` |
-| Khôi phục về 0.103.0 | `tools/resonance_restore_pre_a5.py` |
+| Khôi phục về 0.105.0 | `tools/resonance_restore_pre_a5.py` |
 | Test | `tests/python/test_resonance_a5_team.py`, `test_resonance_a5_budget.py`, `test_resonance_a5_rollback.py`, `tests/js/test_resonance_a5_ui.js` |
 
 Không thêm công cụ cho model: reviewer không gọi công cụ; agent làm dùng `javis_submit_deliverable` như A4.
 
 ## 13. Nâng và hạ phiên bản
 
-- **Lúc nâng:** lần đầu mã A5 mở kho có từ trước, `_backup_before("team_pairs", ".pre-0.104.0")` chép kho bằng SQLite backup API một lần, rồi tạo bảng A5. Cùng mẫu với A1 đến A4: có bảng mốc thì không chép lại. Mục tiêu cũ không có `goal_team`, chạy như A4.
-- **Hạ đúng cách:** tắt Javis, chạy `tools/resonance_restore_pre_a5.py`, rồi chạy 0.103.0. Script giữ bản kho hiện tại `post-0.104.0-<thời điểm>` rồi mới ghi snapshot.
+- **Lúc nâng:** lần đầu mã A5 mở kho có từ trước, `_backup_before("team_pairs", ".pre-0.106.0")` chép kho bằng SQLite backup API một lần, rồi tạo bảng A5. Cùng mẫu với A1 đến A4: có bảng mốc thì không chép lại. Mục tiêu cũ không có `goal_team`, chạy như A4.
+- **Hạ đúng cách:** tắt Javis, chạy `tools/resonance_restore_pre_a5.py`, rồi chạy 0.105.0. Script giữ bản kho hiện tại `post-0.106.0-<thời điểm>` rồi mới ghi snapshot.
 - **Hạ không khôi phục: không hỗ trợ.** Ghi rõ trong CHANGELOG. Lý do:
-  - Mã 0.103.0 bỏ qua bảng A5, nên mục tiêu có đội có thể được chốt đạt mà không có review.
+  - Mã 0.105.0 bỏ qua bảng A5, nên mục tiêu có đội có thể được chốt đạt mà không có review.
   - Hành động `kind='review'` còn `running` bị `_reconcile` cũ coi là lượt việc thường bị ngắt.
 - **Nâng lại sau khi mã cũ đã chạy:** snapshot đã có thì không chép lại; bảng A5 còn nguyên. Mục tiêu đã chốt bởi mã cũ giữ nguyên trạng thái, không review hồi tố.
 
@@ -803,7 +803,7 @@ Mọi ca 15.6 kiểm thêm: hash của bytes thật sự gửi engine giả bằ
 | T27 | Bản nộp trong chat (A4) trên mục tiêu có đội | Đăng theo A4; review chạy ở việc nền, tính phần reviewer | (0, 1, 1) | 1 | |
 | T29 | Chat thường không có mục tiêu với agent có đội | Không tạo mục tiêu, không review | (0, 0, 0) | 0 | |
 | T60 | Đổi tên hay xoá một tag mà reviewer và maker đang mang | `team_pairs`, `goal_team` không đổi; ô Người review không đổi danh sách | không đổi | 0 | |
-| T30 | Nâng kho từ 0.103.0; khôi phục về 0.103.0 bằng script | Snapshot đúng một bản; mã 0.103.0 thật mở được kho khôi phục | | | Ghi nhận giới hạn hạ không khôi phục |
+| T30 | Nâng kho từ 0.105.0; khôi phục về 0.105.0 bằng script | Snapshot đúng một bản; mã 0.105.0 thật mở được kho khôi phục | | | Ghi nhận giới hạn hạ không khôi phục |
 
 ### 15.8 Bộ đếm thử lại, lịch đối soát, vòng sửa (vòng 3)
 
