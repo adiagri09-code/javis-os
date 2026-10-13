@@ -16,6 +16,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+import team_migration
+
 
 VALID_STATUS = {
     "triage", "todo", "ready", "running", "review", "blocked", "done",
@@ -84,6 +86,8 @@ class TaskStore:
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # 0.111.0: kho có từ trước thì chụp một bản trước khi thêm cột làn `team` (khôi phục khi hạ phiên bản).
+        team_migration.snapshot_once(self.path, "tasks", "lane")
         self._lock = threading.RLock()
         self._db = sqlite3.connect(str(self.path), check_same_thread=False)
         self._db.row_factory = sqlite3.Row

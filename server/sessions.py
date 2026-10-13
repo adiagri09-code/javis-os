@@ -30,6 +30,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import team_migration
+
 # DB nằm cùng nơi settings.json/.sessions.json (JAVIS_STATE_DIR, mặc định server/).
 _STATE_DIR = Path(os.getenv("JAVIS_STATE_DIR", str(Path(__file__).parent)))
 _DEFAULT_DB = _STATE_DIR / "conversations.db"
@@ -377,6 +379,8 @@ class SessionStore:
         self._lock = threading.Lock()
         self._fts_enabled = False
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        # 0.111.0: kho có từ trước thì chụp một bản trước khi thêm cột người gửi (khôi phục khi hạ phiên bản).
+        team_migration.snapshot_once(self.db_path, "messages", "author_kind")
 
         self._conn = sqlite3.connect(
             str(self.db_path),
