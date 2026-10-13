@@ -10,7 +10,12 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.111.0] - 2026-10-13
 ### Added
-- **Team group chat:** several assistants in one group, with a leader that coordinates and a work queue.
+- **Teams page: several assistants in one chat.** Create a team, pick members and a team lead from the **Teams** item in the sidebar.
+- **Messages without @ go to the team lead.** Type @ and pick a member to ask them directly; call several and they answer in turn, each seeing the previous answer.
+- **Turn on "Assign job" to make a message a job.** The lead splits it among members and writes the summary; an @ member does it directly. The lead can only suggest new jobs, you tap **Create job** to start one.
+- **The queue has a Prioritize button** and is numbered in run order. A blocked job never stalls the queue; it shows under waiting for you with the reason and an inbox notice.
+- **Limits keep turns from being wasted:** 12 turns per job, 100 turns per team per day, 3 members called per message, and help loops are stopped. Change them in the team's Settings tab.
+- Team turns answer in text only for now, without files or connections. To go back to 0.109.0: stop Javis and run `tools/team_chat_restore_pre.py`.
 
 ## [0.110.0] - 2026-10-13
 ### Improved

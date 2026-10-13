@@ -8,7 +8,12 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.111.0] - 2026-10-13
 ### Thêm mới
-- **Nhóm chat team:** nhiều trợ lý trong một nhóm, có trưởng nhóm điều phối và hàng đợi việc.
+- **Trang Nhóm: nhiều trợ lý cùng một khung chat.** Tạo nhóm, chọn thành viên và trưởng nhóm ở thanh bên, mục **Nhóm**.
+- **Nhắn không @ thì trưởng nhóm trả lời.** Gõ @ rồi chọn từ gợi ý để hỏi thẳng một người; gọi nhiều người thì họ trả lời lần lượt, người sau thấy câu của người trước.
+- **Bật "Giao việc" để tin thành một việc.** Trưởng nhóm chia phần cho thành viên rồi tổng hợp; @ ai thì người đó làm thẳng. Trưởng nhóm chỉ được đề xuất việc mới, bạn bấm **Tạo việc** mới có.
+- **Hàng đợi có nút Ưu tiên**, đánh số đúng thứ tự chạy. Việc bị chặn không làm kẹt hàng; nó hiện ở mục chờ bạn kèm lý do và có tin vào hộp thư.
+- **Có trần để không tốn lượt vô ích:** 12 lượt mỗi việc, 100 lượt mỗi nhóm mỗi ngày, 3 người được gọi mỗi tin, chặn vòng nhờ qua nhờ lại. Đổi ở tab Cài đặt của nhóm.
+- Lượt trong nhóm hiện chỉ trả lời bằng chữ, chưa đọc, ghi file hay dùng kết nối. Muốn quay về 0.109.0: tắt Javis, chạy `tools/team_chat_restore_pre.py`.
 
 ## [0.110.0] - 2026-10-13
 ### Cải thiện
