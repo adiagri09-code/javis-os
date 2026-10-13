@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.110.0] - 2026-10-13
+### Cải thiện
+- **Bật, tắt Cộng hưởng ngay trên danh sách trợ lý** ở trang Cộng sự.
+
 ## [0.109.0] - 2026-10-13
 ### Thêm mới
 - **Trợ lý có thể có người review (Cộng hưởng A5).** Ở trang trợ lý đã bật Cộng hưởng, chọn một trợ lý khác ở ô **Người review**. Từ đó mục tiêu mới của trợ lý này chỉ được coi là đạt khi người review xem đúng bản đã đăng và kết luận đạt. Mục tiêu đang có không đổi.

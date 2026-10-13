@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.110.0] - 2026-10-13
+### Improved
+- **Turn Resonance on or off right on the assistant list** of the Collaborators page.
+
 ## [0.109.0] - 2026-10-13
 ### Added
 - **An assistant can have a reviewer (Resonance A5).** On the page of an assistant with Resonance on, pick another assistant in the **Reviewer** box. From then on, new goals of this assistant count as done only after the reviewer checks the exact published version and passes it. Existing goals do not change.

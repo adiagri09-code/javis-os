@@ -1,6 +1,6 @@
 # Nhóm chat team nhiều agent (thiết kế)
 
-**Trạng thái:** bản thiết kế vòng 1, **chờ review**. Chưa có mã sản phẩm, chưa gọi model, chưa pilot, chưa merge, không đụng VPS.
+**Trạng thái:** bản thiết kế vòng 1. **Chủ dự án chốt D1 tới D7 theo đề xuất và cho triển khai (13/10/2026)**, bắt đầu từ T0 rồi T1 ([kế hoạch](../plans/2026-10-13-team-chat-t0-t1.md)). Chưa gọi model, chưa pilot, chưa merge, không đụng VPS.
 
 - **Nền:** `main` `bfb1c29f9e87e8b43a0bf1a8a43d3535581047d6` (0.109.0). Cộng hưởng A1 0.87.0, A2 0.88.0, A3 0.89.0, A4 0.96.0, A5 0.109.0 đã phát hành; tag cho agent 0.100.0.
 - **Nhánh:** `claude/team-chat-design`. Chưa giữ số phiên bản: số được giữ khi bắt đầu viết mã T1 (mục 19), theo `docs/quy-uoc-dev.md`.
@@ -922,9 +922,9 @@ Mọi ca chạy bằng **engine giả** trừ khi ghi khác. Mã ca: TC. "Mốc"
 | M10 | Bảng reaction riêng cho nhóm, không dùng bảng A3 | Bảng A3 gắn goal và tin báo |
 | M11 | Toàn quyền không chuyển theo khi đổi trưởng nhóm | Quyền gắn người, không gắn chức danh |
 
-### 21.3 Điểm cần anh quyết
+### 21.3 Điểm đã chốt (chủ dự án đồng ý cả bảy đề xuất, 13/10/2026)
 
-| # | Câu hỏi | Đề xuất | Ảnh hưởng |
+| # | Câu hỏi | Đã chốt | Ảnh hưởng |
 |---|---|---|---|
 | D1 | Tin không @ ở chế độ trò chuyện: trưởng nhóm trả lời (một lượt mỗi tin), hay không ai trả lời trừ khi @? | Trưởng nhóm trả lời | Chi phí mỗi tin, cảm giác "nhóm có người" |
 | D2 | Giao việc: chỉ khi anh bật "Giao việc", hay trưởng nhóm được tự nhận ra yêu cầu và đề xuất (anh bấm một lần)? | Cả hai: công tắc rõ ràng, cộng đề xuất của trưởng nhóm cần anh bấm | Số lần bấm và chi phí |
