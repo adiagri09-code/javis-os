@@ -96,6 +96,6 @@ Kết luận "sẵn sàng sau khi sửa": 0 lỗi nghiêm trọng, 5 lỗi quan 
 - Tin thường: lưu, báo "Nhóm đã dùng hết lượt hôm nay", không ai trả lời.
 - @ gõ "mi" hiện gợi ý Minh; chọn thì thành thẻ; bật Giao việc thì gợi ý "Tạo 1 việc · giao cho Minh · vào cuối hàng (vị trí 1)".
 - Việc chạm trần, vào "Bị chặn, chờ bạn" kèm lý do và nút Cho chạy tiếp.
-- Tạm dừng nhóm, thêm B rồi C, bấm Ưu tiên C: C lên vị trí 1 với "★ Ưu tiên" và nút Bỏ ưu tiên.
+- Tạm dừng nhóm, thêm B rồi C, bấm Ưu tiên C: C lên vị trí 1 với nhãn "Ưu tiên" có icon sao và nút Bỏ ưu tiên.
 - 375px: danh sách là trang đầu; khung chat toàn màn, đầu khung hai hàng; cài đặt trượt lên, nền đặc; không cuộn ngang; nút 44px.
 - Smoke tìm ra và đã sửa: nút ẩn vẫn hiện (`.ws-btn` đè `hidden`), cột cài đặt trống khi chưa mở nhóm, đầu khung chat bị ép trên điện thoại, ngăn kéo trong suốt, nút quay lại hẹp hơn 44px.

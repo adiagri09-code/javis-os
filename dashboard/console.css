@@ -2520,6 +2520,7 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .tm-role, .tm-decision, .tm-result, .tm-star { border-radius: 6px; padding: 0 6px; background: var(--surface-2); }
 .tm-result { background: var(--green); color: var(--on-accent, #fff); }
 .tm-state-late { color: var(--warn-ink); }
+.tm-state .ic, .tm-star .ic { margin-right: 3px; }
 .tm-tag { border: 1px solid var(--border); background: none; color: var(--accent); border-radius: 6px; padding: 0 6px; cursor: pointer; font-size: 12px; }
 .tm-text { overflow-wrap: anywhere; font-size: 14px; color: var(--text); }
 .tm-note-line { font-size: 12px; color: var(--warn-ink); margin-top: 4px; }

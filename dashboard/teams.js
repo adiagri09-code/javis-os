@@ -29,6 +29,8 @@
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
+  // Icon lấy từ bộ Lucide của dashboard; chạy trong Node (test) thì không có, trả chuỗi rỗng.
+  var ic = function (n, o) { return (typeof window !== "undefined" && window.ic) ? window.ic(n, o) : ""; };
 
   var ROLE_KEY = { leader_reply: "teams.role.reply", member_reply: "teams.role.reply", plan: "teams.role.plan",
     work: "teams.role.work", help: "teams.role.help", synthesize: "teams.role.synthesize" };
@@ -100,7 +102,7 @@
     if (m.author_kind === "agent" && STATUS_KEY[meta.status]) {
       var late = LATE.indexOf(meta.status) >= 0;
       head.push('<span class="tm-state' + (late ? " tm-state-late" : "") + '">' +
-        esc((late ? "⚠ " : "✓ ") + tw(STATUS_KEY[meta.status])) + "</span>");
+        ic(late ? "triangle-alert" : "check") + esc(tw(STATUS_KEY[meta.status])) + "</span>");
     }
     if (meta.decision) head.push('<span class="tm-decision">' + esc(tw("teams.decision_pinned")) + "</span>");
     var body = '<div class="tm-text">' + esc(m.content).replace(/\n/g, "<br>") + "</div>";
@@ -140,7 +142,7 @@
       h += waiting.map(function (t, i) {
         var star = t.team_prio != null;
         return '<div class="tm-qrow"><span class="tm-qpos">' + (i + 1) + "</span>" +
-          (star ? '<span class="tm-star" title="' + esc(tw("teams.prioritized")) + '">★ ' + esc(tw("teams.prioritized")) + "</span>" : "") +
+          (star ? '<span class="tm-star" title="' + esc(tw("teams.prioritized")) + '">' + ic("star") + esc(tw("teams.prioritized")) + "</span>" : "") +
           '<span class="tm-qtitle">' + esc(t.title) + '</span><span class="tm-actions">' +
           '<button type="button" class="ws-btn" data-prio="' + esc(t.id) + '" data-on="' + (star ? "0" : "1") + '">' +
           esc(tw(star ? "teams.unprioritize" : "teams.prioritize")) + "</button>" +
