@@ -49,17 +49,24 @@ Op sai (JSON hỏng, op lạ, người ngoài nhóm, nhờ ngược, quá độ 
 
 ## Sổ lượt
 
-Một dòng mỗi lời gọi model. Lỗi trước mốc gọi engine thì hoàn (`refunded`). Sau mốc thì tính, kể cả lỗi, bị huỷ giữa lượt (`interrupted`), restart (`interrupted`, không tự chạy lại).
+Một dòng mỗi lời gọi model. Giữ chỗ và kiểm trần (ngày, việc) nằm trong CÙNG một giao dịch `BEGIN IMMEDIATE` (`reserve_turn` có `daily_cap`, `task_cap`), nên hai lượt đồng thời không cùng lọt qua chỗ trống cuối. Lỗi trước mốc gọi engine thì hoàn (`refunded`) đúng một lần. Sau mốc thì tính, kể cả lỗi, bị huỷ giữa lượt (`interrupted`), restart (`interrupted`, không tự chạy lại).
+
+**Mốc gọi engine (review vòng 1, R4):** engine thật (`fn.marks_engine`) dựng xong engine, kiểm `is_available`, rồi mới gọi `req["engine_started"]`; bộ chạy ghi mốc ở đó. Dựng hỏng (`_resonance_engine` trả None, engine báo chưa sẵn sàng, cấu hình ném lỗi) hay bị huỷ khi đang dựng thì lượt hoàn, việc chặn `failed` với lý do "Không dựng được engine" để Chạy lại. Engine giả không khai báo thì mốc ghi ngay trước lời gọi như trước.
+
+**Kết cục engine (R1):** adapter đọc sự kiện theo `team_runner.TextOnlyOutcome`, cùng luật với `_engine_outcome_pop` của lượt chat: final `is_error`, cờ `auth_refresh_race`, sự kiện `error` (kể cả sau final), gọi công cụ (`tool_call`, `tool_use`, `tool_result`), thiếu final, final rỗng đều là lượt `error` (đã tính), bước lỗi, việc chặn `failed`. Lỗi mất mạch đã được engine mồi lại trong lượt (`resume_failed`) không tính là lỗi.
+
+**Bài học bền (R3):** adapter chỉ BÓC `JAVIS_LESSON` / `JAVIS_RULE` (rule hạ thành bài học vì trong nhóm chủ không nói trực tiếp với agent), trả `commit`. Pha chấp nhận (`_accept`) kiểm đầu ra còn hợp lệ rồi gọi `commit` trong cùng `accept_lock`; các thao tác làm đầu ra hết hợp lệ (bỏ thành viên, đổi trưởng nhóm, huỷ, sửa yêu cầu, lưu trữ, xoá agent ở `delete_agent`) giữ cùng khoá. `commit` kiểm lại danh tính (mã bền còn trỏ đúng slug) ngay trước khi ghi, và `claim_commit(turn_id)` cho ghi đúng một lần mỗi lượt. Đầu ra không hợp lệ chỉ là bằng chứng: tin có `applied=false` và `held_lessons`, bộ nhớ agent không đổi.
 
 ## Giới hạn đã biết của T1
 
 - **Lượt nhóm chỉ chữ** (R3): không đọc, ghi file, không MCP, không `javis_goal`. Mở công cụ cùng cổng quyền theo nhóm để T3.
-- **Không resume mạch thành viên:** mỗi lượt là một lời gọi mới mang khối nhóm (20 tin mới nhất kể từ lượt trước của agent, tối đa 8.000 ký tự; sổ quyết định; đầu vào của bước).
+- **Không resume mạch thành viên:** mỗi lượt là một lời gọi mới mang khối nhóm: cửa sổ 20 tin GẦN NHẤT của chính phiên nhóm (gồm tin cũ của chủ và câu trả lời trước của mọi thành viên, kể cả của agent đó; tin sau lượt trước của agent có nhãn "mới"), tối đa 8.000 ký tự; sổ quyết định; đầu vào của bước. Trước review vòng 1 khối này chỉ có tin SAU lượt trước của agent, nên câu hỏi nối tiếp mất dữ kiện (R2). Tin cũ hơn cửa sổ chỉ còn qua sổ quyết định.
+- **I/O ở luồng phụ (R5):** mọi đọc, ghi SQLite và file của bộ chạy và của route `/teams/*` chạy qua `run_io` (luồng phụ). Bị huỷ, kể cả huỷ lặp, khi luồng phụ đang ghi thì chờ ghi xong, chạy bước hoàn tác (hoàn lượt vừa giữ chỗ, nhả dòng khoá vừa lấy, trả việc vừa nhận về hàng) rồi mới ném huỷ; dòng khoá bận chỉ nhả sau khi lượt đã chốt. Gói WS, hộp thư và huỷ task asyncio từ luồng phụ được xếp về event loop.
 - **Không stream từng chữ** (R2): câu trả lời về khi xong.
 - **Chưa có reaction** (T2), **chưa có Toàn quyền** (T3).
 - **Chat riêng 1:1 với agent không lấy khoá bận:** một agent có thể cùng lúc chạy một lượt nhóm và một lượt chat riêng.
 - **Bỏ qua thẻ đề xuất** chỉ ẩn trong tab đang mở.
-- Route ghi gọi kho trên vòng sự kiện (mỗi lệnh một ghi có chỉ mục); route đọc chạy trong luồng phụ. Đo ở T4.
+- Hiệu năng thật trên VPS chưa đo; ngưỡng 100 ms trong test là chỉ dấu cục bộ với kho giả chậm 250 ms, không phải SLA. Đo ở T4.
 
 ## Review cuối (người review mới, model mạnh nhất)
 
@@ -70,12 +77,32 @@ Kết luận "sẵn sàng sau khi sửa": 0 lỗi nghiêm trọng, 5 lỗi quan 
 - Sửa thêm (nâng mức theo tác động): lượt trả lời không chạy khi nhóm đã tạm dừng, lưu trữ huỷ cả việc đang treo, bước không tiến triển thành bước lỗi để Chạy lại, khoá bận không kẹt khi huỷ, phiên nhóm không hiện trong ô tìm của khung chat chính.
 - Để lại (ghi trong sổ phán quyết): bài học từ lượt đến muộn vẫn ghi vào bộ nhớ agent; trần ngày có thể vượt vài lượt khi nhiều lượt cùng lúc; khoá bận không gia hạn sau 15 phút; chữ lý do từ server chỉ có tiếng Việt; dựng tên thành viên tốn đọc file mỗi lượt (đo ở T4).
 
+## Review mã vòng 1 (14/10/2026, head `c729f464`)
+
+Reviewer tái hiện 2 P1 và 4 P2 bằng `exports/reviews/PR-628-T1-review-checks.py` (ngoài repo, engine giả). Trên `c729f464` cả 6 tái hiện (chế độ mặc định exit 0, `--expect-fixed` exit 1). Đã sửa, mỗi lỗi có hồi quy riêng trong repo:
+
+| Lỗi | Sửa | Hồi quy |
+|---|---|---|
+| R1 [P1] engine lỗi, rỗng thành Xong | `TextOnlyOutcome` trong adapter; lượt `error` đã tính, việc chặn `failed` | `test_team_t1_review.py` mục R1: 9 kết cục xấu qua factory thật, đối chứng final hợp lệ, `resume_failed`, Chạy lại, lượt trò chuyện |
+| R2 [P2] lượt hai mất ngữ cảnh | Cửa sổ 20 tin gần nhất của chính phiên nhóm | mục R2: SOURCE và câu trả lời trước có ở lượt hai, nhãn (bạn) và mới, không lẫn nhóm khác, trần 20 tin, trần 8.000 ký tự |
+| R3 [P1] đầu ra muộn ghi bộ nhớ bền | Adapter chỉ bóc, `commit` sau kiểm trong `accept_lock`, ghim danh tính, `claim_commit` | mục R3: đối chứng ghi đúng, rule hạ thành bài học, rời nhóm, huỷ, sửa yêu cầu, đổi trưởng nhóm, xoá rồi tạo lại cùng slug, tranh khoá, xử lý lặp |
+| R4 [P2] engine chưa dựng vẫn tính | Mốc `engine_started` sau khi dựng xong | mục R4: `_resonance_engine` trả None, engine chưa sẵn sàng, dựng ném lỗi, huỷ khi đang dựng, restart |
+| R5 [P2] chặn event loop | `run_io` cho runner và mọi route `/teams/*`; giữ chỗ kèm kiểm trần một giao dịch | mục R5: kho chậm (lượt trả lời, việc, route thật), hai lượt đồng thời trần 1, tám luồng trần 3, huỷ lặp khi giữ chỗ, huỷ khi chốt lượt, huỷ khi lấy khoá, kho lỗi |
+| R6 [P2] nhóm sống trỏ phiên đã mất | Khôi phục cả bộ ba kho, đối soát nhóm mồ côi lúc khởi động | `test_team_rollback.py` mục R6: vòng đầy đủ với nhóm thật và mã 0.109.0 thật, nhóm mồ côi, thiếu snapshot, hỏng giữa chừng |
+
+Quyết định đổi so với bản trước: khối ngữ cảnh có lịch sử, không chỉ tin mới (R2); `JAVIS_RULE` trong lượt nhóm vẫn hạ thành bài học nhưng chỉ ghi khi đầu ra được chấp nhận (R3); `team.sqlite3` không còn "để nguyên" khi khôi phục (R6). Ngoài phạm vi: Toàn quyền, công cụ, stream, reaction (T2, T3).
+
 ## Nâng, hạ phiên bản
 
 - Lần đầu 0.111.0 mở `kanban.sqlite3` và `conversations.db` có từ trước, mỗi kho được chụp một bản `<tên>.pre-0.111.0` bằng SQLite backup, trước khi thêm cột. Kho mới tinh thì không chụp.
-- **Hạ về 0.109.0:** tắt Javis, chạy `python tools/team_chat_restore_pre.py --yes`. Kho hiện tại được giữ ở `<tên>.post-0.111.0-<thời điểm>`. Việc Kanban và tin chat sau lúc nâng không còn trong kho chạy.
+- **Hạ về 0.109.0:** tắt Javis, chạy `python tools/team_chat_restore_pre.py --yes`. Công cụ khôi phục CẢ BỘ ba kho (review vòng 1, R6):
+  1. Kiểm trước cả bộ, chưa ghi gì: kho nào đã nâng thì phải có snapshot hợp lệ. Thiếu hay hỏng một snapshot là dừng, không đụng kho nào.
+  2. Chép mọi kho hiện có (kể cả `team.sqlite3`) sang `<tên>.post-0.111.0-<thời điểm>`.
+  3. Gỡ `team.sqlite3` khỏi chỗ chạy: trước 0.111.0 không có kho này.
+  4. Ghi snapshot vào hai kho kia. Hỏng giữa chừng thì trả mọi kho đã đụng về bản ở bước 2 và báo lỗi, không báo thành công.
+- **Mất khỏi kho chạy / giữ lại:** việc Kanban, tin chat và nhóm sau lúc nâng rời kho chạy; cả ba có bản `.post-0.111.0-*` để đọc lại. Nâng lại thì không có nhóm nào trỏ vào phiên đã mất, snapshot `.pre-0.111.0` dùng lại, không chụp đè.
+- **Nhóm mồ côi:** nếu kho phiên bị đưa về bản cũ mà `team.sqlite3` còn (công cụ trước review, hay chép tay), lần khởi động sau vòng nền lưu trữ nhóm, ghi sự kiện `session_missing`, huỷ việc còn mở; dữ liệu nhóm giữ để đối chiếu. Gửi tin vào nhóm đó trả lỗi nghiệp vụ (TeamError), không phải lỗi khoá ngoại.
 - **Hạ không khôi phục:** mã cũ không bao giờ nhặt việc nhóm, nhưng trang Việc hiện các dòng `team_*` với trạng thái lạ và phiên `team:` hiện như phiên thường.
-- `team.sqlite3` để nguyên; mã cũ không đọc.
 
 ## Kiểm
 
@@ -88,7 +115,8 @@ Kết luận "sẵn sàng sau khi sửa": 0 lỗi nghiêm trọng, 5 lỗi quan 
 | `tests/python/test_team_runner.py` | 65 ca, engine giả: TC6 tới TC13, TC17 tới TC23, khối JAVIS_TEAM sai khuôn, huỷ giữa lượt |
 | `tests/python/test_team_api.py` | 40 ca trên app thật với engine giả: route, 409, đề xuất, sổ quyết định, xoá agent rồi tạo lại (TC5), lưu trữ |
 | `tests/js/test_teams_ui.js` | 53 ca: danh sách, tin, hàng đợi, khung soạn, cài đặt, chỗ nối, CSS, i18n |
-| `tests/python/test_team_rollback.py` | 15 ca với mã 0.109.0 thật (`bfb1c29f`): snapshot, hạ có và không khôi phục, nâng lại |
+| `tests/python/test_team_rollback.py` | 31 ca với mã 0.109.0 thật (`bfb1c29f`): snapshot, hạ có và không khôi phục, nâng lại; R6 với nhóm thật, nhóm mồ côi, thiếu snapshot, hỏng giữa chừng |
+| `tests/python/test_team_t1_review.py` | 71 ca review vòng 1 (R1 tới R5), qua factory thật `main._team_engine_for` với engine giả, có đối chứng hợp lệ |
 | `python tests/run.py --js` | 186/186 |
 
 **Smoke giao diện** (sandbox cổng 7788, state trong worktree). Trần lượt ngày của nhóm đặt 0 trước khi gửi gì, nên không lượt nào tới engine thật; sổ lượt cuối buổi 0 dòng. Ảnh ở `exports/reviews/team-t1-smoke/`, ngoài repo.
