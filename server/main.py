@@ -6749,6 +6749,9 @@ async def save_agent(name: str = Form(...), role: str = Form(""), skills: str = 
                      avatar_eye_size: str = Form(None), tags: str = Form(None)):
     # Trợ lý MỚI đặt tên file không dấu ("Bống Work" -> bong-work.md), đúng quy ước slug của Javis. Trước
     # 0.88.1 tên giữ nguyên dấu; các file đó vẫn đọc, sửa, xoá được nhờ skill_router.valid_file_slug.
+    # TẠO MỚI = form không gửi slug. Nhóm chat team (spec 2026-10-13 mục 5.1): tạo mới mà slug suy từ tên đã có file thì
+    # KHÔNG ghi đè agent cũ (trước đây ghi đè âm thầm tên, vai, lời nhắc của người khác); trả 409 kèm gợi ý slug trống.
+    creating = not (slug or "").strip()
     slug = slug or _ascii_slug(name)
     skills_list = [s.strip() for s in re.split(r"[,\n]", skills) if s.strip()]
     # `model_provider` nói RÕ model thuộc nhà nào - cùng một tên model có thể có ở hai nhà
@@ -6765,6 +6768,14 @@ async def save_agent(name: str = Form(...), role: str = Form(""), skills: str = 
         # và chạy ở worker. Đọc ngoài khoá rồi mới khoá lúc ghi thì một thao tác thêm/bỏ tag chen giữa sẽ
         # bị snapshot cũ của form ghi đè (review PR #617 vòng 1, R4).
         with _AGENT_META_LOCK:
+            if creating and path.is_file():
+                n = 2
+                while (_agents_dir(brain) / f"{slug}-{n}.md").is_file():
+                    n += 1
+                return JSONResponse({"ok": False, "code": "slug_taken", "suggest": f"{slug}-{n}", "error": localefmt.chu(
+                    f"Đã có trợ lý mang tên tệp {slug}. Đổi tên trợ lý mới, hoặc sửa trợ lý đang có.",
+                    f"An assistant with file name {slug} already exists. Rename the new one, or edit the existing one.")},
+                    status_code=409)
             previous = _read_md(path)[0] if path.is_file() else None
             try:
                 avatar = agent_avatar.for_save(previous, slug, avatar_shape, avatar_palette,
