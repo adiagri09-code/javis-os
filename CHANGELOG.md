@@ -6,6 +6,11 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.114.0] - 2026-10-14
+### Sửa lỗi
+- **Bot Zalo không còn im sau khi Javis khởi động lại.** Javis tắt không êm (crash, dừng cứng khi cập nhật) từng để lại tiến trình Zalo cũ còn chạy, nên tài khoản có hai phiên nghe. Zalo chỉ gửi tin về một phiên, bot đọc phiên kia và im luôn. Giờ Javis ghi lại mọi tiến trình kết nối nó mở và tự dọn phần sót của lần chạy trước.
+- **An toàn khi dọn.** Chỉ dọn khi server cũ đã thật sự tắt và tiến trình vẫn đúng là lệnh Javis đã mở, nên không đụng tới chương trình khác.
+
 ## [0.109.0] - 2026-10-13
 ### Thêm mới
 - **Trợ lý có thể có người review (Cộng hưởng A5).** Ở trang trợ lý đã bật Cộng hưởng, chọn một trợ lý khác ở ô **Người review**. Từ đó mục tiêu mới của trợ lý này chỉ được coi là đạt khi người review xem đúng bản đã đăng và kết luận đạt. Mục tiêu đang có không đổi.
