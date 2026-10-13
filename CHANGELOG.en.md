@@ -8,7 +8,7 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
-## [0.106.0] - 2026-10-13
+## [0.109.0] - 2026-10-13
 ### Added
 - **An assistant can have a reviewer (Resonance A5).** On the page of an assistant with Resonance on, pick another assistant in the **Reviewer** box. From then on, new goals of this assistant count as done only after the reviewer checks the exact published version and passes it. Existing goals do not change.
 - **When the review asks for changes, the assistant applies the feedback by itself**, at most twice. A goal with a team uses at most 8 calls, 4 per role; when the rounds or calls run out it stops and tells you, without extending them.
@@ -16,6 +16,13 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 - Ongoing goals and discovery steps also wait for the reviewer to pass the version before reporting an update or a finished step; the same version is not reviewed again on schedule.
 - A call that fails before the model is reached is given back, not counted.
 - If a published file is edited by hand, a goal with a team waits instead of counting as done. To go back to 0.105.0: stop Javis and run `tools/resonance_restore_pre_a5.py`.
+
+## [0.107.0] - 2026-10-13
+### Fixed
+- **Background jobs only reach Done when they really pass.** After the worker finishes, a separate AI pass checks the result against the acceptance criteria and opens the files and images they name. A job that falls short waits for you with the real reason (no longer the last line of the report), and the alert names the jobs waiting on it.
+- **Workflows no longer "accept for now".** A verify step that errors or answers vaguely now counts as a fail; a step still failing after its retries stops the workflow there instead of running on. A switched-off workflow no longer runs in the background.
+- **Chat can queue a job that runs a real workflow** with `route: wf:<name>`; a wrong name is refused, and only naming the workflow in the description gets a warning. A job that needs images gets the image tools alone, without opening Full access, and each workflow step can declare its own tools.
+- **Usage, learning, reminders and Docker are more accurate.** A long chat moved onto a new thread still counts as chat instead of swelling "background"; the learning token cap counts real tokens. Script reminders are no longer skipped while a long reminder runs, and Docker keeps the Claude Code config and the Google Workspace sign-in across rebuilds.
 
 ## [0.105.0] - 2026-10-13
 ### Fixed

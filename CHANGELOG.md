@@ -6,7 +6,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.106.0] - 2026-10-13
+## [0.109.0] - 2026-10-13
 ### Thêm mới
 - **Trợ lý có thể có người review (Cộng hưởng A5).** Ở trang trợ lý đã bật Cộng hưởng, chọn một trợ lý khác ở ô **Người review**. Từ đó mục tiêu mới của trợ lý này chỉ được coi là đạt khi người review xem đúng bản đã đăng và kết luận đạt. Mục tiêu đang có không đổi.
 - **Review đòi sửa thì trợ lý tự sửa theo góp ý**, tối đa hai lần. Mỗi mục tiêu có đội dùng tối đa 8 lượt, mỗi vai 4; hết vòng hay hết lượt thì dừng và báo, không tự nới.
@@ -14,6 +14,13 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - Mục tiêu duy trì và bước khám phá cũng chờ người review đạt rồi mới báo đã cập nhật hay xong bước; cùng một bản không bị review lại theo lịch.
 - Lượt hỏng trước khi kịp gọi model được trả lại, không bị tính.
 - File đã đăng bị sửa tay thì mục tiêu có đội chờ, không tự coi là đạt. Muốn quay về 0.105.0: tắt Javis, chạy `tools/resonance_restore_pre_a5.py`.
+
+## [0.107.0] - 2026-10-13
+### Sửa lỗi
+- **Việc nền chỉ sang Hoàn thành khi đạt thật.** Worker chạy xong, một lượt AI riêng đối chiếu kết quả với điều kiện hoàn thành và mở đúng file, ảnh để kiểm. Chưa đạt thì việc dừng chờ bạn kèm lý do thật (không còn lấy nhầm câu cuối bài), và tin báo kể tên các việc đang chờ nó.
+- **Quy trình hết "tạm chấp nhận".** Bước kiểm chứng lỗi hay trả lời mơ hồ giờ tính là chưa đạt; sửa hết lượt vẫn trượt thì quy trình dừng ở bước đó chứ không chạy tiếp. Quy trình đang tắt không còn chạy nền.
+- **Chat giao được việc chạy đúng quy trình** bằng `route: wf:<tên>`; tên sai bị từ chối, còn chỉ chép tên quy trình vào mô tả thì Javis cảnh báo. Việc cần làm ảnh được cấp riêng công cụ tạo ảnh mà không phải mở Toàn quyền, và từng bước quy trình cũng khai được công cụ riêng.
+- **Mức dùng, tự học, nhắc hẹn, Docker chính xác hơn.** Hội thoại dài được nén sang mạch mới vẫn tính là chat chứ không đội phần "nền"; trần token tự học đếm token thật. Script nhắc hẹn không còn bị bỏ lượt khi có nhắc hẹn dài đang chạy, và bản Docker giữ cấu hình Claude Code cùng đăng nhập Google Workspace qua mỗi lần dựng lại.
 
 ## [0.105.0] - 2026-10-13
 ### Sửa lỗi
