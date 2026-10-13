@@ -360,3 +360,31 @@ Hai góp ý câu chữ, không chặn:
 
 1. Nguồn yêu cầu tối thiểu do host ghim đúng mục tiêu và revision, đưa cho vai review để đối chiếu việc thêm hay bớt dữ kiện. Không phải toàn bộ lịch sử chat, và vẫn không cho xem suy luận của vai làm.
 2. Đưa lượt và token việc nền của Cộng hưởng vào màn hình usage chung, không đếm trùng với sổ chat.
+
+## Tích hợp `main` 0.103.0, đánh số 0.104.0 (13/10/2026)
+
+`main` lúc tích hợp: `eb73383480c97178e014fff4d7d7b450b54f9cd2` (0.103.0, PR #622). Không PR mở nào khác giữ số phiên bản, nên A5 lấy **0.104.0**. Tích hợp tách thành ba commit sau head cổng pilot `33cec518`:
+
+| Commit | Nội dung |
+|---|---|
+| `0840dc6e` | Hồ sơ pilot real-1 và real-2 (chỉ tài liệu) |
+| `ba591f4f` | Merge `main`. Xung đột chỉ ở `VERSION`, `CHANGELOG.md`, `CHANGELOG.en.md`: khối A5 lên đầu với số 0.104.0, các khối 0.102.0, 0.102.1, 0.103.0 của `main` giữ nguyên. `--remerge-diff` chỉ có ba file đó |
+| `371ff0ab` | Đánh số lại: hậu tố snapshot `.pre-0.104.0`, công cụ khôi phục, test quay về và bước fetch của CI trỏ bản phát hành 0.103.0 thật (`eb733834`); changelog, hướng dẫn, thiết kế, lộ trình. Mốc lịch sử giữ số cũ |
+
+**Mã chạy.**
+- Phần A5 thêm trên `main` (`eb733834` tới bản merge) trùng khít, từng file, với phần A5 đã review trên nền cũ (`a02663cb` tới `33cec518`): 9 file, cùng nội dung từng dòng thêm và bớt.
+- Ba file tự gộp không xung đột (`server/main.py`, `dashboard/i18n/en.json`, `dashboard/i18n/vi.json`) giữ đủ thay đổi của cả hai phía.
+- Dòng mã chạy duy nhất đổi do tích hợp: `A5_BACKUP_SUFFIX = ".pre-0.104.0"` (cùng ba dòng chú thích).
+
+**Kết quả** (máy local, `.venv` của checkout gốc, head `371ff0ab`):
+
+| Lệnh | Kết quả |
+|---|---|
+| `python tests/python/test_resonance_a5_rollback.py` | 11 ok, exit 0, mã 0.103.0 thật qua `git show eb733834` |
+| `JAVIS_RESONANCE_A5_PILOT=dry python tests/python/test_resonance_a5_pilot.py` | 24/24 ca, exit 0; mỗi ca mã thoát đúng hợp đồng, sổ lượt engine của server bằng 0, 0 lượt model thật |
+| Toàn repo `tests/run.py` | 646/660, exit 1. 14 file đỏ: agy_prompt_dai, antigravity_cli, ba_loi_mac_va_telegram, cai_windows, grok_cli, install_admin, khoi_dong_nhe, link_file_uri, machine_translations, memory_hoa_thuong, model_theo_phien, ollama_local, terminal, windows_no_console |
+| Đối chứng 14 file đỏ trên checkout `main` sạch `eb733834` | Đỏ đúng 14 file đó (test phụ thuộc máy, cùng danh sách các vòng trước); không có đỏ mới |
+
+Các nhóm liên quan nằm trong lượt toàn repo và đều xanh: mọi test `resonance_*` (A1 tới A5), phiên bản và nhật ký song ngữ, bảng route, i18n của dashboard, test của `main` mới (công cụ gộp nhiều lệnh, kênh Lark, chatbot).
+
+Không gọi model thật, không chạy lại pilot, không merge, không phát hành, không đụng VPS.
