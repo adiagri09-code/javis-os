@@ -50,6 +50,19 @@ def _today() -> str:
     return _now_vn().strftime("%Y-%m-%d")
 
 
+# Daily token cap of the learning loop, in REAL tokens (see LearnFeature.DEFAULT["rate"]).
+TOKEN_DAY_DEFAULT = 15_000_000
+
+
+def _roll_day(cfg: dict) -> dict:
+    """The day counters in cfg["_state"], reset when the day changed. Returns that dict."""
+    st = cfg.setdefault("_state", {})
+    today = _today()
+    if st.get("day") != today:
+        st["day"] = today; st["fork_count"] = 0; st["token_est"] = 0
+    return st
+
+
 # Dấu thời gian ở đầu mỗi mục nhật ký học: "## [2026-08-31 06:13] learn - ...". Đọc ra để SẮP,
 # (mục ghi trước 0.55.65 dùng gạch dài ở chỗ đó; regex chỉ bám phần dấu thời gian nên cả hai
 # vẫn đọc được.)
@@ -422,7 +435,11 @@ class LearnFeature:
             "capabilities": {"memory": True, "wiki": True, "skill": True, "task": False,
                              "agent": False, "workflow": False},
             "debounce": {"k": 3, "idle_min": 10, "dense_idle_min": 3},
-            "rate": {"min_interval_s": 90, "fork_day": 40, "token_day": 300000},
+            # token_day counts REAL tokens since 0.107.0 (input + cache + output, as the engine
+            # reports them), not len(text)/4: the old estimate said 395k for a day that really
+            # used 12.5M (field report 2026-10-13), so the cap never meant anything. 15M sits
+            # above a normal day (fork_day is the everyday limiter) and stops a runaway one.
+            "rate": {"min_interval_s": 90, "fork_day": 40, "token_day": TOKEN_DAY_DEFAULT},
             # stale_days: brain im lặng quá ngần này ngày thì curator BỎ QUA (0 = không lọc).
             # Danh sách brains chỉ có thêm chứ không bớt (mỗi brain từng chat một lần là nằm đó
             # mãi), nên không có mốc này thì curator cứ 24h lại chạy LINT Wiki - một phiên agent
@@ -445,7 +462,10 @@ class LearnFeature:
     # ── config ──
     # Migration chạy ĐÚNG MỘT LẦN rồi ghi cờ. Không ép giá trị mỗi lần đọc: làm thế thì
     # công tắc trong Cài đặt thành nút chết, chủ bật lại cũng vô nghĩa.
-    _MIGRATIONS = {"task_autocreate_off": ("capabilities", "task", False)}
+    _MIGRATIONS = {"task_autocreate_off": ("capabilities", "task", False),
+                   # The unit of token_day changed (estimate -> real usage); a value set in
+                   # the old unit would stop learning after one fork.
+                   "token_day_real_usage": ("rate", "token_day", TOKEN_DAY_DEFAULT)}
 
     def read_config(self) -> dict:
         cfg = json.loads(json.dumps(self.DEFAULT))
@@ -484,17 +504,14 @@ class LearnFeature:
     def _rate_check(self, cfg: dict) -> dict:
         """Kiểm tra trần ngày + min-interval. Trả {allow_promote, reason}. KHÔNG chặn phân tích
         (dry-run luôn cho phép để user vẫn thấy 'sẽ học gì'); chỉ chặn GHI file khi vượt trần."""
-        st = cfg.setdefault("_state", {})
-        today = _today()
-        if st.get("day") != today:
-            st["day"] = today; st["fork_count"] = 0; st["token_est"] = 0
+        st = _roll_day(cfg)
         rate = cfg.get("rate", {})
         now = time.time()
         if now - float(st.get("last_fork_ts", 0)) < float(rate.get("min_interval_s", 90)):
             return {"allow_promote": False, "reason": "min-interval chưa đủ (chống spam fork)"}
         if int(st.get("fork_count", 0)) >= int(rate.get("fork_day", 40)):
             return {"allow_promote": False, "reason": "đã chạm trần fork/ngày → hạ dry-run (backpressure)"}
-        if int(st.get("token_est", 0)) >= int(rate.get("token_day", 300000)):
+        if int(st.get("token_est", 0)) >= int(rate.get("token_day", TOKEN_DAY_DEFAULT)):
             return {"allow_promote": False, "reason": "đã chạm trần token/ngày → hạ dry-run (backpressure)"}
         return {"allow_promote": True, "reason": ""}
 
@@ -1101,11 +1118,21 @@ class LearnFeature:
         if not gcli.is_available():
             return ""
         out = ""
+        real = 0
         async for ev in gcli.query(prompt):
             if ev["type"] == "final":
                 out = ev.get("content", "") or out
+                # Claude Agent SDK: tokens_in already includes cache read + cache creation.
+                real += int(ev.get("tokens_in") or 0) + int(ev.get("tokens_out") or 0)
+            elif ev["type"] == "usage":
+                real += int(ev.get("input") or 0) + int(ev.get("output") or 0)
             elif ev["type"] == "error":
                 out = out or ("__ERROR__ " + ev["content"][:200])
+        # Every fork counts, the verify and curator ones too (before 0.107.0 only the main
+        # pass was counted, and only as len(text)/4). No usage reported -> fall back to the
+        # rough estimate rather than counting zero.
+        st = _roll_day(cfg)
+        st["token_est"] = int(st.get("token_est", 0)) + (real or (len(prompt) + len(out)) // 4)
         return out
 
     # ── VERIFY skill (spawn thứ 2 độc lập, chỉ cho skill - blast radius lớn nhất) ──
@@ -1820,9 +1847,7 @@ class LearnFeature:
                 st["fork_count"] = int(st.get("fork_count", 0)) + 1
                 st["last_fork_ts"] = time.time()
 
-            # token ước lượng (thô) để đếm budget
-            st = cfg.setdefault("_state", {})
-            st["token_est"] = int(st.get("token_est", 0)) + (len(prompt) + len(out)) // 4
+            # token của lượt đã cộng ngay trong _spawn_readonly (usage thật của engine)
             cfg["last_run"] = time.time()
             summary = manifest.get("notes", "") or "Đã học."
             status = ("auto-ghi" if allow_write else ("dry-run" + (f" ({downgrade})" if downgrade else "")))

@@ -6,6 +6,13 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.107.0] - 2026-10-13
+### Sửa lỗi
+- **Việc nền chỉ sang Hoàn thành khi đạt thật.** Worker chạy xong, một lượt AI riêng đối chiếu kết quả với điều kiện hoàn thành và mở đúng file, ảnh để kiểm. Chưa đạt thì việc dừng chờ bạn kèm lý do thật (không còn lấy nhầm câu cuối bài), và tin báo kể tên các việc đang chờ nó.
+- **Quy trình hết "tạm chấp nhận".** Bước kiểm chứng lỗi hay trả lời mơ hồ giờ tính là chưa đạt; sửa hết lượt vẫn trượt thì quy trình dừng ở bước đó chứ không chạy tiếp. Quy trình đang tắt không còn chạy nền.
+- **Chat giao được việc chạy đúng quy trình** bằng `route: wf:<tên>`; tên sai bị từ chối, còn chỉ chép tên quy trình vào mô tả thì Javis cảnh báo. Việc cần làm ảnh được cấp riêng công cụ tạo ảnh mà không phải mở Toàn quyền, và từng bước quy trình cũng khai được công cụ riêng.
+- **Mức dùng, tự học, nhắc hẹn, Docker chính xác hơn.** Hội thoại dài được nén sang mạch mới vẫn tính là chat chứ không đội phần "nền"; trần token tự học đếm token thật. Script nhắc hẹn không còn bị bỏ lượt khi có nhắc hẹn dài đang chạy, và bản Docker giữ cấu hình Claude Code cùng đăng nhập Google Workspace qua mỗi lần dựng lại.
+
 ## [0.105.0] - 2026-10-13
 ### Sửa lỗi
 - **Tự học không còn làm agent quên luật bạn đã dặn.** Trước đây mỗi lần tự học sửa một agent là viết lại cả lời dặn của nó, nên luật như "nhắn Zalo thì không dùng markdown" có thể biến mất sau vài vòng. Giờ tự học chỉ được thêm luật mới vào cuối, phần bạn viết giữ nguyên.
