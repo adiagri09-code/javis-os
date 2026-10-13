@@ -2,7 +2,7 @@
 
 Đội một agent làm, một agent review. Thiết kế đã chốt: [2026-10-11-resonance-a5-maker-reviewer-design.md](../superpowers/specs/2026-10-11-resonance-a5-maker-reviewer-design.md) (`56f7ab50`; phương án A cho file sửa tay). Hướng dẫn: [resonance-a5-team.md](resonance-a5-team.md).
 
-**Trạng thái: mã đạt review mã vòng 2 tại `05e9b065` (Codex, 12/10/2026); cổng pilot đạt review vòng 3 tại `33cec518`; pilot thật real-2 tại `33cec518` được reviewer chấp nhận trong phạm vi một mẫu `pass_first` (1 lượt làm, 1 lượt review, 0 chat; chưa chứng minh vòng sửa bằng model thật). A5 chưa phát hành.** Kịch bản và bộ chạy pilot: [resonance-a5-pilot.md](resonance-a5-pilot.md). Chưa merge, chưa phát hành, không đụng VPS. Các mục kiểm mã dùng engine GIẢ; lượt model thật chỉ có ở mục [Pilot thật](#pilot-thật-13102026).
+**Trạng thái: mã đạt review mã vòng 2 tại `05e9b065` (Codex, 12/10/2026); cổng pilot đạt review vòng 3 tại `33cec518`; pilot thật real-2 tại `33cec518` được reviewer chấp nhận trong phạm vi một mẫu `pass_first` (1 lượt làm, 1 lượt review, 0 chat; chưa chứng minh vòng sửa bằng model thật). Đã tích hợp `main` 0.108.0 với số 0.109.0, chờ review tích hợp cuối. A5 chưa phát hành.** Kịch bản và bộ chạy pilot: [resonance-a5-pilot.md](resonance-a5-pilot.md). Chưa merge, chưa phát hành, không đụng VPS. Các mục kiểm mã dùng engine GIẢ; lượt model thật chỉ có ở mục [Pilot thật](#pilot-thật-13102026).
 
 ## Test mới
 
@@ -361,30 +361,63 @@ Hai góp ý câu chữ, không chặn:
 1. Nguồn yêu cầu tối thiểu do host ghim đúng mục tiêu và revision, đưa cho vai review để đối chiếu việc thêm hay bớt dữ kiện. Không phải toàn bộ lịch sử chat, và vẫn không cho xem suy luận của vai làm.
 2. Đưa lượt và token việc nền của Cộng hưởng vào màn hình usage chung, không đếm trùng với sổ chat.
 
-## Tích hợp `main` 0.103.0, đánh số 0.104.0 (13/10/2026)
+## Tích hợp `main` tới 0.108.0, đánh số 0.109.0 (13/10/2026)
 
-`main` lúc tích hợp: `eb73383480c97178e014fff4d7d7b450b54f9cd2` (0.103.0, PR #622). Không PR mở nào khác giữ số phiên bản, nên A5 lấy **0.104.0**. Tích hợp tách thành ba commit sau head cổng pilot `33cec518`:
+`main` đi tiếp bốn lần trong lúc tích hợp (0.103.0, 0.105.0, 0.107.0, 0.108.0). Mọi lượt theo cùng quy tắc:
+- merge `main` vào nhánh, không rebase;
+- xung đột chỉ giải ở `VERSION` và hai changelog: khối A5 ở đầu, các khối của `main` giữ nguyên;
+- đánh số lại và dời mốc quay về trong commit riêng, theo bản phát hành thật cuối cùng trước A5.
 
-| Commit | Nội dung |
-|---|---|
-| `0840dc6e` | Hồ sơ pilot real-1 và real-2 (chỉ tài liệu) |
-| `ba591f4f` | Merge `main`. Xung đột chỉ ở `VERSION`, `CHANGELOG.md`, `CHANGELOG.en.md`: khối A5 lên đầu với số 0.104.0, các khối 0.102.0, 0.102.1, 0.103.0 của `main` giữ nguyên. `--remerge-diff` chỉ có ba file đó |
-| `371ff0ab` | Đánh số lại: hậu tố snapshot `.pre-0.104.0`, công cụ khôi phục, test quay về và bước fetch của CI trỏ bản phát hành 0.103.0 thật (`eb733834`); changelog, hướng dẫn, thiết kế, lộ trình. Mốc lịch sử giữ số cũ |
+Mốc lịch sử (kết quả các vòng trước, nền checkout pilot, số dòng dẫn theo `a02663cb`) giữ số cũ.
 
-**Mã chạy.**
-- Phần A5 thêm trên `main` (`eb733834` tới bản merge) trùng khít, từng file, với phần A5 đã review trên nền cũ (`a02663cb` tới `33cec518`): 9 file, cùng nội dung từng dòng thêm và bớt.
-- Ba file tự gộp không xung đột (`server/main.py`, `dashboard/i18n/en.json`, `dashboard/i18n/vi.json`) giữ đủ thay đổi của cả hai phía.
-- Dòng mã chạy duy nhất đổi do tích hợp: `A5_BACKUP_SUFFIX = ".pre-0.104.0"` (cùng ba dòng chú thích).
+| Commit | Lượt | Nội dung |
+|---|---|---|
+| `0840dc6e` | | Hồ sơ pilot real-1 và real-2 (chỉ tài liệu) |
+| `ba591f4f`, `371ff0ab`, `1db1d570` | 1 | Merge `main` 0.103.0 (`eb733834`, #622); A5 0.104.0; biên bản |
+| `d7276bc5`, `4b20001e` | 2 | `main` 0.105.0 (`1dd593ba`, #624) vượt 0.104.0, #623 cũng giữ 0.104.0; A5 0.106.0. **Đã review tích hợp tại `4b20001e`** |
+| `ef18c9f5`, `fecbb63d` | cuối | `main` 0.107.0 (`49c795ab`, #623) vượt 0.106.0, #625 giữ 0.108.0; A5 lấy **0.109.0**; hậu tố `.pre-0.109.0` |
+| `79724208` | cuối | Test mới `test_resonance_a5_engine_session_gate.py` (chỉ test) |
+| `6c4f0b5a`, `20d7c063` | cuối | `main` 0.108.0 (`c4fb614d`, #625); 0.109.0 vẫn trống và lớn hơn `main` nên giữ số; mốc quay về sang 0.108.0 thật (CI và build image GHCR của `main`) |
 
-**Kết quả** (máy local, `.venv` của checkout gốc, head `371ff0ab`):
+Cả năm commit merge (`ba591f4f`, `d7276bc5`, `ef18c9f5`, `6c4f0b5a`): `--remerge-diff` chỉ có `VERSION`, `CHANGELOG.md`, `CHANGELOG.en.md`.
 
-| Lệnh | Kết quả |
-|---|---|
-| `python tests/python/test_resonance_a5_rollback.py` | 11 ok, exit 0, mã 0.103.0 thật qua `git show eb733834` |
-| `JAVIS_RESONANCE_A5_PILOT=dry python tests/python/test_resonance_a5_pilot.py` | 24/24 ca, exit 0; mỗi ca mã thoát đúng hợp đồng, sổ lượt engine của server bằng 0, 0 lượt model thật |
-| Toàn repo `tests/run.py` | 646/660, exit 1. 14 file đỏ: agy_prompt_dai, antigravity_cli, ba_loi_mac_va_telegram, cai_windows, grok_cli, install_admin, khoi_dong_nhe, link_file_uri, machine_translations, memory_hoa_thuong, model_theo_phien, ollama_local, terminal, windows_no_console |
-| Đối chứng 14 file đỏ trên checkout `main` sạch `eb733834` | Đỏ đúng 14 file đó (test phụ thuộc máy, cùng danh sách các vòng trước); không có đỏ mới |
+### Mã chạy
 
-Các nhóm liên quan nằm trong lượt toàn repo và đều xanh: mọi test `resonance_*` (A1 tới A5), phiên bản và nhật ký song ngữ, bảng route, i18n của dashboard, test của `main` mới (công cụ gộp nhiều lệnh, kênh Lark, chatbot).
+- **Mã A5 giữ nguyên.** Phần A5 thêm trên `main` trùng khít, từng file, với phần A5 đã review trên nền cũ (`a02663cb` tới `33cec518`): 9 file, cùng nội dung dòng thêm và bớt.
+  - Kiểm ở lượt 1 (`eb733834` tới `ba591f4f`), lượt 2 (`1dd593ba` tới `d7276bc5`) và lượt cuối (`49c795ab` tới `ef18c9f5`, so với `1dd593ba` tới `4b20001e` đã review).
+  - #625 (0.108.0) không đụng file nào của 9 file đó.
+- **File tự gộp** giữ đủ thay đổi của cả hai phía: `server/main.py` ở mọi lượt có đổi (lượt cuối: A5 thêm 2 dòng, #623 thêm 137 và bớt 38 dòng), hai file i18n ở lượt 1.
+- **Dòng mã chạy duy nhất đổi do tích hợp:** `A5_BACKUP_SUFFIX = ".pre-0.109.0"`, cùng chú thích. 0.104.0 và 0.106.0 chưa từng phát hành, nên đổi hậu tố không ảnh hưởng máy nào.
 
-Không gọi model thật, không chạy lại pilot, không merge, không phát hành, không đụng VPS.
+### Tác động gián tiếp của `main` 0.107.0 và 0.108.0
+
+- **`claude_sdk_engine` (#623):** phiên có `allowed_tools` giờ được nạp plugin tool khi danh sách nêu đích danh `mcp__javis-plugins__<tên>`. Lượt làm và lượt review của A5 dựng bằng `main._resonance_engine`, với một tên canh gác không khớp công cụ nào. Test mới `tests/python/test_resonance_a5_engine_session_gate.py` dựng ĐÚNG đường đó (swap, `strip_tools`, `pick_text_only_link`) cho system prompt của hai vai, thay `ClaudeSDKClient` bằng client giả để bắt `options` thật đưa cho SDK. Kết quả, 26 kiểm:
+  - MCP rỗng và strict: không hub, không server plugin;
+  - `allowed_tools` chỉ có tên canh gác, cổng `can_use_tool` bật; không nạp settings máy người dùng; công cụ native bị cấm sẵn;
+  - cổng từ chối 14 tên công cụ (native, hub, plugin có và không tiền tố);
+  - không chuỗi dự phòng; provider đã chọn chưa sẵn sàng thì không chạy thay bằng provider khác;
+  - đối chứng: phiên nêu đích danh một plugin tool thật thì có server plugin, nên test thấy được nếu A5 bị rò. Trên `4b20001e` (SDK 0.105.0), test dừng ở kiểm thứ hai vì `plugins_host.granted_plugin_tools` chưa có.
+- **`sessions` (#623):** thêm bảng `cli_session_history` và ghi lịch sử trong `set_cli_session_id`. Cùng file test: kho phiên kiểu cũ (bỏ đúng bảng mới, vì CI chỉ fetch nông một commit nền) mở được, tạo bảng; dòng phiên giữ nguyên; phiên agent vẫn ra đúng danh tính (`agent:<slug>`, nguồn danh tính A5); gắn phiên CLI mới ghi lịch sử.
+- **#625 (0.108.0):** chỉ đường Zalo, chatbot, hội thoại khách và danh mục MCP; không đụng file Cộng hưởng, `server/main.py`, engine hay `sessions`.
+
+### Kết quả
+
+| Lệnh | Head | Kết quả |
+|---|---|---|
+| `python tests/python/test_resonance_a5_rollback.py` | `20d7c063` | 11 ok, exit 0, mã 0.108.0 thật qua `git show c4fb614d` |
+| `python tests/python/test_resonance_a5_engine_session_gate.py` | `20d7c063` | 26 ok, exit 0 |
+| `tests/run.py` theo tác động: mọi `resonance_*`, `sdk_engine`, `aux`, `session`, `strip`, `kanban`, `workflow`, `agent_rules`, `learn`, `usage`, `plugin`, `reminder`, `task`, test mới của #623, phiên bản, changelog, route, i18n, `ignore_files` | `fecbb63d` + test mới | 101/102; file đỏ duy nhất `test_ignore_files` vì test mới chưa commit, xanh sau commit `79724208` |
+| Theo tác động sau merge 0.108.0: test engine và kho phiên, phiên bản, changelog, route, tài liệu song ngữ, hai test mới của #625, `ignore_files` | `20d7c063` | 9/9 và 1/1, exit 0 |
+| `JAVIS_RESONANCE_A5_PILOT=dry JAVIS_RESONANCE_A5_DRY_ONLY=main_pass,main_fix python tests/python/test_resonance_a5_pilot.py` | `79724208` | 2/2 ca, exit 0; đúng nhánh, sổ (1, 1) và (2, 2), sổ engine server 0, 0 lượt model thật |
+
+**Không chạy lại** cả 24 ca dry hay toàn repo ở lượt cuối, vì:
+- bộ chạy pilot không đổi kể từ `33cec518`;
+- mã A5 không đổi ngoài hậu tố;
+- các đường bị `main` đụng tới đã có kiểm riêng ở trên;
+- các kiểm theo tác động không phát hiện lỗi mới.
+
+CI trên head cuối chạy đủ bộ test của repo.
+
+Lượt 2 (`4b20001e`, đã review) có: quay về 11 ok trên mã 0.105.0; dry 24/24; toàn repo 647/661 với 14 file đỏ phụ thuộc máy khớp `main` sạch `1dd593ba`; CI `push` 38342887031 và `pull_request` 38342891054 thành công. Lượt 1 (`371ff0ab`) tương đương trên 0.103.0. 14 file đỏ: agy_prompt_dai, antigravity_cli, ba_loi_mac_va_telegram, cai_windows, grok_cli, install_admin, khoi_dong_nhe, link_file_uri, machine_translations, memory_hoa_thuong, model_theo_phien, ollama_local, terminal, windows_no_console.
+
+Không gọi model thật, không chạy lại pilot, không merge, không phát hành, không đụng VPS. Giới hạn của pilot real-2 giữ nguyên như mục "Pilot thật".
