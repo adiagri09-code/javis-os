@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.111.0] - 2026-10-13
+### Thêm mới
+- **Nhóm chat team:** nhiều trợ lý trong một nhóm, có trưởng nhóm điều phối và hàng đợi việc.
+
 ## [0.110.0] - 2026-10-13
 ### Cải thiện
 - **Bật, tắt Cộng hưởng ngay trên danh sách trợ lý.** Ở trang Cộng sự, mỗi trợ lý có dòng "Cộng hưởng: Bật/Tắt" kèm công tắc. Chỉ đổi khi máy chủ xác nhận; không đổi được thì báo lý do và hiện đúng trạng thái thật.

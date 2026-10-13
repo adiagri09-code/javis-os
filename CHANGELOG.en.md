@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.111.0] - 2026-10-13
+### Added
+- **Team group chat:** several assistants in one group, with a leader that coordinates and a work queue.
+
 ## [0.110.0] - 2026-10-13
 ### Improved
 - **Turn Resonance on or off right on the assistant list.** On the Collaborators page each assistant shows "Resonance: On/Off" with a switch. It only changes once the server confirms; if it cannot, it says why and shows the real state.
