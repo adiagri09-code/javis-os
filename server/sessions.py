@@ -1477,6 +1477,11 @@ class SessionStore:
             else:
                 brain_clause += " AND s.channel IN (%s)" % ",".join("?" * len(chs))
             _bparams = list(_bparams) + chs
+        else:
+            # Tìm chung (thanh tìm của khung chat chính) không trả phiên nhóm chat team: mở ra ở khung chat chính là chat
+            # vào phiên nhóm bằng bộ não chính, lẫn với tin của các thành viên.
+            brain_clause += (" AND COALESCE(s.channel, '') NOT LIKE 'team:%'"
+                             " AND COALESCE(s.channel, '') NOT LIKE 'teammate:%'")
         if self._fts_enabled:
             fts_q = self._sanitize_fts(q)
             if fts_q:

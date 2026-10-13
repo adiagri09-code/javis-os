@@ -47,6 +47,9 @@ class Fake:
         self.script.setdefault((agent, role), []).extend(answers)
 
     def engine_for(self, team, agent_key, role):
+        if agent_key in getattr(self, "boom", set()):
+            raise RuntimeError("database is locked")
+
         async def run(req):
             self.calls.append(req)
             queue = self.script.get((agent_key, role)) or []
@@ -312,6 +315,8 @@ n0 = len(inbox)
 n_blocked = len(ts.team_queue(T["team_id"])["blocked"])
 check("TC18 nhắc sau 24 giờ: mỗi việc bị chặn một lần", r.remind_blocked(now=time.time() + 25 * 3600) == n_blocked
       and r.remind_blocked(now=time.time() + 26 * 3600) == 0 and len(inbox) == n0 + n_blocked and n_blocked >= 1)
+check("tin nhắc xưng hô trung tính (bạn), không cố định anh", all("chờ bạn" in x[1] and " anh " not in x[1]
+                                                                for x in inbox[n0:]), str(inbox[n0:]))
 fake.say("ag_minh", "work", "Lần này được")
 r.unblock(ja["task_id"], "retry")
 run(r.dispatch_once(wait=True))
@@ -574,4 +579,117 @@ fake.say("ag_minh", "member_reply", "Giao luôn." + directive(op="assign", agent
 run(r.run_replies(r.submit(T["team_id"], "Minh?", mentions=["ag_minh"], client_msg_id="z2")))
 check("lượt trò chuyện không được giao việc hay nhờ người khác", len(fake.calls) == 1
       and not ts.team_queue(T["team_id"])["waiting"])
+
+# ---------- Sửa sau review cuối T1 ----------
+ss, ts, tm, fake, r, pub, inbox, gone = world("review")
+T = make_team(tm, ss, "Review")
+TID = T["team_id"]
+fake.say("ag_lan", "plan", "Chia." + directive(op="assign", agent="minh", brief="a")
+         + directive(op="assign", agent="Hoa", brief="b"))
+j = r.submit(TID, "Việc tên hiển thị", as_job=True, client_msg_id="v1")
+run(r.dispatch_once(wait=True))
+check("review I1: giao theo tên hiển thị (khác hoa thường) vẫn tới đúng người",
+      [(c["agent_key"], c["role"]) for c in fake.calls][:3] == [("ag_lan", "plan"), ("ag_minh", "work"), ("ag_hoa", "work")],
+      str([(c["agent_key"], c["role"]) for c in fake.calls]))
+fake.calls.clear()
+fake.say("ag_lan", "plan", "Chia." + directive(op="assign", agent="Người lạ", brief="a"))
+j = r.submit(TID, "Việc giao người lạ", as_job=True, client_msg_id="v2")
+run(r.dispatch_once(wait=True))
+tj = ts.get_task(j["task_id"])
+check("review I1: kế hoạch có lệnh giao mà mọi lệnh đều bị bỏ thì việc bị chặn, không báo xong",
+      tj["status"] == "team_blocked" and tj["block_kind"] == "failed", str((tj["status"], tj["block_kind"])))
+ts.team_cancel(j["task_id"])
+
+fake.calls.clear()
+
+
+async def amend_mid(req):
+    ts.team_amend(req["task_id"], "thêm bản tiếng Anh")
+    return "Minh bản cũ"
+
+
+fake.say("ag_minh", "work", amend_mid, "Minh bản mới")
+fake.say("ag_hoa", "work", "Hoa bản mới")
+j = r.submit(TID, "Hai bạn làm", mentions=["ag_minh", "ag_hoa"], as_job=True, client_msg_id="v3")
+run(r.dispatch_once(wait=True))
+done_rev2 = sorted(s["agent_key"] for s in tm.steps(j["task_id"])
+                   if s["kind"] == "work" and s["status"] == "done" and s["job_revision"] == 2)
+check("review I2: sửa yêu cầu việc @ nhiều người: mọi người được giao đều làm lại theo bản mới",
+      done_rev2 == ["ag_hoa", "ag_minh"] and ts.get_task(j["task_id"])["status"] == "done", str(done_rev2))
+
+fake.calls.clear()
+
+
+async def pause_in_plan(req):
+    tm.update(TID, status="paused")
+    return "Chia." + directive(op="assign", agent="ag_minh", brief="a")
+
+
+fake.say("ag_lan", "plan", pause_in_plan)
+j = r.submit(TID, "Việc tạm dừng nhanh", as_job=True, client_msg_id="v4")
+
+
+async def pause_then_resume():
+    await r.dispatch_once(wait=False)
+    for _ in range(50):
+        await asyncio.sleep(0.02)
+        if all(t.done() for t in r._jobs.values()):
+            break
+    tm.update(TID, status="active")
+    await r.resume_team(TID)
+    await r.wait_jobs()
+
+
+run(pause_then_resume())
+check("review I3: tạm dừng rồi tiếp tục ngay: việc chạy tiếp tới xong, không kẹt",
+      ts.get_task(j["task_id"])["status"] == "done", ts.get_task(j["task_id"])["status"])
+
+fake.boom = {"ag_hoa"}
+j = r.submit(TID, "Hoa làm", mentions=["ag_hoa"], as_job=True, client_msg_id="v5")
+run(r.dispatch_once(wait=True))
+tj = ts.get_task(j["task_id"])
+hoa_turns = [t["status"] for t in tm.turns(TID) if t["task_id"] == j["task_id"]]
+check("review I4: lỗi bất ngờ trước mốc engine: hoàn lượt, việc bị chặn failed, bước không treo running",
+      tj["status"] == "team_blocked" and tj["block_kind"] == "failed" and hoa_turns == ["refunded"]
+      and all(s["status"] != "running" for s in tm.steps(j["task_id"])), str((tj["status"], hoa_turns)))
+fake.boom = set()
+ts.team_cancel(j["task_id"])
+
+fake.calls.clear()
+sp = r.submit(TID, "Ai đó trả lời", mentions=["ag_minh", "ag_hoa"], client_msg_id="v6")
+tm.update(TID, status="paused")
+run(r.run_replies(sp))
+check("review: nhóm tạm dừng sau khi gửi: lượt trả lời chưa chạy thì không chạy, không tốn lượt",
+      fake.calls == [] and not [t for t in tm.turns(TID) if t["role"] == "member_reply" and t["status"] != "refunded"])
+tm.update(TID, status="active")
+
+fake.say("ag_minh", "work", "Hỏi Hoa." + directive(op="request_help", agent="ag_hoa", question="q"), "Hỏi Hoa."
+         + directive(op="request_help", agent="ag_hoa", question="q"), "Lần này có kết quả")
+j = r.submit(TID, "Minh lặp", mentions=["ag_minh"], as_job=True, client_msg_id="v7")
+run(r.dispatch_once(wait=True))
+np_step = [s for s in tm.steps(j["task_id"]) if s["note"] and "tiến triển" in s["note"]]
+check("review: bước không tiến triển không được áp dụng, thành bước lỗi để Chạy lại",
+      ts.get_task(j["task_id"])["block_kind"] == "no_progress" and np_step and np_step[0]["status"] == "failed"
+      and np_step[0]["applied"] is False, str(np_step))
+r.unblock(j["task_id"], "retry")
+run(r.dispatch_once(wait=True))
+check("review: Chạy lại sau không tiến triển: chạy lại bước, việc xong với kết quả mới",
+      ts.get_task(j["task_id"])["status"] == "done" and ts.get_task(j["task_id"])["result"] == "Lần này có kết quả",
+      ts.get_task(j["task_id"])["result"])
+
+
+async def lock_leak():
+    tm.acquire_busy("ag_tu", "tm_khac", "tu_khac", lease_s=60)
+    t = asyncio.ensure_future(r._acquire(dict(T, caps=dict(T["caps"], busy_wait_s=5)), "ag_tu", "tu_x"))
+    await asyncio.sleep(0.1)
+    t.cancel()
+    try:
+        await t
+    except asyncio.CancelledError:
+        pass
+    return r._lock_for("ag_tu").locked()
+
+
+check("review: huỷ lúc đang chờ khoá bận trong kho không giữ khoá trong tiến trình", run(lock_leak()) is False)
+tm.release_busy("ag_tu", "tu_khac")
 raise SystemExit(1 if fails else 0)

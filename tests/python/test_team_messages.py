@@ -61,6 +61,11 @@ check("lịch sử chat chính không hiện phiên nhóm hay mạch thành viê
 st.append_message(web, "user", "chat thường")
 plain = st.get_messages_page(web, limit=5)["messages"][0]
 check("chat thường không đổi hình dạng", plain["content"] == "chat thường" and "author_kind" not in plain)
+st.append_message(web, "user", "từ khoá chung xyzzy")
+st.append_team_message(team, "user", "từ khoá chung xyzzy trong nhóm", author_kind="owner", client_msg_id="s-1")
+hits = {h["session_id"] for h in st.search("xyzzy", brain="B")}
+check("tìm kiếm chung không trả phiên nhóm (mở ra là chat vào nhóm bằng bộ não chính)", web in hits and team not in hits,
+      str(hits))
 with sqlite3.connect(db) as c:
     cols = {r[1] for r in c.execute("PRAGMA table_info(messages)")}
 check("cột mới cho phép null", {"author_kind", "author_ref", "client_msg_id", "reply_to", "task_id", "step_id",

@@ -15,7 +15,8 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 - **Turn on "Assign job" to make a message a job.** The lead splits it among members and writes the summary; an @ member does it directly. The lead can only suggest new jobs, you tap **Create job** to start one.
 - **The queue has a Prioritize button** and is numbered in run order. A blocked job never stalls the queue; it shows under waiting for you with the reason and an inbox notice.
 - **Limits keep turns from being wasted:** 12 turns per job, 100 turns per team per day, 3 members called per message, and help loops are stopped. Change them in the team's Settings tab.
-- Team turns answer in text only for now, without files or connections. To go back to 0.109.0: stop Javis and run `tools/team_chat_restore_pre.py`.
+- Team turns answer in text only for now, without files or connections.
+- Going back to 0.109.0 still works and never runs team jobs by mistake. For a clean rollback, stop Javis and run `tools/team_chat_restore_pre.py`; jobs and chat messages from after the upgrade leave the live store (a copy is kept next to the store file).
 
 ## [0.110.0] - 2026-10-13
 ### Improved

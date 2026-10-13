@@ -202,11 +202,37 @@ r = c.post(f"/teams/{TID}/members{Q}", json={"slug": "minh"})
 new_key = next(m["agent_key"] for m in r.json()["team"]["members"] if m["slug"] == "minh")
 check("tạo lại cùng slug: mã mới, phải thêm lại mới là thành viên", new_key != keys["minh"])
 
+# Việc đang chạy nhưng không còn ai chạy (đã dừng ở điểm điều phối lúc tạm dừng) phải bị huỷ khi lưu trữ.
+jr = c.post(f"/teams/{TID}/messages{Q}", json={"text": "Việc treo", "client_msg_id": "j6", "as_job": True,
+                                               "mentions": [keys["lan"]]}).json()["task_id"]
+c.patch(f"/teams/{TID}{Q}", json={"status": "paused"})
+idle = main.tasks_feature.store.claim_team_next(TID, "w-cu")["id"]
 r = c.patch(f"/teams/{TID}{Q}", json={"status": "archived"})
 check("lưu trữ nhóm: huỷ mọi việc chờ", r.status_code == 200
-      and main.tasks_feature.store.get_task(jw)["status"] == "cancelled")
+      and {main.tasks_feature.store.get_task(x)["status"] for x in (jw, jr) if x != idle} == {"cancelled"})
+check("lưu trữ nhóm: việc đang chạy mà không còn ai chạy cũng bị huỷ, không treo mãi",
+      main.tasks_feature.store.get_task(idle)["status"] == "cancelled", main.tasks_feature.store.get_task(idle)["status"])
+check("nhóm lưu trữ không nhận đề xuất thành việc", c.post(f"/teams/{TID}/messages/{card['id']}/accept{Q}").status_code
+      == 409)
 check("nhóm lưu trữ không gửi tin được", c.post(f"/teams/{TID}/messages{Q}", json={
     "text": "x", "client_msg_id": "m9"}).status_code == 409)
 check("không có nhóm: 404", c.get(f"/teams/tm_khong{Q}").status_code == 404)
 drain()
+
+# Vòng nền: cài mới (chưa có team.sqlite3 lúc khởi động) thì KHÔNG chạy phục hồi về sau, kẻo chặn nhầm việc đang chạy.
+import dataclasses  # noqa: E402
+import team_api  # noqa: E402
+fresh_path = Path(tempfile.mkdtemp(prefix="team-fresh-")) / "team.sqlite3"
+api2 = team_api.TeamApi(dataclasses.replace(api.deps, store_path=fresh_path, spawn=spawned.append))
+api2.prime()
+tm2 = api2.teams()
+t2 = tm2.create_team(str(BR), "Mới", "", main.get_store().create_session(brain=str(BR), channel="team:tm_x"))
+tu = tm2.reserve_turn(t2["team_id"], None, None, "ag_x", "leader_reply")
+asyncio.run(api2.tick())
+check("cài mới: lượt đang giữ chỗ không bị phục hồi nhầm (không hoàn lượt)", tm2.turn(tu)["status"] == "reserved")
+api3 = team_api.TeamApi(dataclasses.replace(api.deps, store_path=fresh_path, spawn=spawned.append))
+api3.prime()
+asyncio.run(api3.tick())
+check("khởi động lại khi đã có kho: phục hồi chạy một lần", tm2.turn(tu)["status"] == "refunded")
+spawned.clear()
 raise SystemExit(1 if fails else 0)

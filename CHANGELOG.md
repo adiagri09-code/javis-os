@@ -13,7 +13,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - **Bật "Giao việc" để tin thành một việc.** Trưởng nhóm chia phần cho thành viên rồi tổng hợp; @ ai thì người đó làm thẳng. Trưởng nhóm chỉ được đề xuất việc mới, bạn bấm **Tạo việc** mới có.
 - **Hàng đợi có nút Ưu tiên**, đánh số đúng thứ tự chạy. Việc bị chặn không làm kẹt hàng; nó hiện ở mục chờ bạn kèm lý do và có tin vào hộp thư.
 - **Có trần để không tốn lượt vô ích:** 12 lượt mỗi việc, 100 lượt mỗi nhóm mỗi ngày, 3 người được gọi mỗi tin, chặn vòng nhờ qua nhờ lại. Đổi ở tab Cài đặt của nhóm.
-- Lượt trong nhóm hiện chỉ trả lời bằng chữ, chưa đọc, ghi file hay dùng kết nối. Muốn quay về 0.109.0: tắt Javis, chạy `tools/team_chat_restore_pre.py`.
+- Lượt trong nhóm hiện chỉ trả lời bằng chữ, chưa đọc, ghi file hay dùng kết nối.
+- Quay về 0.109.0 vẫn chạy được, việc nhóm không bị chạy nhầm. Muốn dọn sạch: tắt Javis, chạy `tools/team_chat_restore_pre.py`; việc và tin chat sau lúc nâng sẽ rời kho đang chạy (bản sao được giữ cạnh file kho).
 
 ## [0.110.0] - 2026-10-13
 ### Cải thiện

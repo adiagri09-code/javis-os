@@ -37,6 +37,7 @@ OPS_BY_ROLE = {
     "synthesize": set(),
 }
 LEADER_ROLES = ("leader_reply", "plan", "synthesize")
+REPLY_ROLES = ("leader_reply", "member_reply")
 ROLE_LABEL = {
     "leader_reply": "Trưởng nhóm trả lời trò chuyện",
     "member_reply": "Thành viên trả lời trò chuyện",
@@ -129,12 +130,14 @@ class TeamRunner:
 
     def _resolve(self, team: dict, ref: Any) -> Optional[str]:
         """Mã agent từ `agent_key`, slug lúc vào nhóm hay slug hiện tại; chỉ thành viên đang hoạt động."""
-        ref = str(ref or "").strip().lstrip("@")
+        ref = str(ref or "").strip().lstrip("@").strip().casefold()
         if not ref:
             return None
+        # Model hay gọi thành viên bằng TÊN hiển thị ("Minh") thay vì mã: so cả tên, không phân biệt hoa thường.
         for m in self.teams.members(team["team_id"]):
             info = self.agent_info(team["brain_id"], m["agent_key"]) or {}
-            if ref in (m["agent_key"], m["slug_at_join"], info.get("slug")):
+            names = (m["agent_key"], m["slug_at_join"], info.get("slug"), info.get("name"))
+            if ref in {str(n).strip().casefold() for n in names if n}:
                 return m["agent_key"]
         return None
 
@@ -269,6 +272,8 @@ class TeamRunner:
     def accept_proposal(self, team_id: str, message_id: int) -> str:
         """Chủ nhóm bấm "Tạo việc" trên thẻ đề xuất của trưởng nhóm (D2). Bấm lại trả đúng việc cũ."""
         team = self._team(team_id)
+        if team["status"] == "archived":
+            raise TeamError("nhóm đã lưu trữ, không tạo việc mới được")
         msg = self.sessions.team_message(team["session_id"], int(message_id))
         prop = ((msg or {}).get("meta") or {}).get("proposal")
         if not msg or msg.get("author_kind") != "agent" or not prop:
@@ -342,11 +347,17 @@ class TeamRunner:
         except (asyncio.TimeoutError, TimeoutError):
             return False
         deadline = time.monotonic() + wait
-        while not self.teams.acquire_busy(agent_key, team["team_id"], turn_id, lease_s=BUSY_LEASE_S):
-            if time.monotonic() > deadline:
+        try:
+            while not self.teams.acquire_busy(agent_key, team["team_id"], turn_id, lease_s=BUSY_LEASE_S):
+                if time.monotonic() > deadline:
+                    lock.release()
+                    return False
+                await asyncio.sleep(0.2)
+        except BaseException:
+            # Bị huỷ (hay kho lỗi) giữa lúc chờ dòng khoá trong kho: nhả khoá trong tiến trình, kẻo agent kẹt mãi.
+            if lock.locked():
                 lock.release()
-                return False
-            await asyncio.sleep(0.2)
+            raise
         return True
 
     def _release(self, agent_key: str, turn_id: str) -> None:
@@ -375,20 +386,34 @@ class TeamRunner:
             self.teams.refund_turn(turn_id)
             return {"status": "busy_long", "turn_id": turn_id}
         try:
-            pre = self._still_valid(team_id, agent_key, role, task, step)
-            info = self.agent_info(team["brain_id"], agent_key)
-            if pre == "done" and info is None:
-                pre = "member_left"
-            if pre != "done":
-                self.teams.refund_turn(turn_id)
-                return {"status": pre, "before_engine": True, "turn_id": turn_id}
-            team = self._team(team_id)
-            engine, model, fn = self.engine_for(team, agent_key, role)
-            req = {"team_id": team_id, "brain": team["brain_id"], "agent_key": agent_key, "role": role,
-                   "system": str(info.get("system") or ""), "prompt": self._context(team, agent_key, role, task, step)
-                   + "\n\n" + body, "thread": f"teammate:{team_id}:{agent_key}", "task_id": task_id,
-                   "step_id": step_id, "turn_id": turn_id, "tools": []}
-            self.teams.mark_engine(turn_id, str(engine or ""), str(model or ""))
+            try:
+                pre = self._still_valid(team_id, agent_key, role, task, step)
+                info = self.agent_info(team["brain_id"], agent_key)
+                if pre == "done" and info is None:
+                    pre = "member_left"
+                # Tạm dừng hay lưu trữ nhóm: lượt trả lời chưa tới engine thì không chạy (spec 11.4). Lượt đã chạy thì
+                # chạy hết; bước của việc dừng ở điểm điều phối trong run_job.
+                if pre == "done" and role in REPLY_ROLES and (self.teams.get(team_id) or {}).get("status") != "active":
+                    pre = "team_paused"
+                if pre != "done":
+                    self.teams.refund_turn(turn_id)
+                    return {"status": pre, "before_engine": True, "turn_id": turn_id}
+                team = self._team(team_id)
+                engine, model, fn = self.engine_for(team, agent_key, role)
+                req = {"team_id": team_id, "brain": team["brain_id"], "agent_key": agent_key, "role": role,
+                       "system": str(info.get("system") or ""),
+                       "prompt": self._context(team, agent_key, role, task, step) + "\n\n" + body,
+                       "thread": f"teammate:{team_id}:{agent_key}", "task_id": task_id,
+                       "step_id": step_id, "turn_id": turn_id, "tools": []}
+                self.teams.mark_engine(turn_id, str(engine or ""), str(model or ""))
+            except BaseException:
+                # Lỗi bất ngờ (kho bận, dựng engine hỏng) hay bị huỷ TRƯỚC mốc gọi engine: hoàn lượt, không tính.
+                try:
+                    if (self.teams.turn(turn_id) or {}).get("engine_at") is None:
+                        self.teams.refund_turn(turn_id)
+                except Exception:  # noqa: BLE001
+                    pass
+                raise
             try:
                 res = await fn(req)
             except asyncio.CancelledError:
@@ -425,7 +450,7 @@ class TeamRunner:
         mid = self._post(self._team(team_id), clean or "(không có nội dung)", author_kind="agent", author_ref=agent_key,
                          reply_to=reply_to, task_id=task_id, step_id=step_id, meta=meta)
         return {"status": status, "applied": applied, "ops": kept, "notes": notes, "message_id": mid,
-                "text": clean, "sha": meta["sha"], "turn_id": turn_id}
+                "text": clean, "sha": meta["sha"], "turn_id": turn_id, "extra": extra}
 
     def _still_valid(self, team_id: str, agent_key: str, role: str, task: Optional[dict],
                      step: Optional[dict]) -> str:
@@ -514,13 +539,21 @@ class TeamRunner:
         giao làm lại theo bản mới, hay chặn `assignee_removed` nếu người đó đã rời."""
         task = self.tasks.get_task(task["id"])
         self.teams.cancel_open_steps(task["id"], reason)
-        direct = bool(self._assignees(task))
-        if direct:
-            if not self.teams.is_active_member(team["team_id"], step["agent_key"]):
+        assignees = self._assignees(task)
+        if assignees:
+            # Việc @ trực tiếp: chỉ chặn khi chính NGƯỜI ĐƯỢC GIAO rời nhóm (người hỗ trợ rời thì làm lại chuỗi). Mọi người
+            # được giao còn thiếu kết quả ở bản hiện tại đều làm lại từ đầu, không chỉ người có lượt vừa bị bỏ.
+            gone = [a for a in assignees if not self.teams.is_active_member(team["team_id"], a)]
+            if step["agent_key"] in gone or len(gone) == len(assignees):
                 return self._block(task["id"], "assignee_removed", "Người được giao đã rời nhóm")
-            ok = self._add_steps(team, task, [{"kind": step["kind"], "agent": step["agent_key"], "brief": task["intent"],
-                                               "inputs": step["input_refs"], "parent": step["parent_step"]}])
-            return None if ok else "team_blocked"
+            have = {s["agent_key"] for s in self.teams.steps(task["id"])
+                    if s["kind"] == "work" and s["status"] == "done" and s["applied"] and not s["parent_step"]
+                    and int(s["job_revision"]) == int(task["team_rev"])}
+            specs = [{"kind": "work", "agent": a, "brief": task["intent"], "inputs": self._source_id(task)}
+                     for a in assignees if a not in gone and a not in have]
+            if not specs:
+                return None
+            return None if self._add_steps(team, task, specs) else "team_blocked"
         team = self._team(team["team_id"])
         if not team["leader_key"]:
             return self._block(task["id"], "no_leader", "Nhóm chưa có trưởng nhóm")
@@ -570,7 +603,8 @@ class TeamRunner:
                     notes.append(f"'{op.get('agent')}' không phải thành viên đang hoạt động của nhóm, đã bỏ")
                     continue
                 kept.append({"op": "assign", "agent": key, "brief": str(op.get("brief") or "")[:4000]})
-            return kept, {}
+            # Trưởng nhóm CÓ giao mà mọi lệnh giao đều hỏng: không được coi kế hoạch là kết quả việc.
+            return kept, ({"assign_dropped": len(ops)} if ops and not kept else {})
         # work, help: nhờ hỗ trợ (spec 7.4) với trần độ sâu và chặn nhờ ngược
         for op in ops:
             if kept:
@@ -593,7 +627,24 @@ class TeamRunner:
         return kept, {}
 
     async def run_job(self, task_id: str) -> str:
-        """Chạy các bước của một việc `team_running` tới khi xong, bị chặn, bị huỷ hay nhóm tạm dừng."""
+        """Chạy các bước của một việc `team_running` tới khi xong, bị chặn, bị huỷ hay nhóm tạm dừng.
+
+        Lỗi bất ngờ (kho bận, lỗi mã) không được để việc nằm `team_running` không ai chạy và đóng băng hàng của nhóm:
+        bước đang chạy thành lỗi, việc bị chặn `failed` kèm lý do, có tin hộp thư; chủ bấm Chạy lại bước."""
+        try:
+            return await self._run_job_steps(task_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as ex:  # noqa: BLE001
+            try:
+                for s in self.teams.steps(task_id):
+                    if s["status"] == "running":
+                        self.teams.finish_step(s["step_id"], "failed", note=f"lỗi nội bộ: {type(ex).__name__}")
+                return self._block(task_id, "failed", f"Lỗi nội bộ khi chạy việc: {type(ex).__name__}: {str(ex)[:200]}")
+            except Exception:  # noqa: BLE001
+                return "error"
+
+    async def _run_job_steps(self, task_id: str) -> str:
         while True:
             task = self.tasks.get_task(task_id)
             if not task or task["status"] != "team_running":
@@ -687,11 +738,16 @@ class TeamRunner:
             prev_msg = self.sessions.team_message(team["session_id"], prev["result_msg_id"]) if prev and \
                 prev.get("result_msg_id") else None
             if prev_msg and (prev_msg.get("meta") or {}).get("sha") == out["sha"]:
-                self.teams.finish_step(sid, "done", mid, True, "không tiến triển")
+                # Không áp dụng và để ở trạng thái lỗi: "Chạy lại bước" chạy lại đúng bước này; không có kết quả lặp nào
+                # được coi là kết quả việc.
+                self.teams.finish_step(sid, "failed", mid, False, "không tiến triển")
                 return self._block(task["id"], "no_progress", "Hai lượt liền nhau không có kết quả mới")
         kind = step["kind"]
         if kind == "plan":
             assigns = out["ops"]
+            if not assigns and (out.get("extra") or {}).get("assign_dropped"):
+                self.teams.finish_step(sid, "failed", mid, False, "không giao được cho ai")
+                return self._block(task["id"], "failed", "Kế hoạch giao việc cho người không có trong nhóm")
             self.teams.finish_step(sid, "done", mid, True)
             if not assigns:
                 return self._finish(team, task["id"], mid, out["text"])
@@ -798,9 +854,21 @@ class TeamRunner:
             self._state(task["team_id"])
         return prev
 
+    def cancel_idle_running(self, team_id: str, reason: str) -> int:
+        """Huỷ việc `team_running` của nhóm mà tiến trình này không còn chạy (đã dừng ở điểm điều phối khi tạm dừng).
+        Việc còn đang chạy thì tự dừng ở điểm điều phối kế tiếp (run_job thấy nhóm đã lưu trữ)."""
+        n = 0
+        for t in self.tasks.team_queue(team_id)["running"]:
+            job = self._jobs.get(t["id"])
+            if (job is None or job.done()) and self.cancel_job(t["id"], reason) is not None:
+                n += 1
+        return n
+
     async def resume_team(self, team_id: str) -> None:
         """Nhóm tiếp tục sau tạm dừng: việc đang `team_running` của nhóm chạy tiếp từ điểm điều phối."""
-        ids = [t["id"] for t in self.tasks.team_queue(team_id)["running"] if t["id"] not in self._jobs]
+        # Việc đã dừng ở điểm điều phối vẫn còn trong `_jobs` (đã xong) tới lần điều phối sau: chỉ bỏ qua việc CÒN chạy.
+        ids = [t["id"] for t in self.tasks.team_queue(team_id)["running"]
+               if t["id"] not in self._jobs or self._jobs[t["id"]].done()]
         for tid in ids:
             self._jobs[tid] = asyncio.ensure_future(self.run_job(tid))
 
@@ -838,7 +906,7 @@ class TeamRunner:
             if any(e["kind"] == "blocked_reminder" and e["after"] == mark for e in self.teams.events(t["team_id"], 500)):
                 continue
             self.teams.log_event(t["team_id"], "blocked_reminder", "host", None, mark)
-            self._notify(t["team_id"], f"Việc nhóm \"{t['title']}\" vẫn đang chờ anh xử lý: {t['block_reason']}")
+            self._notify(t["team_id"], f"Việc nhóm \"{t['title']}\" vẫn đang chờ bạn xử lý: {t['block_reason']}")
             sent += 1
         return sent
 

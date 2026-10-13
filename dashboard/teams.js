@@ -43,8 +43,9 @@
     mentions: "teams.cap.mentions" };
   var TAB_KEY = { members: "teams.tab_members", jobs: "teams.tab_jobs", turns: "teams.tab_turns", settings: "teams.tab_settings" };
   var LATE = ["late_cancelled", "late", "old_revision", "member_left", "leader_changed"];
-  var RETRY_KINDS = ["failed", "interrupted"];
-  var RESUME_KINDS = ["cap_reached", "agent_busy_long", "no_progress", "waiting_user"];
+  // Không tiến triển: chạy lại đúng bước đó (bước lặp đã đánh dấu lỗi, không phải kết quả việc).
+  var RETRY_KINDS = ["failed", "interrupted", "no_progress"];
+  var RESUME_KINDS = ["cap_reached", "agent_busy_long", "waiting_user"];
   var CAP_FIELDS = ["task_turns", "task_steps", "daily_turns", "mentions"];
 
   function initial(name) {
@@ -627,7 +628,12 @@
     if (t.classList.contains("tm-send")) return send();
     if (t.classList.contains("tm-older")) return loadMsgs(true);
     if (d.mention) return pickMention(d.mention);
-    if (d.unmention) { S.mentions = S.mentions.filter(function (k) { return k !== d.unmention; }); drawComposer(); return; }
+    if (d.unmention) {
+      S.mentions = S.mentions.filter(function (k) { return k !== d.unmention; });
+      S.pending = null;
+      drawComposer();
+      return;
+    }
     if (d.task && t.classList.contains("tm-tag")) { S.filterTask = d.task; drawHead(); loadMsgs(false); return; }
     if (d.accept) return call("POST", teamUrl("/messages/" + q(d.accept) + "/accept")).then(function (r) { act(r); });
     if (d.skip) { S.skipped["p" + d.skip] = true; drawMsgs(false); return; }
@@ -710,6 +716,8 @@
     if (e.target.classList.contains("tm-input")) { suggest(); return; }
     if (e.target.classList.contains("tm-asjob")) {
       S.asJob = !!e.target.checked;
+      // Đổi loại tin là một tin KHÁC: mã client cũ thuộc tin trước, gửi lại bằng nó sẽ được trả tin cũ khác loại.
+      S.pending = null;
       var btn = S.el.querySelector(".tm-send");
       if (btn) btn.textContent = tw(S.asJob ? "teams.as_job" : "teams.send");
       drawHint();

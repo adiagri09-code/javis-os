@@ -145,24 +145,35 @@ class TeamApi:
 
     # ───────────── nền ─────────────
 
+    def prime(self) -> None:
+        """Lúc khởi động: chỉ khi kho nhóm ĐÃ có từ trước mới cần phục hồi. Cài mới (chưa có kho) thì không có gì để phục
+        hồi; nếu để phục hồi chạy lúc kho vừa được tạo, nó sẽ chặn nhầm việc đang chạy và hoàn nhầm lượt đang giữ chỗ."""
+        self._recovered = not self.exists()
+        self._last_remind = 0.0
+
+    async def tick(self) -> None:
+        """Một vòng: phục hồi (một lần, nếu cần), nhận việc đầu hàng, mỗi giờ nhắc việc chặn quá 24 giờ."""
+        if not hasattr(self, "_recovered"):
+            self.prime()
+        if not self.exists():
+            return
+        r = self.runner()
+        if not self._recovered:
+            self._recovered = True
+            rep = await asyncio.to_thread(r.recover)
+            if rep["resumed"]:
+                self._spawn(r.resume_jobs(rep["resumed"]))
+        await r.dispatch_once(wait=False)
+        now = asyncio.get_running_loop().time()
+        if now - self._last_remind >= REMIND_EVERY_S:
+            self._last_remind = now
+            r.remind_blocked()
+
     async def loop(self) -> None:
-        """Vòng điều phối: phục hồi sau restart một lần, rồi mỗi 5 giây nhận việc đầu hàng; mỗi giờ nhắc việc chặn lâu."""
-        recovered = False
-        last_remind = 0.0
+        """Vòng điều phối mỗi 5 giây (spec 8.3)."""
         while True:
             try:
-                if self.exists():
-                    r = self.runner()
-                    if not recovered:
-                        recovered = True
-                        rep = await asyncio.to_thread(r.recover)
-                        if rep["resumed"]:
-                            self._spawn(r.resume_jobs(rep["resumed"]))
-                    await r.dispatch_once(wait=False)
-                    now = asyncio.get_running_loop().time()
-                    if now - last_remind >= REMIND_EVERY_S:
-                        last_remind = now
-                        r.remind_blocked()
+                await self.tick()
             except asyncio.CancelledError:
                 raise
             except Exception as ex:  # noqa: BLE001
@@ -176,6 +187,7 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
 
     @app.on_event("startup")
     async def _team_loop_start():
+        api.prime()
         api._loop_task = asyncio.create_task(api.loop())
 
     def _root(brain: str) -> Optional[str]:
@@ -266,6 +278,7 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             q = deps.task_store().team_queue(team_id)
             for t in q["waiting"] + q["blocked"]:
                 runner.cancel_job(t["id"], "nhóm đã lưu trữ")
+            runner.cancel_idle_running(team_id, "nhóm đã lưu trữ")
         elif fields.get("status") == "active" and team["status"] != "active":
             api._spawn(runner.resume_team(team_id))
             api.kick()
@@ -448,6 +461,8 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
         team, err = _team(team_id, brain)
         if err:
             return err
+        if team["status"] == "archived":
+            return _err(409, "Nhóm đã lưu trữ, không tạo việc mới được", "The team is archived")
         try:
             tid = api.runner().accept_proposal(team_id, message_id)
         except TeamError as ex:

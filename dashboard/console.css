@@ -2568,6 +2568,7 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .tm-field[hidden] { display: none; }
 .tm-field input, .tm-field textarea, .tm-field select { border-radius: 8px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); padding: 6px 8px; font: inherit; }
 .tm-radio, .tm-check { display: inline-flex; align-items: center; gap: 6px; }
+.tm-job[hidden], .tm-sug-item[hidden], .tm-radio[hidden], .tm-check[hidden], .tm-ava[hidden] { display: none; }
 .tm-create { max-width: 560px; }
 .tm-save, .tm-create-save { align-self: flex-start; }
 .tm-back, .tm-close { display: none; }

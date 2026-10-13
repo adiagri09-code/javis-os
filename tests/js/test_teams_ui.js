@@ -79,6 +79,13 @@ check("việc ưu tiên: dấu sao kèm chữ, nút Bỏ ưu tiên", /data-prio=
 check("việc thường: nút Ưu tiên có chữ", /data-prio="t_2"[^>]*data-on="1"/.test(h) && h.includes(vi["teams.prioritize"]), h);
 check("bị chặn: lý do bằng chữ; lỗi thì Chạy lại bước; chạm trần thì Cho chạy tiếp", h.includes("Lượt lỗi: hết giờ")
       && /data-unblock="t_4"[^>]*data-action="retry"/.test(h) && /data-unblock="t_5"[^>]*data-action="resume"/.test(h), h);
+h = TM.queueHtml({ version: 1, running: [], waiting: [], blocked: [{ id: "t_6", title: "Lặp", block_kind: "no_progress", block_reason: "x" }] });
+check("không tiến triển: nút Chạy lại bước (không phải Cho chạy tiếp ra kết quả lặp)",
+      /data-unblock="t_6"[^>]*data-action="retry"/.test(h), h);
+check("đổi công tắc Giao việc thì gửi lại là tin MỚI (không trả nhầm tin cũ khác loại)",
+      /tm-asjob[\s\S]{0,200}S\.pending = null/.test(teamsJs));
+check("mọi lớp đặt display có luật [hidden] riêng", [".tm-job", ".tm-sug-item", ".tm-radio", ".tm-check", ".tm-ava"]
+  .every(function (c) { return css.includes(c + "[hidden]"); }));
 check("hàng rỗng: có chữ", TM.queueHtml({ version: 0, running: [], waiting: [], blocked: [] }).includes(vi["teams.queue_empty"]));
 
 // ───────────── khung soạn ─────────────
