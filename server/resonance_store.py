@@ -305,7 +305,7 @@ _A4_SCHEMA = (
     "CREATE INDEX IF NOT EXISTS submissions_binding ON submissions(binding_id, status)",
 )
 # A5 (0.109.0): đội một agent làm, một agent review cho mỗi mục tiêu (thiết kế 2026-10-11-resonance-a5-maker-reviewer).
-# Chỉ thêm bảng; bản 0.107.0 bỏ qua chúng (hạ phiên bản chỉ hỗ trợ bằng khôi phục snapshot `.pre-0.109.0`).
+# Chỉ thêm bảng; bản 0.108.0 bỏ qua chúng (hạ phiên bản chỉ hỗ trợ bằng khôi phục snapshot `.pre-0.109.0`).
 A5_BACKUP_SUFFIX = ".pre-0.109.0"
 A5_TABLES = ("team_pairs", "goal_team", "team_calls", "reviews")
 TEAM_DEFAULT_CALLS = 8                 # tổng lượt của mục tiêu có đội (mục 6.1)

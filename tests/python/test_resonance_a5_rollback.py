@@ -1,13 +1,13 @@
-"""Resonance A5: nâng từ 0.107.0, hạ về 0.107.0 bằng snapshot (thiết kế A5 mục 13; ca T30).
+"""Resonance A5: nâng từ 0.108.0, hạ về 0.108.0 bằng snapshot (thiết kế A5 mục 13; ca T30).
 
     python tests/run.py resonance_a5_rollback -v
 
-Nạp `server/resonance*.py` của commit phát hành 0.107.0 (`49c795ab` trên main, bản cuối trước A5) qua `git show`:
-1. mã 0.107.0 THẬT lập kho và một mục tiêu có trợ lý và đường sản phẩm;
+Nạp `server/resonance*.py` của commit phát hành 0.108.0 (`c4fb614d` trên main, bản cuối trước A5) qua `git show`:
+1. mã 0.108.0 THẬT lập kho và một mục tiêu có trợ lý và đường sản phẩm;
 2. mã A5 mở kho đó: snapshot `.pre-0.109.0` đúng một bản, không có bảng A5; mục tiêu cũ không có đội, chạy như A4;
    mục tiêu mới có đội dừng ở chờ review;
-3. hạ KHÔNG khôi phục: mã 0.107.0 chốt đạt mục tiêu có đội mà không có review (giới hạn đã công bố là đúng sự thật);
-4. script khôi phục giữ bản kho hiện tại `post-0.109.0-*` rồi ghi snapshot; mã 0.107.0 mở được;
+3. hạ KHÔNG khôi phục: mã 0.108.0 chốt đạt mục tiêu có đội mà không có review (giới hạn đã công bố là đúng sự thật);
+4. script khôi phục giữ bản kho hiện tại `post-0.109.0-*` rồi ghi snapshot; mã 0.108.0 mở được;
 5. nâng lại: snapshot đã có thì không chép lại.
 Engine giả, không model thật. Máy không có lịch sử git của commit đó thì in SKIP; trên CI (biến CI) thì ĐỎ.
 """
@@ -34,7 +34,7 @@ import _resonance_team as T  # noqa: E402
 sys.path.insert(0, str(ROOT / "tools"))
 import resonance_restore_pre_a5 as RESTORE  # noqa: E402
 
-OLD_SHA = "49c795ab8e7858913aa96c6a5e846c524ac4929b"
+OLD_SHA = "c4fb614d30b63e592e66a8f943cf2749bb33a412"
 _fails = []
 
 
@@ -83,7 +83,7 @@ try:
     OLD_S = _load("resonance_store_0100", srcs["resonance_store"])
 finally:
     sys.modules.update(_saved)
-check("nạp đúng mã 0.107.0: kho cũ không biết bảng A5", not hasattr(OLD_S, "A5_TABLES") and hasattr(RS, "A5_TABLES"))
+check("nạp đúng mã 0.108.0: kho cũ không biết bảng A5", not hasattr(OLD_S, "A5_TABLES") and hasattr(RS, "A5_TABLES"))
 
 BRAIN = str(Path(tempfile.mkdtemp(prefix="brain-a5rb-")).resolve())
 (Path(BRAIN) / "Javis").mkdir(parents=True)
@@ -140,12 +140,12 @@ state_dir = Path(tempfile.mkdtemp(prefix="state-a5rb-"))
 db = state_dir / "resonance.sqlite3"
 clock = [1_800_000_000.0]
 
-# 1. Mã 0.107.0 lập kho và một mục tiêu.
+# 1. Mã 0.108.0 lập kho và một mục tiêu.
 old = OLD_S.GoalStore(db)
 maker = RA.enable(old, BRAIN, T.MAKER)
 g_old = form(OLD_R, old, maker, 1, "Inbox/cu.md")
 RA.approve(old, BRAIN, g_old.id)
-check("0.107.0 lập mục tiêu có trợ lý và đường sản phẩm", g_old.agent_key == maker["agent_key"])
+check("0.108.0 lập mục tiêu có trợ lý và đường sản phẩm", g_old.agent_key == maker["agent_key"])
 del old
 
 # 2. Mã A5 mở kho: snapshot một lần; mục tiêu cũ không có đội.
@@ -170,17 +170,17 @@ check("T30 mục tiêu mới có đội dừng ở chờ review", new.goal_team(
       and (new.run_state(owner, g_team.id) or {}).get("block_reason") == "review_pending")
 calls_after = new.get(owner, g_team.id).calls_used
 
-# 3. Hạ KHÔNG khôi phục (không hỗ trợ): mã 0.107.0 trên BẢN SAO kho A5.
+# 3. Hạ KHÔNG khôi phục (không hỗ trợ): mã 0.108.0 trên BẢN SAO kho A5.
 copy = state_dir / "copy.sqlite3"
 with sqlite3.connect(str(db)) as s, sqlite3.connect(str(copy)) as d:
     s.backup(d)
 old_c = OLD_S.GoalStore(copy)
 asyncio.run(OLD_R.advance(g_team.id, {"kind": "wake"}, deps(OLD_R, old_c, clock)))
-check("T30 không hỗ trợ: mã 0.107.0 chốt đạt mục tiêu có đội mà không có review (giới hạn đã công bố là đúng sự thật)",
+check("T30 không hỗ trợ: mã 0.108.0 chốt đạt mục tiêu có đội mà không có review (giới hạn đã công bố là đúng sự thật)",
       old_c.get(OLD_S.Principal("owner", "owner", BRAIN), g_team.id).status == "succeeded" and REV.queries == 0)
 del old_c
 
-# 4. Script khôi phục, rồi chạy 0.107.0.
+# 4. Script khôi phục, rồi chạy 0.108.0.
 del new
 r = RESTORE.restore(str(state_dir))
 kept = Path(r.get("kept") or "")
@@ -193,7 +193,7 @@ old2 = OLD_S.GoalStore(db)
 o2 = OLD_S.Principal("owner", "owner", BRAIN)
 with sqlite3.connect(str(db)) as c:
     tables_now = {x[0] for x in c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-check("T30 khôi phục rồi chạy 0.107.0: kho mở được, ở trạng thái lúc nâng (chỉ có mục tiêu cũ, chưa chạy), không có "
+check("T30 khôi phục rồi chạy 0.108.0: kho mở được, ở trạng thái lúc nâng (chỉ có mục tiêu cũ, chưa chạy), không có "
       "bảng A5", old2.get(o2, g_old.id) is not None and old2.get(o2, g_old.id).calls_used == 0
       and old2.get(o2, g_team.id) is None and not (set(RS.A5_TABLES) & tables_now), tables_now)
 del old2

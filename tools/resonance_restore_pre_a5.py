@@ -1,4 +1,4 @@
-"""Hạ Resonance về 0.107.0 bằng snapshot lúc nâng lên 0.109.0 (A5, thiết kế mục 13).
+"""Hạ Resonance về 0.108.0 bằng snapshot lúc nâng lên 0.109.0 (A5, thiết kế mục 13).
 
     python tools/resonance_restore_pre_a5.py --yes
     python tools/resonance_restore_pre_a5.py --state-dir /duong/dan/state --yes
@@ -10,7 +10,7 @@ file `.sqlite3`):
 2. Ghi đè kho bằng snapshot `resonance.sqlite3.pre-0.109.0` mà mã 0.109.0 tạo một lần lúc nâng.
 
 Hậu quả, cũng ghi trong ghi chú phát hành: mọi thay đổi của mục tiêu sau lúc nâng biến mất khỏi kho chạy (bản sao ở
-bước 1 vẫn đọc được). File đã đăng trong brain vẫn còn. Hạ về 0.107.0 mà KHÔNG khôi phục snapshot là không hỗ trợ: mã cũ
+bước 1 vẫn đọc được). File đã đăng trong brain vẫn còn. Hạ về 0.108.0 mà KHÔNG khôi phục snapshot là không hỗ trợ: mã cũ
 bỏ qua bảng A5, nên mục tiêu có đội có thể được chốt đạt mà không có review.
 """
 from __future__ import annotations
