@@ -425,8 +425,12 @@
         if (!row || !row.agent_key) return;
         var same = b.getAttribute("data-same") === "1";
         if (!same && !window.confirm(tw("resonance.a1_confirm_new_q"))) return;
+        // T0: phát sự kiện trong tab (dòng trợ lý ở cột trái đổi ngay, không chờ gói WS) rồi vẽ lại bảng này.
         postJson("/resonance/agents/confirm?brain=" + q(brain()), { agent_key: row.agent_key, same: same })
-          .then(function () { refresh(); });
+          .then(function () {
+            try { window.dispatchEvent(new CustomEvent("javis:resonance-agents-changed")); } catch (e) {}
+            refresh();
+          }, function () { refresh(); });
       });
     });
   }
@@ -450,7 +454,14 @@
     host.addEventListener("click", function (ev) {
       // T0: bật, tắt từng trợ lý ở trang Cộng sự; trang Cài đặt chỉ đưa đường sang đó.
       var go = ev.target && ev.target.closest && ev.target.closest(".rsa-goto-ws");
-      if (go) { try { window.JavisNav.go("workspace"); } catch (e) {} return; }
+      // Mở đúng tab Trợ lý (JavisNav.go thì rơi vào tab đang nhớ dở, có thể là Quy trình).
+      if (go) {
+        try {
+          if (window.JavisWorkspace && window.JavisWorkspace.openTab) window.JavisWorkspace.openTab("agent");
+          else window.JavisNav.go("workspace");
+        } catch (e) {}
+        return;
+      }
       var btn = ev.target && ev.target.closest && ev.target.closest(".rsa-assign");
       if (!btn) return;
       var row = btn.closest(".rsa-wait");

@@ -50,7 +50,7 @@ check("trang Cài đặt: chỉ tóm tắt và nút sang trang Cộng sự, khô
 const keys = Object.keys(vi).filter(function (k) { return k.indexOf("resonance.t0_") === 0; });
 check("đủ khoá tiếng Anh", keys.length >= 11 && keys.every(function (k) { return typeof en[k] === "string" && en[k]; }),
       keys.filter(function (k) { return !en[k]; }).join(","));
-check("không em dash trong chuỗi mới", keys.every(function (k) { return !/—/.test(vi[k] + en[k]); }));
+check("không em dash trong chuỗi mới", keys.every(function (k) { return (vi[k] + en[k]).indexOf(String.fromCharCode(0x2014)) < 0; }));
 
 // ───────────── toggleAgent: chỉ báo thành công khi server xác nhận; luôn phát sự kiện để tải trạng thái thật ─────────────
 const events = [];
@@ -81,8 +81,9 @@ global.fetch = function (url, init) {
         && events.indexOf("javis:resonance-agents-changed") >= 0);
 
   const WS = fs.readFileSync(path.join(ROOT, "dashboard", "workspace.js"), "utf8").replace(/\s+/g, " ");
-  check("trang Cộng sự đọc /resonance/agents MỘT lần cùng lúc với /agents; lỗi của nó không làm hỏng danh sách",
-        /Promise\.all\(\[api\("\/agents\?brain=" \+ b \+ "&prompt=0"\), api\("\/workflows\?brain=" \+ b\), api\("\/resonance\/agents\?brain=" \+ b\)\.catch\(function \(\) \{ return null; \}\)\]\)/.test(WS));
+  check("trang Cộng sự đọc /resonance/agents bằng MỘT request riêng (không theo từng dòng); lỗi không làm hỏng danh sách",
+        (WS.match(/\/resonance\/agents\?brain=/g) || []).length === 1
+        && /api\("\/resonance\/agents\?brain=" \+ encodeURIComponent\(b0\)\)\.catch\(function \(\) \{ return null; \}\)/.test(WS));
   check("dòng trợ lý vẽ công tắc qua rowToggleHtml, nối dây ws-rs-toggle và ws-rs-confirm",
         WS.includes("rowToggleHtml(") && WS.includes(".ws-rs-toggle") && WS.includes(".ws-rs-confirm") && WS.includes("toggleAgent("));
   check("trang Cộng sự nghe sự kiện đồng bộ", WS.includes("javis:resonance-agents-changed"));
@@ -94,5 +95,39 @@ global.fetch = function (url, init) {
         !SRC.includes("rsa-set-toggle") && SRC.includes('JavisNav.go("workspace")'));
   const CSS = fs.readFileSync(path.join(ROOT, "dashboard", "console.css"), "utf8");
   check("CSS có .ws-rs và luật [hidden] riêng", CSS.includes(".ws-rs{") && CSS.includes(".ws-rs[hidden]"));
+
+  // ───────────── sửa sau review cuối T0 ─────────────
+  const RAW = fs.readFileSync(path.join(ROOT, "dashboard", "workspace.js"), "utf8");
+  check("Important 2: đọc Cộng hưởng KHÔNG nằm trong Promise.all của danh sách (chậm thì danh sách vẫn hiện)",
+        !/Promise\.all\(\[[^\]]*\/resonance\/agents/.test(WS) && /loadResonance\(\)/.test(WS));
+  check("định danh mới tiếng Anh (không còn banDoCongHuong, taiCongHuong)",
+        !RAW.includes("banDoCongHuong") && !RAW.includes("taiCongHuong"));
+  check("chỉ phần chữ và công tắc bấm được (không cả dải rộng)", /\.ws-rs\{display:inline-flex/.test(CSS));
+  check("không có ký tự em dash nguyên văn trong file test này",
+        !fs.readFileSync(__filename, "utf8").includes(String.fromCharCode(0x2014)));
+  check("xác nhận ở bảng bên phải phát sự kiện trong tab", /agents\/confirm[\s\S]{0,400}javis:resonance-agents-changed/.test(SRC));
+  check("nút Quản lý mở đúng tab Trợ lý", SRC.includes('JavisWorkspace.openTab("agent")'));
+
+  // Hàm thuần của workspace.js chạy dưới node với DOM giả tối thiểu (như test_workspace.js).
+  global.window = { t: function (k) { return k; }, ic: function () { return ""; }, addEventListener: function () {},
+    removeEventListener: function () {}, matchMedia: function () { return { matches: false }; } };
+  global.document = { getElementById: function () { return null; }, createElement: function () {
+    return { classList: { add: function () {}, remove: function () {} }, appendChild: function () {} }; },
+    body: { classList: { add: function () {}, remove: function () {} } } };
+  global.localStorage = { getItem: function () { return null; }, setItem: function () {} };
+  delete require.cache[require.resolve(path.join(ROOT, "dashboard", "workspace.js"))];
+  require(path.join(ROOT, "dashboard", "workspace.js"));
+  const W = window.JavisWorkspace;
+  check("resonanceMap: dữ liệu tốt thì dựng bản đồ theo slug", W.resonanceMap &&
+        W.resonanceMap({ agents: [{ slug: "a", enabled: true }] }, {}).a.enabled === true);
+  check("Minor 2: đọc lại hỏng thì GIỮ bản đồ cũ, không xoá hết công tắc",
+        W.resonanceMap && W.resonanceMap(null, { b: { slug: "b" } }).b.slug === "b");
+  const st = W.state();
+  st.rsSaving = { a: true, b: true }; st.tagNote = { loi: true, msg: "cũ" };
+  W.afterToggle("a", { ok: true, error: "" });
+  check("Important 1, Minor 1: xong lượt nào chỉ gỡ cờ đang lưu của đúng trợ lý đó", !st.rsSaving.a && st.rsSaving.b === true);
+  check("Minor 3: thành công thì gỡ câu báo lỗi cũ", st.tagNote === null);
+  W.afterToggle("b", { ok: false, error: "x" });
+  check("lỗi: gỡ cờ đang lưu và hiện lý do", !st.rsSaving.b && st.tagNote && st.tagNote.loi === true);
   process.exit(fails ? 1 : 0);
 })();

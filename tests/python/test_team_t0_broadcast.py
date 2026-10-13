@@ -46,6 +46,20 @@ check("tắt: phát gói", r.status_code == 200 and [e.get("type") for e in sent
 sent.clear()
 
 
+# Xác nhận trợ lý `missing` cũng phát gói: file mất (host đánh dấu missing khi đọc), có lại, chủ bấm "Đúng trợ lý cũ".
+f = BR / "agents" / "viet-bai.md"
+tmp = BR / "viet-bai.tmp"
+f.rename(tmp)
+c.get(f"/resonance/agents?brain={BR}")
+tmp.rename(f)
+key = next(a for a in c.get(f"/resonance/agents?brain={BR}").json()["agents"] if a["slug"] == "viet-bai")["agent_key"]
+sent.clear()
+r = c.post(f"/resonance/agents/confirm?brain={BR}", json={"agent_key": key, "same": True})
+check("xác nhận trợ lý missing: 200 và phát gói", r.status_code == 200
+      and [e.get("type") for e in sent] == ["resonance_agents"], f"{r.status_code} {r.text} {sent}")
+sent.clear()
+
+
 async def broken_publish(ev):
     raise RuntimeError("socket chết")
 
