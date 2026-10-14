@@ -70,7 +70,7 @@ api.runner()._put_steps(teams.get(tid), t, [{"kind": "work", "agent": keys["minh
 code, j = jobs("minh")
 mine = [x for x in j["jobs"] if x["source"] == "team"]
 check("Minh thấy việc giao thẳng, nguồn là nhóm, mở đúng nhóm và việc",
-      len(mine) == 1 and mine[0]["roles"][0] == "assignee" and mine[0]["source_label"] == "Ra mắt"
+      len(mine) == 1 and mine[0]["roles"] == ["worker"] and mine[0]["source_label"] == "Ra mắt"
       and mine[0]["open"] == {"kind": "team", "team_id": tid, "task_id": task_id}, j)
 check("việc đang chờ: ngăn Đang chờ, vị trí thật trong hàng của nhóm, có Huỷ",
       mine[0]["bucket"] == "waiting" and mine[0]["queue_pos"] == 1 and mine[0]["cancel"]["task_id"] == task_id, mine)
@@ -152,6 +152,208 @@ with main._resonance_store()._conn() as c:
 r = client.post("/agents/hoa/jobs", params={"brain": B}, json={"text": "Gửi báo giá", "nonce": "h1"})
 check("review #7: Giao việc không báo vào phiên của trợ lý cũ cùng slug, mở phiên mới",
       r.json()["ok"] and r.json()["session_id"] != old_sid, r.json())
+
+# ───────────── bước kế tiếp, vai, ưu tiên (bổ sung sau review đầy đủ 0.142.0) ─────────────
+ROOT_B = str(BR)
+store = main.tasks_feature.store
+code, j = jobs("minh")
+tj = next(x for x in j["jobs"] if x["id"] == f"team:{task_id}")
+check("bước kế của việc nhóm đang chờ: vị trí thật trong hàng của nhóm",
+      tj["next"] == {"code": "queue", "n": 1, "team": "Ra mắt"}, tj)
+kj = next(x for x in j["jobs"] if x["id"] == f"kanban:{a1['task_id']}")
+check("bước kế của việc giao khi AI tự vận hành tắt: bật ở trang Việc", kj["next"] == {"code": "board_off"}, kj)
+check("vai chỉ còn bốn loại", all(r in agent_jobs.ROLES for x in j["jobs"] for r in x["roles"]), j["jobs"])
+check("việc nhóm đang chờ có Ưu tiên theo route của nhóm (CAS phiên bản hàng)",
+      tj["priority"]["kind"] == "team" and tj["priority"]["on"] is True and isinstance(tj["priority"]["version"], int), tj)
+r = client.post(f"/teams/{tid}/queue/{task_id}/priority", params={"brain": B},
+                json={"on": True, "expected_queue_version": tj["priority"]["version"]})
+code, j = jobs("minh")
+tj = next(x for x in j["jobs"] if x["id"] == f"team:{task_id}")
+check("ưu tiên qua route gốc của nhóm: thẻ thấy đã ưu tiên", r.json().get("ok") and tj["priority"]["on"] is False, r.text)
+
+# Trợ lý đang bận ở nhóm khác: việc chờ nói rõ đang chờ trợ lý xong việc ở nhóm kia.
+r = client.post("/teams", params={"brain": B}, json={"name": "Hậu cần", "members": ["minh", "lan"],
+                                                      "leader_slug": "lan"})
+tid2 = r.json()["team"]["team_id"]
+teams.acquire_busy(keys["minh"], tid2, "turn-x")
+code, j = jobs("minh")
+tj = next(x for x in j["jobs"] if x["id"] == f"team:{task_id}")
+check("bận ở nhóm khác: bước kế là chờ xong việc ở nhóm đó", tj["next"] == {"code": "busy", "team": "Hậu cần"}, tj)
+teams.release_busy(keys["minh"], "turn-x")
+
+# ───────────── Giao việc vào một nhóm (máy của nhóm, không tạo đường mới) ─────────────
+code, j = jobs("minh")
+check("tab trả nhóm đang hoạt động mà trợ lý là thành viên (nơi nhận kết quả)",
+      {t["team_id"] for t in j["teams"]} == {tid, tid2}, j["teams"])
+body = {"text": "Tổng hợp phản hồi khách", "criteria": "Có ít nhất 5 ý, kèm nguồn", "nonce": "tm1", "target": f"team:{tid}"}
+r1 = client.post("/agents/minh/jobs", params={"brain": B}, json=body).json()
+r2 = client.post("/agents/minh/jobs", params={"brain": B}, json=body).json()
+tt = store.get_task(r1.get("task_id") or "") or {}
+check("giao vào nhóm: một việc nhóm giao cho đúng trợ lý, tiêu chí trong nội dung",
+      r1.get("ok") and tt.get("lane") == "team" and tt.get("team_id") == tid and tt.get("assignee_key") == keys["minh"]
+      and "Có ít nhất 5 ý" in (tt.get("intent") or ""), (r1, tt))
+check("giao vào nhóm: gửi lại cùng nonce không nhân đôi", r2.get("task_id") == r1.get("task_id") and r2.get("created") is False,
+      r2)
+r = client.post("/agents/hoa/jobs", params={"brain": B}, json=dict(body, nonce="tm2", target=f"team:{tid2}"))
+check("trợ lý không trong nhóm: 409, không tạo gì", r.status_code == 409, r.text)
+r = client.post("/agents/minh/jobs", params={"brain": B}, json=dict(body, nonce="tm3", target="team:khong-co"))
+check("nhóm không có: 404", r.status_code == 404, r.text)
+r = client.post("/agents/minh/jobs", params={"brain": B}, json=dict(body, nonce="tm4", target="zalo:abc"))
+check("nơi nhận lạ: 400", r.status_code == 400, r.text)
+code, j = jobs("minh")
+check("việc giao vào nhóm hiện ở tab với nguồn nhóm, vai Thực hiện",
+      any(x["id"] == f"team:{r1['task_id']}" and x["roles"] == ["worker"] and x["source"] == "team" for x in j["jobs"]), j)
+kt2 = store.get_task(a1["task_id"])
+r = client.post("/agents/lan/jobs", params={"brain": B}, json={"text": "Viết lại", "criteria": "Ngắn gọn", "nonce": "c1"})
+check("Giao việc vào chat riêng: tiêu chí xong đi vào mô tả việc Kanban",
+      "Tiêu chí xong:\nNgắn gọn" in (store.get_task(r.json()["task_id"]) or {}).get("intent", ""), r.json())
+
+# ───────────── Việc kiểm chứng là một việc riêng ─────────────
+r = client.post("/agents/lan/jobs", params={"brain": B}, json={"text": "Soát email", "kind": "verify", "nonce": "v0"})
+check("kiểm chứng không có tiêu chí: 400", r.status_code == 400, r.text)
+r = client.post("/agents/minh/jobs", params={"brain": B}, json={"text": "Tự soát", "kind": "verify", "criteria": "x",
+                                                                 "nonce": "v9", "link": f"kanban:{a1['task_id']}"})
+check("không giao kiểm chứng việc cho chính trợ lý làm nó", r.status_code == 400, r.text)
+r = client.post("/agents/lan/jobs", params={"brain": B}, json={"text": "Soát", "kind": "verify", "criteria": "x",
+                                                                "nonce": "v8", "link": "kanban:khong-co"})
+check("mục cần kiểm không có trong brain: 404", r.status_code == 404, r.text)
+vb = {"text": "Soát email cảm ơn của Minh", "kind": "verify", "criteria": "Đúng tên khách, không lỗi chính tả",
+      "nonce": "v1", "link": f"kanban:{a1['task_id']}"}
+v1 = client.post("/agents/lan/jobs", params={"brain": B}, json=vb).json()
+v2 = client.post("/agents/lan/jobs", params={"brain": B}, json=vb).json()
+vt = store.get_task(v1["task_id"])
+info = agent_jobs.parse_assign(vt["idempotency_key"])
+check("kiểm chứng: kiểu việc và mục được kiểm nằm trong khoá bền, gửi lại không nhân đôi",
+      v1["ok"] and v2["task_id"] == v1["task_id"] and info["kind"] == "verify" and info["link"] == f"kanban:{a1['task_id']}"
+      and info["agent_key"] == keys["lan"], (v1, info))
+# Nội dung việc bị viết lại khi chạy (bước đặc tả): kiểu và liên kết vẫn đọc được từ khoá.
+with store._lock:
+    store._db.execute("UPDATE tasks SET intent='viết lại', metadata_json='{}' WHERE id=?", (v1["task_id"],))
+    store._db.commit()
+code, j = jobs("lan")
+vj = next(x for x in j["jobs"] if x["id"] == f"kanban:{v1['task_id']}")
+check("tab hiện vai Kiểm chứng và mục được kiểm (tên, mở được), kể cả sau khi nội dung bị viết lại",
+      vj["roles"] == ["verifier"] and vj["kind"] == "verify" and vj["link"]["title"] == kt2["title"]
+      and vj["link"]["open"] == {"kind": "chat", "session_id": a1["session_id"]}, vj)
+tv = client.post("/agents/lan/jobs", params={"brain": B},
+                 json={"text": "Soát bản tổng hợp", "kind": "verify", "criteria": "Đủ 5 ý", "nonce": "v2",
+                       "target": f"team:{tid}", "link": f"team:{r1['task_id']}"}).json()
+code, j = jobs("lan")
+tvj = next((x for x in j["jobs"] if x["id"] == f"team:{tv.get('task_id')}"), {})
+check("kiểm chứng giao vào nhóm: việc nhóm, vai Kiểm chứng, liên kết tới việc được kiểm",
+      tv.get("ok") and "verifier" in tvj.get("roles", []) and (tvj.get("link") or {}).get("id") == f"team:{r1['task_id']}"
+      and (tvj.get("link") or {}).get("open", {}).get("team_id") == tid, (tv, tvj))
+check("brief đọc ngược", agent_jobs.parse_brief(agent_jobs.brief("a", "b", "verify", {"id": "goal:g_1", "title": "T"}))
+      == {"kind": "verify", "link": "goal:g_1"})
+r = client.get("/agents/lan/jobs/verify-targets", params={"brain": B})
+items = r.json().get("items") or []
+ids = {x["id"] for x in items}
+check("danh sách mục để kiểm: việc của trợ lý khác, bỏ việc người kiểm đang tham gia",
+      r.status_code == 200 and f"kanban:{a1['task_id']}" in ids and f"team:{task_id}" not in ids
+      and all(x["slug"] != "lan" for x in items), items)
+
+# ───────────── lọc nguồn, phân trang, không trần ngầm ─────────────
+for i in range(7):
+    client.post("/agents/lan/jobs", params={"brain": B}, json={"text": f"Việc số {i}", "nonce": f"p{i}"})
+full = client.get("/agents/lan/jobs", params={"brain": B, "limit": 100}).json()
+ids_full = [x["id"] for x in full["jobs"]]
+seen, cur, pages = [], "", 0
+while True:
+    pg = client.get("/agents/lan/jobs", params={"brain": B, "limit": 3, "cursor": cur}).json()
+    seen += [x["id"] for x in pg["jobs"]]
+    pages += 1
+    cur = pg["next"]
+    if not cur or pages > 50:
+        break
+check("phân trang: đi hết các trang ra đúng danh sách đầy đủ, không trùng, không sót",
+      seen == ids_full and len(set(seen)) == len(seen) and full["total"] == len(ids_full) and pages > 1,
+      (len(seen), len(ids_full), pages))
+tm = client.get("/agents/lan/jobs", params={"brain": B, "source": "team", "limit": 100}).json()
+check("lọc nguồn Nhóm: chỉ việc nhóm, đếm nguồn khớp",
+      tm["jobs"] and all(x["source"] == "team" for x in tm["jobs"]) and tm["source_counts"]["team"] == len(tm["jobs"])
+      and sum(tm["counts"].values()) == tm["total"], tm["source_counts"])
+ch = client.get("/agents/lan/jobs", params={"brain": B, "source": "chat", "bucket": "waiting", "limit": 100}).json()
+check("lọc nguồn Chat riêng và ngăn Đang chờ cùng lúc", ch["jobs"] and all(x["source"] == "chat" and x["bucket"] == "waiting"
+                                                                       for x in ch["jobs"]), ch["jobs"][:2])
+many = [{"id": f"t_{i:03d}", "title": f"x{i}", "status": "done", "updated_at": i} for i in range(80)]
+
+
+class _FakeTasks:
+    def team_queue(self, _tid):
+        return {"version": 1, "running": [], "waiting": [], "blocked": []}
+
+    def team_history(self, _tid, limit):
+        return [dict(t, assignee_key="ag_x") for t in sorted(many, key=lambda t: -t["updated_at"])][:min(500, limit)]
+
+
+class _FakeTeams:
+    def busy_of(self, _k):
+        return None
+
+    def teams_of_agent(self, _k):
+        return [{"team_id": "tm", "brain_id": "R", "name": "N"}]
+
+    def steps(self, _tid):
+        return []
+
+
+got, cur = [], None
+while True:
+    pg = agent_jobs.collect("ag_x", "x", "R", teams=_FakeTeams(), tasks=_FakeTasks(), cursor=cur, limit=30)
+    got += [x["id"] for x in pg["jobs"] if x["source"] == "team"]
+    cur = pg["next"]
+    if not cur:
+        break
+check("lịch sử nhóm dài hơn trần cũ (30) vẫn xem hết qua phân trang", len(got) == 80 and len(set(got)) == 80, len(got))
+
+# ───────────── một trợ lý chạy một việc giao trực tiếp một lúc ─────────────
+store.set_orchestration(ROOT_B, "auto")
+live = [t for t in store.list_tasks(ROOT_B) if t["status"] in ("triage", "ready")]
+for t in live:          # dọn hàng để kiểm thứ tự rõ ràng
+    store.move(t["id"], "cancelled", "test")
+q1 = client.post("/agents/minh/jobs", params={"brain": B}, json={"text": "Việc A", "nonce": "q1"}).json()["task_id"]
+q2 = client.post("/agents/minh/jobs", params={"brain": B}, json={"text": "Việc B", "nonce": "q2"}).json()["task_id"]
+q3 = client.post("/agents/minh/jobs", params={"brain": B}, json={"text": "Việc C", "nonce": "q3"}).json()["task_id"]
+plain = main.tasks_feature.enqueue(B, "Việc thường không gắn trợ lý", "x")
+other = client.post("/agents/hoa/jobs", params={"brain": B}, json={"text": "Việc của Hoa", "nonce": "q4"}).json()["task_id"]
+c1 = store.next_candidate(ROOT_B)
+check("hàng chạy: việc đầu tiên của Minh đi trước", c1 and c1["id"] == q1, c1 and c1["id"])
+store.claim(q1, "w1", 60)
+check("Minh đang chạy một việc: không nhận việc thứ hai của Minh (kiểm trong giao dịch nhận)",
+      store.claim(q2, "w2", 60) is None and store.get_task(q2)["status"] in ("triage", "ready"))
+c2 = store.next_candidate(ROOT_B)
+check("không bỏ đói: việc thường và việc của trợ lý khác vẫn đi tiếp", c2 and c2["id"] == plain, c2 and c2["id"])
+store.claim(plain, "w3", 60)
+c3 = store.next_candidate(ROOT_B)
+check("việc của Hoa chạy song song với Minh", c3 and c3["id"] == other, c3 and c3["id"])
+code, j = jobs("minh")
+qj = next(x for x in j["jobs"] if x["id"] == f"kanban:{q2}")
+check("thẻ nói rõ đang chờ việc khác của chính trợ lý xong", qj["next"] == {"code": "agent_busy"} and qj["bucket"] == "waiting",
+      qj)
+store.claim(other, "w4", 60)
+check("hết việc khác: không lấy việc thứ hai của Minh khi Minh còn chạy", store.next_candidate(ROOT_B) is None)
+store.complete(q1, "w1", "xong")
+c4 = store.next_candidate(ROOT_B)
+check("Minh xong việc A: việc B tới lượt (đúng thứ tự, không nhảy sang C)", c4 and c4["id"] == q2, c4 and c4["id"])
+check("trần chạy chung giữ nguyên (JAVIS_KANBAN_MAX_WORKERS)", 1 <= main.tasks_feature.max_workers <= 8)
+
+# ───────────── huy hiệu việc trên thẻ trợ lý ─────────────
+r = client.get("/agents/jobs/counts", params={"brain": B})
+cn = r.json()["counts"]
+check("huy hiệu: đếm Đang làm và Cần bạn theo trợ lý", r.status_code == 200
+      and cn.get("hoa", {}).get("running") == 1 and cn.get("minh", {}).get("running", 0) == 0
+      and cn.get("lan", {}).get("running", 0) == 0, cn)
+code, j = jobs("hoa")
+check("huy hiệu khớp tab Công việc", cn.get("hoa", {}).get("running") == j["counts"]["running"]
+      and cn.get("hoa", {}).get("needs_you", 0) == j["counts"]["needs_you"], (cn, j["counts"]))
+
+# ───────────── vai theo đúng mã trợ lý, không theo slug ─────────────
+check("vai: mã đúng của slug thì có vai", "Bạn là Minh" in main._agent_persona(ROOT_B, "minh", keys["minh"]))
+check("vai: slug đã sang mã khác (dùng lại slug) thì không có vai",
+      main._agent_persona(ROOT_B, "minh", "ag_tro_ly_cu") == "" and main._agent_persona(ROOT_B, "minh", keys["lan"]) == "")
+forged = dict(store.get_task(q2), idempotency_key=f"agent:ag_tro_ly_cu:minh:zz")
+check("việc Kanban của trợ lý cũ cùng slug không mang vai của trợ lý mới", main.tasks_feature._persona(forged, ROOT_B) == "")
+check("việc của đúng trợ lý vẫn mang vai", "Bạn là Minh" in main.tasks_feature._persona(store.get_task(q2), ROOT_B))
 
 print(("FAIL" if fails else "PASS") + f" - test_agent_jobs_0142: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)

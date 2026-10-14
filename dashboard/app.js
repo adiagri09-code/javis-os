@@ -1012,6 +1012,9 @@ function handleMessage(data) {
     // Socket NỐI LẠI (không phải lần chào đầu): tin tới trong lúc đứt có thể đã rơi mất, ví dụ
     // câu trả lời của một lượt chạy xong khi điện thoại đang tắt màn hình. Đồng bộ nhẹ.
     if (_daChao) setTimeout(_dongBoNeuLech, 300);
+    // Nhóm chat (0.142.0): gói team_message/team_replies lỡ trong lúc mất kết nối không được gửi lại, nên trang Nhóm
+    // tự tải lại tin và kết cục lượt trả lời của nhóm đang mở khi socket nối lại.
+    if (_daChao) { try { window.dispatchEvent(new CustomEvent("javis:team-event", { detail: { type: "team_resync" } })); } catch (e) {} }
     _daChao = true;
     adaptiveCapable = (data.capabilities || []).includes("adaptive_voice_v1");
     stopTag = data.stop_tag || null;

@@ -90,22 +90,25 @@ check("đổi bộ lọc tag không mất người đã chọn", st.selected.joi
 let html = TP.html(st, roster);
 check("người đã chọn vẫn hiện thành chip dù bị lọc khỏi danh sách", html.includes("Coach Mục Tiêu &amp; Kỷ Luật")
   && /tmp-sel[\s\S]*data-pick-toggle="coach"/.test(html), html);
-check("Điều phối chỉ có người đã chọn", /<select class="tmp-leader-pick">[\s\S]*value="coach" selected[\s\S]*value="viet"/.test(html)
-  && !/<option value="ban-hang"/.test(html), html);
+// Đối chiếu goal-claude-v2: Điều phối chọn NGAY trên chip người đã chọn (không còn ô select riêng dưới danh sách).
+check("Điều phối chỉ có người đã chọn, chọn ngay trên chip", /data-pick-leader="coach" aria-pressed="true"/.test(html)
+  && /data-pick-leader="viet" aria-pressed="false"/.test(html) && !/data-pick-leader="ban-hang"/.test(html)
+  && !html.includes("tmp-leader-pick"), html);
 check("người tạo hiện 'Bạn · Người tạo nhóm/quản lý', tách khỏi Điều phối", html.includes("tmp-owner")
-  && html.includes(vi["teams.pick.you_role"]) && html.indexOf("tmp-owner") < html.indexOf("tmp-leader-pick"));
+  && html.includes(vi["teams.pick.you_role"]) && !/tmp-owner[^>]*data-pick/.test(html)
+  && !/data-pick-leader="[^"]*"[^>]*>[^<]*Bạn/.test(html));
 check("tên, vai escape; trợ lý đã nghỉ không hiện", html.includes("Người Viết &lt;i&gt;") && !html.includes("Đã nghỉ"));
 check("footer cố định có số đã chọn, Huỷ, Tạo nhóm", /tmp-foot-box[\s\S]*Đã chọn 2[\s\S]*tmp-cancel[\s\S]*tmp-submit/.test(html), html);
 st = TP.toggle(st, "coach");
-check("bỏ người đang Điều phối: Điều phối chuyển cho người còn lại", st.leader === "viet" && st.selected.join() === "viet");
-st = TP.normalize(Object.assign({}, st, { leader: "", leaderTouched: true }));
-check("chủ chọn 'Chưa chọn' Điều phối: giữ trống", st.leader === "");
+check("còn đúng một người: người đó là Điều phối (mặc định rõ ràng)", st.leader === "viet" && st.selected.join() === "viet");
 check("tên trống: ghép tên thành viên như Zalo", TP.autoName({ selected: ["coach", "viet"] }, roster) === "Coach Mục Tiêu & Kỷ Luật, Người Viết <i>");
 check("chưa chọn ai: không bấm Tạo được", !TP.canSubmit({ selected: [] }) && TP.canSubmit({ selected: ["coach"] })
   && !TP.canSubmit({ selected: ["coach"], saving: true }));
 html = TP.html({ mode: "add", query: "", tag: "", selected: [], exclude: ["coach"] }, roster);
-check("thêm thành viên: không có ô tên, không có 'Bạn', loại người đã trong nhóm", !html.includes("tmp-name-input")
-  && !html.includes("tmp-owner") && !html.includes('data-pick-slug="coach"') && html.includes('data-pick-slug="viet"'));
+// Đối chiếu goal-claude-v2: người đã trong nhóm HIỆN với nhãn "Đã tham gia" (ô chọn khoá), không bị ẩn.
+check("thêm thành viên: không có ô tên, không có 'Bạn', người đã trong nhóm hiện Đã tham gia và khoá", !html.includes("tmp-name-input")
+  && !html.includes("tmp-owner") && /data-pick-slug="coach" checked disabled/.test(html) && html.includes(vi["teams.pick.joined"])
+  && html.includes('data-pick-slug="viet"'));
 html = TP.html({ mode: "create", query: "", tag: "", selected: ["coach"], leader: "coach", name: "Nhóm <x>", error: "Thiếu <b>" }, roster);
 check("lỗi khi tạo: form giữ nguyên tên và lựa chọn, lỗi hiện trong hộp", html.includes('value="Nhóm &lt;x&gt;"')
   && html.includes("tmp-error") && html.includes("Thiếu &lt;b&gt;") && /data-pick-slug="coach" checked/.test(html));
@@ -152,7 +155,7 @@ jh = AJ.html(data, { filter: "waiting" });
 check("lọc theo trạng thái chỉ còn đúng ngăn", jh.includes("Chờ") && jh.includes("Email") && !jh.includes("Viết thông cáo"));
 jh = AJ.html(data, { assignOpen: true, name: "Minh <i>", draft: "Soạn <b>", assignError: "Lỗi" });
 check("form Giao việc giữ chữ đang gõ, tên trợ lý escape, lỗi hiện rõ", jh.includes("Soạn &lt;b&gt;") && jh.includes("Minh &lt;i&gt;")
-  && jh.includes("aj-err") && jh.includes("aj-assign-send"));
+  && jh.includes("aj-err") && jh.includes("aj-assign-next"));
 check("chưa có việc: lời gợi ý", AJ.html({ jobs: [], counts: {}, errors: [] }, {}).includes(vi["ajobs.empty"]));
 check("lỗi tải: có Thử lại", AJ.html(null, { error: true }).includes("aj-reload"));
 const ws = fs.readFileSync(path.join(ROOT, "dashboard", "workspace.js"), "utf8");

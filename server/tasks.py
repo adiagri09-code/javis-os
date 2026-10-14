@@ -130,7 +130,7 @@ class TasksDeps:
     learn_hook: Optional[Callable] = None
     # 0.142.0: việc giao cho một trợ lý (nút Giao việc ở tab Công việc) chạy với vai của trợ lý đó. (root, slug) -> đoạn
     # lời nhắc vai trò, rỗng khi không có. Engine, quyền và trần của Kanban giữ nguyên.
-    agent_persona: Optional[Callable[[str, str], str]] = None
+    agent_persona: Optional[Callable[[str, str, str], str]] = None
 
 
 class TasksFeature:
@@ -567,17 +567,20 @@ class TasksFeature:
     # AI specification and execution lanes
     # ------------------------------------------------------------------
     def _persona(self, task: dict, root: str) -> str:
-        """Vai của trợ lý được giao việc (khoá `agent:<mã>:<slug>:...`). Lỗi hay không có thì rỗng: việc vẫn chạy."""
+        """Vai của trợ lý được giao việc (khoá `agent:<mã>:<slug>:...`). Lỗi hay không có thì rỗng: việc vẫn chạy.
+
+        Truyền cả MÃ trợ lý đọc từ khoá: slug có thể đã được dùng lại cho một trợ lý mới (xoá rồi tạo lại), và việc
+        giao cho trợ lý cũ không được mang vai của trợ lý mới. Bên cấp vai kiểm slug còn thuộc đúng mã đó."""
         if not self.deps.agent_persona:
             return ""
         key = str(task.get("idempotency_key") or "")
         if not key.startswith("agent:"):
             return ""
         parts = key[len("agent:"):].split(":")
-        if len(parts) < 3:
+        if len(parts) < 3 or not parts[0] or not parts[1]:
             return ""
         try:
-            return str(self.deps.agent_persona(root, parts[1]) or "")
+            return str(self.deps.agent_persona(root, parts[1], parts[0]) or "")
         except Exception:
             return ""
 

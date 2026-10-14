@@ -248,6 +248,15 @@
     return "";
   }
 
+  // Dòng phụ ở đầu khung chat (0.142.0): "Bạn + N trợ lý · X điều phối". Bạn là người tạo, quản lý (người thật); điều
+  // phối là một trợ lý AI. Chỉ đếm trợ lý đang hoạt động.
+  function headLine(t) {
+    var n = (t.members || []).filter(function (m) { return !m.status || m.status === "active"; }).length;
+    var who = tw("teams.head_people", { n: n });
+    return who + " · " + (t.leader_key ? tw("teams.head_leader", { name: nameOf(t.members, t.leader_key) })
+      : tw("teams.no_leader_short"));
+  }
+
   function previewText(t, members) {
     var last = t.last;
     if (!last || !last.text) return tw("teams.no_messages");
@@ -288,37 +297,68 @@
     cap: "teams.reply.why.cap", busy: "teams.reply.why.busy", team_paused: "teams.reply.why.team_paused",
     member_left: "teams.reply.why.member_left", restart: "teams.reply.why.restart",
     interrupted: "teams.reply.why.interrupted", internal: "teams.reply.why.internal",
-    leader_changed: "teams.reply.why.leader_changed", superseded: "teams.reply.why.superseded" };
+    leader_changed: "teams.reply.why.leader_changed", superseded: "teams.reply.why.superseded",
+    timeout: "teams.reply.why.timeout", auth: "teams.reply.why.auth", no_leader: "teams.reply.why.no_leader" };
   var STUCK_QUEUED_S = 600;   // khớp team_store.STUCK_QUEUED_S: chờ lâu hơn thì cho Thử lại
+  var LEADER_SLOT = "__leader__";   // khớp team_runner.LEADER_SLOT: tin thường gửi lúc nhóm chưa có điều phối
+
+  // Thao tác xử lý theo từng loại lỗi (0.142.0), ngoài nút Thử lại: lỗi model hay đăng nhập thì mở trợ lý để đổi model
+  // hoặc mở trang Models; hết lượt thì mở giới hạn của nhóm; chưa có hay mất điều phối thì mở danh sách thành viên.
+  function replyActions(x, ctx) {
+    var out = [];
+    var slug = (memberOf(ctx.members, x.agent_key) || {}).slug || "";
+    if (x.reason === "auth") out.push({ act: "models", key: "teams.reply.act.models" });
+    if ((x.reason === "engine" || x.reason === "engine_unavailable" || x.reason === "timeout" || x.reason === "auth") && slug) {
+      out.push({ act: "agent", key: "teams.reply.act.agent", slug: slug });
+    }
+    if (x.reason === "cap") out.push({ act: "limits", key: "teams.reply.act.limits" });
+    if (x.reason === "no_leader" || (x.reason === "member_left" && ctx.leaderKey === x.agent_key) ||
+        x.reason === "leader_changed") {
+      out.push({ act: "leader", key: "teams.reply.act.leader" });
+    }
+    if (x.reason === "team_paused") out.push({ act: "resume", key: "teams.reply.act.resume" });
+    return out.map(function (a) {
+      return '<button type="button" class="ws-btn tm-reply-act" data-reply-act="' + esc(a.act) + '"' +
+        (a.slug ? ' data-slug="' + esc(a.slug) + '"' : "") + ">" + esc(tw(a.key)) + "</button>";
+    }).join("");
+  }
+
   function replyStatusHtml(m, ctx) {
     var rows = (m.replies || []).filter(function (x) { return x.status !== "done"; });
     if (!rows.length) return "";
     var retrying = (ctx && ctx.retrying) || {};
     return '<div class="tm-replies">' + rows.map(function (x) {
-      var who = nameOf(ctx.members, x.agent_key) || ((ctx.authors || {})[x.agent_key] || {}).name || x.agent_key;
-      var face = agentAva(memberOf(ctx.members, x.agent_key) || (ctx.authors || {})[x.agent_key] || { name: who }, 20);
+      var slot = x.agent_key === LEADER_SLOT;
+      var who = slot ? tw("teams.reply.leader_slot") :
+        nameOf(ctx.members, x.agent_key) || ((ctx.authors || {})[x.agent_key] || {}).name || x.agent_key;
+      var face = slot ? "" : agentAva(memberOf(ctx.members, x.agent_key) || (ctx.authors || {})[x.agent_key] || { name: who }, 20);
       var busy = retrying[m.id + "|" + x.agent_key];
+      var retryBtn = '<button type="button" class="ws-btn tm-reply-retry" data-retry="' + esc(m.id) + '" data-retry-key="' +
+        esc(x.agent_key) + '"' + (busy ? " disabled" : "") + ">" + ic("rotate-cw") +
+        esc(tw(busy ? "teams.reply.retrying" : "teams.reply.retry")) + "</button>";
       if (x.status === "error") {
         var why = REPLY_WHY[x.reason] || "teams.reply.why.unknown";
-        var detail = x.detail ? '<span class="tm-reply-detail">' + esc(String(x.detail).slice(0, 200)) + "</span>" : "";
+        var detail = x.detail && x.reason !== "timeout" && x.reason !== "no_leader"
+          ? '<span class="tm-reply-detail">' + esc(String(x.detail).slice(0, 200)) + "</span>" : "";
+        var whyText = x.reason === "timeout" ? tw(why, { n: x.detail || "?" }) : tw(why);
+        // Rời nhóm thì không thử lại được; hết lượt hôm nay thì Thử lại chỉ chạy được sau khi mở thêm giới hạn.
         var canRetry = x.reason !== "member_left";
         return '<div class="tm-reply tm-reply-error" role="status">' + face + '<span class="tm-reply-main"><b>' + esc(who) +
-          "</b> " + esc(tw("teams.reply.error")) + ": " + esc(tw(why)) + detail + "</span>" +
-          (canRetry ? '<button type="button" class="ws-btn tm-reply-retry" data-retry="' + esc(m.id) + '" data-retry-key="' +
-            esc(x.agent_key) + '"' + (busy ? " disabled" : "") + ">" + ic("rotate-cw") +
-            esc(tw(busy ? "teams.reply.retrying" : "teams.reply.retry")) + "</button>" : "") + "</div>";
+          "</b> " + esc(tw(slot ? "teams.reply.error_slot" : "teams.reply.error")) + ": " + esc(whyText) + detail + "</span>" +
+          '<span class="tm-reply-acts">' + replyActions(x, ctx) + (canRetry ? retryBtn : "") + "</span></div>";
       }
       var answering = x.status === "running" && x.reason === "answering";
+      var waiting = x.status === "running" && x.reason === "waiting_busy";
       var stuck = x.status === "queued" && x.updated_at && (Date.now() / 1000 - Number(x.updated_at)) > STUCK_QUEUED_S;
       if (stuck) {
         return '<div class="tm-reply tm-reply-error" role="status">' + face + '<span class="tm-reply-main"><b>' + esc(who) +
-          "</b> " + esc(tw("teams.reply.stuck")) + '</span><button type="button" class="ws-btn tm-reply-retry" data-retry="' +
-          esc(m.id) + '" data-retry-key="' + esc(x.agent_key) + '"' + (busy ? " disabled" : "") + ">" + ic("rotate-cw") +
-          esc(tw(busy ? "teams.reply.retrying" : "teams.reply.retry")) + "</button></div>";
+          "</b> " + esc(tw("teams.reply.stuck")) + '</span><span class="tm-reply-acts">' + retryBtn + "</span></div>";
       }
+      var label = answering ? tw("teams.reply.answering") : waiting ? (x.detail ? tw("teams.reply.waiting_busy_in",
+        { team: x.detail }) : tw("teams.reply.waiting_busy")) : tw("teams.reply.queued");
       return '<div class="tm-reply tm-reply-' + (answering ? "answering" : "queued") + '" role="status">' + face +
-        '<span class="tm-reply-main"><b>' + esc(who) + "</b> " + esc(tw(answering ? "teams.reply.answering" :
-          "teams.reply.queued")) + '<span class="tm-dots" aria-hidden="true"><i></i><i></i><i></i></span></span></div>';
+        '<span class="tm-reply-main"><b>' + esc(who) + "</b> " + esc(label) +
+        '<span class="tm-dots" aria-hidden="true"><i></i><i></i><i></i></span></span></div>';
     }).join("") + "</div>";
   }
 
@@ -466,13 +506,27 @@
 
   // ───────────── khung soạn ─────────────
 
+  // Bỏ dấu, hoa thường, chuẩn NFC để tìm "lan" ra "Lân" và gõ tổ hợp hay dựng sẵn đều khớp. "đ" không phải dấu ghép.
+  function foldName(s) {
+    s = String(s == null ? "" : s);
+    if (s.normalize) s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return s.replace(/\u0111/g, "d").replace(/\u0110/g, "D").toLowerCase();
+  }
+
+  // Gợi ý @ (0.142.0): tìm KHÔNG DẤU theo đầu bất kỳ từ nào trong tên, mã (slug) hay vai; người đã gọi thì bỏ.
   function mentionMatches(members, query, chosen) {
-    var q = String(query || "").toLowerCase();
+    var q = foldName(query).trim();
+    var starts = function (s) {
+      s = foldName(s);
+      if (!q) return true;
+      if (s.indexOf(q) === 0) return true;
+      return s.split(/[^\p{L}\p{N}]+/u).some(function (w) { return w && w.indexOf(q) === 0; }) ||
+        s.indexOf(" " + q) >= 0;
+    };
     return (members || []).filter(function (m) {
       if (m.status && m.status !== "active") return false;
       if ((chosen || []).indexOf(m.agent_key) >= 0) return false;
-      if (!q) return true;
-      return String(m.name || "").toLowerCase().indexOf(q) === 0 || String(m.slug || "").toLowerCase().indexOf(q) === 0;
+      return starts(m.name) || starts(m.slug) || (q && starts(m.title));
     }).slice(0, 8);
   }
 
@@ -480,24 +534,31 @@
   // tự không phải chữ/số (địa chỉ email "ho@lan.vn" không gọi ai); sau tên phải là hết chữ hay ký tự không phải chữ/số/dấu.
   // So trên chữ đã chuẩn hoá NFC (gõ tổ hợp vẫn khớp). Hai tên cùng bắt đầu ở một chỗ ("@Lan Anh" và "@Lan") thì lấy tên
   // dài hơn.
-  // Hai trợ lý TRÙNG TÊN (0.142.0): chữ "@One" không nói được là ai. Người đã chọn trong danh sách gợi ý (`picked`, mã bền
-  // theo thứ tự chọn) quyết định; gõ tay một tên trùng mà không chọn thì không gọi ai và báo `ambiguous` để chủ chọn lại.
+  // Nhân dạng theo agent_key (0.142.0): người CHỌN từ gợi ý được ghi `{key, label}`. Token "@label" còn nguyên trong chữ
+  // thì gọi ĐÚNG mã đó (hai trợ lý trùng tên vẫn đúng người, không suy lại theo tên); sửa hay xoá token thì lựa chọn đó
+  // mất, không gọi ai theo nó nữa. Gõ tay một tên duy nhất vẫn gọi được; gõ tay một tên trùng thì không gọi ai và báo
+  // `ambiguous` để chủ chọn trong gợi ý.
   function mentionScan(text, members, picked) {
     var norm = function (s) { s = String(s || ""); return (s.normalize ? s.normalize("NFC") : s).toLowerCase(); };
     var low = norm(text);
     var word = /[\p{L}\p{M}\p{N}_]/u;
     var byPos = {};
+    var active = {};
+    var bounded = function (i, len) {
+      var prev = i ? low.charAt(i - 1) : "";
+      var next = low.charAt(i + 1 + len);
+      return (!prev || !word.test(prev)) && (!next || !word.test(next));
+    };
     (members || []).forEach(function (m) {
       if (m.status && m.status !== "active") return;
+      active[m.agent_key] = true;
       [m.name, m.slug].forEach(function (n) {
         var label = String(n || "").trim();
         n = norm(n).trim();
         if (!n) return;
         var at = 0, i;
         while ((i = low.indexOf("@" + n, at)) >= 0) {
-          var prev = i ? low.charAt(i - 1) : "";
-          var next = low.charAt(i + 1 + n.length);
-          if ((!prev || !word.test(prev)) && (!next || !word.test(next))) {
+          if (bounded(i, n.length)) {
             var g = byPos[i];
             if (!g || n.length > g.len) byPos[i] = { i: i, len: n.length, keys: [m.agent_key], label: label };
             else if (n.length === g.len && g.keys.indexOf(m.agent_key) < 0) g.keys.push(m.agent_key);
@@ -506,12 +567,31 @@
         }
       });
     });
+    // Lựa chọn từ gợi ý thắng mọi cách đọc theo tên, ở đúng chỗ token của nó (mỗi lựa chọn giữ một chỗ).
+    var claimed = {};
+    var legacy = [];
+    (picked || []).forEach(function (p) {
+      if (!p || typeof p !== "object") { legacy.push(p); return; }
+      if (!active[p.key]) return;
+      var n = norm(p.label).trim();
+      if (!n) return;
+      var at = 0, i;
+      while ((i = low.indexOf("@" + n, at)) >= 0) {
+        if (!claimed[i] && bounded(i, n.length)) {
+          claimed[i] = true;
+          byPos[i] = { i: i, len: n.length, keys: [p.key], label: String(p.label), picked: true };
+          // Tên ngắn hơn bắt đầu ở cùng chỗ (vd. gợi ý "@Lan" nằm trong "@Lan Anh") không còn hiệu lực.
+          return;
+        }
+        at = i + 1;
+      }
+    });
     var used = {}, out = [], ambiguous = [];
     Object.keys(byPos).map(Number).sort(function (a, b) { return a - b; }).forEach(function (i) {
       var g = byPos[i], key = null;
       if (g.keys.length === 1) key = g.keys[0];
       else {
-        (picked || []).some(function (k) {
+        legacy.some(function (k) {
           if (!used[k] && g.keys.indexOf(k) >= 0) { key = k; return true; }
           return false;
         });
@@ -523,6 +603,31 @@
       }
     });
     return { keys: out, ambiguous: ambiguous };
+  }
+
+  // Bỏ một người khỏi tin đang soạn: xoá token "@tên" của họ trong chữ (token đã chọn trước, rồi tới tên gõ tay) và bỏ
+  // lựa chọn tương ứng. Trả {text, picked} mới.
+  function removeMention(text, members, picked, key) {
+    var labels = [];
+    (picked || []).forEach(function (p) { if (p && typeof p === "object" && p.key === key) labels.push(String(p.label)); });
+    (members || []).forEach(function (m) { if (m.agent_key === key) labels.push(String(m.name || ""), String(m.slug || "")); });
+    var t = String(text || "");
+    labels.filter(Boolean).sort(function (a, b) { return b.length - a.length; }).forEach(function (label) {
+      var esc2 = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      t = t.replace(new RegExp("(^|[^\\p{L}\\p{N}_])@" + esc2 + "(?![\\p{L}\\p{M}\\p{N}_]) ?", "giu"), "$1");
+    });
+    return { text: t, picked: (picked || []).filter(function (p) { return !(p && typeof p === "object" ? p.key === key : p === key); }) };
+  }
+
+  // Hàng "Gọi:" trên khung soạn: mỗi người sẽ được gọi là một token riêng, bấm x để bỏ gọi.
+  function callsHtml(keys, members) {
+    if (!(keys || []).length) return "";
+    return '<span class="tm-calls-label">' + esc(tw("teams.calls")) + "</span>" + keys.map(function (k) {
+      var m = memberOf(members, k) || { name: k };
+      return '<span class="tm-call">' + agentAva(m, 20) + '<span class="tm-call-name">@' + esc(m.name || m.slug || k) +
+        '</span><button type="button" class="tm-call-x" data-unmention="' + esc(k) + '" aria-label="' +
+        esc(tw("teams.uncall", { name: m.name || m.slug || k })) + '">' + ic("x") + "</button></span>";
+    }).join("");
   }
 
   function mentionsFromText(text, members, picked) {
@@ -582,10 +687,14 @@
     var add = '<div class="tm-add"><button type="button" class="ws-btn tm-add-open">' + ic("users") +
       esc(tw("teams.pick.add_open")) + "</button></div>";
     // Chủ nhóm luôn đứng đầu, tách khỏi Điều phối (AI): người tạo và quản lý nhóm là bạn, không phải một trợ lý.
+    // Nhân dạng người tạo lấy từ server (`team.creator`, theo phiên đăng nhập của chủ máy), không do trang tự khai.
+    var cr = (team && team.creator) || {};
+    var youName = tw("teams.pick.you") + (cr.name ? " (" + cr.name + ")" : "");
     var you = '<div class="tm-mrow tm-mrow-you"><div class="tm-mhead tm-mhead-static">' +
       '<span class="tmp-face tmp-initial tmp-you" aria-hidden="true">' + esc(tw("teams.pick.you").charAt(0)) + "</span>" +
-      '<span class="tm-mtext"><span class="tm-mname">' + esc(tw("teams.pick.you")) + '</span><span class="tm-mrole">' +
-      esc(tw("teams.pick.you_role")) + "</span></span></div></div>";
+      '<span class="tm-mtext"><span class="tm-mname">' + esc(youName) + '</span><span class="tm-mrole">' +
+      esc(tw("teams.pick.you_role")) + '</span></span><span class="tmp-badge">' + esc(tw("teams.pick.owner_badge")) +
+      "</span></div></div>";
     return you + rows + add;
   }
 
@@ -793,7 +902,9 @@
   // Tab Nhóm: thành viên, mức tự quyết, số lần đã dùng hôm nay, tên và trạng thái; mọi con số trong Nâng cao (đóng sẵn).
   function teamTabHtml(team, agents, ui) {
     ui = ui || {};
-    return '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.tab_members")) + "</div>" +
+    var nAct = (team.members || []).filter(function (m) { return !m.status || m.status === "active"; }).length;
+    return '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.tab_members")) + " · " +
+      esc(tw("teams.head_people", { n: nAct })) + "</div>" +
       membersHtml(team, agents, ui.openMember) + "</section>" +
       '<section class="tm-sec">' + levelsHtml(team) + usageHtml(team) + "</section>" +
       '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.tab_team")) + "</div>" +
@@ -950,8 +1061,7 @@
       head.hidden = true;
     } else {
       var t = S.team;
-      var lead = t.leader_key ? tw("teams.leader_line", { name: nameOf(t.members, t.leader_key), n: (t.members || []).length })
-        : tw("teams.no_leader_short");
+      var lead = headLine(t);
       head.hidden = false;
       head.innerHTML = back + teamAvatarHtml(t, 36) +
         '<div class="tm-title"><strong>' + esc(t.name) + '</strong><span class="tm-sub">' + esc(lead) + "</span></div>" +
@@ -1114,16 +1224,22 @@
     var old = box.querySelector(".tm-input");
     var draft = S.pending ? S.pending.text : old ? old.value : "";
     var off = S.team.status === "archived";
-    box.innerHTML = '<div class="tm-sug" hidden></div><div class="tm-hint" hidden></div>' +
+    box.innerHTML = '<div class="tm-sug" role="listbox" id="tm-sug" aria-label="' + esc(tw("teams.mention_list")) + '" hidden></div>' +
+      '<div class="tm-calls" hidden></div><div class="tm-hint" hidden></div>' +
       '<div class="tm-row"><button type="button" class="tm-mode tm-asjob" aria-pressed="' + (S.asJob ? "true" : "false") +
       '" title="' + esc(tw("teams.as_job_title")) + '"' + (off ? " disabled" : "") + ">" + ic("list-todo") + "<span>" +
       esc(tw("teams.as_job")) + "</span></button>" +
-      '<textarea class="tm-input" rows="1" placeholder="' + esc(tw(S.asJob ? "teams.placeholder_job" : "teams.placeholder")) + '"' +
+      '<textarea class="tm-input" rows="1" aria-autocomplete="list" aria-controls="tm-sug" placeholder="' + esc(tw(S.asJob ? "teams.placeholder_job" : "teams.placeholder")) + '"' +
       (off ? " disabled" : "") + ">" + esc(draft) + "</textarea>" +
       '<button type="button" class="tm-send" aria-label="' + esc(tw("teams.send")) + '" title="' + esc(tw("teams.send")) + '">' +
       ic("send") + "</button></div>";
     grow(box.querySelector(".tm-input"));
     drawHint();
+    if (S.focusComposer && !off) {
+      S.focusComposer = false;
+      var inp = box.querySelector(".tm-input");
+      if (inp) { try { inp.focus(); } catch (e) {} }
+    }
   }
 
   // Khung soạn một dòng, tự cao theo chữ tới khoảng năm dòng rồi cuộn trong.
@@ -1148,6 +1264,12 @@
       members: S.team.members, leaderKey: S.team.leader_key });
     hintEl.textContent = h.text;
     hintEl.hidden = !h.text;
+    var calls = S.el.querySelector(".tm-calls");
+    if (calls) {
+      var ch = callsHtml(sc.keys, S.team.members);
+      calls.innerHTML = ch;
+      calls.hidden = !ch;
+    }
     hintEl.classList.toggle("tm-hint-bad", !h.ok);
     var send = S.el.querySelector(".tm-send");
     if (send) send.disabled = !h.ok || S.team.status === "archived";
@@ -1203,6 +1325,24 @@
     if (tab === "team") loadAgents().then(function () { if (S.side && S.tab === "team") drawSide(); });
     var first = S.el.querySelector(".tm-side .tm-tab[aria-selected=\"true\"]");
     if (first) first.focus();
+  }
+
+  // Nút xử lý trên dòng lỗi của lượt trả lời (0.142.0).
+  function replyAct(kind, slug, btn) {
+    if (kind === "models") {
+      if (typeof window !== "undefined" && window.JavisNav && window.JavisNav.go) window.JavisNav.go("models");
+      return;
+    }
+    if (kind === "agent") {
+      if (typeof window !== "undefined" && window.JavisWorkspace && window.JavisWorkspace.openCommand) {
+        window.JavisWorkspace.openCommand("agent", slug);
+      }
+      return;
+    }
+    if (kind === "resume") return call("PATCH", teamUrl(), { status: "active" }).then(function (r) { act(r, drawAll); });
+    // Giới hạn nằm ở Nâng cao của ngăn Nhóm; điều phối chọn trong danh sách thành viên của cùng ngăn.
+    if (kind === "limits") S.advOpen = true;
+    openSide("team", btn);
   }
 
   function closeSide() {
@@ -1351,39 +1491,111 @@
     });
   }
 
+  // "@" đứng sau một chữ/số là địa chỉ email ("ho@lan.vn"), không mở gợi ý và không gọi ai.
+  function emailBefore(before) {
+    var m = String(before || "").match(/(^|[\s\S])@[^\s@]*$/);
+    if (!m) return false;
+    return !!m[1] && /[\p{L}\p{N}_.+-]/u.test(m[1]);
+  }
+
+  function suggestQuery(input) {
+    var before = input.value.slice(0, input.selectionStart || 0);
+    var m = before.match(/@([^\s@]*)$/);
+    if (!m || emailBefore(before)) return null;
+    return m[1];
+  }
+
   function suggest() {
     var input = S.el.querySelector(".tm-input");
     var box = S.el.querySelector(".tm-sug");
     if (!input || !box || !S.team) return;
-    var before = input.value.slice(0, input.selectionStart || 0);
-    var m = before.match(/@([^\s@]*)$/);
-    if (!m) { box.hidden = true; return; }
-    var list = mentionMatches(S.team.members, m[1], mentionsFromText(input.value, S.team.members, S.picked));
+    var query = suggestQuery(input);
+    if (query === null) { hideSug(); return; }
+    var list = mentionMatches(S.team.members, query, mentionsFromText(input.value, S.team.members, S.picked));
     var seen = {};
-    (S.team.members || []).forEach(function (a) { var n = String(a.name || a.slug).toLowerCase(); seen[n] = (seen[n] || 0) + 1; });
+    (S.team.members || []).forEach(function (a) {
+      if (a.status && a.status !== "active") return;
+      var n = foldName(a.name || a.slug).trim();
+      seen[n] = (seen[n] || 0) + 1;
+    });
+    S.sugKeys = list.map(function (a) { return a.agent_key; });
+    if (S.sugIdx == null || S.sugIdx >= list.length) S.sugIdx = 0;
     box.hidden = !list.length;
-    box.innerHTML = list.map(function (a) {
-      // Trùng tên: thêm mã ngắn (slug) để chọn đúng người.
-      var dup = seen[String(a.name || a.slug).toLowerCase()] > 1;
-      return '<button type="button" class="tm-sug-item" data-mention="' + esc(a.agent_key) + '">' + agentAva(a, 24) +
-        esc(a.name || a.slug) + (dup ? ' <span class="tm-sug-slug">' + esc(a.slug) + "</span>" : "") + "</button>";
+    input.setAttribute("aria-expanded", list.length ? "true" : "false");
+    box.innerHTML = list.map(function (a, i) {
+      // Trùng tên: thêm mã ngắn (slug) để chọn đúng người. Vai của trợ lý (dòng "role" ở Cộng sự) nằm dưới tên.
+      var dup = seen[foldName(a.name || a.slug).trim()] > 1;
+      var on = i === S.sugIdx;
+      return '<button type="button" class="tm-sug-item' + (on ? " is-active" : "") + '" role="option" id="tm-sug-' + i +
+        '" aria-selected="' + (on ? "true" : "false") + '" data-mention="' + esc(a.agent_key) + '">' + agentAva(a, 28) +
+        '<span class="tm-sug-text"><span class="tm-sug-name">' + esc(a.name || a.slug) +
+        (dup ? ' <span class="tm-sug-slug">' + esc(a.slug) + "</span>" : "") + "</span>" +
+        (a.title ? '<span class="tm-sug-role">' + esc(a.title) + "</span>" : "") + "</span></button>";
     }).join("");
+    if (list.length) input.setAttribute("aria-activedescendant", "tm-sug-" + S.sugIdx);
+    else input.removeAttribute("aria-activedescendant");
+  }
+
+  function hideSug() {
+    var box = S.el.querySelector(".tm-sug");
+    if (box) box.hidden = true;
+    S.sugKeys = []; S.sugIdx = 0;
+    var input = S.el.querySelector(".tm-input");
+    if (input) { input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant"); }
+  }
+
+  // Phím khi danh sách gợi ý đang mở: lên/xuống chọn, Enter hay Tab chèn người đang chọn, Escape đóng. Trả true khi đã
+  // xử lý (khung soạn không gửi tin, ngăn bên không đóng). Đang gõ bằng bộ gõ (IME) thì không can thiệp.
+  function sugKey(e) {
+    var box = S.el.querySelector(".tm-sug");
+    if (!box || box.hidden || !(S.sugKeys || []).length || e.isComposing || e.keyCode === 229) return false;
+    var n = S.sugKeys.length;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      S.sugIdx = ((S.sugIdx || 0) + (e.key === "ArrowDown" ? 1 : n - 1)) % n;
+      suggest();
+      return true;
+    }
+    if ((e.key === "Enter" && !e.shiftKey) || e.key === "Tab") {
+      e.preventDefault();
+      pickMention(S.sugKeys[S.sugIdx || 0]);
+      return true;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      hideSug();
+      return true;
+    }
+    return false;
   }
 
   function pickMention(key) {
     var input = S.el.querySelector(".tm-input");
-    if (input) {
+    if (input && key) {
+      var label = nameOf(S.team.members, key);
       var pos = input.selectionStart || input.value.length;
-      var before = input.value.slice(0, pos).replace(/@([^\s@]*)$/, "@" + nameOf(S.team.members, key) + " ");
+      var before = input.value.slice(0, pos).replace(/@([^\s@]*)$/, "@" + label + " ");
       input.value = before + input.value.slice(pos);
       try { input.setSelectionRange(before.length, before.length); } catch (e) {}
       input.focus();
       grow(input);
-      S.picked = (S.picked || []).concat([key]);
+      // Ghi đúng mã đã chọn kèm chữ của token: trùng tên vẫn gọi đúng người, sửa token thì bỏ gọi.
+      S.picked = (S.picked || []).concat([{ key: key, label: label }]);
     }
     S.pending = null;
-    var box = S.el.querySelector(".tm-sug");
-    if (box) box.hidden = true;
+    hideSug();
+    drawHint();
+  }
+
+  function unMention(key) {
+    var input = S.el.querySelector(".tm-input");
+    if (!input || !S.team) return;
+    var r = removeMention(input.value, S.team.members, S.picked, key);
+    input.value = r.text;
+    S.picked = r.picked;
+    S.pending = null;
+    grow(input);
+    input.focus();
     drawHint();
   }
 
@@ -1463,17 +1675,21 @@
 
   // Trợ lý của trang Cộng sự (tên, vai, tag, ảnh): cùng nguồn với cột trái trang Cộng sự để chip tag khớp.
   function loadRoster() {
+    if (S.pickSt) S.pickSt.rosterState = "loading";
     return call("GET", "/agents?prompt=0").then(function (r) {
       if (r.code === 200) S.roster = r.j.agents || [];
-    });
+      if (S.pickSt) S.pickSt.rosterState = r.code === 200 ? "ok" : "error";
+    }, function () { if (S.pickSt) S.pickSt.rosterState = "error"; });
   }
 
   function openPicker(mode, opener) {
     if (!TP()) return;
     var exclude = mode === "add" && S.team ? (S.team.members || []).filter(function (m) { return !m.status || m.status === "active"; })
       .map(function (m) { return m.slug; }) : [];
-    S.pickSt = { mode: mode, query: "", tag: "", selected: [], leader: "", leaderTouched: false, name: "", desc: "",
-      exclude: exclude, saving: false, error: "" };
+    // `reqId`: một mã cho mỗi lần mở hộp Tạo nhóm. Bấm Tạo hai lần hay mạng chậm gửi lại thì server trả lại nhóm đã tạo.
+    S.pickSt = { mode: mode, query: "", tag: "", selected: [], leader: "", leaderTouched: false, leaderDropped: false, name: "",
+      desc: "", descOpen: false, exclude: exclude, saving: false, error: "", rosterState: (S.roster || []).length ? "ok" : "loading",
+      reqId: newClientId() };
     S.pickOpener = opener || null;
     drawPicker("all");
     loadRoster().then(function () { if (S.pickSt) drawPicker("all"); });
@@ -1518,7 +1734,7 @@
     put(".tmp-list", P.listHtml(roster, st));
     if (part === "filter") return;
     put(".tmp-selected-box", P.selectedHtml(roster, st));
-    put(".tmp-leader-box", P.leaderHtml(roster, st));
+    put(".tmp-preview-box", P.previewHtml(roster, st));
     put(".tmp-foot-box", P.footerHtml(st));
     var err = host.querySelector(".tmp-error");
     if (err && !st.error) err.remove();
@@ -1544,11 +1760,13 @@
     drawPicker("pick");
     if (st.mode === "create") {
       var name = String(st.name || "").trim() || P.autoName(st, S.roster || []);
-      call("POST", "/teams", { name: name, description: st.desc || "", members: st.selected.slice(), leader_slug: st.leader || "" })
+      call("POST", "/teams", { name: name, description: st.desc || "", members: st.selected.slice(), leader_slug: st.leader || "",
+        client_req_id: st.reqId })
         .then(function (r) {
           if (r.code !== 200) return pickFail((r.j && r.j.error) || tw("teams.err", { e: r.code }));
-          // Tạo xong: vào thẳng khung chat của nhóm mới.
+          // Tạo xong: vào thẳng khung chat của nhóm mới, con trỏ đặt sẵn ở khung soạn.
           closePicker();
+          S.focusComposer = true;
           loadTeams(false).then(function () { openTeam(r.j.team.team_id); });
         }, function () { pickFail(tw("teams.pick.err_network")); });
       return;
@@ -1608,6 +1826,9 @@
     if (t.classList.contains("tm-add-open")) return openPicker("add", t);
     if (d.pickTag !== undefined) { S.pickSt.tag = d.pickTag; drawPicker("filter"); return; }
     if (d.pickToggle) { pickToggle(d.pickToggle); return; }
+    if (d.pickLeader) { S.pickSt = TP().setLeader(S.pickSt, d.pickLeader); drawPicker("pick"); return; }
+    if (t.classList.contains("tmp-reload")) { loadRoster().then(function () { if (S.pickSt) drawPicker("all"); }); drawPicker("filter"); return; }
+    if (t.classList.contains("tmp-desc-sum")) { var dd = t.parentNode; if (S.pickSt) S.pickSt.descOpen = !(dd && dd.open); return; }
     if (t.classList.contains("tmp-cancel")) return closePicker();
     if (t.classList.contains("tmp-submit")) return submitPicker();
     if (t.classList.contains("tm-more-teams")) return loadTeams(true);
@@ -1646,6 +1867,7 @@
     if (t.classList.contains("tm-send")) return send();
     if (t.classList.contains("tm-older")) return loadMsgs(true);
     if (d.mention) return pickMention(d.mention);
+    if (d.unmention) return unMention(d.unmention);
     if (t.classList.contains("tm-search-btn")) {
       S.searchOpen = !S.searchOpen;
       if (!S.searchOpen) { S.searchResults = null; S.searchQuery = ""; }
@@ -1685,6 +1907,7 @@
       drawSide(); drawFilterbar(); loadMsgs(false);
       return;
     }
+    if (d.replyAct) return replyAct(d.replyAct, d.slug || "", t);
     if (d.retry && d.retryKey) {
       var rk = d.retry + "|" + d.retryKey;
       if (S.retrying[rk]) return;
@@ -1879,6 +2102,7 @@
       return;
     }
     if (e.key === "Escape" && S.pickSt) { closePicker(); return; }
+    if (e.target.classList && e.target.classList.contains("tm-input") && sugKey(e)) return;
     if (e.target.classList && e.target.classList.contains("tmp-name-input") && e.key === "Enter") {
       e.preventDefault();
       var srch = S.pickHost && S.pickHost.querySelector(".tmp-search-input");
@@ -1888,7 +2112,8 @@
     if (e.key === "Escape" && S.rowMenu) { closeRowMenu(true); return; }
     if (e.key === "Escape" && S.picker !== null) { S.focusBack = S.picker; S.picker = null; S.draft = null; drawMsgs(false); return; }
     if (e.key === "Escape" && S.side) { closeSide(); return; }
-    if (e.target.classList && e.target.classList.contains("tm-input") && e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    if (e.target.classList && e.target.classList.contains("tm-input") && e.key === "Enter" && !e.shiftKey && !e.isComposing &&
+        e.keyCode !== 229) {
       e.preventDefault();
       send();
     }
@@ -1918,6 +2143,12 @@
   function onTeamEvent(ev) {
     if (!S || !S.el || !S.el.isConnected) return;
     var d = (ev && ev.detail) || {};
+    if (d.type === "team_resync") {
+      // Socket vừa nối lại (0.142.0): tin và kết cục lượt trả lời trong lúc mất kết nối chưa về, tải lại từ server.
+      loadTeams(false);
+      if (S.activeId) { loadMsgs(false); loadQueue(); loadTeam(); }
+      return;
+    }
     if (d.type === "team_replies" && d.team_id === S.activeId) {
       // Kết cục lượt trả lời đổi (0.142.0): chỉ vẽ lại khung tin, không cần hỏi lại danh sách.
       var k = S.msgs.findIndex(function (m) { return Number(m.id) === Number(d.message_id); });
@@ -2003,16 +2234,23 @@
 
   if (typeof window !== "undefined" && window.addEventListener) {
     window.addEventListener("javis:team-event", onTeamEvent);
+    // Auto bật/tắt ở trang Cộng sự hay tab khác (0.142.0): danh sách thành viên của nhóm đang mở đọc lại trạng thái.
+    window.addEventListener("javis:resonance-agents-changed", function () {
+      if (!S || !S.el || !S.el.isConnected || !S.activeId) return;
+      loadTeam();
+      if (S.side && S.tab === "team") loadAgents().then(function () { if (S.side && S.tab === "team") drawSide(); });
+    });
   }
 
   var api = { render: render, leave: leave, open: open, teamListHtml: teamListHtml, messageHtml: messageHtml, queueHtml: queueHtml,
     jobStripHtml: jobStripHtml, blockedAction: blockedAction, jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
-    mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, mentionScan: mentionScan, composerHint: composerHint, newClientId: newClientId,
+    mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, mentionScan: mentionScan, removeMention: removeMention,
+    callsHtml: callsHtml, foldName: foldName, emailBefore: emailBefore, composerHint: composerHint, newClientId: newClientId,
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, teamTabHtml: teamTabHtml,
     levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml,
     bannersHtml: bannersHtml, reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
-    searchResultsHtml: searchResultsHtml, replyStatusHtml: replyStatusHtml };
+    searchResultsHtml: searchResultsHtml, replyStatusHtml: replyStatusHtml, headLine: headLine };
   if (typeof window !== "undefined") window.JavisTeams = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

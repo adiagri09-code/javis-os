@@ -146,6 +146,16 @@ class TeamStore:
             if "pinned_at" not in {r[1] for r in c.execute("PRAGMA table_info(teams)").fetchall()}:
                 # Ghim nhóm lên đầu danh sách (T5); NULL là không ghim.
                 c.execute("ALTER TABLE teams ADD COLUMN pinned_at REAL")
+            tcols = {r[1] for r in c.execute("PRAGMA table_info(teams)").fetchall()}
+            if "created_by" not in tcols:
+                # Người tạo nhóm (0.142.0): người thật, lấy từ phiên xác thực của server, không từ client. Javis hiện chỉ
+                # có một tài khoản chủ máy nên nhóm cũ nhận đúng chủ đó ("owner"), không giả lập đa người dùng.
+                c.execute("ALTER TABLE teams ADD COLUMN created_by TEXT NOT NULL DEFAULT 'owner'")
+            if "client_req_id" not in tcols:
+                # Mã yêu cầu tạo nhóm của client (0.142.0): bấm Tạo hai lần hay mạng chậm gửi lại thì trả lại nhóm đã tạo.
+                c.execute("ALTER TABLE teams ADD COLUMN client_req_id TEXT")
+            c.execute("CREATE UNIQUE INDEX IF NOT EXISTS teams_client_req ON teams(brain_id, client_req_id) "
+                      "WHERE client_req_id IS NOT NULL")
 
     def _conn(self) -> sqlite3.Connection:
         c = sqlite3.connect(str(self.path), timeout=10, isolation_level=None)
@@ -179,26 +189,57 @@ class TeamStore:
         return {"team_id": r["team_id"], "brain_id": r["brain_id"], "name": r["name"], "description": r["description"],
                 "session_id": r["session_id"], "leader_key": r["leader_key"], "leader_mode": r["leader_mode"],
                 "status": r["status"], "caps": caps, "created_at": r["created_at"], "updated_at": r["updated_at"],
-                "pinned_at": r["pinned_at"]}
+                "pinned_at": r["pinned_at"], "created_by": r["created_by"] if "created_by" in r.keys() else "owner"}
 
     def _event(self, c, team_id: str, kind: str, by: str, before: Any = None, after: Any = None) -> None:
         c.execute("INSERT INTO team_events(team_id,kind,by,before_json,after_json,created_at) VALUES(?,?,?,?,?,?)",
                   (team_id, kind, by, _j(before or {}), _j(after or {}), time.time()))
 
     def create_team(self, brain_id: str, name: str, description: str, session_id: str, by: str = "owner",
-                    team_id: Optional[str] = None) -> dict:
-        """`team_id` cho trước khi phiên hội thoại đã tạo với kênh `team:<team_id>` (xem `new_team_id`)."""
+                    team_id: Optional[str] = None, members: Optional[list] = None, leader_key: Optional[str] = None,
+                    client_req_id: Optional[str] = None) -> dict:
+        """`team_id` cho trước khi phiên hội thoại đã tạo với kênh `team:<team_id>` (xem `new_team_id`).
+
+        `members` [(agent_key, slug)] và `leader_key` ghi trong CÙNG giao dịch với nhóm (0.142.0): không còn nhóm nửa
+        vời khi lỗi giữa chừng. `client_req_id` trùng (bấm hai lần, mạng chậm gửi lại) thì không tạo gì, trả nhóm cũ."""
         name = str(name or "").strip()
         if not name:
             raise TeamError("thiếu tên nhóm")
         tid = team_id or new_team_id()
+        req = str(client_req_id or "").strip()[:80] or None
         now = time.time()
         with self._Tx(self) as c:
-            c.execute("INSERT INTO teams(team_id,brain_id,name,description,session_id,created_at,updated_at) "
-                      "VALUES(?,?,?,?,?,?,?)", (tid, brain_id, name[:120], str(description or "")[:2000],
-                                                 session_id, now, now))
-            self._event(c, tid, "created", by, None, {"name": name})
+            dup = None
+            if req:
+                dup = c.execute("SELECT team_id FROM teams WHERE brain_id=? AND client_req_id=?", (brain_id, req)).fetchone()
+                if dup is not None:
+                    tid = dup["team_id"]
+            if dup is None:
+                c.execute("INSERT INTO teams(team_id,brain_id,name,description,session_id,created_at,updated_at,"
+                          "created_by,client_req_id) VALUES(?,?,?,?,?,?,?,?,?)",
+                          (tid, brain_id, name[:120], str(description or "")[:2000], session_id, now, now,
+                           str(by or "owner")[:80], req))
+                self._event(c, tid, "created", by, None, {"name": name})
+                for key, slug in dict.fromkeys((str(k), str(s)) for k, s in (members or [])):
+                    c.execute("INSERT OR IGNORE INTO team_members(team_id,agent_key,slug_at_join,role,status,joined_at) "
+                              "VALUES(?,?,?,?,?,?)", (tid, key, slug, "member", "active", now))
+                    self._event(c, tid, "member_added", by, None, {"agent_key": key, "slug": slug})
+                if leader_key:
+                    if c.execute("SELECT 1 FROM team_members WHERE team_id=? AND agent_key=?",
+                                 (tid, leader_key)).fetchone() is None:
+                        raise TeamError("trưởng nhóm phải là thành viên đang hoạt động của nhóm")
+                    c.execute("UPDATE team_members SET role='leader' WHERE team_id=? AND agent_key=?", (tid, leader_key))
+                    c.execute("UPDATE teams SET leader_key=? WHERE team_id=?", (leader_key, tid))
+                    self._event(c, tid, "leader_set", by, {"leader_key": None}, {"leader_key": leader_key})
         return self.get(tid)
+
+    def find_by_request(self, brain_id: str, client_req_id: str) -> Optional[dict]:
+        req = str(client_req_id or "").strip()[:80]
+        if not req:
+            return None
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT * FROM teams WHERE brain_id=? AND client_req_id=?", (brain_id, req)).fetchone()
+            return self._team(r) if r else None
 
     def open_teams(self) -> list:
         """Mọi nhóm chưa lưu trữ, ở mọi brain (đối soát lúc khởi động)."""

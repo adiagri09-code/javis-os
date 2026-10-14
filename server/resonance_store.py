@@ -928,16 +928,22 @@ class GoalStore:
 
     def agent_goal_rows(self, p: Principal, agent_key: str, limit: int = 40) -> list:
         """Mục tiêu của một trợ lý cho tab Công việc (0.142.0): mục tiêu nó làm (`goal_agents`) và mục tiêu cũ nó đang là
-        người review (đội A5 còn `active`). Đang mở trước, rồi mới nhất. Bản đọc nhẹ, không dựng cả thẻ mục tiêu."""
+        người review (đội A5 còn `active`). Đang mở trước, rồi mới nhất. Bản đọc nhẹ, không dựng cả thẻ mục tiêu.
+
+        `limit` chỉ áp cho mục tiêu ĐÃ KẾT THÚC: mục tiêu đang mở luôn trả đủ (không giấu việc đang chạy hay cần chủ sau
+        một trần cố định). `revision` đi kèm để Tiếp tục, Huỷ gửi đúng revision đang hiện."""
         key = str(agent_key or "")
+        lim = max(0, int(limit))
+        union = ("SELECT g.*, 'owner' AS role FROM goals g JOIN goal_agents a ON a.goal_id=g.id "
+                 "WHERE g.brain_id=? AND a.agent_key=? "
+                 "UNION ALL SELECT g.*, 'reviewer' AS role FROM goals g JOIN goal_team t ON t.goal_id=g.id "
+                 "WHERE g.brain_id=? AND t.reviewer_agent_key=? AND t.status='active' AND g.status='active'")
+        args = (p.brain_id, key, p.brain_id, key)
         with closing(self._conn()) as c:
-            rows = c.execute(
-                "SELECT * FROM (SELECT g.*, 'owner' AS role FROM goals g JOIN goal_agents a ON a.goal_id=g.id "
-                "WHERE g.brain_id=? AND a.agent_key=? "
-                "UNION ALL SELECT g.*, 'reviewer' AS role FROM goals g JOIN goal_team t ON t.goal_id=g.id "
-                "WHERE g.brain_id=? AND t.reviewer_agent_key=? AND t.status='active' AND g.status='active') "
-                "ORDER BY (status='active') DESC, updated_at DESC LIMIT ?",
-                (p.brain_id, key, p.brain_id, key, max(1, int(limit)))).fetchall()
+            rows = c.execute(f"SELECT * FROM ({union}) WHERE status='active' ORDER BY updated_at DESC", args).fetchall()
+            if lim:
+                rows += c.execute(f"SELECT * FROM ({union}) WHERE status!='active' ORDER BY updated_at DESC LIMIT ?",
+                                  args + (lim,)).fetchall()
             removed = set()
             if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_migrations'").fetchone():
                 m = c.execute("SELECT detail_json FROM review_migrations WHERE name=?", (REVIEW_REMOVED,)).fetchone()
@@ -951,8 +957,17 @@ class GoalStore:
                 out.append({"id": r["id"], "status": r["status"], "run_state": r["run_state"], "reason_code": code,
                             "block_reason": r["block_reason"], "paused": bool(r["paused"]), "role": r["role"],
                             "session_id": r["session_id"], "request_ref": r["request_ref"],
-                            "understanding": rec.understanding, "updated_at": r["updated_at"]})
+                            "revision": int(r["revision"]), "understanding": rec.understanding,
+                            "updated_at": r["updated_at"]})
             return out
+
+    def goal_agent_key(self, p: Principal, goal_id: str) -> str:
+        """Mã trợ lý làm mục tiêu (chỉ trong đúng brain), rỗng khi không có. Tab Công việc dùng để không giao kiểm
+        chứng một mục tiêu cho chính trợ lý làm nó."""
+        with closing(self._conn()) as c:
+            if self._goal_row(c, p, goal_id) is None:
+                return ""
+            return self._goal_agent(c, goal_id)
 
     def revise(self, p: Principal, goal_id: str, expected_revision: int, frame: dict, reason: str,
                intent_id: Optional[str] = None, message_ref: str = "", relation: str = "",

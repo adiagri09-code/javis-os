@@ -68,6 +68,19 @@ def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def agent_prefix(idempotency_key: Any) -> str:
+    """`agent:<mã>:` của việc giao trực tiếp cho một trợ lý (khoá `agent:<mã>:<slug>:...`, 0.142.0), rỗng nếu không phải.
+
+    Một trợ lý chạy MỘT việc giao trực tiếp một lúc: giao nhiều việc không tự mở nhiều lượt model đồng thời cho cùng
+    trợ lý. Việc của trợ lý khác, việc Kanban thường vẫn chạy song song tới trần JAVIS_KANBAN_MAX_WORKERS."""
+    k = str(idempotency_key or "")
+    if not k.startswith("agent:"):
+        return ""
+    rest = k[len("agent:"):]
+    head, sep, _tail = rest.partition(":")
+    return f"agent:{head}:" if head and sep else ""
+
+
 def _loads(value: Any, fallback: Any) -> Any:
     try:
         parsed = json.loads(value or "")
@@ -714,17 +727,33 @@ class TaskStore:
 
     def next_candidate(self, brain_root: str) -> Optional[dict]:
         with self._lock:
+            # Trợ lý đang chạy một việc giao trực tiếp thì việc kế của CÙNG trợ lý đứng chờ; việc khác vẫn đi tiếp
+            # (không bỏ đói ai), và việc của trợ lý đó vẫn theo đúng thứ tự (FIFO trong cùng ưu tiên).
+            busy = {
+                agent_prefix(r["idempotency_key"])
+                for r in self._db.execute(
+                    """SELECT idempotency_key FROM tasks
+                       WHERE brain_root=? AND status='running' AND idempotency_key LIKE 'agent:%'""",
+                    (brain_root,),
+                ).fetchall()
+            }
+            busy.discard("")
             # `not_before`: việc đang đợi gói thuê bao mở lại hạn mức chưa tới giờ thì
             # không phải ứng viên, dù status vẫn là ready.
-            row = self._db.execute(
+            cur = self._db.execute(
                 """SELECT * FROM tasks
                    WHERE brain_root=? AND status IN ('triage','ready')
                      AND not_before <= ?
                    ORDER BY CASE status WHEN 'triage' THEN 0 ELSE 1 END,
-                            priority, created_at
-                   LIMIT 1""",
+                            priority, created_at""",
                 (brain_root, now()),
-            ).fetchone()
+            )
+            row = None
+            for r in cur:
+                if busy and agent_prefix(r["idempotency_key"]) in busy:
+                    continue
+                row = r
+                break
         return self._task_from_row(row) if row else None
 
     def claim(
@@ -744,6 +773,16 @@ class TaskStore:
                     "SELECT * FROM tasks WHERE id=?", (task_id,)
                 ).fetchone()
                 if not row or row["status"] not in ("triage", "ready"):
+                    self._db.rollback()
+                    return None
+                ap = agent_prefix(row["idempotency_key"])
+                if ap and self._db.execute(
+                    """SELECT 1 FROM tasks WHERE brain_root=? AND status='running' AND id<>?
+                       AND substr(idempotency_key, 1, ?)=? LIMIT 1""",
+                    (str(row["brain_root"]), task_id, len(ap), ap),
+                ).fetchone():
+                    # Cùng trợ lý đang chạy một việc giao trực tiếp: việc này chờ tới lượt (kiểm trong giao dịch nhận
+                    # việc, nên hai đường nhận song song cũng không mở hai lượt cho một trợ lý).
                     self._db.rollback()
                     return None
                 if row["status"] == "ready":

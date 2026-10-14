@@ -287,7 +287,7 @@ check("review #1: tải lại trang tin mới nhất (gửi tin, lọc việc) t
       /function loadMsgs\(older\) \{[\s\S]{0,200}if \(!older\) S\.jumped = null;/.test(teamsJs));
 // review #5 cũ (form tạo nhóm thay khung chat nên phải đóng ô tìm) hết hiệu lực từ 0.142.0: hộp tạo nhóm là lớp phủ,
 // không đụng nhóm đang mở hay ô tìm.
-check("0.142.0: hộp tạo nhóm là lớp phủ, không đổi nhóm đang mở", /function openPicker\(mode, opener\) \{(?:(?!S\.activeId =)[\s\S]){0,700}\n  \}/.test(teamsJs));
+check("0.142.0: hộp tạo nhóm là lớp phủ, không đổi nhóm đang mở", /function openPicker\(mode, opener\) \{(?:(?!S\.activeId =)[\s\S]){0,1400}\n  \}/.test(teamsJs));
 check("review #6: băng xem tin cũ dính ở đầu khung", /\.tm-jumped \{[^}]*position: sticky; top: 0;/.test(css));
 check("review #7: nút tìm đủ 44px bề ngang trên điện thoại", /\.tm-back, \.tm-close, \.tm-search-btn \{ min-width: 44px;/.test(css));
 check("review #8: kết quả tìm, nhảy tới về muộn sau khi đổi nhóm thì bỏ",
@@ -325,9 +325,11 @@ check("T5 @ tên dài hơn thắng ('@Lan Anh' không gọi nhầm Lan)", TM.men
 check("T5 @ phải hết tên ('@Lanx' không gọi Lan); người đã rời không được gọi; xoá chữ là bỏ gọi",
       TM.mentionsFromText("@Lanx", mem3).length === 0 && TM.mentionsFromText("@Cũ", mem3).length === 0
       && TM.mentionsFromText("không gọi ai", mem3).length === 0);
-check("T5 gửi tin lấy người được gọi từ chữ, không còn hàng chip @ trùng chữ",
+// 0.142.0 (đối chiếu goal-claude-v2 mục 3): người được gọi là TOKEN riêng ở hàng "Gọi:" (tm-calls), bấm x là bỏ gọi và
+// xoá token trong chữ. Hàng chip @ cũ của T5 (tm-chips, lặp lại chữ) vẫn không quay lại.
+check("T5 gửi tin lấy người được gọi từ chữ, không còn hàng chip @ trùng chữ; 0.142.0 có hàng token Gọi",
       /var scan = mentionScan\(text, S\.team\.members, S\.picked\);/.test(teamsJs) && !teamsJs.includes("tm-chips")
-      && !teamsJs.includes("data-unmention"));
+      && teamsJs.includes("data-unmention") && teamsJs.includes("tm-calls"));
 
 // Một nút giải quyết cho việc bị chặn.
 const BA = TM.blockedAction;

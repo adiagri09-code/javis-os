@@ -4462,6 +4462,26 @@
  {
   "order": 448,
   "type": "APIRoute",
+  "path": "/agents/jobs/counts",
+  "name": "agent_jobs_counts",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 449,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/jobs/verify-targets",
+  "name": "agent_jobs_verify_targets",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 450,
+  "type": "APIRoute",
   "path": "/agents/{slug}/jobs",
   "name": "agent_jobs_list",
   "methods": [
@@ -4470,7 +4490,7 @@
   "trong": null
  },
  {
-  "order": 449,
+  "order": 451,
   "type": "APIRoute",
   "path": "/agents/{slug}/jobs",
   "name": "agent_jobs_assign",

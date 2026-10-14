@@ -59,7 +59,12 @@ def choose_spec(agent_model: str, agent_provider: str, main: dict, resolve: Call
     if model:
         prov = resolve(model, str(agent_provider or ""))
         spec = {"provider": prov, "model": model, "source": "agent", "note": ""}
-        ok, why = available(spec)
+        if not text_only_supported(prov):
+            # Grok Build, Antigravity: chưa có cơ chế chỉ chữ được kiểm. Chạy bằng model chính và NÓI RÕ trên tin (không
+            # âm thầm đổi provider), thay vì để trợ lý im hay báo lỗi mỗi tin.
+            ok, why = False, "chưa chạy được lượt nhóm chỉ chữ (còn công cụ native không tắt riêng được)"
+        else:
+            ok, why = available(spec)
         if ok:
             return spec
         note = f"Model riêng của trợ lý ({prov}) chưa dùng được: {str(why or '').strip().rstrip('.')}. Lượt này chạy bằng model chính."
@@ -68,6 +73,12 @@ def choose_spec(agent_model: str, agent_provider: str, main: dict, resolve: Call
     m = dict(main or {})
     return {"provider": str(m.get("provider") or CLAUDE), "model": str(m.get("model") or ""), "source": "main",
             "note": note}
+
+
+def text_only_supported(provider: str) -> bool:
+    """Provider có cơ chế chỉ chữ đã kiểm cho lượt nhóm: Claude (cổng chặn), Codex (cờ + sandbox read-only), engine API."""
+    p = str(provider or "")
+    return p in (CLAUDE, CODEX) or p in aux_engine.API_PROVIDERS
 
 
 def codex_text_only(cc: Any) -> Any:

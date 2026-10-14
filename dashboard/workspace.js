@@ -261,6 +261,8 @@
             el: null, tienDo: {}, sessionCuaPhien: {}, tabPhai: "lichsu",
             // T0 nhóm chat team: trạng thái Cộng hưởng theo slug, và các dòng đang chờ server trả lời.
             rs: {}, rsSaving: {},
+            // Huy hiệu việc theo slug (Đang làm, Cần bạn), tách khỏi công tắc Auto: Auto tắt vẫn có thể có việc Đang làm.
+            jc: {},
             // Tab cột phải NHỚ RIÊNG theo loại. Trợ lý mở ở Lịch sử (chốt 16/09, xem TAB_PHAI);
             // quy trình mở ở Cài đặt vì nút Chạy nằm ở đó (chủ dự án chốt 17/09). Dùng chung
             // một ô nhớ thì vừa xem xong hội thoại của một trợ lý, sang quy trình là Lịch sử
@@ -321,6 +323,26 @@
     S.rs = resonanceMap(j, S.rs);
     return true;
   }
+  // Huy hiệu việc trên thẻ trợ lý (0.142.0): GET /agents/jobs/counts, một request cho cả brain. Đọc hỏng thì giữ bản cũ;
+  // bỏ kết quả của brain cũ hay của lần dựng trang cũ (cùng luật với loadResonance).
+  async function loadJobCounts() {
+    var round = lanDung, b0 = brain(), AJ = window.JavisAgentJobs;
+    if (!AJ || !AJ.loadCounts) return false;
+    var c = await AJ.loadCounts(b0);
+    if (round !== lanDung || b0 !== brain() || !c) return false;
+    S.jc = c;
+    return true;
+  }
+  // Gộp nhịp: gói nhóm, mục tiêu đổi, việc nền báo về, việc vừa tạo hay huỷ ở tab Công việc đều đọc lại huy hiệu sau 800ms.
+  var _henDem = null;
+  function henDemViec() {
+    if (!active) return;
+    if (_henDem) clearTimeout(_henDem);
+    _henDem = setTimeout(function () {
+      _henDem = null;
+      if (active) loadJobCounts().then(function (ok) { if (ok && active && S.loai === "agent") veDanhSach(); });
+    }, 800);
+  }
   // Bật, tắt Auto của MỘT trợ lý (0.142.0): một hàm cho công tắc trên thẻ và mục Auto trong menu ba chấm, nên hai chỗ
   // dùng chung trạng thái `S.rs`. Khoá trong lúc chờ server (bấm hai lần không gửi hai lệnh); chỉ server xác nhận mới
   // đổi; lỗi thì về đúng trạng thái thật và nói lý do (toggleAgent luôn phát sự kiện tải lại).
@@ -358,6 +380,7 @@
     // T0 nhóm chat team: trạng thái Cộng hưởng của MỌI trợ lý trong một request riêng (không gọi theo từng dòng), đọc
     // SAU khi danh sách đã có: tới đâu vẽ lại tới đó. Chưa về hay lỗi thì dòng không có công tắc (không đoán).
     loadResonance().then(function (ok) { if (ok && active && S.loai === "agent") veDanhSach(); });
+    loadJobCounts().then(function (ok) { if (ok && active && S.loai === "agent") veDanhSach(); });
     S.agents = sapXep(r[0].agents, "last_chat_at");
     S.workflows = sapXep(r[1].workflows.filter(function (w) { return w.status === "active"; }), "last_run_at");
     daTai = true;
@@ -580,6 +603,11 @@
     if (!host) return;
     if (!item || S.loai !== "agent" || !window.JavisAgentJobs) { host.innerHTML = ""; return; }
     _congViec = window.JavisAgentJobs.mount(host, { slug: item.slug, name: item.name || item.slug, brain: brain,
+      // Trợ lý KHÁC trong brain: người nhận việc kiểm chứng khi bấm "Giao kiểm chứng" trên một thẻ.
+      agents: function () {
+        return S.agents.filter(function (a) { return a.slug !== item.slug; })
+          .map(function (a) { return { slug: a.slug, name: a.name || a.slug }; });
+      },
       openChat: function (sid) { var x = dangChon(); if (x) moPhien(x, false, sid); },
       openTeam: function (teamId, taskId) {
         if (window.JavisTeams && window.JavisTeams.open) window.JavisTeams.open(teamId, taskId);
@@ -905,6 +933,9 @@
         : (chay ? ic("loader", { cls: "ic-spin", title: t("ws.running") }) : ic("workflow"))) + '</span>' +
       '<span class="ws-item-text"><strong>' + esc(x.name) + '</strong>' +
       '<small>' + esc(phu) + '</small>' + (S.loai === "agent" ? chipTagHtml(x) : "") + '</span>' +
+      // Huy hiệu việc (Đang làm, Cần bạn): ô riêng ở góc trên, tách hẳn công tắc Auto ở góc dưới (0.142.0).
+      (S.loai === "agent" && S.jc && window.JavisAgentJobs && window.JavisAgentJobs.badgeHtml
+        ? window.JavisAgentJobs.badgeHtml(S.jc[x.slug]) : "") +
       // Dấu ghim đứng NGOÀI khối chữ: trong đó nó bị ellipsis của cái tên cắt mất.
       (x.pinned ? '<span class="ws-item-pin" title="' + esc(t("ws.pinned")) + '">' + ic("pin") + '</span>' : "") +
       '</button>' +
@@ -1642,6 +1673,8 @@
   function roi() {
     active = false; opening++; chatReady(true);
     dongMenu(); traCayThuMuc(); traKhungChat();
+    // Tab Công việc: gỡ trình nghe sự kiện, nhịp hỏi và hẹn tải lại của lần gắn đang sống.
+    if (_congViec) { _congViec.destroy(); _congViec = null; }
     // XOÁ câu đang tìm. S.q sống ở mức module còn ô nhập chết theo DOM của trang, nên giữ lại
     // là lần sau quay vào danh sách đã bị lọc mà ô tìm thì rỗng và đang thu: người dùng thấy
     // cộng sự của mình biến mất, không có gì trên màn hình nói vì sao.
@@ -1665,5 +1698,10 @@
   window.addEventListener("javis:resonance-agents-changed", function () {
     if (!active) return;
     loadResonance().then(function (ok) { if (ok && active && S.loai === "agent") veDanhSach(); });
+    henDemViec();
+  });
+  // Huy hiệu việc trên thẻ trợ lý theo cùng các sự kiện với tab Công việc (gộp nhịp 800ms).
+  ["javis:team-event", "javis:sessions-changed", "javis:agent-jobs-changed"].forEach(function (ev) {
+    window.addEventListener(ev, henDemViec);
   });
 })();
