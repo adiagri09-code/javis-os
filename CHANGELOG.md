@@ -8,7 +8,13 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.129.0] - 2026-10-14
 ### Cải thiện
-- **Trang Nhóm gọn như app chat**, dùng dễ trên điện thoại.
+- **Trang Nhóm gọn như app chat**, dùng dễ trên điện thoại:
+  - khung chat chiếm trọn màn hình, khung soạn một hàng luôn ở đáy;
+  - tin dạng bong bóng (của bạn bên phải, của trợ lý bên trái);
+  - danh sách nhóm có dòng xem trước tin cuối và nhãn Cần bạn.
+- **Việc bị chặn có một nút giải quyết** ngay đầu khung chat. Hết lượt thì bấm **Cho thêm lượt**: Javis nâng đúng giới hạn vừa chạm rồi cho việc chạy tiếp.
+- **Trưởng nhóm tự quyết đến đâu?** Chọn một trong ba mức: Hỏi tôi trước, Tự làm báo tôi, Tự quản cả nhóm. Các con số chi tiết nằm trong mục Nâng cao.
+- **Chữ dễ hiểu hơn:** bỏ các từ nội bộ như "trần", "lượt model"; gọi @ theo tên còn trong chữ, không còn hiện trùng.
 
 ## [0.124.0] - 2026-10-14
 ### Thêm mới

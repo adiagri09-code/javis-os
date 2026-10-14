@@ -9,6 +9,7 @@ from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
+import time
 from pathlib import Path
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-ux-")
@@ -104,6 +105,59 @@ out = r.extend_job(job)
 check("Cho thêm lượt: nâng trần lượt mỗi việc (+6)", out and out["cap"] == "task_turns" and out["value"] == 7, out)
 run(r.dispatch_once())
 check("chạy tiếp tới xong", ts.get_task(job)["status"] == "done", ts.get_task(job)["status"])
+
+# ═════ Review T5 C1: chặn vì trần bước thì bước bị từ chối được giữ lại; Cho thêm lượt thêm lại rồi chạy tới xong ═════
+r, tm, ts, ss, fake, T = world("steps")
+tm.set_caps(T["team_id"], {"task_steps": 2})
+
+
+async def two_assign(req):
+    if req["role"] == "plan":
+        return {"text": 'Chia.\n<!-- JAVIS_TEAM: {"op": "assign", "agent": "minh", "brief": "a"} -->\n'
+                        '<!-- JAVIS_TEAM: {"op": "assign", "agent": "lan", "brief": "b"} -->'}
+    return {"text": "Phần " + req["role"]}
+r.engine_for = lambda team, key, role: ("fake", "fake", two_assign)
+job = r.submit(T["team_id"], "Việc hai người", as_job=True, client_msg_id="s1")["task_id"]
+run(r.dispatch_once())
+t = ts.get_task(job)
+check("C1 kế hoạch giao hai người vượt trần 2 bước: chặn hết lượt", t["block_kind"] == "cap_reached"
+      and t["block_reason"].startswith("Việc đã dùng hết"), t["block_reason"])
+out = r.extend_job(job)
+check("C1 Cho thêm lượt: nâng trần bước đủ chỗ cho hai bước bị từ chối (+4 trên số cần)", out and out["cap"] == "task_steps"
+      and out["value"] == 3 + 4, out)
+run(r.dispatch_once())
+st = [(s["kind"], s["status"]) for s in tm.steps(job)]
+check("C1 chạy tiếp tới xong: hai bước làm được thêm lại, có tổng hợp", ts.get_task(job)["status"] == "done"
+      and st.count(("work", "done")) == 2 and ("synthesize", "done") in st, (ts.get_task(job)["status"], st))
+
+# ═════ Review T5 I1: trần đã chạm không còn chặn nữa (sang ngày mới, chủ đã tự nâng) thì không nâng trần nào ═════
+r, tm, ts, ss, fake, T = world("stale")
+clock = {"t": time.time()}
+r.clock = lambda: clock["t"]
+tm.set_caps(T["team_id"], {"daily_turns": 1})
+run(r.run_replies(r.submit(T["team_id"], "Chào", client_msg_id="d1")))
+job = r.submit(T["team_id"], "Viết", mentions=["minh"], as_job=True, client_msg_id="d2")["task_id"]
+run(r.dispatch_once())
+check("I1 việc chặn vì hết lần trả lời hôm nay", ts.get_task(job)["block_kind"] == "cap_reached")
+clock["t"] += 2 * 86400
+before = dict(tm.get(T["team_id"])["caps"])
+out = r.extend_job(job)
+check("I1 hai ngày sau: Cho thêm lượt không nâng trần nào (kể cả trần bước), chỉ cho việc chạy tiếp",
+      out is not None and out["cap"] is None and tm.get(T["team_id"])["caps"] == before
+      and ts.get_task(job)["status"] == "team_queued"
+      and not any(e["kind"] == "caps_extended" for e in tm.events(T["team_id"])), (out, tm.get(T["team_id"])["caps"]))
+
+# ═════ Review T5 I2: trần bị hạ dưới số đã dùng: nâng từ số đã dùng, không phải từ trần ═════
+r, tm, ts, ss, fake, T = world("below")
+for i in range(3):
+    run(r.run_replies(r.submit(T["team_id"], f"Tin {i}", client_msg_id=f"b{i}")))
+tm.set_caps(T["team_id"], {"daily_turns": 1})
+job = r.submit(T["team_id"], "Viết", mentions=["minh"], as_job=True, client_msg_id="b9")["task_id"]
+run(r.dispatch_once())
+out = r.extend_job(job)
+check("I2 đã dùng 3, trần hạ còn 1: Cho thêm lượt đặt 3 + 20, việc chạy được ngay", out and out["value"] == 23, out)
+run(r.dispatch_once())
+check("I2 việc chạy tới xong, không chặn lại", ts.get_task(job)["status"] == "done", ts.get_task(job)["status"])
 
 # ═════ Toàn quyền đặt số cho trần: nâng trần trong hộp cấp quyền (cả trần tối đa), không đụng trần nhóm ═════
 r, tm, ts, ss, fake, T = world("auth")

@@ -242,7 +242,7 @@
     if (m.task_id) {
       var title = (ctx.taskTitles || {})[m.task_id] || m.task_id;
       head.push('<button type="button" class="tm-tag" data-task="' + esc(m.task_id) + '">' + ic("list-todo") +
-        esc(tw("teams.job_tag", { title: title })) + "</button>");
+        '<span class="tm-tag-text">' + esc(tw("teams.job_tag", { title: title })) + "</span></button>");
     } else if (mine && meta.as_job) {
       head.push('<span class="tm-tag tm-tag-new">' + ic("list-todo") + esc(tw("teams.as_job")) + "</span>");
     }
@@ -265,7 +265,8 @@
     // Nút mở bảng nằm CẠNH bong bóng (không thêm một hàng dưới mỗi tin); bảng mở ra chiếm trọn bề ngang bên dưới.
     var foot = decision, panel = "", side;
     if (mine) {
-      side = '<button type="button" class="tm-more-btn" data-react-open="' + esc(m.id) + '" aria-label="' +
+      // Tin của chủ đã ghim: bảng của nó chỉ có Ghim nên trống; bỏ nút, bỏ ghim bằng nhãn Quyết định (review T5 I5).
+      side = meta.decision ? "" : '<button type="button" class="tm-more-btn" data-react-open="' + esc(m.id) + '" aria-label="' +
         esc(tw("teams.msg_more")) + '" title="' + esc(tw("teams.msg_more")) + '">' + ic("ellipsis-vertical") + "</button>";
       if (open && !meta.decision) panel = ownerPanelHtml(m);
     } else {
@@ -375,21 +376,25 @@
     }).slice(0, 8);
   }
 
-  // Người được gọi là các "@Tên" (hay "@slug") còn trong chữ, theo thứ tự xuất hiện. Sau tên phải là hết chữ hay một ký
-  // tự không phải chữ/số. Hai tên cùng bắt đầu ở một chỗ ("@Lan Anh" và "@Lan") thì lấy tên dài hơn.
+  // Người được gọi là các "@Tên" (hay "@slug") còn trong chữ, theo thứ tự xuất hiện. Trước "@" phải là đầu chữ hay một ký
+  // tự không phải chữ/số (địa chỉ email "ho@lan.vn" không gọi ai); sau tên phải là hết chữ hay ký tự không phải chữ/số/dấu.
+  // So trên chữ đã chuẩn hoá NFC (gõ tổ hợp vẫn khớp). Hai tên cùng bắt đầu ở một chỗ ("@Lan Anh" và "@Lan") thì lấy tên
+  // dài hơn.
   function mentionsFromText(text, members) {
-    var low = String(text || "").toLowerCase();
-    var word = /[\p{L}\p{N}_]/u;
+    var norm = function (s) { s = String(s || ""); return (s.normalize ? s.normalize("NFC") : s).toLowerCase(); };
+    var low = norm(text);
+    var word = /[\p{L}\p{M}\p{N}_]/u;
     var cands = [];
     (members || []).forEach(function (m) {
       if (m.status && m.status !== "active") return;
       [m.name, m.slug].forEach(function (n) {
-        n = String(n || "").trim().toLowerCase();
+        n = norm(n).trim();
         if (!n) return;
         var at = 0, i;
         while ((i = low.indexOf("@" + n, at)) >= 0) {
+          var prev = i ? low.charAt(i - 1) : "";
           var next = low.charAt(i + 1 + n.length);
-          if (!next || !word.test(next)) cands.push({ i: i, len: n.length, key: m.agent_key });
+          if ((!prev || !word.test(prev)) && (!next || !word.test(next))) cands.push({ i: i, len: n.length, key: m.agent_key });
           at = i + 1;
         }
       });
@@ -488,14 +493,19 @@
     return null;
   }
 
+  // Ba mức là một nhóm lựa chọn có tên (fieldset + legend) để trình đọc màn hình đọc câu hỏi kèm từng lựa chọn.
   function levelsHtml(team) {
-    if (!team.leader_key) return '<div class="tm-note-line">' + esc(tw("teams.level_need_leader")) + "</div>";
+    var legend = '<legend class="tm-qhead">' + esc(tw("teams.level_title")) + "</legend>";
+    if (!team.leader_key) {
+      return '<fieldset class="tm-levels">' + legend + '<div class="tm-note-line">' + esc(tw("teams.level_need_leader")) +
+        "</div></fieldset>";
+    }
     var lvl = levelOf(team);
-    return LEVELS.map(function (L) {
+    return '<fieldset class="tm-levels">' + legend + LEVELS.map(function (L) {
       return '<label class="tm-level"><input type="radio" name="tm-level" value="' + L.n + '"' + (lvl === L.n ? " checked" : "") +
         '><span class="tm-level-body"><strong>' + esc(tw(L.key)) + '</strong><span class="tm-level-desc">' + esc(tw(L.desc)) +
         "</span></span></label>";
-    }).join("") + (lvl === "custom" ? '<div class="tm-sub">' + esc(tw("teams.level_custom")) + "</div>" : "");
+    }).join("") + (lvl === "custom" ? '<div class="tm-sub">' + esc(tw("teams.level_custom")) + "</div>" : "") + "</fieldset>";
   }
 
   function usageHtml(team) {
@@ -663,8 +673,7 @@
     ui = ui || {};
     return '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.tab_members")) + "</div>" +
       membersHtml(team, agents, ui.openMember) + "</section>" +
-      '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.level_title")) + "</div>" + levelsHtml(team) +
-      usageHtml(team) + "</section>" +
+      '<section class="tm-sec">' + levelsHtml(team) + usageHtml(team) + "</section>" +
       '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.tab_team")) + "</div>" + settingsFormHtml(team) + "</section>" +
       '<details class="tm-adv"' + (ui.advOpen ? " open" : "") + '><summary class="tm-adv-sum">' + esc(tw("teams.advanced")) +
       '</summary><div class="tm-sub">' + esc(tw("teams.advanced_note")) + "</div>" + capsFormHtml(team) + authorityHtml(team) +
@@ -717,11 +726,12 @@
     return blocked ? { label: tw("teams.needs_you"), n: blocked, warn: true } : { label: tw("teams.tab_jobs"), n: all, warn: false };
   }
 
-  function jobsChipHtml(q) {
+  function jobsChipHtml(q, open) {
     var c = jobsChip(q);
     if (!c) return "";
-    return '<button type="button" class="tm-jobs-chip' + (c.warn ? " tm-jobs-chip-warn" : "") + '" data-open-jobs="1" aria-label="' +
-      esc(c.label + " " + c.n) + '">' + ic("list-todo") + '<span class="tm-chip-label">' + esc(c.label) + "</span>" +
+    return '<button type="button" class="tm-jobs-chip' + (c.warn ? " tm-jobs-chip-warn" : "") + '" data-open-jobs="1" aria-expanded="' +
+      (open ? "true" : "false") + '" aria-label="' + esc(c.label + " " + c.n) + '">' + ic("list-todo") +
+      '<span class="tm-chip-label">' + esc(c.label) + "</span>" +
       '<span class="tm-chip-n">' + c.n + "</span></button>";
   }
 
@@ -755,7 +765,7 @@
       agents: [], asJob: false, pending: null, tab: "jobs", side: false, view: "list", loaded: false,
       filterTask: "", taskTitles: {}, teamNames: {}, note: "", creating: false, skipped: {}, picker: null, draft: null,
       focusPicker: false, focusBack: null, searchOpen: false, searchResults: null, searchQuery: "", jumped: null,
-      openMember: null, advOpen: false, turns: [] };
+      openMember: null, advOpen: false, turns: [], sideOpener: null };
   }
 
   function teamUrl(path) { return "/teams/" + q(S.activeId) + (path || ""); }
@@ -815,12 +825,13 @@
       head.hidden = false;
       head.innerHTML = back + avaHtml(t.name) +
         '<div class="tm-title"><strong>' + esc(t.name) + '</strong><span class="tm-sub">' + esc(lead) + "</span></div>" +
-        jobsChipHtml(S.queue) +
+        jobsChipHtml(S.queue, S.side && S.tab === "jobs") +
         '<button type="button" class="ws-btn tm-icon tm-search-btn" aria-label="' + esc(tw("teams.search")) + '" title="' +
         esc(tw("teams.search")) + '"' + (S.searchOpen ? ' aria-expanded="true"' : ' aria-expanded="false"') + ">" + ic("search") +
         "</button>" +
-        '<button type="button" class="ws-btn tm-icon tm-gear" aria-label="' + esc(tw("teams.settings_btn")) + '" title="' +
-        esc(tw("teams.settings_btn")) + '">' + ic("ellipsis-vertical") + "</button>";
+        '<button type="button" class="ws-btn tm-icon tm-gear" aria-expanded="' + (S.side && S.tab === "team" ? "true" : "false") +
+        '" aria-label="' + esc(tw("teams.settings_btn")) + '" title="' + esc(tw("teams.settings_btn")) + '">' +
+        ic("ellipsis-vertical") + "</button>";
     }
     drawSearch();
     var b = S.el.querySelector(".tm-banners");
@@ -921,6 +932,8 @@
       if (ta) { ta.focus(); try { ta.setSelectionRange(typing.start, typing.end); } catch (e) {} }
       return;
     }
+    // Bảng đang "mở" mà không vẽ ra (tin đã đổi, đã ghim): bỏ trạng thái mở, kẻo tin mới không còn tự cuộn xuống.
+    if (S.picker !== null && !box.querySelector('[data-panel="' + S.picker + '"]')) S.picker = null;
     if ((stick || atEnd) && S.picker === null) box.scrollTop = box.scrollHeight;
     if (S.focusPicker) {
       // Mở bộ chọn: focus vào nút đầu của bảng (bàn phím và trình đọc màn hình vào được bảng, Escape đóng được).
@@ -988,9 +1001,19 @@
     if (send) send.disabled = !h.ok || S.team.status === "archived";
   }
 
-  function drawSide() {
+  // Đang gõ trong một ô chữ của ngăn (tên nhóm, số giới hạn, hộp quyền): đừng vẽ lại ngăn vì một sự kiện nhóm, kẻo mất
+  // chữ đang gõ. Ô chọn (radio, checkbox) không tính: bấm xong vẽ lại là đúng.
+  function typingIn(root) {
+    var a = document.activeElement;
+    if (!a || !root.contains(a)) return false;
+    if (a.tagName === "TEXTAREA" || a.tagName === "SELECT") return true;
+    return a.tagName === "INPUT" && !/^(radio|checkbox|button|submit)$/i.test(a.type || "");
+  }
+
+  function drawSide(force) {
     var side = S.el.querySelector(".tm-side");
     if (!side) return;
+    if (!force && S.side && !side.hidden && typingIn(side)) return;
     side.hidden = !S.side || !S.team || S.creating;
     var page = S.el.querySelector(".tm-page");
     if (page) page.setAttribute("data-side", side.hidden ? "0" : "1");
@@ -1007,7 +1030,8 @@
       : teamTabHtml(S.team, S.agents, { openMember: S.openMember, advOpen: S.advOpen, turns: S.turns });
     side.innerHTML = '<div class="tm-bar tm-side-bar"><div class="tm-tabs" role="tablist">' + tabs + "</div>" +
       '<button type="button" class="ws-btn tm-icon tm-close" aria-label="' + esc(tw("teams.close")) + '" title="' +
-      esc(tw("teams.close")) + '">' + ic("x") + '</button></div><div class="tm-side-body">' + body + "</div>";
+      esc(tw("teams.close")) + '">' + ic("x") + '</button></div><div class="tm-side-body" role="tabpanel" aria-label="' +
+      esc(tw(TAB_KEY[S.tab])) + '">' + body + "</div>";
     var nb = side.querySelector(".tm-side-body");
     if (nb && keep) nb.scrollTop = top;
   }
@@ -1016,10 +1040,14 @@
     drawPage(); drawList(); drawHead(); drawJobs(); drawMsgs(stick); drawComposer(); drawSide();
   }
 
-  function openSide(tab) {
+  // Mở ngăn: nhớ nút đã mở (chip việc, ba chấm, nút trên băng hay thẻ việc) để lúc đóng trả focus về đúng nút đó.
+  function openSide(tab, opener) {
+    if (opener && opener.matches) S.sideOpener = opener.matches(".tm-jobs-chip") ? ".tm-jobs-chip"
+      : opener.matches(".tm-gear") ? ".tm-gear" : null;
     S.side = true;
     S.tab = tab;
-    drawSide();
+    drawSide(true);
+    drawHead();
     if (tab === "team") loadAgents().then(function () { if (S.side && S.tab === "team") drawSide(); });
     var first = S.el.querySelector(".tm-side .tm-tab[aria-selected=\"true\"]");
     if (first) first.focus();
@@ -1027,9 +1055,10 @@
 
   function closeSide() {
     S.side = false;
-    drawSide();
-    var gear = S.el.querySelector(".tm-gear");
-    if (gear) gear.focus();
+    drawSide(true);
+    drawHead();
+    var back = S.el.querySelector(S.sideOpener || ".tm-gear") || S.el.querySelector(".tm-gear");
+    if (back) back.focus();
   }
 
   function learnTitles(qq) {
@@ -1099,7 +1128,9 @@
 
   function loadTurns() {
     if (!S.activeId) return Promise.resolve();
+    var forTeam = S.activeId;
     return call("GET", teamUrl("/turns?since=" + (Date.now() / 1000 - 7 * 86400))).then(function (r) {
+      if (S.activeId !== forTeam) return;
       if (r.code === 200) { S.turns = r.j.turns || []; if (S.side && S.tab === "team") drawSide(); }
     });
   }
@@ -1197,7 +1228,9 @@
     var body = n === 1 ? { mode: "limited", reason: "owner_level_1" } : { mode: "full", grant: grantFor(n) };
     if (n === 1 && was === 1) return;
     call("POST", teamUrl("/authority"), body).then(function (r) {
-      if (r.code === 200) setNote(tw("teams.saved"));
+      // Lỗi: vẽ lại để lựa chọn quay về mức đang áp thật.
+      if (r.code !== 200) { fail(r); drawSide(true); return; }
+      setNote(tw("teams.saved"));
       act(r, drawSide);
     });
   }
@@ -1231,20 +1264,20 @@
     }
     if (t.classList.contains("tm-gear")) {
       if (S.side && S.tab === "team") return closeSide();
-      return openSide("team");
+      return openSide("team", t);
     }
     if (d.openJobs) {
       if (S.side && S.tab === "jobs") return closeSide();
-      return openSide("jobs");
+      return openSide("jobs", t);
     }
-    if (d.openTeam) return openSide("team");
+    if (d.openTeam) return openSide("team", t);
     if (t.classList.contains("tm-close")) return closeSide();
     if (d.tab) {
-      S.tab = d.tab; drawSide();
+      S.tab = d.tab; drawSide(true); drawHead();
       if (d.tab === "team") loadAgents().then(function () { if (S.side && S.tab === "team") drawSide(); });
       return;
     }
-    if (d.expand) { S.openMember = S.openMember === d.expand ? null : d.expand; drawSide(); return; }
+    if (d.expand) { S.openMember = S.openMember === d.expand ? null : d.expand; drawSide(true); return; }
     if (t.classList.contains("tm-create-save")) return createTeam();
     if (t.classList.contains("tm-asjob")) {
       S.asJob = !S.asJob;
@@ -1325,8 +1358,9 @@
     if (d.extend) {
       t.disabled = true;
       return call("POST", teamUrl("/tasks/" + q(d.extend) + "/extend")).then(function (r) {
+        if (r.code !== 200) { fail(r); drawJobs(); loadQueue(); return; }
         // Nhóm đang tạm dừng thì việc chỉ về hàng chờ: nói rõ phải bật lại nhóm, đừng hứa "chạy tiếp".
-        if (r.code === 200) setNote(tw(S.team && S.team.status === "paused" ? "teams.extended_paused" : "teams.extended"));
+        setNote(tw(S.team && S.team.status === "paused" ? "teams.extended_paused" : "teams.extended"));
         act(r);
       });
     }
@@ -1535,6 +1569,8 @@
       if (e.pointerType === "mouse") return;   // chuột đã có nút khi rê; giữ chuột để bôi chữ như thường
       var msg = e.target.closest && e.target.closest(".tm-msg");
       if (!msg || e.target.closest("button, a, input, textarea, select")) return;
+      // Tin của chủ đã ghim: bảng của nó trống (bỏ ghim bằng nhãn Quyết định), khỏi mở.
+      if (msg.classList.contains("tm-msg-owner") && msg.querySelector(".tm-decision")) return;
       stopHold();
       hx = e.clientX; hy = e.clientY;
       hold = setTimeout(function () {

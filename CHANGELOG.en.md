@@ -10,7 +10,13 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.129.0] - 2026-10-14
 ### Improved
-- **The Teams page now works like a chat app**, easy to use on a phone.
+- **The Teams page now works like a chat app**, easy to use on a phone:
+  - the chat fills the screen, with a one-row message box always at the bottom;
+  - messages are bubbles (yours on the right, assistants on the left);
+  - the team list shows the last message and a Needs you badge.
+- **A blocked job has one button that resolves it**, right at the top of the chat. Out of turns? Tap **Allow more turns**: Javis raises exactly the limit that was hit and lets the job continue.
+- **How much can the lead decide alone?** Pick one of three levels: Ask me first, Act then tell me, Run the whole team. The detailed numbers live under Advanced.
+- **Plainer wording:** internal terms are gone; @ follows the names left in your text, with no duplicate chips.
 
 ## [0.124.0] - 2026-10-14
 ### Added

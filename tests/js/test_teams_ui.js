@@ -168,7 +168,7 @@ check("không em dash trong teams.js và chuỗi mới", teamsJs.indexOf(String.
 // Chỉ khoá viết trọn (`tw("teams.x")` hay `tw("teams.x", {...})`); khoá ghép động kiểm riêng ở dưới.
 const used = Array.from(new Set((teamsJs.match(/tw\("(teams\.[a-z0-9_.]+)"[,)]/g) || []).map(function (m) { return m.slice(4, -2); })));
 const dynamic = ["teams.status_active", "teams.status_paused", "teams.status_archived", "teams.tab_members", "teams.tab_jobs",
-  "teams.tab_turns", "teams.tab_settings", "teams.cap.task_turns", "teams.cap.task_steps", "teams.cap.daily_turns", "teams.cap.mentions"]
+  "teams.tab_team", "teams.cap.task_turns", "teams.cap.task_steps", "teams.cap.daily_turns", "teams.cap.mentions"]
   .concat(["failed", "interrupted", "no_leader", "assignee_removed", "no_progress", "cap_reached", "agent_busy_long", "waiting_user"]
     .map(function (k) { return "teams.block." + k; }))
   .concat(["done", "late_cancelled", "late", "old_revision", "member_left", "leader_changed"].map(function (k) { return "teams.status." + k; }));
@@ -433,5 +433,40 @@ check("T5 chữ hiện ra không còn 'trần', 'lượt model', 'Toàn quyền'
       ["teams.block.cap_reached", "teams.queue_empty", "teams.cap.task_turns", "teams.cap.daily_turns", "teams.daily_cap",
         "teams.level_1_desc", "teams.level_2_desc", "teams.level_3_desc", "teams.auth.title", "teams.caps"].every(function (k) {
         return !/trần|lượt model|Toàn quyền/i.test(vi[k]); }));
+
+// ───────────── Review T5 ─────────────
+check("review T5: địa chỉ email không thành @ (tốn một lượt model); @ phải đứng đầu chữ hay sau ký tự không phải chữ",
+      TM.mentionsFromText("gửi ho@lan.vn nhé", mem3).length === 0 && TM.mentionsFromText("(@Lan) xem", mem3).join() === "ag_lan"
+      && TM.mentionsFromText("@lan", mem3).join() === "ag_lan");
+check("review T5: chữ gõ tổ hợp (NFD) vẫn so đúng, dấu rời không bị coi là hết tên",
+      TM.mentionsFromText("@Cũ ơi", [{ agent_key: "ag_x", slug: "x", name: "Cũ", status: "active" }]).join() === "ag_x"
+      && TM.mentionsFromText("@Lañ", mem3).length === 0);
+h = TM.messageHtml({ id: 30, author_kind: "owner", content: "Chốt", meta: { decision: true } }, { members: members, picker: 30 });
+check("review T5 I5: tin của chủ đã ghim không có nút ba chấm (bảng của nó trống)", !h.includes("tm-more-btn"), h);
+check("review T5 I5: nhấn giữ tin của chủ đã ghim không mở bảng; bảng không còn thì bỏ trạng thái mở để tin mới vẫn tự cuộn",
+      /tm-msg-owner"\) && msg\.querySelector\("\.tm-decision"\)\) return;/.test(teamsJs)
+      && /if \(S\.picker !== null && !box\.querySelector\('\[data-panel="' \+ S\.picker \+ '"\]'\)\) S\.picker = null;/.test(teamsJs));
+check("review T5 I4: mô tả mức 3 không hứa bỏ giới hạn", !/không bị chặn|without number limits/i.test(vi["teams.level_3_desc"] + en["teams.level_3_desc"])
+      && vi["teams.level_3_desc"].includes("tự nâng"));
+check("review T5 I3: ngăn kéo bắt đầu dưới thanh trên toàn cục; trang trượt lên theo chiều cao khung nhìn thật",
+      /\.tm-side \{ position: fixed; top: var\(--topbar-h\);/.test(css) && /height: min\(88vh, calc\(var\(--vv-h, 100dvh\) - var\(--topbar-h\) - 12px\)\)/.test(css));
+check("review T5: đang gõ trong ô chữ của ngăn thì sự kiện nhóm không vẽ lại ngăn (mất chữ đang gõ)",
+      /function drawSide\(force\) \{[\s\S]{0,400}if \(!force && S\.side && !side\.hidden && typingIn\(side\)\) return;/.test(teamsJs)
+      && /a\.tagName === "INPUT" && !\/\^\(radio\|checkbox\|button\|submit\)\$\/i\.test/.test(teamsJs));
+check("review T5: Cho thêm lượt lỗi thì vẽ lại dải việc (nút không kẹt tắt); đổi mức lỗi thì vẽ lại lựa chọn",
+      /"\/extend"\)\)\.then\(function \(r\) \{\s*if \(r\.code !== 200\) \{ fail\(r\); drawJobs\(\); loadQueue\(\); return; \}/.test(teamsJs)
+      && /if \(r\.code !== 200\) \{ fail\(r\); drawSide\(true\); return; \}/.test(teamsJs));
+check("review T5: sổ lượt về muộn sau khi đổi nhóm thì bỏ", /function loadTurns\(\) \{[\s\S]{0,200}var forTeam = S\.activeId;[\s\S]{0,200}S\.activeId !== forTeam/.test(teamsJs));
+h = TM.levelsHtml(Object.assign({}, team));
+check("review T5: ba mức là một nhóm lựa chọn có tên (fieldset, legend)", /<fieldset class="tm-levels"><legend class="tm-qhead">/.test(h), h);
+check("review T5: nút mở ngăn có aria-expanded; đóng ngăn trả focus về đúng nút đã mở", /tm-gear" aria-expanded=/.test(teamsJs)
+      && /data-open-jobs="1" aria-expanded=/.test(teamsJs) && /S\.sideOpener/.test(teamsJs) && /role="tabpanel"/.test(teamsJs));
+check("review T5: nhãn việc dài cắt bằng dấu ba chấm ở phần chữ", /class="tm-tag-text"/.test(TM.messageHtml({ id: 31, author_kind: "agent",
+  author_ref: "ag_lan", content: "x", task_id: "t_1", meta: {} }, ctx)) && /\.tm-tag-text \{[^}]*text-overflow: ellipsis/.test(css));
+check("review T5: công tắc thành viên và nút chọn trạng thái đủ 44px trên điện thoại", /\.tm-rs, \.tm-radio \{ min-height: 44px; \}/.test(css));
+const dead = ["teams.empty", "teams.waiting_owner", "teams.running_n", "teams.waiting_n", "teams.retry", "teams.cap_hint",
+  "teams.tab_turns", "teams.tab_settings", "teams.filter_all"];
+check("review T5: bỏ khoá chữ không còn dùng", dead.every(function (k) { return !(k in vi) && !(k in en); }),
+      dead.filter(function (k) { return k in vi || k in en; }).join(","));
 
 process.exit(fails ? 1 : 0);

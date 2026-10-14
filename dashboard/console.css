@@ -2590,7 +2590,11 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .tm-star .ic, .tm-tag .ic, .tm-decision .ic, .tm-late .ic, .tm-pin .ic { margin-right: 3px; }
 .tm-tag { display: inline-flex; align-items: center; border: 1px solid var(--border); background: none; color: var(--accent);
   border-radius: 999px; padding: 0 8px; cursor: pointer; font: inherit; font-size: 12px; white-space: nowrap; max-width: 100%;
-  overflow: hidden; text-overflow: ellipsis; }
+  min-width: 0; }
+/* Nhãn việc dài: cắt bằng dấu ba chấm ở phần chữ (inline-flex không tự cắt). */
+.tm-tag-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-levels { border: none; margin: 0; padding: 0; min-width: 0; }
+.tm-levels > legend { padding: 0; }
 .tm-tag-new { cursor: default; border: none; padding: 0; }
 .tm-text { overflow-wrap: anywhere; font-size: 14px; color: var(--text); line-height: 1.45; }
 .tm-late { display: flex; align-items: center; gap: 2px; font-size: 12px; color: var(--warn-ink); margin-top: 4px; }
@@ -2747,7 +2751,9 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 @media (max-width: 1060px) {
   .tm-page, .tm-page[data-side="0"], .tm-page[data-side="1"] { grid-template-columns: 240px minmax(0, 1fr); }
   /* Ngăn kéo nằm ĐÈ lên khung chat nên phải đặc: --surface-1 là lớp kính mờ, nhìn xuyên thấy tin bên dưới. */
-  .tm-side { position: fixed; top: 0; right: 0; bottom: 0; width: min(400px, 100%); z-index: 40;
+  /* .cview là position:fixed (stacking context riêng) nằm DƯỚI thanh trên toàn cục: ngăn kéo bắt đầu từ mép dưới thanh
+     đó, không thì hàng tab và nút đóng bị thanh trên che (review T5 I3). */
+  .tm-side { position: fixed; top: var(--topbar-h); right: 0; bottom: 0; width: min(400px, 100%); z-index: 40;
     box-shadow: 0 0 24px rgba(0, 0, 0, .25); background: var(--bg); animation: tm-in-right .18s ease; }
   .tm-scrim { display: block; position: fixed; inset: 0; z-index: 39; background: rgba(0, 0, 0, .35); }
   .tm-scrim[hidden] { display: none; }
@@ -2758,13 +2764,14 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   .tm-page[data-view="list"] .tm-chat { display: none; }
   .tm-page[data-view="chat"] .tm-list { display: none; }
   .tm-back { display: inline-flex; }
-  .tm-side { top: auto; left: 0; width: 100%; height: 88vh; border-radius: 16px 16px 0 0; border-left: none; animation: tm-in-up .2s ease; }
+  .tm-side { top: auto; left: 0; width: 100%; height: min(88vh, calc(var(--vv-h, 100dvh) - var(--topbar-h) - 12px));
+    border-radius: 16px 16px 0 0; border-left: none; animation: tm-in-up .2s ease; }
   /* Đầu khung chat một hàng: bỏ ảnh nhóm, chip việc chỉ còn icon kèm số để tên nhóm còn chỗ. */
   .tm-chat-head { padding: 4px 6px; gap: 4px; }
   .tm-chat-head > .tm-ava, .tm-chip-label { display: none; }
   .tm-team, .tm-tab, .tm-back, .tm-gear, .tm-close, .tm-tag, .tm-pin, .tm-sug-item, .tm-actions .ws-btn, .tm-jobs-chip,
   .tm-filter-clear, .tm-banner .ws-btn, .tm-adv-sum, .tm-decision, .tm-jmore { min-height: 44px; }
-  .tm-save, .tm-caps-save, .tm-create-save, .tm-new, .tm-more-teams, .tm-older { min-height: 44px; }
+  .tm-save, .tm-caps-save, .tm-create-save, .tm-new, .tm-more-teams, .tm-older, .tm-rs, .tm-radio { min-height: 44px; }
   .tm-back, .tm-close, .tm-search-btn { min-width: 44px; justify-content: center; }
   .tm-gear { min-width: 44px; }
   .tm-mode { height: 44px; padding: 0 10px; }

@@ -1173,15 +1173,32 @@ class TeamRunner:
             self._state(task["team_id"])
         return "team_blocked"
 
-    def _add_steps(self, team: dict, task: dict, specs: list) -> bool:
-        """Thêm bước nếu không vượt trần bước mỗi việc; vượt thì chặn `cap_reached`, không thêm bước nào."""
-        cap = self._caps(team)["task_steps"]
-        if cap is not None and len(self.teams.steps(task["id"])) + len(specs) > int(cap):
-            self._block(task["id"], "cap_reached", f"Việc đã dùng hết {cap} bước cho phép")
-            return False
+    def _block_cap(self, task: dict, cap: str, reason: str, specs: Optional[list] = None,
+                   continues: Optional[str] = None) -> str:
+        """Chặn `cap_reached` kèm bản ghi trần nào đã chạm và các bước bị từ chối (sự kiện `cap_blocked`), để nút
+        "Cho thêm lượt" nâng đúng trần đó và thêm lại đúng các bước đó (review T5 C1, I1)."""
+        self.teams.log_event(task["team_id"], "cap_blocked", "host", None,
+                             {"task_id": task["id"], "cap": cap, "specs": list(specs or []), "continues": continues})
+        return self._block(task["id"], "cap_reached", reason)
+
+    def _put_steps(self, team: dict, task: dict, specs: list, continues: Optional[str] = None) -> None:
         for s in specs:
             self.teams.add_step(task["id"], team["team_id"], s["kind"], s["agent"], int(s.get("rev") or task["team_rev"]),
                                 s.get("brief", ""), s.get("inputs", []), s.get("parent"))
+        if continues:
+            # Bước tiếp nối một bước đã nhờ hỗ trợ: bước cũ thành `continued`, bước mới (vừa thêm, cuối danh sách) chạy.
+            cont = self.teams.steps(task["id"])[-1]
+            self.teams.set_step_status(continues, "continued", "")
+            self.teams.set_step_status(cont["step_id"], "queued", f"continues:{continues}")
+
+    def _add_steps(self, team: dict, task: dict, specs: list, continues: Optional[str] = None) -> bool:
+        """Thêm bước nếu không vượt trần bước mỗi việc; vượt thì chặn `cap_reached`, không thêm bước nào (các bước bị từ
+        chối được ghi lại để thêm sau khi chủ cho thêm)."""
+        cap = self._caps(team)["task_steps"]
+        if cap is not None and len(self.teams.steps(task["id"])) + len(specs) > int(cap):
+            self._block_cap(task, "task_steps", f"Việc đã dùng hết {cap} bước cho phép", specs, continues)
+            return False
+        self._put_steps(team, task, specs, continues)
         return True
 
     def _recoordinate(self, team: dict, task: dict, step: dict, reason: str) -> Optional[str]:
@@ -1408,7 +1425,7 @@ class TeamRunner:
             self.teams.requeue_step(sid)
             why = ("Nhóm đã dùng hết số lần trả lời hôm nay" if out["cap"] == "daily_turns"
                    else "Việc đã dùng hết số lần trả lời cho phép")
-            return self._block(task["id"], "cap_reached", why)
+            return self._block_cap(task, out["cap"], why)
         if st == "busy_long":
             self.teams.requeue_step(sid)
             return self._block(task["id"], "agent_busy_long",
@@ -1475,12 +1492,10 @@ class TeamRunner:
             if parent:
                 ok = self._add_steps(team, task, [{"kind": parent["kind"], "agent": parent["agent_key"],
                                                    "brief": parent["brief"], "inputs": list(parent["input_refs"]) + [mid],
-                                                   "parent": parent["parent_step"], "rev": parent["job_revision"]}])
+                                                   "parent": parent["parent_step"], "rev": parent["job_revision"]}],
+                                     continues=parent["step_id"])
                 if not ok:
                     return "team_blocked"
-                cont = self.teams.steps(task["id"])[-1]
-                self.teams.set_step_status(parent["step_id"], "continued", "")
-                self.teams.set_step_status(cont["step_id"], "queued", f"continues:{parent['step_id']}")
         return None
 
     async def dispatch_once(self, wait: bool = True) -> list:
@@ -1647,48 +1662,73 @@ class TeamRunner:
                                     last["brief"], last["input_refs"], last["parent_step"])
         return self.tasks.team_unblock(task_id) is not None
 
-    def _hit_cap(self, team: dict, task: dict) -> Optional[str]:
-        """Trần nào đang chặn việc `cap_reached`: lần trả lời trong ngày, lượt của việc, hay số bước. Đọc lại số thật."""
-        waiting = next((s for s in self.teams.steps(task["id"]) if s["status"] == "queued"), None)
-        caps = self._caps(team, waiting["agent_key"] if waiting else None)
-        if caps["daily_turns"] is not None and \
-                self.teams.count_team_turns(team["team_id"], self._day_start()) >= int(caps["daily_turns"]):
-            return "daily_turns"
-        if caps["task_turns"] is not None and self.teams.count_task_turns(task["id"]) >= int(caps["task_turns"]):
-            return "task_turns"
-        # Còn lại chỉ trần bước: chặn khi số bước CỘNG bước định thêm vượt trần, nên số bước hiện có có thể dưới trần.
-        return "task_steps" if caps["task_steps"] is not None else None
+    def _cap_record(self, task: dict) -> Optional[dict]:
+        """Bản ghi `cap_blocked` mới nhất của việc (trần đã chạm, các bước bị từ chối). Mỗi lần chặn ghi bản ghi TRƯỚC khi
+        chặn, nên bản mới nhất là của lần chặn hiện tại. Việc chặn từ trước T5 không có bản ghi: None."""
+        for e in self.teams.events(task["team_id"], 500):
+            a = e.get("after") or {}
+            if e["kind"] == "cap_blocked" and a.get("task_id") == task["id"]:
+                return a
+        return None
+
+    def _cap_usage(self, team: dict, task: dict, pending: int) -> dict:
+        return {"daily_turns": self.teams.count_team_turns(team["team_id"], self._day_start()),
+                "task_turns": self.teams.count_task_turns(task["id"]),
+                "task_steps": len(self.teams.steps(task["id"])) + pending}
+
+    @staticmethod
+    def _binding(cap: str, cur: Any, used: int) -> bool:
+        # Trần bước chặn khi số bước CỘNG bước định thêm vượt trần; trần lượt chặn khi số đã dùng chạm trần.
+        if cur is None:
+            return False
+        return used > int(cur) if cap == "task_steps" else used >= int(cur)
 
     def extend_job(self, task_id: str) -> Optional[dict]:
-        """Nút "Cho thêm lượt" trên việc bị chặn vì hết lượt (T5): chủ nâng ĐÚNG trần đã chạm thêm một nấc (EXTEND_STEP),
-        rồi việc về hàng chờ chạy tiếp. Trần lấy từ Toàn quyền nếu hộp cấp quyền đang đặt số cho trần đó (nâng cả trần
-        tối đa khi cần), không thì trần của nhóm. Không phải việc chặn vì hết lượt thì không làm gì, trả None."""
-        task = self.tasks.get_task(task_id)
-        if not task or task["status"] != "team_blocked" or task.get("block_kind") != "cap_reached":
-            return None
-        team = self._team(task["team_id"])
-        cap = self._hit_cap(team, task)
-        added, value = 0, None
-        if cap:
-            added = EXTEND_STEP[cap]
-            with self.accept_lock:
+        """Nút "Cho thêm lượt" trên việc bị chặn vì hết lượt (T5): nâng ĐÚNG trần đã chạm (bản ghi lúc chặn) lên số đã
+        dùng cộng một nấc (EXTEND_STEP), thêm lại các bước bị từ chối, rồi việc về hàng chờ. Trần lấy từ Toàn quyền nếu
+        hộp cấp quyền đặt số cho trần đó (nâng cả trần tối đa khi cần), không thì trần của nhóm. Trần đó không còn chặn
+        (sang ngày mới, chủ đã tự nâng) thì không nâng gì, chỉ cho chạy tiếp. Mọi bước trong `accept_lock`, nên hai lần
+        bấm cùng lúc chỉ một lần có tác dụng. Không phải việc chặn vì hết lượt thì không làm gì, trả None."""
+        with self.accept_lock:
+            task = self.tasks.get_task(task_id)
+            if not task or task["status"] != "team_blocked" or task.get("block_kind") != "cap_reached":
+                return None
+            team = self._team(task["team_id"])
+            rec = self._cap_record(task) or {}
+            specs = list(rec.get("specs") or [])
+            queued = next((s for s in self.teams.steps(task["id"]) if s["status"] == "queued"), None)
+            caps = self._caps(team, queued["agent_key"] if queued else (specs[0]["agent"] if specs else None))
+            used = self._cap_usage(team, task, len(specs))
+            cap = rec.get("cap")
+            if cap not in EXTEND_STEP:
+                # Chặn từ trước khi có bản ghi: đoán theo số thật. Chặn vì lượt thì bước luôn về hàng chờ, nên không có
+                # bước nào chờ mới có thể là trần bước.
+                cap = next((k for k in ("daily_turns", "task_turns") if self._binding(k, caps[k], used[k])), None)
+                if cap is None and queued is None:
+                    cap = "task_steps"
+            added = value = None
+            if cap and self._binding(cap, caps[cap], used[cap] + (1 if cap == "task_steps" and not specs else 0)):
+                added = EXTEND_STEP[cap]
                 auth = self.teams.active_authority(team["team_id"])
-                g = ((auth or {}).get("grant") or {}).get("caps") or {}
-                gv = g.get(cap)
+                gv = (((auth or {}).get("grant") or {}).get("caps") or {}).get(cap)
                 if auth and isinstance(gv, int) and not isinstance(gv, bool):
-                    value = gv + added
+                    value = max(gv, used[cap]) + added
                     ceil = ((auth.get("grant") or {}).get("ceilings") or {}).get(cap)
                     raise_ceil = {cap: value} if isinstance(ceil, int) and ceil < value else None
                     self.teams.update_authority_caps(auth["id"], {cap: value}, "owner", ceilings=raise_ceil)
                 else:
-                    value = int(team["caps"][cap]) + added
+                    value = max(int(team["caps"][cap]), used[cap]) + added
                     self.teams.set_caps(team["team_id"], {cap: value})
-            self.teams.log_event(team["team_id"], "caps_extended", "owner", None,
-                                 {"task_id": task_id, "cap": cap, "added": added, "value": value})
-            self._system(team, EXTEND_TEXT[cap].format(n=added, title=task["title"]), "caps_extended")
-        self.tasks.team_unblock(task_id)
+                self.teams.log_event(team["team_id"], "caps_extended", "owner", None,
+                                     {"task_id": task_id, "cap": cap, "added": added, "value": value})
+                self._system(team, EXTEND_TEXT[cap].format(n=added, title=task["title"]), "caps_extended")
+            else:
+                cap = None
+            if specs:
+                self._put_steps(team, task, specs, rec.get("continues"))
+            self.tasks.team_unblock(task_id)
         self._state(team["team_id"])
-        return {"cap": cap, "added": added, "value": value}
+        return {"cap": cap, "added": added or 0, "value": value}
 
     def usage(self, team_id: str) -> dict:
         """Số lần trả lời nhóm đã dùng hôm nay và giới hạn đang áp (None là không giới hạn), cho dòng "Hôm nay đã dùng"."""
