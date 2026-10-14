@@ -5129,6 +5129,9 @@ async def settings_set(section: str = Form(...), data: str = Form("{}")):
         if "reasoning" in patch:
             r = patch["reasoning"]
             m["reasoning"] = r if r in engine.REASONING_LEVELS else "off"
+        # Fast mode (tia sét ở khung gõ, 0.148.0). Đường POST này nuốt khoá lạ nên phải có nhánh riêng.
+        if "fast" in patch:
+            m["fast"] = patch["fast"] is True
         # Legacy trực tiếp (tương thích ngược)
         for k in ("engine", "claude_model", "openrouter_model"):
             if k in patch:
@@ -7505,6 +7508,26 @@ def _md_hong_ghi_sach(broot: str, sach: bool) -> None:
     except Exception as e:
         print(f"[md-hong] không ghi được dấu đã soi: {type(e).__name__}: {e}", file=sys.stderr)
 
+
+
+@app.get("/files/resolve")
+async def files_resolve(brain: str = Query("brain"), path: str = Query("")):
+    """Đường dẫn TUYỆT ĐỐI của một file có sẵn trong brain, cho mục "Chọn file trong brain" của
+    menu "+" ở khung gõ (0.148.0). `path` tính theo trần như /files/search trả về. Chỉ nhận file
+    thật nằm trong gốc brain (chặn `..`, đường tuyệt đối, symlink trỏ ra ngoài)."""
+    rel = (path or "").strip().replace("\\", "/")
+    if not rel or rel.startswith("/") or re.match(r"^[A-Za-z]:", rel):
+        return JSONResponse({"ok": False, "error": "path"}, status_code=400)
+    root = Path(_files_root(brain)).resolve()
+    broot = Path(_brain_root(brain)).resolve()
+    try:
+        p = (root / rel).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return JSONResponse({"ok": False, "error": "not_found"}, status_code=400)
+    if not p.is_file() or (p != broot and broot not in p.parents):
+        return JSONResponse({"ok": False, "error": "outside"}, status_code=400)
+    kind = "image" if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp") else "file"
+    return {"ok": True, "path": str(p), "name": p.name, "size": p.stat().st_size, "kind": kind}
 
 @app.get("/files/md-hong")
 async def files_md_hong(brain: str = Query("brain"), force: str = Query("")):
