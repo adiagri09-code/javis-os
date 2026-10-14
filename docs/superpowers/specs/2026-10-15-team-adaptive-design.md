@@ -4,7 +4,7 @@ Ngày: 15/10/2026. Nền: `main` `1d1b52fa` (0.151.0). Lệnh gốc: `exports/re
 2). Rà hiện trạng: bốn bản recon (T1, reaction, heartbeat, phán xử) tóm ở mục 1. T1 làm song song theo thiết kế team chat đã
 duyệt (`2026-10-13-team-chat-design.md`) và không phụ thuộc tài liệu này.
 
-Tài liệu này là **một** thiết kế cho toàn phần bổ sung, để review một lần. Mọi số trong tài liệu là **tham số khởi tạo có
+**Bản 2** (sửa theo review độc lập vòng 1, xem mục 15). Tài liệu này là **một** thiết kế cho toàn phần bổ sung, để review một lần. Mọi số trong tài liệu là **tham số khởi tạo có
 phiên bản**, không phải kết luận nghiên cứu; chúng được kiểm bằng test đồng hồ giả và chỉ được chỉnh có bằng chứng.
 
 ## 0. Thay đổi so với tài liệu cũ (nói rõ, không âm thầm)
@@ -36,364 +36,462 @@ phiên bản**, không phải kết luận nghiên cứu; chúng được kiểm
 
 ## 2. Khái niệm chung
 
-- **Agent:** định danh bền `agent_key` do host cấp (`resonance_agents`). Mọi bảng mới khoá theo `agent_key`, không theo slug.
-- **Ngữ cảnh (`context_ref`):** `team:<team_id>` hoặc `dm:<session_id>` (chat riêng với agent). Phần chung theo agent dùng
-  `context_ref = "*"`. Dữ liệu, quyết định, bài học và nhịp có phạm vi ngữ cảnh; không đưa nội dung của ngữ cảnh này vào
-  prompt ngữ cảnh khác.
-- **Sự kiện nguồn:** mọi tác động (lý do thức, tín hiệu hữu ích, ghi nhận đóng góp, bài học) trỏ về một `source_ref` duy nhất
-  (vd `rx:dm:<log_id>`, `rx:team:<log_id>`, `decision:<id>`, `step:<id>`). Một nguồn chỉ có một tác động mỗi loại (UNIQUE).
+- **Agent:** định danh bền `agent_key` do host cấp (`resonance_agents`). Mọi bảng mới khoá theo `agent_key`, không theo slug; API
+  của giao diện nhận slug nhưng host đổi sang `agent_key` đang hoạt động trước khi đọc/ghi (slug có thể bị dùng lại).
+- **Ngữ cảnh (`context_ref`):** `team:<team_id>` hoặc `dm:<session_id>` (chat riêng với agent, kênh `agent:<slug>`). Phần tổng hợp
+  theo agent dùng `context_ref = "*"` (chỉ để hiển thị và khởi tạo). Không đưa nội dung của ngữ cảnh này vào prompt ngữ cảnh khác.
+- **Câu trả lời ở trang Trò chuyện chính** (không có agent, tác giả là Javis): có sáu reaction để lưu và hiển thị (`agent_key`
+  rỗng); không vào ước lượng hữu ích hay phán xử của agent nào.
+- **Sự kiện nguồn:** mọi tác động trỏ về một `source_ref` duy nhất (`rx:dm:<log_id>`, `rx:team:<log_id>`, `decision:<id>`,
+  `step:<id>`, `seen:<context>:<message_id>`). Mỗi loại tác động có chỉ mục duy nhất theo `source_ref`.
+- **Kho nào chứa gì (không có giao dịch xuyên kho):**
+
+| Kho | Bảng mới / cột mới |
+|---|---|
+| `conversations.db` (tin chat riêng) | `dm_reactions`, `dm_reaction_log` |
+| `team.sqlite3` | cột mới của `team_reactions`, `team_reaction_log` (mục 4.1) |
+| `resonance.sqlite3` | `agent_calls`, `agent_wake_reasons`, `agent_wake_sources`, `agent_pulse`, `agent_pulse_events`, `pulse_signals`, `pulse_contrib`, `message_seen`, `agent_lessons`, `agent_lesson_events`, `agent_peer_feedback` |
+| `agent_judge.sqlite3` (mới, dữ liệu nội bộ, tách khỏi kho phán xử khách Zalo) | `profiles`, `decisions`, `offsets`, `cases`, `waits`, `changes`, `review_state` |
+
 - **Cộng hưởng (công tắc theo agent) và phạm vi:**
 
 | Năng lực | Cộng hưởng tắt | Cộng hưởng bật |
 |---|---|---|
 | Trả lời lời gọi trực tiếp, làm việc được giao, việc nhóm | Có | Có |
-| Phán xử nói/chờ/im trong nhóm đang tham gia (chính sách hiện có, đóng băng) | Có | Có |
+| Phán xử nói/chờ/im khi tham gia nhóm (chính sách hiện có, đóng băng) | Có | Có |
 | Lưu và hiển thị reaction | Có | Có |
-| Lý do xem xét từ reaction, học chính sách, tự rà soát | Không | Có |
-| Heartbeat thích nghi (nhịp chủ động, ngủ, tự tìm việc) | Không | Có |
-| Nhắc tiếp chủ động trong chat riêng | Không | Có |
+| Lý do xem xét từ reaction, nhãn dạy phán xử làm đổi ngưỡng, tự rà soát, tự áp bài học | Không (nhãn chỉ lưu) | Có |
+| Heartbeat thích nghi: nhịp chủ động, ngủ, tự tìm việc, nhắc tiếp trong chat riêng | Không | Có |
 
-  Bật lại: ghi `resumed_at`; phản hồi trước mốc chỉ là **bằng chứng/ngữ cảnh**, không tạo lượt bù, không đặt lại ngân sách.
+  **Bật lại:** host ghi `resumed_at = now` vào `agent_pulse` mọi ngữ cảnh của agent. Mọi bộ đếm kích hoạt (lý do xem xét, tự rà
+  soát, đếm nhãn, đếm tín hiệu mới) chỉ tính sự kiện **sau** `resumed_at`; phản hồi trước mốc chỉ là bằng chứng/ngữ cảnh, không tạo
+  lượt bù, không đặt lại ngân sách. Đường bật bằng lệnh trưởng nhóm (Toàn quyền) cũng ghi `resumed_at` và gọi `wake_agent_goals`
+  như đường của chủ.
 
-## 3. Sổ lượt chung theo agent (nền cho T2-T4)
+## 3. Sổ lượt chung, vòng đời lý do, khoá theo agent
 
-Bảng mới `agent_calls` trong `resonance.sqlite3` (cùng kho với `resonance_agents`):
+### 3.1 `agent_calls` (resonance.sqlite3)
 
-`id, agent_key, brain_id, context_ref, purpose (reply|step|judge|review|proactive|learn|goal), reason_ref UNIQUE, engine, model,
-status (reserved|running|ok|error|refunded), tokens_in, tokens_out, cost_usd, mirror_ref, created_at, settled_at`
+`id, agent_key, brain_id, context_ref, purpose (reply|step|judge_batch|review|proactive|scan|reaction_review), reason_ref,
+attempt, engine, model, status (reserved|running|ok|error|refunded|interrupted), tokens_in, tokens_out, cost_usd, mirror_ref,
+created_at, settled_at`. Chỉ mục duy nhất **từng phần**: `UNIQUE(reason_ref) WHERE status IN ('reserved','running','ok')`. Một lý
+do chỉ có tối đa một lượt đang hoặc đã chạy thành công; lượt `refunded`/`interrupted`/`error` không giữ khoá nên thử lại được
+(attempt + 1).
 
-- Một `reason_ref` chỉ mở **một** lượt (UNIQUE): lý do goal A2, lý do chủ động lớp 3 và lý do reaction cùng nguồn không thể
-  nhân thành ba lượt (GOAL 12.15).
-- Lượt nhóm vẫn ghi `team_turns` (trần ngày của nhóm giữ nguyên) và ghi **bản phản chiếu** vào `agent_calls`
-  (`mirror_ref = team_turn:<id>`), để thẻ agent đếm đúng tổng. Goal A2 ghi `mirror_ref = goal_call:<id>`. Lượt phán xử, tự
-  rà soát, chủ động là lượt riêng ghi thẳng vào `agent_calls` và tính vào trần tương ứng (mục 9).
-- Giữ chỗ trước, chốt sau, hoàn khi chưa tới mốc gọi engine (cùng hợp đồng R4 của T1). Restart: lượt `reserved` cũ hơn mốc khởi
-  động được hoàn; `running` thành `error/interrupted`, không chạy lại tự động.
+- Lượt nhóm (trả lời, bước việc) ghi `team_turns` như hiện nay (trần ngày nhóm giữ nguyên) và ghi **bản phản chiếu** sau khi chốt
+  (`mirror_ref = team_turn:<id>`). Ghi phản chiếu lỗi **không** làm hỏng lượt nhóm; lúc khởi động có bước đối soát dựng lại phản
+  chiếu thiếu từ `team_turns`. Lượt goal A2 phản chiếu `mirror_ref = goal_call:<id>` theo cùng cách.
+- Trần chung server `_under_ceiling` hiện cộng `goals.calls_used` và `call_ledger`; nay cộng thêm `agent_calls WHERE mirror_ref =
+  ''` (lượt chỉ có ở sổ mới: phán xử, xem xét, chủ động, quét), để không đếm hai lần lượt goal.
+
+### 3.2 Vòng đời lý do thức theo agent (`agent_wake_reasons`)
+
+`id, agent_key, context_ref, code (reaction_review|related_review|proactive_due|scan_due|wait_unblocked), status (pending|claimed|
+served|superseded|failed), attempt, ledger_ref, created_at, updated_at`; nguồn ở `agent_wake_sources(reason_id, source_ref UNIQUE,
+added_at, removed_at)`. Chỉ mục duy nhất `(agent_key, context_ref, code) WHERE status IN ('pending','claimed')`: một lý do đang mở
+mỗi loại mỗi ngữ cảnh, gom mọi nguồn mới vào.
+
+`pending → claimed` (CAS, giữ chỗ `agent_calls`) `→ served` chỉ khi lượt chốt `ok`; `interrupted/refunded/error → pending`
+(attempt + 1), quá 3 lần → `failed` (hiển thị, chủ bấm thử lại). Nguồn bị bỏ (reaction gỡ) khi lý do còn `pending`: đánh
+`removed_at`; lý do không còn nguồn nào → `superseded`.
+
+### 3.3 Định tuyến chuẩn khi một sự kiện thuộc nhiều lớp
+
+- Reaction trên tin có `goal_id` (tin báo goal, hoặc tin trong chat riêng gắn goal): chỉ tạo lý do `feedback` của goal ở **A2**
+  (`wake_reasons` hiện có, `source_ref = rx:...`); lớp 3 chỉ ghi **tín hiệu** hữu ích, không tạo lý do riêng.
+- Reaction trên tin không gắn goal: lớp 3 tạo lý do `reaction_review`.
+- `effective_due` (mục 5.1) bỏ qua agent đang có lượt A2 hoặc lượt nhóm chạy (khoá bận, 3.4) và dời 60 giây.
+
+### 3.4 Khoá bận dùng chung theo agent
+
+Khoá `agent_busy` hiện có (team_store, có gia hạn từ T1) trở thành khoá của **mọi** lượt mang persona agent: lượt nhóm, chủ động,
+xem xét reaction, quét việc, và lượt goal A2. Lượt A2 gặp khoá bận thì dời 30 giây (không tính là lỗi). Lượt phán xử theo lô không
+mang persona nên không lấy khoá.
+
+### 3.5 Outbox: ghi reaction rồi chiếu tác động (không giao dịch xuyên kho)
+
+Ghi reaction (kho của reaction) kèm `effect_state = 'pending'` trên dòng nhật ký. Bộ chiếu `feedback_projector.project(log_row)`
+idempotent theo `source_ref` (UNIQUE ở `agent_wake_sources` và `pulse_signals`): tạo/gom lý do, ghi tín hiệu, rồi đặt `effect_state =
+'done'` và `effect_refs_json`. Bộ chiếu chạy ngay sau khi ghi (cùng request, nếu lỗi thì bỏ qua) và chạy lại mỗi nhịp pulse và lúc
+khởi động cho mọi dòng còn `pending`. Trạng thái hiển thị trên reaction cũng do bộ chiếu ghi ngược sau khi lý do đổi trạng thái.
 
 ## 4. T2: sáu reaction ở chat riêng và chat nhóm
 
 ### 4.1 Dữ liệu
 
-- **Bảng dùng chung cho chat riêng** `dm_reactions` trong `conversations.db` (cùng kho tin nhắn, để join theo `message_id` bền):
-  `session_id, message_id, reactor, source_kind (owner|leader|member), agent_key, agent_config_version, value (like|heart|
-  haha|wow|sad|angry|NULL), reasons_json, axis (speak_ok|should_speak|should_silent|''), comment, content_sha, status, status_reason,
-  goal_id, revision, updated_at, PRIMARY KEY(session_id, message_id, reactor)`; nhật ký `dm_reaction_log` gồm cả giá trị trước,
-  `nonce UNIQUE`, `effect_refs_json`.
-- **Team giữ bảng hiện có** và thêm cột qua `ALTER`: `source_kind`, `axis`, `status`, `status_reason`; `team_reaction_log` thêm
-  `agent_key`, `task_id`, `prev_value`, `effect_refs_json`. Không đổi khoá, không đổi ngữ nghĩa thay-cả-trạng-thái và luật
-  nonce của T2.
-- `content_sha` tính trên **nội dung đã lưu** (sau khi bỏ khối điều khiển). Client gửi kèm `seen_sha` (sha nội dung đang
-  hiển thị); lệch thì lưu cờ `stale=1` và vẫn nhận (chủ thả lên bản cũ là sự thật cần giữ).
-- **Nguồn phản hồi do host gán:** `owner` qua route dashboard (cookie); `leader`/`member` chỉ qua lệnh có cấu trúc trong lượt
-  của agent (`{"op":"react","message_id":..,"value":..}`), host lấy danh tính từ lượt đang chạy. Agent không thả lên tin của
-  chính mình. Reaction của agent **không** vào ước lượng hữu ích (chống tự thưởng, mục 6.5); chỉ là góp ý cộng tác.
+- `dm_reactions` (conversations.db): `session_id, message_id, reactor, source_kind (owner|leader|member), agent_key,
+  agent_config_version, value (like|heart|haha|wow|sad|angry|NULL), reasons_json, axis (should_speak|should_silent|''), comment,
+  content_sha, seen_sha, stale, goal_id, revision, status, status_reason, updated_at, PRIMARY KEY(session_id, message_id, reactor)`;
+  `dm_reaction_log(id, session_id, message_id, reactor, prev_json, next_json, nonce UNIQUE, effect_state, effect_refs_json,
+  created_at)`.
+- Team: `ALTER TABLE team_reactions ADD` `source_kind TEXT NOT NULL DEFAULT 'owner'`, `axis TEXT NOT NULL DEFAULT ''`, `status TEXT
+  NOT NULL DEFAULT 'received'`, `status_reason TEXT NOT NULL DEFAULT ''`, `seen_sha TEXT`, `stale INTEGER NOT NULL DEFAULT 0`;
+  `team_reaction_log ADD` `agent_key`, `task_id`, `prev_json`, `effect_state TEXT NOT NULL DEFAULT 'done'`, `effect_refs_json`. Dòng
+  cũ coi như đã chiếu xong (không backfill tác động). Cột mới đều có mặc định nên bản cũ vẫn chạy trên kho đã nâng.
+- `content_sha` tính trên nội dung đã lưu (sau khi bỏ khối điều khiển). `seen_sha` do client gửi; lệch thì `stale = 1`, vẫn nhận.
+- Nguồn do host gán: `owner` qua route dashboard; `leader`/`member` chỉ qua lệnh có cấu trúc trong lượt của agent
+  (`{"op":"react","message_id":..,"value":..}`), host lấy danh tính từ lượt; không thả lên tin của chính mình. Reaction của agent
+  không vào ước lượng hữu ích (chống tự thưởng), chỉ là góp ý cộng tác.
+- Chống trùng: client sinh `nonce` một lần cho mỗi thao tác và **dùng lại** khi thử lại sau lỗi mạng.
 
 ### 4.2 Giao diện
 
-- Bảng sáu emoji, `nextReaction`, chip, bộ chọn và nhấn giữ chuyển vào **một** module `dashboard/reactions.js`, dùng cho
-  `teams.js` và chat riêng (`app.js` bong bóng trả lời, bong bóng đang stream sau khi chốt, lịch sử).
-- Bong bóng mang `data-mid`: lịch sử lấy `m.id`; lượt mới nhận `message_id` qua gói `turn_saved` phát **sau** `_persist_turn`
-  (hàm trả mã tin đã lưu). Trước khi có mã: nút reaction ẩn, không cho thả lên tin chưa lưu.
-- Lý do chất lượng (sáu lý do T2) và trục thứ hai "Đáng lẽ nên nói" / "Nên im (chen ngang)" là hai nhóm chip riêng; góp ý chữ
-  tuỳ chọn. Không lý do nào bắt buộc.
-- Nhiều tab: gói WS `chat_reaction {session_id, message_id, state}` (chat riêng) và `team_message` (đã có); khung lọc theo việc
-  của nhóm cũng nhận gói (sửa lỗ hổng recon).
-- Trạng thái hiển thị dưới chip, chỉ theo host: Đã nhận, Chờ xem xét, Đang xem xét, Đã điều chỉnh, Không cần đổi (kèm lý do
-  ngắn). Agent tắt Cộng hưởng: chỉ "Đã nhận (Cộng hưởng tắt: chỉ lưu)".
-- Điện thoại: nút luôn hiện (hover: none), vùng chạm 44px, chữ 16px.
+- Bảng sáu emoji, `nextReaction`, chip, bộ chọn, nhấn giữ chuyển vào `dashboard/reactions.js` (bảng sáu emoji duy nhất của repo;
+  `test_icons` đổi phạm vi ngoại lệ sang file này). `teams.js`, `app.js` (bong bóng trả lời, bong bóng stream sau khi chốt, lịch sử)
+  và `mobile-chat.js` dùng chung.
+- Bong bóng mang `data-mid`: lịch sử lấy `m.id`; lượt mới nhận `message_id` qua gói `turn_saved` phát sau `_persist_turn` (hàm trả mã
+  tin). Chưa có mã thì chưa có nút reaction.
+- Hai nhóm chip riêng: sáu lý do chất lượng (T2) và trục "Đáng lẽ nên nói" / "Nên im (chen ngang)"; góp ý chữ tuỳ chọn; không bắt
+  buộc gì để thả emoji.
+- Nhiều tab: gói WS `chat_reaction` (chat riêng) và `team_message` (đã có); khung lọc theo việc của nhóm cũng nhận gói.
+- Trạng thái dưới chip theo host: Đã nhận; Chờ xem xét; Đang xem xét; Đã điều chỉnh; Không cần đổi; Chờ hạn mức (mỗi trạng thái có
+  lý do ngắn). Agent tắt Cộng hưởng: "Đã nhận, Cộng hưởng tắt nên chỉ lưu".
+- Điện thoại: nút luôn hiện, vùng chạm 44px, chữ 16px.
 
 ### 4.3 Hiệu lực
 
-- Ghi reaction và tác động trong **một giao dịch**: nếu agent bật Cộng hưởng và `created_at >= resumed_at` thì upsert **một** lý
-  do xem xét đang chờ cho (agent, ngữ cảnh) (`agent_wake_reasons`, chỉ mục duy nhất trên `(agent_key, context_ref, code) WHERE
-  status='pending'`); lý do gom danh sách `source_refs`. Nhiều lần bấm liên tiếp: một lý do, không lượt model nào trong lúc bấm.
-- Đổi/bỏ reaction: nhật ký ghi trước/sau; nếu lý do còn chờ thì bỏ nguồn đó khỏi lý do (lý do rỗng thì chuyển `superseded`);
-  nếu đã xem xét thì tín hiệu cũ được đánh `superseded_by` và lần tính sau dùng giá trị mới (mục 6.4). Không giữ tác động kép.
-- Emoji không chốt đạt, không đổi ưu tiên, không cấp quyền, không đổi trạng thái việc/goal (test kiểu TC29 cho cả chat riêng).
-- Phản hồi vào lượt kế tiếp của agent trong **đúng ngữ cảnh** như khối phản hồi T2 (`_feedback_lines`), có ghi chú emoji là
-  cảm xúc. Chat riêng thêm cùng khối vào lời nhắc của lượt `agent:<slug>` kế tiếp.
-- Ranh giới T2/T3: T2 tạo lý do và trạng thái "Chờ xem xét"; bộ xử lý lý do thật (lần xem xét, quyết định giữ/hỏi/sửa/rút kinh
-  nghiệm) là T3. Gói nghiệm thu cuối chạy xuyên T2 → T3 trên host thật với engine giả.
+- Định tuyến theo 3.3, ghi qua outbox 3.5, chỉ khi agent bật Cộng hưởng và sự kiện sau `resumed_at`.
+- Đổi/bỏ: nhật ký trước/sau; nguồn trong lý do còn chờ bị gỡ; tín hiệu đã ghi chuyển `superseded_by` (mục 6.3).
+- Emoji không chốt đạt, không đổi ưu tiên, không cấp quyền, không đổi trạng thái việc/goal (test cho cả chat riêng).
+- Khối phản hồi (như `_feedback_lines` T2, có ghi chú "emoji là cảm xúc") vào lượt kế tiếp của agent trong **đúng ngữ cảnh**; chat
+  riêng thêm khối này vào lời nhắc của lượt `agent:<slug>`.
+
+### 4.4 Lượt xem xét reaction (bộ xử lý thật, T3; T2 chỉ tạo lý do)
+
+Khi lý do `reaction_review` được phục vụ: host dựng lời nhắc gồm tin bị phản hồi, các reaction/lý do/góp ý trong nguồn của lý do,
+và yêu cầu đầu ra có cấu trúc:
+
+`{"outcome": "keep"|"ask_back"|"revise"|"lesson", "message": "...", "lesson": {"text": "...", "kind": "presentation"|"method"},
+"consumed": ["rx:..."], "reason": "..."}`
+
+- `keep`: không gửi gì. `ask_back`: gửi **một tin mới** hỏi lại, trả lời tin bị phản hồi. `revise`: gửi một tin mới là bản sửa (không
+  sửa đè tin cũ), chỉ trong phạm vi được phép của ngữ cảnh (chat riêng; nhóm thì qua phán xử như mọi tin tự phát). `lesson`: ghi bài
+  học có phạm vi ngữ cảnh (mục 8), có thể kèm `keep`.
+- Host kiểm `consumed ⊆ nguồn của lý do`; sai cấu trúc hay `consumed` lệch: lượt `error`, lý do về `pending` (3.2).
+- Trạng thái: `keep` → "Không cần đổi"; `ask_back`/`revise`/`lesson` → "Đã điều chỉnh". Ghi trên mọi reaction trong `consumed`.
+- Bằng chứng tác động: quyết định ghi vào `agent_pulse_events`; bài học mới xuất hiện trong lời nhắc lượt sau của đúng ngữ cảnh (test
+  kiểm prompt kế tiếp chứa bài học và mã nguồn).
 
 ## 5. T3: heartbeat thích nghi (lớp 3)
 
-### 5.1 Một nơi quyết định lịch
+### 5.1 Một nơi quyết định lịch, chạy ngoài tick goal
 
-Lớp 1 (lease) và lớp 2 (goal A2) giữ nguyên. Lớp 3 là module thuần mới `server/agent_pulse.py` (policy `pulse.v1`) và kho
-trong `resonance.sqlite3`. Lịch chạy là **một bước** thêm vào `_resonance_tick` (sau `resonance.tick`), không scheduler thứ hai.
-Hàm `effective_due(agent, context)` hợp nhất: lịch chủ động lớp 3, lý do xem xét đang chờ (`agent_wake_reasons`), và **không**
-đụng `wake_reasons` của goal. Lịch trách nhiệm (goal, hạn chót, Kanban, nhắc hẹn) chạy theo nguồn của nó, không bị lớp 3 làm
-chậm; lớp 3 chỉ quyết định khi nào agent **tự** xem xét/chủ động.
+Module thuần `server/agent_pulse.py` (policy `pulse.v1`). Một coroutine nhịp 30 giây **riêng** trong `_scheduler_loop` (cờ bận
+riêng, không nằm trong `_resonance_tick`), chỉ làm việc nhanh bằng code: chiếu outbox còn chờ, tìm `agent_pulse.next_due_at <= now`
+và lý do `pending`, nhận lịch bằng CAS, rồi **spawn** lượt cần model ra tác vụ riêng (giữ chỗ sổ lượt trước). `effective_due(agent,
+context)` hợp nhất lịch chủ động và lý do đang chờ của lớp 3; không đụng `wake_reasons` của goal. Lịch trách nhiệm (goal, hạn chót,
+Kanban, nhắc hẹn) chạy theo nguồn của nó, không bị lớp 3 làm chậm.
 
-### 5.2 Trạng thái và chuyển trạng thái (theo agent x ngữ cảnh)
+### 5.2 Trạng thái (theo agent x ngữ cảnh)
 
-Thang nhịp (bậc): `B0 15 phút, B1 1 giờ, B2 4 giờ, B3 1 ngày, B4 3 ngày, B5 1 tuần, B6 2 tuần, B7 1 tháng`, trên B7 là ngủ đông
-(không có lịch chủ động, chỉ thức theo sự kiện). Bậc khởi tạo B3 (1 ngày) cho ngữ cảnh mới; thẻ agent hiển thị bậc từng ngữ cảnh.
+Thang bậc: `B0 15 phút, B1 1 giờ, B2 4 giờ, B3 1 ngày, B4 3 ngày, B5 1 tuần, B6 2 tuần, B7 1 tháng`, trên B7 là ngủ đông (không có
+lịch chủ động). Bậc khởi tạo B3.
 
 | Trạng thái | Nghĩa | Vào khi | Ra khi |
 |---|---|---|---|
-| `active` | bậc B0-B2 | ước lượng hữu ích cao và đủ tin | tụt bậc dưới B2 |
-| `awake` | bậc B3-B4 | mặc định, hoặc vừa thức lại | lên/xuống bậc |
-| `slowed` | bậc B5-B7 | ít nhu cầu hoặc tương tác chủ động không hữu ích có bằng chứng | lên bậc |
-| `hibernating` | quá B7 | B7 qua hai kỳ liền không cơ hội/không tín hiệu | sự kiện thức |
-| `waiting_owner` | chờ chủ quyết | phán xử/việc cần chủ | chủ trả lời, huỷ |
+| `active` | bậc B0-B2 | lên bậc tới B2 | xuống dưới B2 |
+| `awake` | bậc B3-B4 | mặc định, hoặc thức lại | đổi bậc |
+| `slowed` | bậc B5-B7 | xuống tới B5 | lên bậc |
+| `hibernating` | sau B7 | ở B7 qua hai kỳ liền không tín hiệu, không cơ hội | sự kiện thức |
+| `waiting_owner` | chờ chủ | phán xử/việc cần chủ quyết | chủ trả lời/huỷ; nhắc một lần sau 24 giờ rồi giữ nguyên |
 | `paused` | chủ tạm dừng | chủ bấm Tạm dừng | chủ bấm Tiếp |
-| `off` | Cộng hưởng tắt | tắt | bật (về `awake` B3, ghi `resumed_at`) |
+| `off` | Cộng hưởng tắt | tắt | bật (về bậc B3, `resumed_at`) |
 
-**Thức lại** (về `awake`, bậc tối đa B3, giữ nguyên ký ức và lịch sử): chủ nhắn/gọi trực tiếp agent trong ngữ cảnh, giao việc
-mới, reaction mới hợp lệ, sự kiện liên quan có cấu trúc (mục 7.5). Thức không đặt lại ước lượng; chỉ đặt lại đồng hồ quan sát.
+`paused`, `waiting_owner`, `off`, `hibernating` chỉ dừng phần **chủ động**; việc đã nhận, hạn chót, goal, lời gọi trực tiếp vẫn chạy.
+**Thức lại:** bậc mới = `min(bậc hiện tại, B3)` (đang nhanh hơn B3 thì giữ), giữ nguyên ước lượng, ký ức và lịch sử; kích hoạt bởi
+chủ nhắn/gọi trực tiếp agent trong ngữ cảnh, giao việc mới, reaction mới hợp lệ, sự kiện liên quan có cấu trúc (7.5).
 
-### 5.3 Điều chỉnh nhịp có giới hạn
+### 5.3 Điều chỉnh nhịp (chỉ theo bằng chứng mới, có độ trễ)
 
-Mỗi **kỳ đánh giá** (khi tới lịch chủ động, hoặc khi lý do xem xét được phục vụ), tính `u = estimate * confidence` (mục 6):
+Mỗi **kỳ đánh giá** (tới lịch chủ động hoặc khi phục vụ lý do), theo thứ tự:
 
-- `u >= +0.25`: lên **một** bậc (nhịp dày hơn), không quá trần bậc được cấp (`max_tier`, mặc định B1; Toàn quyền/chủ có thể cấp
-  B0).
-- `u <= -0.25` (có bằng chứng tương tác chủ động không hữu ích): xuống **một** bậc.
-- Không tín hiệu và không cơ hội trong hai lần khoảng hiện tại: xuống một bậc với lý do `low_demand` (ít nhu cầu, **không**
-  ghi là agent sai).
-- Ngược lại giữ bậc.
-- **Ổn định:** tối đa một bước mỗi kỳ; sau một lần đổi chiều phải qua ít nhất một kỳ giữ nguyên mới đổi chiều lại (hysteresis);
-  một reaction đơn lẻ chỉ đóng góp giới hạn (mục 6.2) nên không thể đẩy từ ngủ tháng lên chạy liên tục. Thức lại do sự kiện chỉ
-  về B3, không về B0.
-- Mỗi lần đổi bậc ghi `agent_pulse_events` (trước/sau, nguồn, `policy_version`, `u`, lý do). Chủ có thể **quay lại** một thay
-  đổi (khôi phục bậc trước) hoặc **đặt lại** ngữ cảnh về khởi tạo; cả hai ghi sự kiện.
+1. `new = Σ w·decay` của tín hiệu **sau** `last_change_at` và sau `resumed_at`. Không đổi bậc nếu chưa ở bậc hiện tại đủ **thời gian
+   tối thiểu** `dwell = max(2 × khoảng của bậc, 1 ngày)`.
+2. Lên một bậc nếu `u ≥ +0.25` **và** `new ≥ 1.0`, không quá `max_tier` được cấp (mặc định B1, chủ có thể cấp B0; Toàn quyền không
+   nâng được trần này).
+3. Xuống một bậc nếu `u ≤ -0.25` và `new ≥ 1.0` (lý do `unhelpful`).
+4. Xuống một bậc nếu không có tín hiệu mới và không có cơ hội (lý do `low_demand`, không ghi là agent sai) trong hai lần khoảng hiện
+   tại.
+5. Ngược lại giữ.
+6. Hysteresis: đổi chiều chỉ sau ít nhất một kỳ giữ nguyên.
+
+Bằng chứng cũ không thể tự đẩy bậc mãi: bước 2-3 cần bằng chứng mới; bước 4 kéo nhịp chậm lại khi im lâu. Mọi lần đổi bậc ghi
+`agent_pulse_events` (trước/sau, nguồn, `u`, `new`, lý do, `policy_version`). Chủ có thể quay lại một thay đổi hoặc đặt lại ngữ cảnh.
+
+**Vectơ test đồng hồ giả bắt buộc** (từ B3, Cộng hưởng bật, giá trị tính theo 6.3, có kèm số trong test):
+
+| Kịch bản | Kỳ vọng |
+|---|---|
+| 1 ❤️ (`u ≈ 0.05`) hay 2 ❤️ (`u ≈ 0.13`) | giữ B3 |
+| 5 ❤️ trong 2 tuần (`u ≈ 0.32`) | lên đúng một bậc (B2) sau dwell; không lên tiếp nếu không có tín hiệu mới |
+| thêm 10 ❤️ trong 2 tuần kế | lên B1 (= `max_tier`), không bao giờ B0 |
+| 10 ❤️ trong 1 phút (`u ≈ 0.48`) | tối đa một bậc ở kỳ đó; kỳ sau không lên nữa vì không có bằng chứng mới |
+| im hoàn toàn từ B3 | khoảng ngày 2 xuống B4, ngày 8 B5, ngày 22 B6, ngày 50 B7, khoảng ngày 110 ngủ đông; tức 30 ngày ở B6, 90 ngày ở B7, 180 ngày ngủ đông |
+| 3 tin chủ động đã xem bị bỏ qua | ước lượng âm nhẹ (`u ≈ -0.02`), không tự xuống bậc vì `unhelpful`; chỉ `low_demand` nếu cũng không có gì khác |
+| 3 reaction có lý do "sai dữ kiện" (`u ≈ -0.25`) | xuống một bậc (`unhelpful`) sau dwell |
+| im lặng đúng (không tín hiệu, có cơ hội nhưng phán xử chọn im) | không phạt; không coi là `low_demand` khi có cơ hội |
+| chủ gọi trực tiếp lúc ngủ đông | về B3 ngay, giữ ước lượng |
 
 ### 5.4 Lưu bền và restart
 
-Bảng `agent_pulse(agent_key, context_ref, state, tier, interval_s, next_due_at, estimate, confidence, n_eff, last_eval_at,
-last_change_dir, last_change_at, resumed_at, max_tier, policy_version, updated_at, PK(agent_key, context_ref))`. Nhận lịch bằng
-CAS (giống `claim_wake` A2): chết giữa chừng thì lịch tự tới hạn lại; một lần tới hạn chỉ có một `reason_ref` trong sổ lượt.
+`agent_pulse(agent_key, context_ref, state, tier, next_due_at, estimate, confidence, n_eff, last_eval_at, last_change_dir,
+last_change_at, resumed_at, max_tier, scan_counter, policy_version, updated_at, PK(agent_key, context_ref))`. Nhận lịch bằng CAS;
+chết giữa chừng thì lịch tự tới hạn lại. Lệch đồng hồ: tuổi âm kẹp về 0, `next_due_at` quá khứ xa chỉ chạy một lần rồi tính lại.
 
-### 5.5 Lần thức: kiểm bằng code trước, model sau
+### 5.5 Lần thức: code trước, model sau
 
-`Thức không đồng nghĩa gọi model. Gọi model không đồng nghĩa gửi tin.` Mỗi lần thức phân loại:
+`Thức không đồng nghĩa gọi model. Gọi model không đồng nghĩa gửi tin.` Mỗi lần thức chạy bước code: cập nhật ước lượng, tính bậc,
+lập **danh sách cơ hội** trong phạm vi đã giao bằng code: việc nhóm agent là thành viên có cập nhật cũ hơn khoảng hiện tại, việc bị
+chặn có dữ kiện mới, goal của agent chờ chủ quá 24 giờ, đề xuất chưa ai xử lý, lý do đang chờ. Không có gì: ghi `no_action`, ngủ.
 
-1. **Chỉ code:** cập nhật ước lượng từ tín hiệu mới, tính bậc, kiểm việc đã giao (hạn chót gần, việc bị chặn có dữ kiện mới, đề
-   xuất chờ chủ quá lâu). Không có gì: ghi `wake_log` (mục `no_action`) và ngủ tới lịch kế.
-2. **Cần model suy xét:** chỉ khi có lý do cụ thể (reaction gom chờ, việc có dữ kiện mới, phát hiện cơ hội từ nguồn đã giao). Giữ
-   chỗ sổ lượt (purpose `proactive` hoặc `review`) rồi mới gọi.
-3. **Có việc cần làm:** trong quyền đã cấp thì đưa qua hàng đợi chung (Kanban/làn team) với nguồn; chưa có quyền thì ghi **đề
-   xuất có nguồn** cho chủ/trưởng nhóm (thẻ đề xuất có sẵn).
-4. **Có điều đáng nói:** qua phán xử của agent (mục 7) trước khi gửi.
-5. **Không làm phiền ai:** im, ghi lý do vào nhật ký quyết định (không ra chat).
-
-Tự tìm việc chỉ trong phạm vi đã giao: goal của agent, việc nhóm agent là thành viên, cam kết đã ghi, nguồn dữ liệu đã kết nối
-cho agent. Không tạo việc để giữ mình hoạt động; một lần thức tạo tối đa một đề xuất hoặc một việc.
+- Có lý do `reaction_review`/`related_review`/`wait_unblocked`: chạy lượt tương ứng (4.4, 7.5, 7.4).
+- Có cơ hội: chạy lượt **quét** (purpose `scan`) với danh sách đó làm đầu vào, đầu ra có cấu trúc `{"action": "none"|"propose"|
+  "enqueue"|"say", ...}`. `enqueue` chỉ khi quyền của agent cho phép (qua hàng đợi chung, có nguồn); không có quyền thì `propose` (thẻ
+  đề xuất cho chủ/trưởng nhóm); `say` qua phán xử (mục 7). Tối đa một hành động mỗi lần quét.
+- Ở `active`/`awake`, dù danh sách rỗng, cứ mỗi 3 lần thức có một lượt quét giới hạn (đếm `scan_counter`, tối đa một lượt/ngày/ngữ
+  cảnh) để agent có cơ hội tự thấy việc từ nguồn đã giao; quét không thấy gì không tạo tín hiệu xấu.
+- Không tạo việc để giữ mình hoạt động; đề xuất không được duyệt không mở lại nếu không có dữ kiện mới.
 
 ## 6. T3: ước lượng hữu ích
 
-### 6.1 Tín hiệu (`pulse_signals`, một dòng một sự kiện nguồn)
+### 6.1 Tín hiệu (`pulse_signals`, một dòng một sự kiện nguồn, `source_ref` UNIQUE)
 
-| Nguồn | Giá trị khởi tạo (giả thuyết) | Ghi chú |
+| Nguồn | Giá trị khởi tạo (giả thuyết `pulse.v1`) | Độ tin nguồn `w` |
 |---|---|---|
-| Reaction ❤️ / 😮 / 😂 / 👍 | +1.0 / +0.8 / +0.5 / +0.4 | thứ tự GOAL là giả thuyết; cá nhân hoá ở 6.3 |
-| Reaction 😢 / 😡 không lý do chất lượng | -0.2 / -0.4, độ tin thấp | có thể là cảm xúc về sự việc, không mặc định chê agent |
-| Reaction kèm lý do chất lượng | theo lý do: đúng ý +0.8; sai dữ kiện, thiếu ý, khó hiểu, lạc đề -0.6; quá dài -0.3 | lý do là đánh giá agent, độ tin cao |
-| Trục nói/im | không vào ước lượng nội dung | dạy phán xử (mục 7.6), tách trục |
-| Chấp nhận đề xuất, chốt quyết định, dùng kết quả có sự kiện | +0.6 | chỉ khi có sự kiện host |
-| Sửa yêu cầu sau kết quả, huỷ, bác đề xuất, thu hồi | -0.4 | có sự kiện host |
-| Kiểm khách quan đạt / không đạt (assessment, review) | +0.5 / -0.5 | |
-| Tin **chủ động** đã được xem, qua cửa sổ 24 giờ không tương tác | -0.15 | chỉ khi có sự kiện "đã xem" (6.2) |
-| Tin chủ động chưa có bằng chứng xem | 0, `unknown` | không phạt |
-| Im lặng / quan sát | không tạo tín hiệu | không phạt |
-| Việc bắt buộc đã giao | không tạo tín hiệu "bị bỏ qua" | |
-| Reaction của agent khác | 0 (chỉ cộng tác) | chống tự thưởng |
+| ❤️ / 😮 / 👍 không lý do | +0.8 / +0.6 / +0.4 | 1.0 |
+| 😂 không lý do | +0.2 | 0.5 (không mặc định là khen chất lượng) |
+| 😢 / 😡 không lý do | -0.2 / -0.4 | 0.4 (có thể là cảm xúc về sự việc) |
+| Reaction có lý do chất lượng | đúng ý +0.8; quá dài -0.3; sai dữ kiện, thiếu ý, khó hiểu, lạc đề -0.6 (lý do thắng emoji) | 1.0 |
+| Trục nói/im | không vào ước lượng (dạy phán xử, 7.6) | |
+| Chấp nhận đề xuất, chốt quyết định, dùng kết quả có sự kiện host | +0.6 | 0.8 |
+| Sửa yêu cầu sau kết quả, huỷ, bác đề xuất, thu hồi | -0.4 | 0.8 |
+| Kiểm khách quan đạt / không đạt | +0.5 / -0.5 | 0.8 |
+| Tin chủ động đã xem (6.2), qua 24 giờ không tương tác | -0.15 | 0.6 |
+| Tin chủ động chưa có bằng chứng xem; im lặng/quan sát; việc bắt buộc đã giao | không tạo tín hiệu | |
+| Reaction của agent; agent tự nhận công | không tạo tín hiệu | |
 
-### 6.2 Sự kiện "đã xem"
+### 6.2 Sự kiện "đã xem" (`message_seen`, resonance.sqlite3)
 
-Mới: dashboard gửi `POST /seen {context_ref, message_ids}` khi tin của agent nằm trong khung nhìn ít nhất 1,5 giây và tab đang
-hiển thị (cả nhóm lẫn chat riêng); host ghi `message_seen` (một dòng mỗi tin, lần đầu). Không có sự kiện này thì "chưa biết".
+Dashboard gửi `POST /seen {context_ref, message_ids}` khi tin của agent nằm trong khung nhìn ≥ 1,5 giây và tab đang hiển thị (nhóm
+và chat riêng). Host ghi lần đầu. Chỉ tin của agent trong Javis; không theo dõi gì khác.
 
-### 6.3 Công thức (pulse.v1)
+### 6.3 Công thức (`pulse.v1`)
 
-- Mỗi tín hiệu có `value v ∈ [-1, 1]`, trọng số nguồn `w` (chủ 1.0; kiểm khách quan 0.8; sự kiện hệ thống 0.6), và suy giảm theo
-  thời gian nửa đời **21 ngày**.
-- **Cá nhân hoá theo người phản hồi:** với người phản hồi r và giá trị e, `v_r(e) = v0(e) * k_r(e)`, trong đó
-  `k_r(e) = clamp(1 + 0.5 * (1 - f_r(e)/f̄_r) * n_r/(n_r + 20), 0.6, 1.4)`: emoji người đó dùng thường xuyên mang ít thông tin
-  hơn, emoji hiếm mang nhiều hơn, nhưng chỉ khi đủ mẫu (`n_r` lớn so với 20) và luôn bị kẹp 0.6-1.4 (không thành điểm vô hạn,
-  không dùng độ hiếm đơn độc làm kết luận).
-- `estimate = Σ w·v·decay / Σ w·decay` (khi không có tín hiệu: 0); `n_eff = Σ w·decay`; `confidence = n_eff/(n_eff + 4)`.
-- Mỗi sự kiện nguồn đóng góp tối đa |w·v| ≤ 1 trước suy giảm.
-- Thay/bỏ reaction: dòng cũ `superseded_by`; lần tính sau dùng dòng mới. Xoá nguồn (xoá tin, xoá agent): dòng chuyển `void`, ghi
-  sự kiện. Không cộng dồn.
-- Tách theo ngữ cảnh: ước lượng tính riêng từng `context_ref`; bản tổng hợp `*` chỉ để hiển thị và làm giá trị khởi tạo cho ngữ
-  cảnh mới (kéo về 0 theo hệ số 0.5). Phản hồi tốt ở nhóm A không nâng bậc ở nhóm B.
-- Không tối ưu số tim, số tin, số lượt: tin không có tín hiệu thì không có điểm; nói nhiều không tạo điểm.
+- Suy giảm theo thời gian, nửa đời 21 ngày (`decay`).
+- **Cá nhân hoá theo người phản hồi và loại ngữ cảnh** (nhóm hay chat riêng): với người r, loại ngữ cảnh c, emoji e: `n` = số reaction
+  của r trong c, `p(e)` = tỷ lệ e trong số đó, `p̄ = 1/6`. `k = clamp(1 + 0.5 × (p̄ − p(e))/p̄ × n/(n + 20), 0.6, 1.4)`, `v = v0(e) × k`.
+  Ít mẫu (`n` nhỏ) thì `k ≈ 1`; không bao giờ ngoài 0.6-1.4; độ hiếm không đứng một mình làm kết luận.
+- Prior về 0: `estimate = Σ w·v·decay / (Σ w·decay + 2)`; `n_eff = Σ w·decay`; `confidence = n_eff / (n_eff + 4)`; `u = estimate ×
+  confidence`. Im lâu thì `estimate` và `confidence` cùng về 0.
+- Mỗi sự kiện nguồn đóng góp `|w·v| ≤ 1`.
+- Thay/bỏ reaction: dòng cũ `superseded_by`; xoá nguồn (xoá tin/agent): `void`. Không cộng dồn.
+- Theo ngữ cảnh: tính riêng từng `context_ref`; bản `*` chỉ hiển thị và là giá trị khởi tạo cho ngữ cảnh mới (nhân 0.5).
+- Không tối ưu số tim/tin/lượt: tin không có tín hiệu không có điểm.
 
-### 6.4 Đối chứng và quay lại
+### 6.4 Quay lại thay đổi chính sách
 
-Mọi lần đổi bậc và mọi thay đổi chính sách ghi trước/sau. Sau mỗi thay đổi có **cửa sổ quan sát** (tối thiểu 5 tín hiệu mới
-hoặc 14 ngày): nếu `estimate` sau thấp hơn trước quá 0.3 với `confidence ≥ 0.5`, tự quay lại bản trước và ghi lý do. Không tuyên
-bố cải thiện khi chưa qua cửa sổ.
+Chỉ áp cho thay đổi **chính sách** (độ lệch ngưỡng phán xử, độ hăng hái, bài học tự áp, phiên bản `pulse`), không áp cho bước bậc
+(bậc chỉ theo 5.3). Sau thay đổi có cửa sổ quan sát (≥ 6 nhãn hoặc ≥ 5 tín hiệu mới, tối đa 14 ngày); tỷ lệ lỗi phán xử tăng quá 0.15
+(≥ 6 nhãn) hoặc `estimate` của ngữ cảnh giảm quá 0.3 (`confidence ≥ 0.5`) thì tự quay lại và ghi lý do. Không tuyên bố cải thiện khi
+chưa qua cửa sổ.
 
 ### 6.5 Ghi nhận đóng góp (`pulse_contrib`)
 
-- Chuỗi đóng góp do host ghi: bước làm/hỗ trợ (`team_steps`) với `input_refs`, tin tổng hợp trỏ về các bước đã dùng, câu trả lời
-  trỏ về tin được trích.
-- Phản hồi của chủ trên **bản tổng hợp**: tác giả tổng hợp nhận 0.4; 0.6 chia cho các bước có bằng chứng đã được dùng (theo
-  `input_refs` của tổng hợp), chia đều giữa các bước đó; bước không được dùng không nhận gì. Tổng phân bổ một sự kiện nguồn = 1.
-  Không chia đều cả nhóm, không mặc định trưởng nhóm nhận nhiều nhất.
-- Một sự kiện nguồn chỉ phân bổ một lần: trích dẫn, chuyển tiếp, tổng hợp nhiều tầng không nhân điểm (tầng trên chỉ phân bổ
-  phần của nó theo cùng nguồn).
-- Agent không tự nhận công: đóng góp chỉ từ chuỗi host ghi; agent nói "tôi đã làm" không tạo dòng.
-- Điểm hữu ích không thành quyền: chỉ ảnh hưởng bậc nhịp trong `max_tier` đã cấp.
+- Chuỗi do host ghi: bước làm/hỗ trợ (`team_steps`) với `input_refs`; tin tổng hợp trỏ các bước đã dùng.
+- Phản hồi của chủ trên **bản tổng hợp** (một sự kiện nguồn, tổng 1.0): 0.8 chia cho các bước có bằng chứng được dùng, theo số lần được
+  tham chiếu, trần 0.6 mỗi agent; phần còn lại (kể cả phần vượt trần) về tác giả tổng hợp. Không có bước nào được dùng: tác giả tổng hợp
+  nhận 1.0 (là tác giả trực tiếp). Một agent vừa làm bước vừa tổng hợp: gộp phần, không đếm hai lần. Tác giả tổng hợp **không** nhận
+  thêm tín hiệu trực tiếp riêng ở 6.1 cho cùng nguồn.
+- Thay bản kết quả: phân bổ cũ `superseded`, tính lại theo bản mới. Trích dẫn/chuyển tiếp/tổng hợp nhiều tầng không nhân điểm (một
+  nguồn phân bổ một lần).
+- Agent không tự nhận công; điểm hữu ích không thành quyền (chỉ trong `max_tier`).
 
 ## 7. T3: bộ phán xử của từng agent
 
 ### 7.1 Kiến trúc
 
-Module thuần mới `server/agent_judge.py`, tái dùng hình dạng của phán xử Zalo (tách "được gọi" khỏi "có nên nói", cổng thô, ca
-học, ngưỡng có độ lệch theo ngữ cảnh, tự rà soát có trước/sau, quay lại) nhưng **không** gọi trực tiếp mã bot. Kho riêng
-`agent_judge.sqlite3` (dữ liệu nội bộ của chủ, tách khỏi dữ liệu khách Zalo): `profiles(agent_key, role_text, eagerness,
-role_hash)`, `decisions(id, agent_key, context_ref, source_event, verdict speak|wait|silent, address certain|none, score,
-threshold, reason, silence_code, wait_until_json, ledger_ref, label, label_source, created_at)`, `offsets(agent_key, context_ref,
-offset)`, `cases(agent_key, context_ref, text_sha, features, label, weight)`, `changes(...)` (khuôn `changes` Zalo),
-`waits(decision_id, agent_key, context_ref, until_kinds, until_ts, status)`.
+Module thuần `server/agent_judge.py` theo hình dạng phán xử Zalo (tách được gọi / có nên nói, cổng thô, ca theo ngữ cảnh, ngưỡng có độ
+lệch, tự rà soát), không gọi mã bot. Kho `agent_judge.sqlite3`: `profiles(agent_key, role_text, eagerness, role_hash)`, `decisions(id,
+agent_key, context_ref, source_event, verdict speak|wait|silent, address certain|none, score, threshold, reason, silence_code,
+wait_until_json, ledger_ref, label, label_source, created_at)`, `offsets(agent_key, context_ref, offset, updated_at)`, `cases(agent_key,
+context_ref, text_sha, features_json, label, weight, created_at)`, `waits(decision_id, agent_key, context_ref, until_kinds, until_ts,
+status, rejudged)`, `changes(...)`, `review_state(agent_key, last_review_at)`.
 
-- Hồ sơ riêng từng agent (vai từ file agent, độ hăng hái), ngưỡng và ca **theo ngữ cảnh**: ca thô chỉ lấy từ cùng ngữ cảnh; ngữ
-  cảnh khác chỉ góp bài học đã trừu tượng hoá (mục 8). Hai agent vai khác nhau có thể ra quyết định khác nhau cho cùng một tin.
-- Kết quả chỉ là quyết định có cấu trúc `{verdict, score, reason, wait_until, ask_clarify}`; câu trả lời vẫn do agent tạo với
-  persona của mình.
+Hồ sơ riêng từng agent; ngưỡng và ca **theo ngữ cảnh** (ca thô chỉ lấy cùng ngữ cảnh). Kết quả chỉ là `{verdict, score, reason,
+wait_until, ask_clarify}`; câu trả lời do agent tạo.
 
 ### 7.2 Chat nhóm
 
-1. **Được gọi trực tiếp** (mentions có cấu trúc, ô điều phối của tin thường, việc giao): đi đường trả lời hiện có, không qua phán
-   xử, ghi `decision` với `address=certain` để có lịch sử.
-2. **Không được gọi:** với mỗi thành viên hoạt động còn lại, **lọc bằng code** (quan hệ với việc đang mở, câu hỏi chung cho nhóm,
-   từ khoá vai, vừa có đóng góp liên quan); không qua cổng thì `silent` code `no_signal`, không gọi model.
-3. Ứng viên qua cổng: **một** lời gọi model theo lô cho cả nhóm ứng viên trên tin đó (purpose `judge`, vào sổ lượt và trần ngày
-   của nhóm), trả quyết định từng `agent_key`.
-4. **Điều phối:** host giữ tối đa `K` người tự lên tiếng mỗi tin (mặc định 1, chủ đổi được trong Nâng cao), ưu tiên điểm cao và
-   không trùng với người đã được gọi; không round-robin. Người được chọn chạy lượt `member_volunteer` (không có lệnh quản trị).
-5. Lỗi phán xử, hết giờ, sai cấu trúc: ứng viên `silent` code `policy_error`; lời gọi trực tiếp không bị ảnh hưởng.
+1. Được gọi trực tiếp (mentions có cấu trúc, ô điều phối của tin thường, việc giao): đường trả lời hiện có, không qua phán xử; ghi
+   `decision` `address=certain`.
+2. Không được gọi: lọc bằng code cho từng thành viên hoạt động (quan hệ việc mở, câu hỏi chung cho nhóm, từ khoá vai, đóng góp liên quan
+   gần đây). Không qua cổng: `silent`/`no_signal`, không model.
+3. Ứng viên qua cổng: **một** lời gọi theo lô (spawn ngoài request), engine là model việc nền người dùng đã chọn, timeout 25 giây,
+   tối đa 2 lô đồng thời toàn máy; một dòng `agent_calls` purpose `judge_batch` (`agent_key` rỗng, `context_ref` nhóm), mỗi agent
+   một `decision` trỏ `ledger_ref` về dòng đó. Chi phí tính cho nhóm, không chia cho agent.
+4. Điều phối: tối đa `K` người tự lên tiếng mỗi tin (mặc định 1), ưu tiên điểm cao, không trùng người đã được gọi; không round-robin.
+   Người được chọn chạy lượt `member_volunteer` (không lệnh quản trị).
+5. Lỗi phán xử: ứng viên `silent`/`policy_error`; lời gọi trực tiếp không ảnh hưởng.
 
 ### 7.3 Chat riêng
 
-Câu hỏi trực tiếp của chủ đi luồng trả lời thường (không bao giờ qua phán xử). Phán xử chỉ dùng cho **chủ động**: khi lần thức lớp
-3 có điều muốn nói trong chat riêng (nhắc tiếp, hỏi thêm, báo kết quả việc nền), phán xử quyết nói/chờ/im trước khi gửi. Lỗi phán
-xử: không gửi, ghi lý do, không mất câu hỏi nào.
+Câu hỏi trực tiếp của chủ đi luồng trả lời thường, không bao giờ qua phán xử. Phán xử chỉ cho tin **chủ động** (từ lượt quét/xem xét
+lớp 3): nói/chờ/im trước khi gửi. Phán xử lỗi/hết giờ/sai cấu trúc: không gửi, ghi lý do; không mất câu hỏi nào, không chốt việc.
 
 ### 7.4 Chờ và gỡ chờ
 
-`wait` ghi `waits` với điều kiện gỡ: tin mới của chủ trong ngữ cảnh, người đang nói chốt lượt, việc liên quan đổi trạng thái, mốc
-giờ. Gỡ chờ được xét ở các điểm hiện có (`_settle_reply_out`, chuyển trạng thái việc, vòng 5 giây của nhóm). Hết hạn: `silent`
-có lý do, hoặc `ask_clarify` gửi trưởng nhóm/chủ một câu hỏi (một lần, có trần). Không chờ vô hạn, không quay vòng.
+`wait` ghi `waits` với điều kiện gỡ (tin mới của chủ trong ngữ cảnh, người đang nói chốt lượt, việc liên quan đổi trạng thái, mốc giờ
+tối đa 30 phút). Gỡ chờ xét ở `_settle_reply_out`, chuyển trạng thái việc, vòng 5 giây của nhóm; tạo lý do `wait_unblocked`. Mỗi
+(agent, tin gốc) được xét lại **tối đa một lần**. Hết hạn: `silent` có lý do, hoặc một câu `ask_clarify` gửi trưởng nhóm/chủ.
 
 ### 7.5 Lượt xem xét liên quan từ đồng đội
 
-Sau khi `_accept` đăng tin của agent X, host sinh sự kiện `related_review` **chỉ** cho agent có quan hệ có cấu trúc: người nhận
-việc/điều phối của việc đó, bước có `input_refs` trỏ tới tin của X, người nhờ hỗ trợ, hoặc lệnh `{"op":"ask_peer","agent_key":..}`
-do host kiểm danh tính. Chặn: tự gọi mình, trích dẫn (khối trích bỏ trước khi xét), `@` trong văn bản, độ sâu ≤ 2 tính từ tin gốc
-của chủ, một lượt xem xét mỗi (agent, tin gốc), không A→B→A, trần lượt của nhóm. Sự kiện đi qua phán xử của agent nhận như mục
-7.2 (bước 2-5).
+Sau `_accept` đăng tin của agent X, host sinh `related_review` chỉ cho agent có quan hệ có cấu trúc: người nhận/điều phối việc đó, bước
+có `input_refs` trỏ tới tin của X, người nhờ hỗ trợ, hoặc lệnh `{"op":"ask_peer","agent_key":..}` (host kiểm danh tính). Chặn: tự gọi
+mình, trích dẫn (bỏ trước khi xét), `@` trong văn bản, độ sâu ≤ 2 từ tin gốc của chủ, một lượt mỗi (agent, tin gốc), không A→B→A, trần
+của nhóm. Đi qua phán xử của agent nhận (7.2 bước 2-5).
 
-### 7.6 Dạy phán xử (trục nói/im tách trục nội dung)
+### 7.6 Dạy phán xử
 
-- Nhãn từ chủ: chip "Đáng lẽ nên nói" / "Nên im (chen ngang)" trên tin, và **lịch sử quyết định** nói/chờ/im của agent theo nhóm
-  (cả ca im không có tin) với nút sửa quyết định; lời nhắc "sao em không trả lời?" trong nhóm được gắn vào quyết định im gần nhất
-  của agent đó (host khớp theo thời gian và người được nhắc, không giả tạo tin agent).
-- Nhãn chỉ dịch ngưỡng theo ngữ cảnh (kẹp ±0.25, nửa đời 14 ngày như Zalo) và thêm ca; **không** đổi ước lượng nội dung. Một câu
-  đúng nhưng chen ngang dạy "nên im"; một lần im bỏ lỡ dạy "nên nói".
-- Cộng hưởng tắt: nhãn được lưu, ngưỡng không đổi (chính sách đóng băng); bật lại không phát lại.
+- Nhãn từ chủ: chip "Đáng lẽ nên nói" / "Nên im (chen ngang)" trên tin, và **lịch sử quyết định** nói/chờ/im theo agent và nhóm (cả ca
+  im không có tin) có nút sửa. Lời nhắc kiểu "sao em không trả lời?" chỉ **gợi ý** liên kết tới quyết định im gần nhất; đường xác nhận là
+  sửa trong lịch sử quyết định.
+- Nhãn dịch độ lệch ngưỡng theo ngữ cảnh (kẹp ±0.25, nửa đời 14 ngày) và thêm ca; không đổi ước lượng nội dung.
+- Cộng hưởng tắt: nhãn lưu, ngưỡng không đổi; bật lại không phát lại (chỉ nhãn sau `resumed_at` được tính).
 
 ## 8. T3: học trong đội
 
-### 8.1 Kho bài học có phạm vi
+### 8.1 Kho bài học có phạm vi (`agent_lessons`, resonance.sqlite3)
 
-Bảng `agent_lessons` trong `resonance.sqlite3`: `id, agent_key, scope (team:<id>|dm|*), kind (speak|method|presentation|collab),
-text, source (owner|teammate|leader|self|review), source_refs_json, status (active|revoked|superseded|proposed), created_at,
-revoked_at, revoked_by`, nhật ký `agent_lesson_events` (trước/sau).
+`id, agent_key, scope (team:<id>|dm:<session_id>|*), kind (speak|method|presentation|collab), text, source (owner|teammate|leader|self|
+review), source_refs_json, status (active|revoked|superseded), created_at, revoked_at, revoked_by`; nhật ký `agent_lesson_events`.
 
-- `JAVIS_LESSON` trong lượt nhóm ghi scope `team:<id>`, nguồn `self`, liên kết lượt/tin/revision; chỉ ghi khi đầu ra còn hợp lệ
-  (giữ hợp đồng R3 T1). Lượt nhóm chỉ nạp bài học scope `team:<id>` của nhóm đó và scope `*`.
-- Bài học scope `*` (đi mọi ngữ cảnh) chỉ có qua: chủ dặn trong chat riêng (luật chủ, như hiện nay), hoặc tự rà soát thấy cùng bài
-  học có bằng chứng ở ≥ 2 ngữ cảnh. Bộ nhớ `MEMORY.md` hiện có vẫn được đọc như trước; bài học mới có phạm vi không ghi vào đó.
-- Thu hồi: chủ bấm thu hồi trên thẻ agent; trạng thái `revoked`, không nạp nữa, nhật ký giữ.
+- `JAVIS_LESSON` trong lượt nhóm: scope `team:<id>`, nguồn `self`, gắn lượt/tin/revision; chỉ khi đầu ra còn hợp lệ (R3). Lượt nhóm nạp
+  scope của nhóm đó và `*`.
+- Chat riêng giữ hành vi hiện có: `JAVIS_RULE` của chủ vào "Luật chủ dặn", `JAVIS_LESSON` vào `MEMORY.md` (bài học chung do chủ dạy
+  trực tiếp). Đây là phạm vi `*` theo định nghĩa; lượt nhóm đọc chúng như hôm nay.
+- Bài học cũ trong `MEMORY.md` (đã trộn nhiều nhóm): giữ nguyên, đánh dấu "bài học cũ chưa có phạm vi" trên giao diện; không tự di trú,
+  chủ có thể xoá tay như trước.
+- Lên phạm vi `*` từ bài học nhóm chỉ qua tự rà soát (bằng chứng ≥ 2 ngữ cảnh) hoặc chủ.
+- Thu hồi: chủ bấm trên thẻ agent; `revoked`, không nạp nữa, nhật ký giữ.
 
-### 8.2 Góp ý của đồng đội
+### 8.2 Góp ý của đồng đội (`agent_peer_feedback`)
 
-Lệnh có cấu trúc `{"op":"peer_feedback","message_id":..,"note":..}` trong lượt của agent: host gán nguồn `teammate`/`leader`, gắn
-tin, sản phẩm, revision; đưa vào lượt kế tiếp của agent nhận trong đúng nhóm dưới mục "Góp ý của đồng đội (không phải yêu cầu của
-chủ, không phải sự thật đã kiểm)". Không bao giờ thành luật của chủ; nhiều agent đồng ý không được coi là bằng chứng độc lập.
-Kết quả đến muộn sau huỷ/sửa/bỏ thành viên/thu hồi quyền chỉ giữ làm bằng chứng.
+Lệnh `{"op":"peer_feedback","message_id":..,"note":..}` trong lượt agent: host gán nguồn `teammate`/`leader`, gắn tin, sản phẩm, revision;
+vào lượt kế tiếp của agent nhận trong đúng nhóm dưới mục "Góp ý của đồng đội (không phải yêu cầu của chủ, không phải sự thật đã kiểm)".
+Không thành luật của chủ; nhiều agent đồng ý không là bằng chứng độc lập; kết quả đến muộn sau huỷ/sửa/bỏ thành viên/thu hồi chỉ là bằng
+chứng.
 
 ### 8.3 Tự rà soát và tự áp dụng (Cộng hưởng bật)
 
-- Chạy theo agent khi có đủ bằng chứng mới (≥ 6 nhãn nói/im mới, hoặc ≥ 5 tín hiệu hữu ích mới) và cách lần trước ≥ 24 giờ;
-  purpose `review` trong sổ lượt. Một lần tối đa 3 thay đổi từ danh sách đóng: `offset_set` theo ngữ cảnh, `eagerness_set`,
-  `lesson_add`/`lesson_remove` scope nhóm hoặc dm, `lesson_promote` lên `*` (cần bằng chứng ≥ 2 ngữ cảnh). Mỗi thay đổi phải dẫn mã
-  quyết định/tín hiệu đã cho xem.
-- Tự áp ngay trong phạm vi trên, ghi trước/sau; cửa sổ đánh giá: tỷ lệ lỗi (nhãn chen ngang + bỏ lỡ) sau tăng quá 0.15 với ≥ 6
-  nhãn thì tự quay lại cả lần rà soát; không lặp thay đổi đã quay lại trong 14 ngày. Không đè thiết lập chủ đang giữ.
-- Ngoài phạm vi (đổi quyền, luật chủ, sửa mã/skill/workflow, cấu trúc agent): chỉ ghi **đề xuất có phạm vi** cho chủ.
+- Kích hoạt khi có ≥ 6 nhãn nói/im **mới sau `resumed_at`**, hoặc ≥ 5 tín hiệu hữu ích mới sau `resumed_at`, và cách lần trước ≥ 24
+  giờ; purpose `review`. Tối đa 3 thay đổi từ danh sách đóng: `offset_set` (ngữ cảnh), `eagerness_set`, `lesson_add`/`lesson_remove`
+  (scope nhóm hoặc dm), `lesson_promote` (cần bằng chứng ≥ 2 ngữ cảnh). Mỗi thay đổi dẫn mã quyết định/tín hiệu đã cho xem.
+- Tự áp ngay, ghi trước/sau; quay lại theo 6.4; không lặp thay đổi đã quay lại trong 14 ngày; không đè thiết lập chủ đang giữ.
+- Ngoài phạm vi (quyền, luật chủ, mã/skill/workflow, cấu trúc agent): chỉ ghi đề xuất cho chủ.
+- **Không hai vòng học cho một phản hồi:** nguồn đã thuộc lý do `reaction_review`/tự rà soát được đánh dấu đã tiêu thụ. `learn.py`
+  (rewire từ nhật ký hội thoại) và curator không đọc bảng reaction; A3 làn P/M chỉ cho tin báo goal; tự soát Zalo chỉ cho bot. Vì vậy
+  một reaction không mở hai lần rà soát.
 
-## 9. Trần và chi phí
+## 9. Trần, chi phí, dự trữ cho nghĩa vụ
 
-- Lượt phán xử nhóm: tính vào trần ngày của nhóm (`daily_turns`) và sổ `agent_calls`. Lượt chủ động, xem xét, tự rà soát: trần
-  ngày theo agent `agent_daily_calls` (mặc định 6, chủ đổi được; Toàn quyền không chạm trần này vì không phải trần nhóm) và trần
-  chung server hiện có (`JAVIS_RESONANCE_CALL_CEILING`).
-- Hết trần: lần thức chỉ chạy code, lý do giữ `pending`, hiển thị "Chờ hạn mức"; không mất phản hồi, không lượt bù hàng loạt khi
-  qua ngày (mỗi lý do tối đa một lượt).
+| Trần | Mặc định | Ai chỉnh | Ghi chú |
+|---|---|---|---|
+| Lượt phán xử theo lô mỗi nhóm/ngày `judge_daily` | 40 | chủ; Toàn quyền điều chỉnh được; có "Không giới hạn" | **tách** khỏi `daily_turns`, không ăn suất trả lời |
+| `K` người tự lên tiếng mỗi tin | 1 | chủ; Toàn quyền | 0 = tắt tự lên tiếng |
+| Chế độ phán xử khi Cộng hưởng tắt | lọc code + lô | chủ | "chỉ lọc code" = không lượt model cho agent tắt Cộng hưởng |
+| Lượt chủ động/xem xét/quét/tự rà soát mỗi agent/ngày `agent_daily_calls` | 6 | chủ; có "Không giới hạn" | Toàn quyền không chỉnh (không phải trần nhóm) |
+| `max_tier` (nhịp nhanh nhất) | B1 | chủ (tới B0) | trưởng nhóm không nâng được, kể cả Toàn quyền |
+| Dự trữ nghĩa vụ trong trần chung server | 20% | server | lượt chủ động/xem xét/quét không dùng phần dự trữ; goal A2, việc giao, lời gọi trực tiếp dùng được |
+| Trần chung `JAVIS_RESONANCE_CALL_CEILING` | env | server | cố định với Toàn quyền |
+
+Hết trần: lần thức chỉ chạy code, lý do giữ `pending`, trạng thái "Chờ hạn mức"; qua ngày mỗi lý do tối đa một lượt (không bù hàng loạt).
+Các trần mới vào **bảng giới hạn** của T1 (loại: chủ chỉnh, Toàn quyền chỉnh, server cố định, nhà cung cấp).
 
 ## 10. Giao diện (mục 11 GOAL)
 
-Thẻ trợ lý (trang Cộng sự) và hàng thành viên trong ngăn Nhóm, dùng cùng API `GET /agents/{slug}/pulse`:
+Thẻ trợ lý và hàng thành viên ngăn Nhóm, API `GET /agents/{slug}/pulse` (host đổi slug sang `agent_key` đang hoạt động):
 
-- Cộng hưởng bật/tắt (có sẵn); trạng thái (`active/awake/slowed/hibernating/waiting_owner/paused/off`) và bậc theo **từng ngữ
-  cảnh** (chọn nhóm/chat riêng), lần xem xét gần nhất, lần dự kiến, lý do thức;
-- lý do đổi nhịp gần đây (trước/sau, nguồn), phản hồi đã xử lý và trạng thái;
-- bài học đang dùng theo phạm vi, nguồn, nút thu hồi;
-- bộ phán xử: áp dụng ở đâu, quyết định nói/chờ/im gần đây (cả ca im) và nút sửa ("Đáng lẽ nên nói", "Nên im");
-- việc đang làm/chờ/bị chặn (tab Công việc có sẵn).
+- Cộng hưởng bật/tắt; trạng thái (`active/awake/slowed/hibernating/waiting_owner/paused/off`, "Chờ hạn mức") và bậc **theo từng ngữ
+  cảnh**; lần xem xét gần nhất, lần dự kiến, lý do thức;
+- lý do đổi nhịp gần đây (trước/sau, nguồn); phản hồi đã xử lý và trạng thái;
+- bài học đang dùng theo phạm vi, nguồn, nút thu hồi (và nhãn "bài học cũ chưa có phạm vi");
+- bộ phán xử: nơi áp dụng, quyết định nói/chờ/im gần đây (cả ca im) và nút sửa;
+- việc đang làm/chờ/bị chặn (tab Công việc có sẵn);
+- nhật ký quản trị của nhóm (`team_events`: cấp/thu quyền, thêm/bỏ thành viên, lệnh của trưởng nhóm) trong ngăn Nhóm, mục Nâng cao.
 
-Nút: Đánh thức, Tạm dừng/Tiếp, Đặt lại nhịp ngữ cảnh, Quay lại thay đổi. Chỉ hiển thị thành công sau khi host xác nhận. Hai ngôn
-ngữ, màn hẹp, chữ ≥ 16px.
+Nút: Đánh thức, Tạm dừng/Tiếp, Đặt lại nhịp ngữ cảnh, Quay lại thay đổi. Chỉ hiện thành công sau khi host xác nhận. Hai ngôn ngữ, màn
+hẹp, chữ ≥ 16px.
 
 ## 11. T4: lịch sử dài, hiệu năng, vận hành
 
-- Đo bằng engine giả: nhiều nhóm, hàng nghìn tin, nhiều reaction, agent ngủ/thức, phán xử đồng thời; đo riêng API, độ trễ event
-  loop, số lượt model giả, số đọc/ghi kho; trình duyệt (thời gian vẽ danh sách, nhiều tab).
+- **Lịch sử dài trong đúng nhóm** (T4 0.124.0 đã có phân trang theo con trỏ, tìm không dấu, khối tóm tắt phần cũ bằng code): bổ sung
+  vào khối tóm tắt các mục **luôn giữ** mà không nạp toàn bộ lịch sử: sổ quyết định ghim, yêu cầu gốc và trạng thái các việc mở, nguồn
+  đóng góp của kết quả gần nhất (từ `pulse_contrib`), phản hồi chưa tiêu thụ của agent trong nhóm; mỗi mục là truy vấn có chỉ mục và trần
+  số dòng. Chat riêng: lượt `agent:<slug>` nạp bài học phạm vi và khối phản hồi theo cùng cách. Test: nhóm 5.000 tin vẫn giữ yêu cầu,
+  quyết định, nguồn đóng góp và phản hồi trong prompt; số đọc kho mỗi lượt có trần.
+- Đo bằng engine giả: nhiều nhóm, hàng nghìn tin, nhiều reaction, agent ngủ/thức, phán xử đồng thời; đo API, độ trễ event loop, số lượt
+  model giả, số đọc/ghi kho; trình duyệt (vẽ danh sách, nhiều tab).
 - Kiểm: nhiều tab, mất kết nối, restart, huỷ, retry, rời nhóm, đổi trưởng nhóm, bật/tắt Cộng hưởng, thu hồi quyền.
 - Nhóm bị chặn hay agent ngủ không chiếm suất của nhóm có việc. Kịch bản VPS chuẩn bị sẵn, **chưa chạy**.
 
-## 12. Ma trận nghiệm thu (GOAL mục 12) → nơi kiểm
+## 12. Di trú và quay về bản cũ
+
+- Nâng cấp: tạo bảng/kho mới; mọi `agent_pulse` khởi tạo B3 với `resumed_at = lúc nâng cấp`; reaction cũ **không** backfill vào bậc
+  (chỉ là bằng chứng hiển thị). Cột mới đều có mặc định để bản cũ chạy trên kho đã nâng.
+- Quay về bản cũ: bản cũ bỏ qua bảng/kho mới; công cụ khôi phục (R9) mở rộng chép thêm `agent_judge.sqlite3` và các bảng mới trong
+  `resonance.sqlite3`, `conversations.db`, `team.sqlite3` vào bộ sao lưu trước nâng.
+- Lỗi kho khi ghi tác động: outbox giữ `pending`, chiếu lại sau; không mất reaction, không tác động kép.
+
+## 13. Ma trận nghiệm thu (GOAL mục 12) → nơi kiểm
 
 | Ca | Mốc | Test chính (host thật, engine giả) |
 |---|---|---|
-| 1 hai nhóm, tag | T1/T3 | `test_team_t1_goal.py` (tag), `test_agent_judge_scope.py` (ngữ cảnh, bài học) |
+| 1 hai nhóm, tag | T1/T3 | test tag của T1; `test_agent_judge_scope.py`; `test_agent_lessons.py` |
 | 2 gọi trực tiếp/tự tham gia/im | T3 | `test_agent_judge_team.py` |
-| 3 phân công, phản hồi, sửa bản | T1/T3 | test team hiện có + `test_team_peer_feedback.py` |
+| 3 phân công, phản hồi, sửa bản | T1/T3 | test team hiện có; `test_team_peer_feedback.py` |
 | 4 sáu reaction hai nơi | T2 | `test_dm_reactions.py`, `test_team_reactions.py` mở rộng, JS |
-| 5 bật/tắt Cộng hưởng với feedback | T2/T3 | `test_feedback_wake.py` |
-| 6 nhịp dài hạn, ít nhu cầu, im không phạt | T3 | `test_agent_pulse_policy.py` (đồng hồ giả) |
+| 5 bật/tắt với feedback | T2/T3 | `test_feedback_wake.py` |
+| 6 nhịp dài hạn, ít nhu cầu, im không phạt | T3 | `test_agent_pulse_policy.py` (vectơ 5.3) |
 | 7 ngủ thức lại, tắt không tự bật, nghĩa vụ giữ | T3 | `test_agent_pulse_host.py` |
-| 8, 28 ghi nhận đóng góp, không đếm trùng | T3 | `test_pulse_contrib.py` |
+| 8, 28 đóng góp, không đếm trùng, không tự thưởng | T3 | `test_pulse_contrib.py` |
 | 9 thay/bỏ reaction, xoá nguồn | T2/T3 | `test_dm_reactions.py`, `test_agent_pulse_policy.py` |
 | 10 không vòng vô hạn, chờ chủ | T3 | `test_agent_judge_team.py`, `test_related_review.py` |
-| 11 ưu tiên A→C→B, hai kick | T1 | `test_team_t1_goal.py` |
-| 12 sửa/bỏ/đổi/thu hồi/huỷ | T1 | test team hiện có + chốt quyền theo lượt |
-| 13 lỗi engine, restart, sổ lượt | T1/T3 | `test_agent_calls_ledger.py` |
-| 14 khôi phục nhiều kho | T1 | test rollback hiện có (R9) |
-| 15 ba lớp heartbeat không ba lượt | T3 | `test_agent_calls_ledger.py` (reason_ref) |
+| 11 ưu tiên A→C→B, hai kick | T1 | test T1 |
+| 12 sửa/bỏ/đổi/thu hồi/huỷ, quyền theo lượt | T1 | test T1 |
+| 13 lỗi engine, lỗi kho, huỷ lặp, restart | T1/T3 | `test_agent_calls_ledger.py`, `test_feedback_projector.py` |
+| 14 khôi phục nhiều kho | T1/T3 | test rollback hiện có + kho mới |
+| 15 ba lớp không ba lượt | T3 | `test_agent_calls_ledger.py` (định tuyến 3.3, chỉ mục từng phần) |
 | 16 đồng hồ giả ngày/tuần/tháng | T3 | `test_agent_pulse_policy.py` |
 | 17 phán xử/tự rà soát có sổ, nguồn, quay lại | T3 | `test_agent_judge_review.py` |
-| 18 giao diện, hai ngôn ngữ, số đo | T3/T4 | JS + browser smoke + bench |
+| 18 giao diện, hai ngôn ngữ, số đo | T3/T4 | JS, smoke trình duyệt, bench |
 | 19 hồ sơ riêng từng agent | T3 | `test_agent_judge_team.py` |
-| 20 chat riêng | T2/T3 | `test_agent_judge_dm.py` |
+| 20 chat riêng, lỗi phán xử | T2/T3 | `test_agent_judge_dm.py` (timeout, JSON sai, engine lỗi) |
 | 21 sửa ca im/chen ngang | T3 | `test_agent_judge_labels.py` |
 | 22 cá nhân hoá, ít mẫu, emoji sự việc, chưa xem | T3 | `test_agent_pulse_policy.py` |
 | 23 hoạt động ở A, ngủ ở B | T3 | `test_agent_pulse_host.py` |
-| 24 tự tìm việc đúng quyền | T3 | `test_agent_pulse_host.py` |
+| 24 tự tìm việc đúng quyền | T3 | `test_agent_pulse_host.py` (quét, propose/enqueue) |
 | 25 bật lại không phát lại | T2/T3 | `test_feedback_wake.py` |
-| 26 tự áp dụng, trước/sau, quay lại | T3 | `test_agent_judge_review.py`, `test_agent_lessons.py` |
+| 26 tự áp, trước/sau, quay lại | T3 | `test_agent_judge_review.py`, `test_agent_lessons.py` |
 | 27 tín hiệu đồng đội, trích dẫn, gỡ chờ | T3 | `test_related_review.py` |
+| Lỗi kho/outbox, lệch đồng hồ | T2/T3 | `test_feedback_projector.py`, `test_agent_pulse_policy.py` |
 
-## 13. Ngoài khả năng nền hiện tại, cần anh quyết (không tự thu hẹp)
+## 14. Cần anh quyết (không tự thu hẹp)
 
-1. **Chi phí phán xử khi Cộng hưởng tắt:** GOAL yêu cầu phán xử nói/im trong nhóm vẫn chạy khi tắt. Thiết kế giữ phần lọc bằng
-   code cho mọi agent, nhưng lời gọi model theo lô chỉ chạy khi nhóm có ít nhất một ứng viên qua cổng; mặc định `K = 1`. Nếu anh
-   muốn không tốn lượt nào cho agent tắt Cộng hưởng, có thể đặt "chỉ lọc bằng code khi tắt" (không gọi model).
-2. **Sự kiện "đã xem":** cần dashboard gửi sự kiện tin nằm trong khung nhìn. Không theo dõi gì ngoài tin của agent trong Javis.
-3. **Pilot chất lượng thảo luận/phán xử/học trên model thật:** chỉ chuẩn bị gói, chờ lệnh.
-4. **Đo VPS:** chỉ chuẩn bị kịch bản, chờ lệnh.
+1. **Phán xử khi Cộng hưởng tắt:** mặc định vẫn lọc code + lô theo GOAL; có tuỳ chọn "chỉ lọc code" nếu anh không muốn tốn lượt cho
+   agent tắt Cộng hưởng.
+2. **Sự kiện "đã xem":** cần dashboard báo tin của agent đã nằm trong khung nhìn.
+3. **Pilot chất lượng trên model thật** và **đo VPS:** chỉ chuẩn bị gói, chờ lệnh.
+
+## 15. Sổ sửa theo review thiết kế vòng 1
+
+Review độc lập vòng 1 (FAIL, 6 chặn, 10 quan trọng, 6 nhỏ). Mỗi mục đã xử lý tại: (1) kho và outbox: 2, 3.1, 3.5, 12; (2) chỉ mục từng
+phần, vòng đời lý do, định tuyến, khoá bận: 3.1-3.4; (3) nhịp chỉ theo bằng chứng mới, prior về 0, dwell, vectơ test: 5.3, 6.3; (4) lượt
+xem xét reaction: 4.4; (5) trần phán xử riêng, dự trữ nghĩa vụ, `_under_ceiling`: 3.1, 9; (6) lịch sử dài: 11; (7) phân bổ theo bằng
+chứng, trần mỗi agent, không tín hiệu trùng: 6.5; (8) cá nhân hoá theo người và ngữ cảnh, 😂 độ tin thấp, `p̄`, một luật xuống bậc: 6.1,
+6.3, 5.3; (9) quay lại chỉ cho chính sách: 6.4; (10) quét việc giới hạn: 5.5; (11) nhịp pulse ngoài tick goal: 5.1; (12) sổ lượt phán
+xử theo lô, timeout, engine: 7.2; (13) di trú, quay về, lệch đồng hồ: 12, 5.4; (14) trần mới vào bảng giới hạn, Toàn quyền không nâng
+`max_tier`, `resumed_at` ở đường trưởng nhóm: 2, 9; (15) scope `dm:<session>`, `MEMORY.md`, không hai vòng học: 8.1, 8.3; (16) đếm sau
+`resumed_at`: 8.3, 7.6; (17) thức lại `min`, nghĩa vụ khi tạm dừng, nhắc chờ chủ: 5.2; (18) xét lại sau gỡ chờ một lần: 7.4; (19) "sao em
+không trả lời" chỉ gợi ý: 7.6; (20) trang Trò chuyện chính, `mobile-chat.js`, nonce dùng lại, API theo `agent_key`: 2, 4.1, 4.2, 10;
+(21) "Chờ hạn mức", chờ chủ, nhật ký quản trị: 5.2, 10; (22) ma trận thêm ca 14, lỗi kho, lỗi phán xử chat riêng: 13.
