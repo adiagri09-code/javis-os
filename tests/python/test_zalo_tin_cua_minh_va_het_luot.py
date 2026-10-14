@@ -75,10 +75,15 @@ chatbot_runtime.wire(answer=_engine, brain_root=lambda b: tempfile.mkdtemp(prefi
                      read_agent=lambda br, slug: ({"name": "Lan", "role": "Bán hàng"}, "Ngắn gọn."))
 
 
+# A counter, not time.time_ns(): on Windows the clock is coarse enough for two messages built in a row
+# to share an id, and the store then drops the second one as a duplicate (flaky run seen 14/10/2026).
+_SO_TIN = __import__("itertools").count(1)
+
+
 def _tin(**kw):
     """One message in javis-zalo 1.3.0's live-feed shape (normalizeMessage)."""
     base = {"threadId": "u1", "threadType": "dm", "senderId": "u1", "senderName": "Khách A",
-            "isSelf": False, "type": "text", "text": "", "id": f"m{time.time_ns()}", "timestamp": _ms(1)}
+            "isSelf": False, "type": "text", "text": "", "id": f"m{next(_SO_TIN)}", "timestamp": _ms(1)}
     base.update(kw)
     return base
 

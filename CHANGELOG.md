@@ -6,6 +6,11 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.123.0] - 2026-10-14
+### Sửa lỗi
+- **Bot tag thật mọi người nó nhắc tên trong nhóm Zalo.** Trước đây chỉ người bot đang trả lời được tag; bot viết thêm "@Minh Quý" hay "@Phạm Đại" trong câu thì đó chỉ là chữ thường, Zalo không báo cho ai. Giờ mỗi "@Tên" khớp một người đã từng nhắn trong nhóm đều thành tag thật, không phân biệt hoa thường hay dấu.
+- **Câu bạn gõ ở Hộp thư có "@Tên" cũng tag thật.** Người chưa từng nhắn trong nhóm thì chưa tag được, tên vẫn hiện như chữ thường.
+
 ## [0.122.0] - 2026-10-14
 ### Bảo mật
 - **Công cụ mở file không còn chạy file chương trình.** Lệnh mở file trên máy chạy Javis giờ từ chối file chạy được (script, chương trình, lối tắt). Mở app theo tên vẫn như cũ.
