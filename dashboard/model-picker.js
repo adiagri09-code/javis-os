@@ -12,6 +12,8 @@
   // chọn xong server lọc về "off" mà giao diện vẫn khoe đang bật.
   const EFFORT = [["off", "models.r_off"], ["low", "models.r_low"], ["medium", "models.r_med"],
                   ["high", "models.r_high"], ["xhigh", "models.r_xhigh"], ["ultra", "models.r_ultra"]];
+  // Nhãn chip mức suy nghĩ (0.148.0, tiếng Anh theo ý chủ repo): khoá đầy đủ để test i18n đọc được.
+  const EFF_KEY = { off: "eff.off", low: "eff.low", medium: "eff.medium", high: "eff.high", xhigh: "eff.xhigh", ultra: "eff.ultra" };
   let state = { providers: [], main: { provider: "", model: "" }, reasoning: "off" };
   let sessionPin = null;   // {provider, model} phiên đang mở đã ghim; null = theo mặc định chung
   let pinBroken = false;   // phiên có ghim nhưng ghim HỎNG (provider mất key) - server đang chạy mặc định chung
@@ -75,7 +77,7 @@
   function renderBar() {
     const eff = effective();
     const p = state.providers.find((x) => x.id === eff.provider);
-    const mt = $("mbModelTxt"), et = $("mbEffortTxt");
+    const mt = $("mbModelTxt");
     if (mt) {
       mt.textContent = (p ? provShort(p.label) : "Model") + " · " + short(eff.model)
         + (sessionPin ? " · " + window.t("mpick.pin") : pinBroken ? " · " + window.t("mpick.pin_broken") : "");
@@ -85,7 +87,8 @@
           ? window.t("mpick.pin_broken_title")
           : window.t("mpick.follow_default");
     }
-    if (et) et.textContent = "Effort: " + window.t((EFFORT.find((e) => e[0] === state.reasoning) || EFFORT[0])[1]);
+    const eb = $("effTxt");
+    if (eb) eb.textContent = window.t(EFF_KEY[(EFFORT.find((e) => e[0] === state.reasoning) || EFFORT[0])[0]]);
   }
 
   // Màn cảm ứng (điện thoại, máy tính bảng): focus một ô nhập là bật bàn phím ảo.
@@ -101,8 +104,7 @@
     // (o.cho). Trước đây popup mở ra trống trơn trong lúc chờ (Codex mất vài giây).
     const o = {
     // Thân bảng (ô tìm + nhà + model + hàng khoá) dựng bởi model-list.js, dùng CHUNG với ô
-    // Model của trợ lý bên Studio. Ở đây chỉ nối thêm hàng Effort - thứ duy nhất riêng của
-    // thanh chat.
+    // Model của trợ lý bên Studio. Mức suy nghĩ có chip và khung riêng từ 0.148.0.
       providers: state.providers,
       expanded, filter,
       selected: effective(),
@@ -113,9 +115,6 @@
     };
     let html = await window.JavisModelList.render(o);
     if (luot !== luotVe || pop.hidden) return;
-    html += `<div class="mb-eff-row"><span class="lbl">Effort</span>` +
-      EFFORT.map(([v, l]) => `<button class="mb-eff-btn ${state.reasoning === v ? "cur" : ""}" data-eff="${v}">${window.t(l)}</button>`).join("") +
-      `</div>`;
     // Ô tìm đang được gõ thì giữ con trỏ ở đó sau khi vẽ lại. Mới MỞ bảng thì chỉ tự focus
     // trên máy có bàn phím thật: trên điện thoại focus là bật bàn phím ảo che nửa bảng, người
     // dùng chỉ muốn bấm chọn model (chủ repo báo 27/09 "tự nhảy lên bàn phím").
@@ -135,6 +134,7 @@
   function open() {
     const pop = $("mbPop");
     if (!pop) return;
+    effClose(); closePlus();
     // Đang gõ trong ô chat mà bấm chip model: hạ bàn phím xuống trước, kẻo bàn phím che bảng.
     if (camUng()) {
       const a = document.activeElement;
@@ -144,6 +144,32 @@
   }
   function close() { const pop = $("mbPop"); if (pop) pop.hidden = true; }
   function isOpen() { const pop = $("mbPop"); return pop && !pop.hidden; }
+
+  // Chip mức suy nghĩ (0.148.0): tách khỏi bảng chọn model, mở một khung nhỏ có thanh trượt.
+  let effSlider = null;
+  function effOpen() {
+    const pop = $("effPop"), btn = $("effBtn");
+    if (!pop || !window.JavisEffortSlider) return;
+    close(); closePlus();
+    const eff = effective();
+    pop.hidden = false;
+    pop.style.left = btn ? (btn.offsetLeft) + "px" : "8px";
+    if (btn) btn.setAttribute("aria-expanded", "true");
+    effSlider = window.JavisEffortSlider.mount(pop, {
+      value: state.reasoning,
+      locked: window.JavisEffortSlider.isLocked(eff.provider, eff.model),
+      onChange: async (v) => { state.reasoning = v; renderBar(); await saveModel({ reasoning: v }); },
+    });
+    if (effSlider.focus) effSlider.focus();
+  }
+  function effClose() {
+    const pop = $("effPop"), btn = $("effBtn");
+    if (effSlider) { effSlider.destroy(); effSlider = null; }
+    if (pop) pop.hidden = true;
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  }
+  function effIsOpen() { const pop = $("effPop"); return pop && !pop.hidden; }
+  function closePlus() { try { if (window.JavisComposerMenu) window.JavisComposerMenu.close(); } catch (e) {} }
 
   // Chọn một model: ghi mặc định chung (chat mới sau này theo cái vừa chọn) + GHIM cho phiên
   // đang mở (phiên này giữ đúng model kể cả khi mặc định chung bị đổi ở chỗ khác). Dùng chung
@@ -163,6 +189,7 @@
       sessionPin = null;
     }
     await loadState(); renderBar();
+    if (effIsOpen()) { effClose(); effOpen(); }   // model mới có thể khoá hoặc mở khoá thanh trượt
   }
 
   // `/model <tên>`: tìm trong model của các nhà ĐÃ KẾT NỐI. Khớp NGUYÊN id thì thắng ngay; nếu
@@ -192,7 +219,9 @@
 
   document.addEventListener("click", async (e) => {
     if (e.target.closest("#mbOpen")) { isOpen() ? close() : open(); return; }
-    if (!e.target.closest("#modelBar") && !e.target.closest("#mbPop") && !e.target.closest("#mbOpen")) { if (isOpen()) close(); return; }
+    if (e.target.closest("#effBtn")) { effIsOpen() ? effClose() : effOpen(); return; }
+    if (!e.target.closest("#effPop") && effIsOpen()) effClose();
+    if (!e.target.closest("#mbPop") && !e.target.closest("#mbOpen")) { if (isOpen()) close(); return; }
 
     const goto = e.target.closest("[data-goto]");
     if (goto) {
@@ -206,13 +235,6 @@
       close();
       return;
     }
-    const eff = e.target.closest(".mb-eff-btn");
-    if (eff) {
-      state.reasoning = eff.dataset.eff;      // cập nhật lạc quan để UI phản hồi ngay
-      await saveModel({ reasoning: eff.dataset.eff });
-      renderBar(); renderPop();
-      return;
-    }
     const prov = e.target.closest(".mb-prov");
     // Bấm lại tên nhà đang mở là THU lại: OpenRouter hơn 300 model, không thu được thì phải
     // cuộn hết mới sang được nhà khác (chủ repo báo 27/09).
@@ -222,7 +244,11 @@
     }
   });
 
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && isOpen()) close(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (isOpen()) close();
+    if (effIsOpen()) { effClose(); const b = $("effBtn"); if (b) b.focus(); }
+  });
 
   window.initModelBar = async function () {
     await loadState(); await loadSessionPin(); renderBar();
@@ -248,6 +274,7 @@
       if (r.kind === "one") { await chonModel(r.prov, r.model); return { kind: "one", label: provShort(r.label), model: r.model }; }
       return r;
     },
+    effortLabel: function () { return window.t(EFF_KEY[state.reasoning] || "eff.off"); },
     hienTai: function () {
       const eff = effective();
       const p = state.providers.find((x) => x.id === eff.provider);
