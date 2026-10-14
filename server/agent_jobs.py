@@ -157,6 +157,7 @@ def _auto_jobs(agent_key: str, goals, principal) -> list:
             "source_label": "", "title": _excerpt(g.get("understanding") or g.get("request_ref") or g["id"], 140),
             "status": st, "run_state": rs, "bucket": bucket, "roles": [g.get("role") or "owner"], "progress": None,
             "my_steps": [], "result": "", "reason": str(g.get("block_reason") or "") if bucket == "needs_you" else "",
+            "reason_code": str(g.get("reason_code") or ""),
             "queue_pos": None, "cancelled": st == "cancelled", "failed": st == "failed",
             "updated_at": float(g.get("updated_at") or 0),
             "open": {"kind": "chat", "session_id": g.get("session_id") or "", "goal_id": g["id"]},

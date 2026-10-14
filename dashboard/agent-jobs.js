@@ -33,6 +33,7 @@
   var ROLE_KEY = { assignee: "ajobs.role.assignee", coordinator: "ajobs.role.coordinator", worker: "ajobs.role.worker",
     helper: "ajobs.role.helper", owner: "ajobs.role.owner", reviewer: "ajobs.role.reviewer" };
   var SOURCE_KEY = { team: "ajobs.src.team", chat: "ajobs.src.chat", auto: "ajobs.src.auto" };
+  var REASON_KEY = { review_removed: "ajobs.reason.review_removed", paused: "ajobs.reason.paused" };
   var SOURCE_ICON = { team: "users", chat: "message-circle", auto: "zap" };
 
   function sourceText(j) {
@@ -51,7 +52,9 @@
     if (j.board_off) lines.push(tw("ajobs.board_off"));
     if (j.cancelled) lines.push(tw("ajobs.cancelled"));
     if (j.failed) lines.push(tw("ajobs.failed"));
-    var reason = j.reason ? '<div class="aj-reason">' + esc(j.reason) + "</div>" : "";
+    // Mã lý do của mục tiêu Auto (đang dừng, đã gỡ người review cố định) đọc bằng lời thường; lý do khác hiện nguyên văn.
+    var why = REASON_KEY[j.reason_code] ? tw(REASON_KEY[j.reason_code]) : j.reason;
+    var reason = why ? '<div class="aj-reason">' + esc(why) + "</div>" : "";
     var result = j.result ? '<div class="aj-result">' + esc(j.result) + "</div>" : "";
     var openable = j.open && (j.open.team_id || j.open.session_id || j.open.task_id);
     var busy = ui.cancelling && ui.cancelling[j.id];

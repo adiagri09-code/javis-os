@@ -4090,5 +4090,9 @@
   "ajobs.source_err": "Chưa đọc được việc từ nguồn {src}.",
   "ajobs.foot": "Việc nền chạy tối đa {n} việc cùng lúc, việc còn lại xếp hàng. Chat thường không tự tạo việc.",
   "ajobs.foot_off": "AI tự vận hành đang tắt: việc giao trực tiếp chỉ nằm chờ. Việc trong nhóm vẫn chạy theo hàng của nhóm.",
-  "ws.docs_hint": "Tài liệu của trợ lý: nút Tài liệu ở đầu khung chat."
+  "ws.docs_hint": "Tài liệu của trợ lý: nút Tài liệu ở đầu khung chat.",
+  "resonance.verify_note": "Không còn người review cố định. Cần kiểm chứng kết quả thì giao một việc riêng cho trợ lý phù hợp ở tab Công việc.",
+  "ajobs.reason.review_removed": "Đang tạm dừng vì Javis đã bỏ người review cố định. Xem lại kết quả rồi bấm Tiếp tục, hoặc giao một việc kiểm chứng cho trợ lý phù hợp.",
+  "ajobs.reason.paused": "Đang tạm dừng. Mở để tiếp tục.",
+  "resonance.a5_removed_line": "Javis đã bỏ người review cố định. Mục tiêu đang tạm dừng để bạn xem kết quả: bấm Tiếp tục, sửa, huỷ, hoặc giao một việc kiểm chứng ở tab Công việc. Góp ý review cũ vẫn giữ."
 }

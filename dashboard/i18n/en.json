@@ -4090,5 +4090,9 @@
   "ajobs.source_err": "Could not read jobs from {src}.",
   "ajobs.foot": "Background jobs run at most {n} at a time; the rest wait in line. Ordinary chat never creates jobs by itself.",
   "ajobs.foot_off": "AI autopilot is off: directly assigned jobs only wait. Team jobs still run in their team queue.",
-  "ws.docs_hint": "The assistant's documents: the Documents button above the chat."
+  "ws.docs_hint": "The assistant's documents: the Documents button above the chat.",
+  "resonance.verify_note": "There is no fixed reviewer any more. To get a result checked, assign a separate job to a suitable assistant on the Jobs tab.",
+  "ajobs.reason.review_removed": "Paused because Javis removed fixed reviewers. Check the result and press Resume, or assign a check job to a suitable assistant.",
+  "ajobs.reason.paused": "Paused. Open it to resume.",
+  "resonance.a5_removed_line": "Javis removed fixed reviewers. This goal is paused for you to check the result: press Resume, edit, cancel, or assign a check job on the Jobs tab. Earlier review feedback is kept."
 }

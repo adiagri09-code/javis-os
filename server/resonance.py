@@ -4083,7 +4083,8 @@ def _team_view(store, principal, g: GoalRecord) -> Optional[dict]:
                       "sha8": str(r.get("artifact_sha") or "")[:8], "criteria": r.get("criteria") or [],
                       "fixes": r.get("fixes") or "", "at": r.get("finished_at")}
             break
-    return {"legacy": False, "status": t["status"], "maker": who(t["maker_agent_key"]),
+    return {"legacy": False, "status": t["status"], "detached_by": str(t.get("detached_by") or ""),
+            "maker": who(t["maker_agent_key"]),
             "reviewer": who(t["reviewer_agent_key"]), "calls": t.get("calls") or {},
             "max_rounds": int(t["max_rounds"]), "rounds_used": store.review_rounds(principal, g.id, g.revision),
             "latest": latest}

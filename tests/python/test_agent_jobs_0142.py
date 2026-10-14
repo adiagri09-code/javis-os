@@ -138,6 +138,7 @@ check("khoá giao việc đọc ngược được", agent_jobs.parse_assign_key(
 order = [x["bucket"] for x in j["jobs"]]
 rank = {"needs_you": 0, "running": 1, "waiting": 2, "done": 3}
 check("thứ tự ngăn đúng", order == sorted(order, key=lambda b: rank[b]), order)
+check("không nguồn nào lỗi ngầm", j["errors"] == [], j["errors"])
 check("đếm theo ngăn khớp danh sách", all(j["counts"][b] == order.count(b) for b in rank), j["counts"])
 
 print(("FAIL" if fails else "PASS") + f" - test_agent_jobs_0142: {len(fails)} lỗi")
