@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.129.0] - 2026-10-14
+### Cải thiện
+- **Trang Nhóm gọn như app chat**, dùng dễ trên điện thoại.
+
 ## [0.124.0] - 2026-10-14
 ### Thêm mới
 - **Tìm trong nhóm.** Bấm kính lúp ở đầu khung chat, gõ vài chữ (không cần gõ dấu), bấm một kết quả để nhảy tới đúng tin đó; nút Về tin mới nhất đưa bạn trở lại.

@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.129.0] - 2026-10-14
+### Improved
+- **The Teams page now works like a chat app**, easy to use on a phone.
+
 ## [0.124.0] - 2026-10-14
 ### Added
 - **Search inside a team.** Tap the magnifier at the top of the chat, type a few words (accents optional), and tap a result to jump to that message; Back to latest returns you.
