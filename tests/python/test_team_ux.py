@@ -136,6 +136,14 @@ check("số lần đã dùng hôm nay kèm giới hạn đang áp", u == {"today
 src = (ROOT / "server" / "team_runner.py").read_text(encoding="utf-8")
 check("lý do chặn không còn chữ 'trần', 'Lượt lỗi', 'Server khởi động lại'",
       "Đã chạm trần" not in src and 'f"Lượt lỗi:' not in src and "Server khởi động lại khi bước" not in src)
+check("tin hệ thống về quyền tự quyết bằng lời thường (không 'Toàn quyền', 'Quyền giới hạn', 'đặt trần')",
+      "đã bật Toàn quyền" not in src and "Nhóm về Quyền giới hạn" not in src and "đã đặt trần" not in src)
+r, tm, ts, ss, fake, T = world("authmsg")
+r.grant_authority(T["team_id"], {"ceilings": {"daily_turns": 50}})
+r.revoke_authority(T["team_id"])
+sys_msgs = [m["content"] for m in ss.get_team_messages_page(T["session_id"], limit=50)["messages"] if m["author_kind"] == "system"]
+check("bật rồi thu quyền tự quyết: hai tin hệ thống nói rõ", any("tự quyết" in s for s in sys_msgs)
+      and any("thu lại" in s for s in sys_msgs), sys_msgs)
 
 print(f"\n{'FAIL' if fails else 'PASS'} - test_team_ux: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)

@@ -1,16 +1,17 @@
-/* Trang Nhóm: nhóm chat team (T1, Quyền giới hạn).
+/* Trang Nhóm: nhóm chat team (T1 tới T5).
 
-   Thiết kế: docs/superpowers/specs/2026-10-13-team-chat-design.md mục 16; wireframe docs/dev/team-chat-wireframes.md.
-   Ba phần: danh sách nhóm (trái), khung chat (giữa), cài đặt nhóm (phải; ngăn kéo dưới 1060px). Màn hẹp: danh sách là
-   trang đầu, chạm một nhóm mở khung chat toàn màn, cài đặt là trang trượt lên.
+   Thiết kế: docs/superpowers/specs/2026-10-13-team-chat-design.md mục 16; bố cục gọn kiểu app chat ở T5
+   (docs/dev/team-chat-t5.md). Hai phần chính: danh sách nhóm (trái) và khung chat. Mọi thứ ít dùng nằm trong một
+   ngăn "Việc | Nhóm" mở từ đầu khung chat (cột phải trên máy tính, trang trượt lên trên điện thoại).
 
    Gửi tin bằng POST /teams/{id}/messages kèm `client_msg_id`: rớt mạng thì gửi lại ĐÚNG mã cũ, server trả tin cũ, không
    thêm lượt hay việc. Câu trả lời và trạng thái về qua WebSocket chung (app.js đổi gói `team_message` / `team_state`
    thành sự kiện `javis:team-event`).
 
-   @ là danh sách có cấu trúc: chỉ người chọn từ gợi ý mới được gọi; gõ tay "@abc" chỉ là chữ.
+   @: chọn từ gợi ý chèn "@Tên " vào chữ; lúc gửi, người được gọi là các "@Tên" CÒN trong chữ (xoá chữ là bỏ gọi).
 
-   Các hàm *Html, mentionMatches, composerHint thuần (không DOM, không mạng) để test chạy dưới node. */
+   Các hàm *Html, mentionMatches, mentionsFromText, composerHint, levelOf, grantFor thuần (không DOM, không mạng) để test
+   chạy dưới node. */
 (function () {
   "use strict";
 
@@ -32,7 +33,10 @@
   // Icon lấy từ bộ Lucide của dashboard; chạy trong Node (test) thì không có, trả chuỗi rỗng.
   var ic = function (n, o) { return (typeof window !== "undefined" && window.ic) ? window.ic(n, o) : ""; };
 
-  var ROLE_KEY = { leader_reply: "teams.role.reply", member_reply: "teams.role.reply", plan: "teams.role.plan",
+  // Vai chỉ hiện cho bước của việc; câu trả lời trò chuyện thường không cần nhãn.
+  var ROLE_KEY = { plan: "teams.role.plan", work: "teams.role.work", help: "teams.role.help",
+    synthesize: "teams.role.synthesize" };
+  var TURN_ROLE_KEY = { leader_reply: "teams.role.reply", member_reply: "teams.role.reply", plan: "teams.role.plan",
     work: "teams.role.work", help: "teams.role.help", synthesize: "teams.role.synthesize" };
   // Khoá viết TRỌN (không ghép chuỗi) để bộ kiểm i18n đọc được từng khoá đang dùng.
   var STATUS_KEY = { done: "teams.status.done", late_cancelled: "teams.status.late_cancelled", late: "teams.status.late",
@@ -43,11 +47,8 @@
     agent_busy_long: "teams.block.agent_busy_long", waiting_user: "teams.block.waiting_user", cancelled: "teams.block.cancelled" };
   var CAP_KEY = { task_turns: "teams.cap.task_turns", task_steps: "teams.cap.task_steps", daily_turns: "teams.cap.daily_turns",
     mentions: "teams.cap.mentions" };
-  var TAB_KEY = { members: "teams.tab_members", jobs: "teams.tab_jobs", turns: "teams.tab_turns", settings: "teams.tab_settings" };
+  var TAB_KEY = { jobs: "teams.tab_jobs", team: "teams.tab_team" };
   var LATE = ["late_cancelled", "late", "old_revision", "member_left", "leader_changed"];
-  // Không tiến triển: chạy lại đúng bước đó (bước lặp đã đánh dấu lỗi, không phải kết quả việc).
-  var RETRY_KINDS = ["failed", "interrupted", "no_progress"];
-  var RESUME_KINDS = ["cap_reached", "agent_busy_long", "waiting_user"];
   var CAP_FIELDS = ["task_turns", "task_steps", "daily_turns", "mentions"];
   // Toàn quyền (T3, spec 13): trần trưởng nhóm đổi được trong trần trần của chủ.
   var AUTH_CAPS = ["task_turns", "task_steps", "help_depth", "daily_turns"];
@@ -56,6 +57,13 @@
   var PROVIDERS = [{ id: "aux", key: "teams.auth.provider_aux" }, { id: "anthropic-cli", key: "teams.auth.provider_claude" }];
   var FIXED_KEYS = ["teams.auth.fixed_server", "teams.auth.fixed_provider", "teams.auth.fixed_account",
     "teams.auth.fixed_technical"];
+  // Ba mức tự quyết của trưởng nhóm (T5), đặt lên Toàn quyền của T3. Mức 2: trần tối đa vừa phải, không ngắt việc.
+  // Mức 3: trần tối đa không giới hạn và được ngắt việc; lượt model vẫn theo trần của nhóm vì không provider nào được
+  // Không giới hạn (D6), nên vẫn trong hạn mức gói của chủ.
+  var LEVEL2_CEILINGS = { task_turns: 24, task_steps: 12, help_depth: 3, daily_turns: 200 };
+  var LEVELS = [{ n: 1, key: "teams.level_1", desc: "teams.level_1_desc" },
+    { n: 2, key: "teams.level_2", desc: "teams.level_2_desc" },
+    { n: 3, key: "teams.level_3", desc: "teams.level_3_desc" }];
   // Sáu reaction (spec mục 14.1). Emoji ở đây là DỮ LIỆU sản phẩm (giá trị chủ chọn, lưu nguyên loại), không phải icon
   // trang trí: test_icons.py cho phép đúng sáu ký tự này trong file này và kiểm cả sáu luôn có mặt.
   var REACTIONS = [
@@ -71,6 +79,7 @@
     off_topic: "teams.reason.off_topic" };
   var REASONS = ["on_point", "wrong_facts", "missing", "too_long", "unclear", "off_topic"];
   var COMMENT_MAX = 500;
+  var INPUT_MAX_PX = 132;   // khung soạn tự cao theo chữ, tối đa khoảng năm dòng
 
   function reactionOf(value) {
     for (var i = 0; i < REACTIONS.length; i++) if (REACTIONS[i].value === value) return REACTIONS[i];
@@ -94,8 +103,13 @@
       esc(tw("teams.react_change")) + '">' + bits.join(" · ") + "</button>";
   }
 
-  // `draft`: lý do và góp ý đang soạn dở (giữ qua lần vẽ lại khi có tin mới tới).
-  function reactionPickerHtml(m, reaction, draft) {
+  function pinButtonHtml(m) {
+    return '<button type="button" class="ws-btn tm-pin" data-decision="' + esc(m.id) + '" data-on="1">' + ic("pin") +
+      esc(tw("teams.decision_pin")) + "</button>";
+  }
+
+  // `draft`: lý do và góp ý đang soạn dở (giữ qua lần vẽ lại khi có tin mới tới). `pin`: thêm nút Ghim vào bảng.
+  function reactionPickerHtml(m, reaction, draft, pin) {
     reaction = reaction || {};
     if (draft) reaction = { value: reaction.value, reasons: draft.reasons, comment: draft.comment };
     var row = REACTIONS.map(function (r) {
@@ -120,13 +134,33 @@
       '<div class="tm-react-note">' + esc(tw("teams.react_note")) + "</div>" +
       '<div class="tm-actions"><button type="button" class="ws-btn" data-react-save="' + esc(m.id) + '">' +
       esc(tw("teams.react_save")) + '</button><button type="button" class="ws-btn" data-react-clear="' + esc(m.id) + '">' +
-      esc(tw("teams.react_clear")) + '</button><button type="button" class="ws-btn" data-react-close="' + esc(m.id) + '">' +
+      esc(tw("teams.react_clear")) + "</button>" + (pin ? pinButtonHtml(m) : "") +
+      '<button type="button" class="ws-btn" data-react-close="' + esc(m.id) + '">' +
       esc(tw("teams.react_close")) + "</button></div></div>";
+  }
+
+  // Bảng của tin do chủ gửi (nhấn giữ hay nút ba chấm): chỉ có Ghim làm quyết định.
+  function ownerPanelHtml(m) {
+    return '<div class="tm-react-panel tm-owner-panel" data-panel="' + esc(m.id) + '" role="dialog" aria-label="' +
+      esc(tw("teams.msg_more")) + '"><div class="tm-actions">' + pinButtonHtml(m) +
+      '<button type="button" class="ws-btn" data-react-close="' + esc(m.id) + '">' + esc(tw("teams.react_close")) +
+      "</button></div></div>";
   }
 
   function initial(name) {
     var s = String(name || "?").trim();
     return s ? s.charAt(0).toUpperCase() : "?";
+  }
+
+  // Màu ảnh đại diện cố định theo tên (8 màu), để nhận ra người trong khung chat mà không cần đọc tên.
+  function avaClass(name) {
+    var s = String(name || ""), h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 997;
+    return "tm-ava tm-ava-c" + (h % 8);
+  }
+
+  function avaHtml(name) {
+    return '<span class="' + avaClass(name) + '" aria-hidden="true">' + esc(initial(name)) + "</span>";
   }
 
   function memberOf(members, key) {
@@ -139,21 +173,53 @@
     return m ? (m.name || m.slug || key) : key;
   }
 
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+
+  // Giờ ngắn cho danh sách nhóm: hôm nay "14:05", ngày khác "13/10".
+  function timeShort(ts, now) {
+    if (!ts) return "";
+    var d = new Date(Number(ts) * 1000), n = new Date(now === undefined ? Date.now() : Number(now) * 1000);
+    if (d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate()) {
+      return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    }
+    return pad2(d.getDate()) + "/" + pad2(d.getMonth() + 1);
+  }
+
   // ───────────── danh sách nhóm ─────────────
 
-  function teamListHtml(teams, activeId) {
-    if (!teams || !teams.length) return '<div class="tm-empty">' + esc(tw("teams.empty")) + "</div>";
+  function guideHtml() {
+    return '<div class="tm-guide"><strong>' + esc(tw("teams.guide_title")) + "</strong><ol>" +
+      ["teams.guide_1", "teams.guide_2", "teams.guide_3"].map(function (k) { return "<li>" + esc(tw(k)) + "</li>"; }).join("") +
+      '</ol><button type="button" class="ws-btn tm-primary tm-new">' + ic("plus") + esc(tw("teams.create_title")) +
+      "</button></div>";
+  }
+
+  function teamBadge(t) {
+    var c = t.counts || {};
+    if (t.status === "archived") return '<span class="tm-badge">' + esc(tw("teams.status_archived")) + "</span>";
+    if (c.blocked) return '<span class="tm-badge tm-badge-owner">' + esc(tw("teams.needs_you")) + "</span>";
+    if (t.status === "paused") return '<span class="tm-badge">' + esc(tw("teams.status_paused")) + "</span>";
+    if (c.running) return '<span class="tm-badge tm-badge-run">' + esc(tw("teams.badge_running")) + "</span>";
+    return "";
+  }
+
+  function previewText(t, members) {
+    var last = t.last;
+    if (!last || !last.text) return tw("teams.no_messages");
+    var who = last.author_kind === "owner" ? tw("teams.you") : last.author_kind === "agent" ? (last.author || "") : "";
+    return (who ? who + ": " : "") + last.text;
+  }
+
+  function teamListHtml(teams, activeId, now) {
+    if (!teams || !teams.length) return guideHtml();
     return teams.map(function (t) {
-      var c = t.counts || {};
-      var sub = [];
-      if (c.blocked) sub.push('<span class="tm-badge tm-badge-owner">' + esc(tw("teams.waiting_owner", { n: c.blocked })) + "</span>");
-      if (c.running) sub.push("<span>" + esc(tw("teams.running_n", { n: c.running })) + "</span>");
-      if (c.waiting) sub.push("<span>" + esc(tw("teams.waiting_n", { n: c.waiting })) + "</span>");
-      if (TEAM_STATUS_KEY[t.status] && t.status !== "active") sub.push("<span>" + esc(tw(TEAM_STATUS_KEY[t.status])) + "</span>");
       var on = t.team_id === activeId;
+      var last = t.last || {};
       return '<button type="button" class="tm-team" data-team="' + esc(t.team_id) + '"' + (on ? ' aria-current="true"' : "") + ">" +
-        '<span class="tm-team-name">' + esc(t.name) + "</span>" +
-        '<span class="tm-team-sub">' + sub.join(" · ") + "</span></button>";
+        avaHtml(t.name) + '<span class="tm-team-main"><span class="tm-team-top"><span class="tm-team-name">' + esc(t.name) +
+        '</span><span class="tm-team-time">' + esc(timeShort(last.ts || t.updated_at, now)) + "</span></span>" +
+        '<span class="tm-team-bottom"><span class="tm-team-sub">' + esc(previewText(t)) + "</span>" + teamBadge(t) +
+        "</span></span></button>";
     }).join("");
   }
 
@@ -162,52 +228,113 @@
   function messageHtml(m, ctx) {
     ctx = ctx || {};
     var meta = m.meta || {};
+    var open = ctx.picker !== undefined && ctx.picker !== null && Number(ctx.picker) === Number(m.id);
+    var hit = ctx.jumped !== undefined && ctx.jumped !== null && Number(ctx.jumped) === Number(m.id);
+    if (m.author_kind !== "owner" && m.author_kind !== "agent") {
+      return '<div class="tm-sys' + (hit ? " tm-msg-hit" : "") + '" data-mid="' + esc(m.id) + '">' +
+        esc(m.content).replace(/\n/g, "<br>") + "</div>";
+    }
     var mine = m.author_kind === "owner";
-    var who = mine ? tw("teams.owner") : m.author_kind === "agent" ? nameOf(ctx.members, m.author_ref) : tw("teams.system");
-    var head = ['<span class="tm-ava" aria-hidden="true">' + esc(initial(who)) + "</span>",
-      '<span class="tm-who">' + esc(who) + "</span>"];
-    if (meta.role && ROLE_KEY[meta.role]) head.push('<span class="tm-role">' + esc(tw(ROLE_KEY[meta.role])) + "</span>");
+    var who = mine ? tw("teams.owner") : nameOf(ctx.members, m.author_ref);
+    var head = [];
+    if (!mine) head.push('<span class="tm-who">' + esc(who) + "</span>");
+    if (!mine && meta.role && ROLE_KEY[meta.role]) head.push('<span class="tm-role">' + esc(tw(ROLE_KEY[meta.role])) + "</span>");
     if (m.task_id) {
       var title = (ctx.taskTitles || {})[m.task_id] || m.task_id;
-      head.push('<button type="button" class="tm-tag" data-task="' + esc(m.task_id) + '">' +
+      head.push('<button type="button" class="tm-tag" data-task="' + esc(m.task_id) + '">' + ic("list-todo") +
         esc(tw("teams.job_tag", { title: title })) + "</button>");
+    } else if (mine && meta.as_job) {
+      head.push('<span class="tm-tag tm-tag-new">' + ic("list-todo") + esc(tw("teams.as_job")) + "</span>");
     }
     if (meta.job_result) head.push('<span class="tm-result">' + esc(tw("teams.job_result")) + "</span>");
-    if (m.author_kind === "agent" && STATUS_KEY[meta.status]) {
-      var late = LATE.indexOf(meta.status) >= 0;
-      head.push('<span class="tm-state' + (late ? " tm-state-late" : "") + '">' +
-        ic(late ? "triangle-alert" : "check") + esc(tw(STATUS_KEY[meta.status])) + "</span>");
-    }
-    if (meta.decision) head.push('<span class="tm-decision">' + esc(tw("teams.decision_pinned")) + "</span>");
+    var late = !mine && LATE.indexOf(meta.status) >= 0;
     var body = '<div class="tm-text">' + esc(m.content).replace(/\n/g, "<br>") + "</div>";
+    // "Xong" là bình thường nên không hiện; chỉ báo khi câu trả lời KHÔNG được áp dụng.
+    var lateLine = late ? '<div class="tm-late">' + ic("triangle-alert") + esc(tw(STATUS_KEY[meta.status])) + "</div>" : "";
     var notes = (meta.notes || []).map(function (n) { return '<div class="tm-note-line">' + esc(n) + "</div>"; }).join("");
     var prop = "";
     if (meta.proposal && meta.proposal.title) {
       prop = '<div class="tm-proposal"><div>' + esc(tw("teams.proposal", { name: who, title: meta.proposal.title })) + "</div>" +
-        '<div class="tm-actions"><button type="button" class="ws-btn" data-accept="' + esc(m.id) + '">' +
+        '<div class="tm-actions"><button type="button" class="ws-btn tm-primary" data-accept="' + esc(m.id) + '">' +
         esc(tw("teams.proposal_create")) + '</button><button type="button" class="ws-btn" data-skip="' + esc(m.id) + '">' +
         esc(tw("teams.proposal_skip")) + "</button></div></div>";
     }
-    var pin = '<button type="button" class="tm-pin" data-decision="' + esc(m.id) + '" data-on="' + (meta.decision ? "0" : "1") + '">' +
-      esc(tw(meta.decision ? "teams.decision_unpin" : "teams.decision_pin")) + "</button>";
-    var cls = "tm-msg" + (mine ? " tm-msg-owner" : "") + (LATE.indexOf(meta.status) >= 0 ? " tm-msg-late" : "") +
-      (meta.job_result ? " tm-msg-result" : "") + (ctx.jumped !== undefined && ctx.jumped !== null && Number(ctx.jumped) === Number(m.id)
-        ? " tm-msg-hit" : "");
-    var react = "";
-    if (m.author_kind === "agent") {
-      cls += " tm-msg-agent";
-      react = reactionChipHtml(m, m.reaction) +
-        '<button type="button" class="tm-react-btn" data-react-open="' + esc(m.id) + '" aria-label="' +
+    // Quyết định đã ghim: nhãn là nút bỏ ghim. Chưa ghim: nút Ghim nằm trong bảng nhấn giữ / ba chấm.
+    var decision = meta.decision ? '<button type="button" class="tm-decision" data-decision="' + esc(m.id) + '" data-on="0" title="' +
+      esc(tw("teams.decision_unpin")) + '">' + ic("pin") + esc(tw("teams.decision_pinned")) + "</button>" : "";
+    // Nút mở bảng nằm CẠNH bong bóng (không thêm một hàng dưới mỗi tin); bảng mở ra chiếm trọn bề ngang bên dưới.
+    var foot = decision, panel = "", side;
+    if (mine) {
+      side = '<button type="button" class="tm-more-btn" data-react-open="' + esc(m.id) + '" aria-label="' +
+        esc(tw("teams.msg_more")) + '" title="' + esc(tw("teams.msg_more")) + '">' + ic("ellipsis-vertical") + "</button>";
+      if (open && !meta.decision) panel = ownerPanelHtml(m);
+    } else {
+      foot += reactionChipHtml(m, m.reaction);
+      side = '<button type="button" class="tm-react-btn" data-react-open="' + esc(m.id) + '" aria-label="' +
         esc(tw("teams.react")) + '" title="' + esc(tw("teams.react")) + '">' + ic("smile") + "</button>";
+      if (open) panel = reactionPickerHtml(m, m.reaction, ctx.draft && ctx.draft.mid === m.id ? ctx.draft : null, !meta.decision);
     }
-    var panel = m.author_kind === "agent" && ctx.picker === m.id ?
-      reactionPickerHtml(m, m.reaction, ctx.draft && ctx.draft.mid === m.id ? ctx.draft : null) : "";
-    return '<div class="' + cls + '" data-mid="' + esc(m.id) + '"><div class="tm-head">' + head.join("") + "</div>" +
-      body + notes + prop + '<div class="tm-foot">' + react + pin + "</div>" + panel + "</div>";
+    var cls = "tm-msg" + (mine ? " tm-msg-owner" : " tm-msg-agent") + (late ? " tm-msg-late" : "") +
+      (meta.job_result ? " tm-msg-result" : "") + (hit ? " tm-msg-hit" : "");
+    var bubble = '<div class="tm-bubble">' + (head.length ? '<div class="tm-head">' + head.join("") + "</div>" : "") +
+      body + lateLine + notes + prop + (foot ? '<div class="tm-foot">' + foot + "</div>" : "") + "</div>";
+    return '<div class="' + cls + '" data-mid="' + esc(m.id) + '">' +
+      (mine ? side + bubble : avaHtml(who) + bubble + side) + panel + "</div>";
   }
 
-  // ───────────── hàng đợi ─────────────
+  // ───────────── việc ─────────────
 
+  // Việc bị chặn: MỘT nút giải quyết theo lý do (T5). Hết lượt thì "Cho thêm lượt" (nâng đúng giới hạn rồi chạy tiếp),
+  // lỗi hay không làm ra gì mới thì Thử lại, bị dừng giữa chừng thì Làm tiếp, chưa có trưởng nhóm thì mở chỗ chọn.
+  function blockedAction(kind) {
+    if (kind === "cap_reached") return { act: "extend", key: "teams.act.extend" };
+    if (kind === "failed" || kind === "no_progress") return { act: "retry", key: "teams.act.retry" };
+    if (kind === "interrupted") return { act: "retry", key: "teams.act.continue" };
+    if (kind === "no_leader") return { act: "leader", key: "teams.pick_leader" };
+    if (kind === "agent_busy_long" || kind === "waiting_user") return { act: "resume", key: "teams.resume" };
+    return null;
+  }
+
+  function blockedButtonHtml(t) {
+    var a = blockedAction(t.block_kind || "failed");
+    if (!a) return "";
+    var label = esc(tw(a.key));
+    if (a.act === "extend") return '<button type="button" class="ws-btn tm-primary" data-extend="' + esc(t.id) + '">' + label + "</button>";
+    if (a.act === "leader") return '<button type="button" class="ws-btn tm-primary" data-open-team="1">' + label + "</button>";
+    return '<button type="button" class="ws-btn tm-primary" data-unblock="' + esc(t.id) + '" data-action="' + a.act + '">' +
+      label + "</button>";
+  }
+
+  function blockedCardHtml(t) {
+    var kind = t.block_kind || "failed";
+    return '<div class="tm-jcard"><div class="tm-jcard-text"><strong class="tm-qtitle">' + esc(t.title) + "</strong>" +
+      '<span class="tm-qwhy">' + esc(t.block_reason || tw(BLOCK_KEY[kind] || BLOCK_KEY.failed)) + "</span></div>" +
+      '<span class="tm-actions">' + blockedButtonHtml(t) +
+      '<button type="button" class="ws-btn" data-cancel="' + esc(t.id) + '">' + esc(tw("teams.cancel")) + "</button></span></div>";
+  }
+
+  function runningRowHtml(t, withView) {
+    return '<div class="tm-qrow tm-jrun"><span class="tm-spin" aria-hidden="true">' + ic("loader") + "</span>" +
+      '<span class="tm-qtitle">' + esc(tw("teams.doing", { title: t.title })) + '</span><span class="tm-actions">' +
+      (withView ? '<button type="button" class="ws-btn" data-view-task="' + esc(t.id) + '">' + esc(tw("teams.view_msgs")) + "</button>" : "") +
+      '<button type="button" class="ws-btn" data-amend="' + esc(t.id) + '">' + esc(tw("teams.amend")) + "</button>" +
+      '<button type="button" class="ws-btn" data-cancel="' + esc(t.id) + '">' + esc(tw("teams.cancel")) + "</button></span></div>";
+  }
+
+  // Dải việc ở đầu khung chat: việc đang làm (một dòng) và việc đang chờ chủ (thẻ có nút giải quyết).
+  function jobStripHtml(q) {
+    q = q || {};
+    var running = q.running || [], blocked = q.blocked || [];
+    var h = running.length ? runningRowHtml(running[0], false) : "";
+    h += blocked.slice(0, 2).map(blockedCardHtml).join("");
+    if (blocked.length > 2) {
+      h += '<button type="button" class="ws-btn tm-jmore" data-open-jobs="1">' +
+        esc(tw("teams.blocked_more", { n: blocked.length - 2 })) + "</button>";
+    }
+    return h;
+  }
+
+  // Tab Việc trong ngăn: Đang làm, Chờ bạn, Sắp làm (đánh số đúng thứ tự chạy).
   function queueHtml(q) {
     q = q || {};
     var running = q.running || [], waiting = q.waiting || [], blocked = q.blocked || [];
@@ -215,11 +342,11 @@
     var h = "";
     if (running.length) {
       h += '<div class="tm-qhead">' + esc(tw("teams.queue_running")) + "</div>";
-      h += running.map(function (t) {
-        return '<div class="tm-qrow"><span class="tm-qtitle">' + esc(t.title) + '</span><span class="tm-actions">' +
-          '<button type="button" class="ws-btn" data-amend="' + esc(t.id) + '">' + esc(tw("teams.amend")) + "</button>" +
-          '<button type="button" class="ws-btn" data-cancel="' + esc(t.id) + '">' + esc(tw("teams.cancel")) + "</button></span></div>";
-      }).join("");
+      h += running.map(function (t) { return runningRowHtml(t, true); }).join("");
+    }
+    if (blocked.length) {
+      h += '<div class="tm-qhead">' + esc(tw("teams.queue_blocked")) + "</div>";
+      h += blocked.map(blockedCardHtml).join("");
     }
     if (waiting.length) {
       h += '<div class="tm-qhead">' + esc(tw("teams.queue_waiting")) + "</div>";
@@ -230,19 +357,6 @@
           '<span class="tm-qtitle">' + esc(t.title) + '</span><span class="tm-actions">' +
           '<button type="button" class="ws-btn" data-prio="' + esc(t.id) + '" data-on="' + (star ? "0" : "1") + '">' +
           esc(tw(star ? "teams.unprioritize" : "teams.prioritize")) + "</button>" +
-          '<button type="button" class="ws-btn" data-cancel="' + esc(t.id) + '">' + esc(tw("teams.cancel")) + "</button></span></div>";
-      }).join("");
-    }
-    if (blocked.length) {
-      h += '<div class="tm-qhead">' + esc(tw("teams.queue_blocked")) + "</div>";
-      h += blocked.map(function (t) {
-        var kind = t.block_kind || "failed";
-        var btn = RETRY_KINDS.indexOf(kind) >= 0 ? ["retry", "teams.retry"] : RESUME_KINDS.indexOf(kind) >= 0 ? ["resume", "teams.resume"] : null;
-        return '<div class="tm-qrow tm-qblocked"><span class="tm-qtitle">' + esc(t.title) + "</span>" +
-          '<span class="tm-qwhy">' + esc(tw(BLOCK_KEY[kind] || BLOCK_KEY.failed)) + (t.block_reason ? ": " + esc(t.block_reason) : "") + "</span>" +
-          (kind === "cap_reached" ? '<span class="tm-qwhy">' + esc(tw("teams.cap_hint")) + "</span>" : "") +
-          '<span class="tm-actions">' +
-          (btn ? '<button type="button" class="ws-btn" data-unblock="' + esc(t.id) + '" data-action="' + btn[0] + '">' + esc(tw(btn[1])) + "</button>" : "") +
           '<button type="button" class="ws-btn" data-cancel="' + esc(t.id) + '">' + esc(tw("teams.cancel")) + "</button></span></div>";
       }).join("");
     }
@@ -261,18 +375,47 @@
     }).slice(0, 8);
   }
 
+  // Người được gọi là các "@Tên" (hay "@slug") còn trong chữ, theo thứ tự xuất hiện. Sau tên phải là hết chữ hay một ký
+  // tự không phải chữ/số. Hai tên cùng bắt đầu ở một chỗ ("@Lan Anh" và "@Lan") thì lấy tên dài hơn.
+  function mentionsFromText(text, members) {
+    var low = String(text || "").toLowerCase();
+    var word = /[\p{L}\p{N}_]/u;
+    var cands = [];
+    (members || []).forEach(function (m) {
+      if (m.status && m.status !== "active") return;
+      [m.name, m.slug].forEach(function (n) {
+        n = String(n || "").trim().toLowerCase();
+        if (!n) return;
+        var at = 0, i;
+        while ((i = low.indexOf("@" + n, at)) >= 0) {
+          var next = low.charAt(i + 1 + n.length);
+          if (!next || !word.test(next)) cands.push({ i: i, len: n.length, key: m.agent_key });
+          at = i + 1;
+        }
+      });
+    });
+    cands.sort(function (a, b) { return a.i - b.i || b.len - a.len; });
+    var taken = {}, out = [];
+    cands.forEach(function (c) {
+      if (taken[c.i]) return;
+      taken[c.i] = true;
+      if (out.indexOf(c.key) < 0) out.push(c.key);
+    });
+    return out;
+  }
+
+  // Một dòng gợi ý dưới khung soạn: chỉ khi Giao việc bật (sẽ tạo việc cho ai) hay khi gọi quá số người cho phép.
   function composerHint(st) {
     var cap = Number(st.cap || 3);
     var ments = st.mentions || [];
     if (ments.length > cap) return { ok: false, text: tw("teams.hint_cap", { cap: cap }) };
     if (!st.asJob) return { ok: true, text: "" };
-    var pos = Number(st.waiting || 0) + 1;
     if (ments.length) {
       var names = ments.map(function (k) { return nameOf(st.members, k); }).join(", ");
-      return { ok: true, text: tw("teams.hint_job_direct", { names: names, pos: pos }) };
+      return { ok: true, text: tw("teams.hint_job_direct", { names: names }) };
     }
     if (!st.leaderKey) return { ok: true, text: tw("teams.hint_job_noleader") };
-    return { ok: true, text: tw("teams.hint_job_general", { name: nameOf(st.members, st.leaderKey), pos: pos }) };
+    return { ok: true, text: tw("teams.hint_job_general", { name: nameOf(st.members, st.leaderKey) }) };
   }
 
   function newClientId() {
@@ -282,19 +425,25 @@
     return "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
   }
 
-  // ───────────── cài đặt nhóm ─────────────
+  // ───────────── ngăn Nhóm ─────────────
 
   function rsText(on) { return tw(on ? "resonance.t0_state_on" : "resonance.t0_state_off"); }
 
-  function membersHtml(team, agents) {
+  // Mỗi thành viên một dòng (tên đủ, vai ở dòng dưới); chạm dòng mở các thao tác.
+  function membersHtml(team, agents, openKey) {
     var mem = team.members || [];
     var have = {};
     mem.forEach(function (m) { have[m.slug] = true; });
     var rows = mem.map(function (m) {
       var lead = m.agent_key === team.leader_key;
-      return '<div class="tm-mrow"><span class="tm-ava" aria-hidden="true">' + esc(initial(m.name)) + "</span>" +
-        '<span class="tm-mname">' + esc(m.name || m.slug) + "</span>" +
-        '<span class="tm-mrole">' + esc(tw(lead ? "teams.leader" : "teams.member")) + "</span>" +
+      var open = openKey === m.agent_key;
+      var sub = [tw(lead ? "teams.leader" : "teams.member")];
+      if (m.resonance_enabled) sub.push(rsText(true));
+      return '<div class="tm-mrow"><button type="button" class="tm-mhead" data-expand="' + esc(m.agent_key) + '" aria-expanded="' +
+        (open ? "true" : "false") + '">' + avaHtml(m.name || m.slug) + '<span class="tm-mtext"><span class="tm-mname">' +
+        esc(m.name || m.slug) + '</span><span class="tm-mrole">' + esc(sub.join(" · ")) + "</span></span>" +
+        '<span class="tm-chev" aria-hidden="true">' + ic("chevron-down") + "</span></button>" +
+        '<div class="tm-mact"' + (open ? "" : " hidden") + ">" +
         '<label class="tm-rs"><input type="checkbox" class="tm-rs-toggle" data-slug="' + esc(m.slug) + '"' +
         (m.resonance_enabled ? " checked" : "") + ' aria-label="' + esc(rsText(m.resonance_enabled)) + '"><span>' +
         esc(rsText(m.resonance_enabled)) + "</span></label>" +
@@ -303,7 +452,7 @@
         '<span class="tm-actions">' + (lead
           ? '<button type="button" class="ws-btn" data-leader="">' + esc(tw("teams.remove_leader")) + "</button>"
           : '<button type="button" class="ws-btn" data-leader="' + esc(m.agent_key) + '">' + esc(tw("teams.make_leader")) + "</button>") +
-        '<button type="button" class="ws-btn" data-remove="' + esc(m.agent_key) + '">' + esc(tw("teams.remove")) + "</button></span></div>";
+        '<button type="button" class="ws-btn" data-remove="' + esc(m.agent_key) + '">' + esc(tw("teams.remove")) + "</button></span></div></div>";
     }).join("");
     var free = (agents || []).filter(function (a) { return !have[a.slug] && a.status !== "retired"; });
     var add = '<div class="tm-add"><select class="tm-add-pick" aria-label="' + esc(tw("teams.pick_agent")) + '"><option value="">' +
@@ -313,30 +462,73 @@
     return rows + add;
   }
 
+  // Mức tự quyết đang áp: 1 (hỏi trước, Quyền giới hạn), 2, 3, hay "custom" (đặt tay trong Nâng cao). Chỉ so trần tối
+  // đa, quyền ngắt việc và provider: trần trưởng nhóm tự chỉnh trong khoảng cho phép không đổi mức.
+  function levelOf(team) {
+    var auth = team && team.authority && team.authority.authority;
+    if (!auth) return 1;
+    var g = auth.grant || {}, ce = g.ceilings || {};
+    if ((g.providers_unlimited || []).length) return "custom";
+    var is2 = !g.can_interrupt && AUTH_CAPS.every(function (k) { return ce[k] === LEVEL2_CEILINGS[k]; });
+    var is3 = !!g.can_interrupt && AUTH_CAPS.every(function (k) { return ce[k] && typeof ce[k] === "object" && ce[k].unlimited; });
+    return is2 ? 2 : is3 ? 3 : "custom";
+  }
+
+  // Hộp cấp quyền cho mức 2, 3 (POST /teams/{id}/authority mode=full). Mức 1 là thu hồi, không có hộp.
+  function grantFor(level) {
+    if (level === 2) {
+      return { caps: {}, ceilings: Object.assign({}, LEVEL2_CEILINGS), can_interrupt: false, providers_unlimited: [],
+        billing: "subscription" };
+    }
+    if (level === 3) {
+      var ce = {};
+      AUTH_CAPS.forEach(function (k) { ce[k] = { unlimited: true }; });
+      return { caps: {}, ceilings: ce, can_interrupt: true, providers_unlimited: [], billing: "subscription" };
+    }
+    return null;
+  }
+
+  function levelsHtml(team) {
+    if (!team.leader_key) return '<div class="tm-note-line">' + esc(tw("teams.level_need_leader")) + "</div>";
+    var lvl = levelOf(team);
+    return LEVELS.map(function (L) {
+      return '<label class="tm-level"><input type="radio" name="tm-level" value="' + L.n + '"' + (lvl === L.n ? " checked" : "") +
+        '><span class="tm-level-body"><strong>' + esc(tw(L.key)) + '</strong><span class="tm-level-desc">' + esc(tw(L.desc)) +
+        "</span></span></label>";
+    }).join("") + (lvl === "custom" ? '<div class="tm-sub">' + esc(tw("teams.level_custom")) + "</div>" : "");
+  }
+
+  function usageHtml(team) {
+    var u = team.usage;
+    if (!u) return "";
+    return '<div class="tm-usage">' + esc(u.cap === null || u.cap === undefined
+      ? tw("teams.usage_today_unl", { n: u.today }) : tw("teams.usage_today", { n: u.today, cap: u.cap })) + "</div>";
+  }
+
+  // Tên, mô tả, trạng thái của nhóm. Nút Lưu ở cuối.
   function settingsFormHtml(team) {
-    var caps = team.caps || {};
     var st = ["active", "paused", "archived"].map(function (s) {
       return '<label class="tm-radio"><input type="radio" name="tm-status" value="' + s + '"' + (team.status === s ? " checked" : "") +
         "><span>" + esc(tw(TEAM_STATUS_KEY[s])) + "</span></label>";
     }).join("");
-    var lead = '<select name="tm-leader-set"><option value="">' + esc(tw("teams.none")) + "</option>" +
-      (team.members || []).map(function (m) {
-        return '<option value="' + esc(m.agent_key) + '"' + (m.agent_key === team.leader_key ? " selected" : "") + ">" + esc(m.name || m.slug) + "</option>";
-      }).join("") + "</select>";
+    return '<form class="tm-form" onsubmit="return false">' +
+      '<label class="tm-field"><span>' + esc(tw("teams.name")) + '</span><input name="tm-set-name" value="' + esc(team.name) + '"></label>' +
+      '<label class="tm-field"><span>' + esc(tw("teams.description")) + '</span><textarea name="tm-set-desc" rows="2">' + esc(team.description) + "</textarea></label>" +
+      '<div class="tm-field"><span>' + esc(tw("teams.status")) + '</span><div class="tm-radios">' + st + "</div></div>" +
+      '<button type="button" class="ws-btn tm-save">' + esc(tw("teams.save")) + "</button></form>";
+  }
+
+  // Các số giới hạn của nhóm (trong Nâng cao). Nút Lưu ở cuối.
+  function capsFormHtml(team) {
+    var caps = team.caps || {};
     var capRows = CAP_FIELDS.map(function (k) {
       return '<label class="tm-field tm-cap"><span>' + esc(tw(CAP_KEY[k])) + '</span><input type="number" min="0" name="tm-cap-' + k +
         '" value="' + esc(caps[k] == null ? "" : caps[k]) + '"></label>';
     }).join("");
-    return '<form class="tm-form" onsubmit="return false">' +
-      '<label class="tm-field"><span>' + esc(tw("teams.name")) + '</span><input name="tm-set-name" value="' + esc(team.name) + '"></label>' +
-      '<label class="tm-field"><span>' + esc(tw("teams.description")) + '</span><textarea name="tm-set-desc" rows="2">' + esc(team.description) + "</textarea></label>" +
-      '<div class="tm-field"><span>' + esc(tw("teams.status")) + "</span>" + st + "</div>" +
-      '<label class="tm-field"><span>' + esc(tw("teams.leader")) + "</span>" + lead + "</label>" +
-      '<div class="tm-qhead">' + esc(tw("teams.caps")) + "</div>" +
-      // Toàn quyền đang bật: trần trong hộp Toàn quyền đè trần ở đây; nói rõ thay vì để "Đã lưu" mà không đổi gì.
+    return '<form class="tm-form tm-caps-form" onsubmit="return false"><div class="tm-qhead">' + esc(tw("teams.caps")) + "</div>" +
+      // Trưởng nhóm đang được tự quyết: số trong hộp quyền đè số ở đây; nói rõ thay vì để "Đã lưu" mà không đổi gì.
       (team.authority && team.authority.authority ? '<div class="tm-note-line">' + esc(tw("teams.caps_full_note")) + "</div>" : "") +
-      capRows +
-      '<button type="button" class="ws-btn tm-save">' + esc(tw("teams.save")) + "</button></form>";
+      capRows + '<button type="button" class="ws-btn tm-caps-save">' + esc(tw("teams.save")) + "</button></form>";
   }
 
   function capText(v) {
@@ -351,8 +543,8 @@
       esc(tw("teams.auth.unlimited")) + "</label>";
   }
 
-  // Hộp cấp quyền (spec 13.1): phạm vi, agent do nhóm quản lý, provider được Không giới hạn, nguồn thanh toán, trần và
-  // trần trần, quyền Được ngắt việc, các trần không bỏ được (luôn hiện).
+  // Hộp cấp quyền chi tiết (spec 13.1), nằm trong Nâng cao: phạm vi, agent do nhóm quản lý, provider được Không giới
+  // hạn, nguồn thanh toán, trần và trần trần, quyền ngắt việc, các trần không bỏ được (luôn hiện).
   function authorityHtml(team) {
     var view = team.authority || {};
     var auth = view.authority;
@@ -454,7 +646,7 @@
     var byAgent = {}, byRole = {};
     counted.forEach(function (t) {
       byAgent[t.agent_key] = (byAgent[t.agent_key] || 0) + 1;
-      var rk = ROLE_KEY[t.role] || t.role;
+      var rk = TURN_ROLE_KEY[t.role] || t.role;
       byRole[rk] = (byRole[rk] || 0) + 1;
     });
     var list = function (obj, label) {
@@ -464,6 +656,19 @@
       "<div>" + esc(tw("teams.turns_by_agent")) + ": " + list(byAgent, function (k) { return nameOf(team.members, k); }) + "</div>" +
       "<div>" + esc(tw("teams.turns_by_role")) + ": " + list(byRole, function (k) { return tw(k); }) + "</div>" +
       '<div class="tm-sub">' + esc(tw("teams.turns_note")) + "</div></div>";
+  }
+
+  // Tab Nhóm: thành viên, mức tự quyết, số lần đã dùng hôm nay, tên và trạng thái; mọi con số trong Nâng cao (đóng sẵn).
+  function teamTabHtml(team, agents, ui) {
+    ui = ui || {};
+    return '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.tab_members")) + "</div>" +
+      membersHtml(team, agents, ui.openMember) + "</section>" +
+      '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.level_title")) + "</div>" + levelsHtml(team) +
+      usageHtml(team) + "</section>" +
+      '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.tab_team")) + "</div>" + settingsFormHtml(team) + "</section>" +
+      '<details class="tm-adv"' + (ui.advOpen ? " open" : "") + '><summary class="tm-adv-sum">' + esc(tw("teams.advanced")) +
+      '</summary><div class="tm-sub">' + esc(tw("teams.advanced_note")) + "</div>" + capsFormHtml(team) + authorityHtml(team) +
+      turnsHtml(ui.turns || [], team) + "</details>";
   }
 
   function createFormHtml(agents) {
@@ -477,19 +682,47 @@
       '<label class="tm-field"><span>' + esc(tw("teams.leader_pick")) + '</span><select name="tm-leader"><option value="">' + esc(tw("teams.none")) +
       "</option>" + live.map(function (a) { return '<option value="' + esc(a.slug) + '">' + esc(a.name || a.slug) + "</option>"; }).join("") +
       "</select></label>" +
-      '<button type="button" class="ws-btn tm-create-save">' + esc(tw("teams.create_save")) + "</button></form>";
+      '<button type="button" class="ws-btn tm-primary tm-create-save">' + esc(tw("teams.create_save")) + "</button></form>";
   }
 
+  // Băng báo gọn, kèm nút giải quyết khi có: tạm dừng thì Bật lại, chưa có trưởng nhóm thì Chọn.
   function bannersHtml(team, teamNames) {
     var out = [];
-    if (team.status === "archived") out.push(tw("teams.archived_banner"));
-    else if (team.status === "paused") out.push(tw("teams.paused_banner"));
-    if (!team.leader_key) out.push(tw("teams.no_leader"));
+    var one = function (text, btn) {
+      return '<div class="tm-banner"><span>' + esc(text) + "</span>" + (btn || "") + "</div>";
+    };
+    if (team.status === "archived") out.push(one(tw("teams.archived_banner")));
+    else if (team.status === "paused") {
+      out.push(one(tw("teams.paused_banner"), '<button type="button" class="ws-btn" data-team-resume="1">' +
+        esc(tw("teams.resume_team")) + "</button>"));
+    }
+    if (!team.leader_key) {
+      out.push(one(tw("teams.no_leader"), '<button type="button" class="ws-btn" data-open-team="1">' +
+        esc(tw("teams.pick")) + "</button>"));
+    }
     Object.keys(team.busy || {}).forEach(function (k) {
       var other = team.busy[k];
-      out.push(tw("teams.busy_elsewhere", { name: nameOf(team.members, k), team: (teamNames || {})[other] || other }));
+      out.push(one(tw("teams.busy_elsewhere", { name: nameOf(team.members, k), team: (teamNames || {})[other] || other })));
     });
-    return out.map(function (s) { return '<div class="tm-banner">' + esc(s) + "</div>"; }).join("");
+    return out.join("");
+  }
+
+  // Chip việc ở đầu khung chat: có việc chờ chủ thì "Cần bạn N" (màu cảnh báo), không thì "Việc N"; không có việc thì ẩn.
+  // Chữ và số tách riêng để màn hẹp chỉ hiện icon kèm số.
+  function jobsChip(q) {
+    q = q || {};
+    var blocked = (q.blocked || []).length;
+    var all = (q.running || []).length + (q.waiting || []).length + blocked;
+    if (!all) return null;
+    return blocked ? { label: tw("teams.needs_you"), n: blocked, warn: true } : { label: tw("teams.tab_jobs"), n: all, warn: false };
+  }
+
+  function jobsChipHtml(q) {
+    var c = jobsChip(q);
+    if (!c) return "";
+    return '<button type="button" class="tm-jobs-chip' + (c.warn ? " tm-jobs-chip-warn" : "") + '" data-open-jobs="1" aria-label="' +
+      esc(c.label + " " + c.n) + '">' + ic("list-todo") + '<span class="tm-chip-label">' + esc(c.label) + "</span>" +
+      '<span class="tm-chip-n">' + c.n + "</span></button>";
   }
 
   // ───────────── phần chạy trong trình duyệt ─────────────
@@ -519,9 +752,10 @@
 
   function fresh(el) {
     return { el: el, teams: [], next: null, activeId: "", team: null, queue: null, msgs: [], hasMore: false,
-      agents: [], mentions: [], asJob: false, pending: null, tab: "jobs", side: false, view: "list",
+      agents: [], asJob: false, pending: null, tab: "jobs", side: false, view: "list", loaded: false,
       filterTask: "", taskTitles: {}, teamNames: {}, note: "", creating: false, skipped: {}, picker: null, draft: null,
-      focusPicker: false, focusBack: null, searchOpen: false, searchResults: null, searchQuery: "", jumped: null };
+      focusPicker: false, focusBack: null, searchOpen: false, searchResults: null, searchQuery: "", jumped: null,
+      openMember: null, advOpen: false, turns: [] };
   }
 
   function teamUrl(path) { return "/teams/" + q(S.activeId) + (path || ""); }
@@ -538,20 +772,24 @@
 
   function shell() {
     S.el.innerHTML =
-      '<div class="tm-page" data-view="' + S.view + '">' +
-      '<aside class="tm-list"><div class="tm-bar"><strong>' + esc(tw("page.teams.label")) + "</strong>" +
-      '<button type="button" class="ws-btn tm-new">+ ' + esc(tw("teams.create")) + "</button></div>" +
+      '<div class="tm-page" data-view="' + S.view + '" data-side="0">' +
+      '<aside class="tm-list"><div class="tm-bar tm-list-bar"><strong class="tm-list-title">' + esc(tw("page.teams.label")) + "</strong>" +
+      '<button type="button" class="ws-btn tm-new">' + ic("plus") + esc(tw("teams.create")) + "</button></div>" +
       '<div class="tm-teams"></div><button type="button" class="ws-btn tm-more-teams" hidden>' + esc(tw("teams.next_page")) + "</button></aside>" +
-      '<section class="tm-chat"><div class="tm-bar tm-chat-head"></div><div class="tm-note" hidden></div><div class="tm-banners"></div>' +
-      '<div class="tm-msgs" aria-live="polite"></div><div class="tm-runbar" hidden></div><div class="tm-composer"></div></section>' +
-      '<aside class="tm-side" hidden></aside></div>';
+      '<section class="tm-chat"><div class="tm-bar tm-chat-head"></div><div class="tm-search" hidden></div>' +
+      '<div class="tm-note" hidden></div><div class="tm-banners"></div><div class="tm-jobs" hidden></div>' +
+      '<div class="tm-filterbar" hidden></div><div class="tm-msgs" aria-live="polite"></div><div class="tm-composer"></div></section>' +
+      '<aside class="tm-side" hidden></aside><div class="tm-scrim" hidden></div></div>';
   }
 
   function drawList() {
     var box = S.el.querySelector(".tm-teams");
-    if (box) box.innerHTML = teamListHtml(S.teams, S.activeId);
+    if (box) box.innerHTML = S.loaded || S.teams.length ? teamListHtml(S.teams, S.activeId) : "";
     var more = S.el.querySelector(".tm-more-teams");
     if (more) more.hidden = !S.next;
+    var bar = S.el.querySelector(".tm-list-bar");
+    // Chưa có nhóm nào: thẻ hướng dẫn đã có nút Tạo nhóm, khỏi lặp nút ở thanh trên.
+    if (bar) bar.classList.toggle("tm-list-bar-empty", S.loaded && !S.teams.length);
   }
 
   function drawPage() {
@@ -562,35 +800,38 @@
   function drawHead() {
     var head = S.el.querySelector(".tm-chat-head");
     if (!head) return;
-    if (S.creating || !S.team) { head.innerHTML = '<button type="button" class="ws-btn tm-back">‹ ' + esc(tw("teams.back")) + "</button>"; return; }
-    var t = S.team;
-    var lead = t.leader_key ? tw("teams.leader_line", { name: nameOf(t.members, t.leader_key), n: (t.members || []).length })
-      : tw("teams.no_leader_short");
-    var opts = '<option value="">' + esc(tw("teams.filter_all")) + "</option>" + Object.keys(S.taskTitles).map(function (id) {
-      return '<option value="' + esc(id) + '"' + (S.filterTask === id ? " selected" : "") + ">" + esc(S.taskTitles[id]) + "</option>";
-    }).join("");
-    head.innerHTML = '<button type="button" class="ws-btn tm-back" aria-label="' + esc(tw("teams.back")) + '">‹</button>' +
-      '<div class="tm-title"><strong>' + esc(t.name) + '</strong><span class="tm-sub">' + esc(lead) + "</span></div>" +
-      '<select class="tm-filter" aria-label="' + esc(tw("teams.filter_all")) + '">' + opts + "</select>" +
-      '<button type="button" class="ws-btn tm-search-btn" aria-label="' + esc(tw("teams.search")) + '" title="' +
-      esc(tw("teams.search")) + '"' + (S.searchOpen ? ' aria-expanded="true"' : ' aria-expanded="false"') + ">" + ic("search") +
-      "</button>" +
-      '<button type="button" class="ws-btn tm-gear">' + esc(tw("teams.settings_btn")) + "</button>";
+    var back = '<button type="button" class="ws-btn tm-back" aria-label="' + esc(tw("teams.back")) + '" title="' +
+      esc(tw("teams.back")) + '">' + ic("chevron-left") + "</button>";
+    if (S.creating) {
+      head.innerHTML = back + '<div class="tm-title"><strong>' + esc(tw("teams.create_title")) + "</strong></div>";
+      head.hidden = false;
+    } else if (!S.team) {
+      head.innerHTML = "";
+      head.hidden = true;
+    } else {
+      var t = S.team;
+      var lead = t.leader_key ? tw("teams.leader_line", { name: nameOf(t.members, t.leader_key), n: (t.members || []).length })
+        : tw("teams.no_leader_short");
+      head.hidden = false;
+      head.innerHTML = back + avaHtml(t.name) +
+        '<div class="tm-title"><strong>' + esc(t.name) + '</strong><span class="tm-sub">' + esc(lead) + "</span></div>" +
+        jobsChipHtml(S.queue) +
+        '<button type="button" class="ws-btn tm-icon tm-search-btn" aria-label="' + esc(tw("teams.search")) + '" title="' +
+        esc(tw("teams.search")) + '"' + (S.searchOpen ? ' aria-expanded="true"' : ' aria-expanded="false"') + ">" + ic("search") +
+        "</button>" +
+        '<button type="button" class="ws-btn tm-icon tm-gear" aria-label="' + esc(tw("teams.settings_btn")) + '" title="' +
+        esc(tw("teams.settings_btn")) + '">' + ic("ellipsis-vertical") + "</button>";
+    }
     drawSearch();
     var b = S.el.querySelector(".tm-banners");
-    if (b) b.innerHTML = bannersHtml(t, S.teamNames);
+    if (b) b.innerHTML = S.team && !S.creating ? bannersHtml(S.team, S.teamNames) : "";
+    drawFilterbar();
   }
 
   // Thanh tìm và kết quả, ngay dưới đầu khung chat (một vùng riêng, không vẽ lại khi có tin mới).
   function drawSearch() {
     var bar = S.el.querySelector(".tm-search");
-    if (!bar) {
-      var head = S.el.querySelector(".tm-chat-head");
-      if (!head || !head.parentNode) return;
-      bar = document.createElement("div");
-      bar.className = "tm-search";
-      head.parentNode.insertBefore(bar, head.nextSibling);
-    }
+    if (!bar) return;
     bar.hidden = !S.searchOpen || !S.team || S.creating;
     if (bar.hidden) { bar.innerHTML = ""; return; }
     if (!bar.querySelector(".tm-search-input")) {
@@ -601,6 +842,15 @@
     }
     var list = bar.querySelector(".tm-search-list");
     if (list) list.innerHTML = searchResultsHtml(S.searchResults, S.team ? S.team.members : [], S.searchQuery);
+  }
+
+  // Đang lọc tin theo một việc: một băng nói rõ, kèm nút Xem tất cả (thay ô chọn lọc cũ).
+  function drawFilterbar() {
+    var bar = S.el.querySelector(".tm-filterbar");
+    if (!bar) return;
+    bar.hidden = !S.filterTask || !S.team || S.creating;
+    bar.innerHTML = bar.hidden ? "" : "<span>" + esc(tw("teams.filter_on", { title: S.taskTitles[S.filterTask] || S.filterTask })) +
+      '</span><button type="button" class="ws-btn tm-filter-clear">' + esc(tw("teams.filter_clear")) + "</button>";
   }
 
   function runSearch() {
@@ -629,7 +879,7 @@
       S.jumped = Number(mid);
       drawHead();
       drawMsgs(false);
-      var hit = S.el.querySelector('.tm-msg[data-mid="' + Number(mid) + '"]');
+      var hit = S.el.querySelector('[data-mid="' + Number(mid) + '"]');
       if (hit && hit.scrollIntoView) hit.scrollIntoView({ block: "center" });
     });
   }
@@ -646,6 +896,10 @@
       box.innerHTML = createFormHtml(S.agents);
       return;
     }
+    if (!S.team) {
+      box.innerHTML = S.teams.length ? '<div class="tm-empty tm-empty-chat">' + esc(tw("teams.pick_team")) + "</div>" : "";
+      return;
+    }
     var atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     // Đang soạn góp ý trong bộ chọn mà có tin mới tới: giữ con trỏ và chỗ cuộn, không kéo xuống cuối (review T2).
     var act = document.activeElement;
@@ -655,6 +909,7 @@
     box.innerHTML = (S.jumped !== null && S.jumped !== undefined ? '<div class="tm-jumped">' + esc(tw("teams.search_viewing")) +
       ' <button type="button" class="ws-btn tm-jump-back">' + ic("chevrons-down") + esc(tw("teams.search_back")) +
       "</button></div>" : "") + (S.hasMore ? '<button type="button" class="ws-btn tm-older">' + esc(tw("teams.older")) + "</button>" : "") +
+      (!list.length && !S.hasMore ? '<div class="tm-empty tm-empty-chat">' + esc(tw("teams.chat_empty")) + "</div>" : "") +
       list.map(function (m) {
         var mm = m;
         if (S.skipped["p" + m.id] && m.meta && m.meta.proposal) mm = Object.assign({}, m, { meta: Object.assign({}, m.meta, { proposal: null }) });
@@ -668,52 +923,67 @@
     }
     if ((stick || atEnd) && S.picker === null) box.scrollTop = box.scrollHeight;
     if (S.focusPicker) {
-      // Mở bộ chọn: focus vào emoji đầu (bàn phím và trình đọc màn hình vào được bảng, Escape đóng được).
+      // Mở bộ chọn: focus vào nút đầu của bảng (bàn phím và trình đọc màn hình vào được bảng, Escape đóng được).
       S.focusPicker = false;
-      var first = box.querySelector(".tm-react-panel .tm-react-pick");
+      var first = box.querySelector(".tm-react-panel .tm-react-pick") || box.querySelector(".tm-react-panel button");
       if (first) first.focus();
     }
     if (S.focusBack !== null && S.focusBack !== undefined) {
-      var back = box.querySelector('.tm-react-btn[data-react-open="' + S.focusBack + '"]');
+      var back = box.querySelector('.tm-react-btn[data-react-open="' + S.focusBack + '"]') ||
+        box.querySelector('.tm-more-btn[data-react-open="' + S.focusBack + '"]');
       S.focusBack = null;
       if (back) back.focus();
     }
   }
 
-  function drawRunbar() {
-    var bar = S.el.querySelector(".tm-runbar");
+  function drawJobs() {
+    var bar = S.el.querySelector(".tm-jobs");
     if (!bar) return;
-    var run = (S.queue && S.queue.running) || [];
-    bar.hidden = !run.length || S.creating;
-    if (!run.length) return;
-    bar.innerHTML = '<span class="tm-qtitle">' + esc(tw("teams.doing", { title: run[0].title })) + '</span><span class="tm-actions">' +
-      '<button type="button" class="ws-btn" data-amend="' + esc(run[0].id) + '">' + esc(tw("teams.amend")) + "</button>" +
-      '<button type="button" class="ws-btn" data-cancel="' + esc(run[0].id) + '">' + esc(tw("teams.cancel")) + "</button></span>";
+    var h = S.team && !S.creating ? jobStripHtml(S.queue) : "";
+    bar.hidden = !h;
+    bar.innerHTML = h;
   }
 
   function drawComposer() {
     var box = S.el.querySelector(".tm-composer");
     if (!box) return;
-    if (!S.team || S.creating) { box.innerHTML = ""; return; }
-    var chips = S.mentions.map(function (k) {
-      return '<span class="tm-chip">@' + esc(nameOf(S.team.members, k)) + '<button type="button" data-unmention="' + esc(k) +
-        '" aria-label="' + esc(tw("teams.remove")) + '">×</button></span>';
-    }).join("");
-    var draft = S.pending ? S.pending.text : (box.querySelector("textarea") || {}).value || "";
-    box.innerHTML = '<div class="tm-chips">' + chips + '</div><div class="tm-sug" hidden></div>' +
-      '<div class="tm-row"><label class="tm-job"><input type="checkbox" class="tm-asjob"' + (S.asJob ? " checked" : "") + "><span>" +
-      esc(tw("teams.as_job")) + '</span></label><textarea class="tm-input" rows="2" placeholder="' + esc(tw("teams.placeholder")) + '"' +
-      (S.team.status === "archived" ? " disabled" : "") + ">" + esc(draft) + '</textarea><button type="button" class="ws-btn tm-send">' +
-      esc(tw(S.asJob ? "teams.as_job" : "teams.send")) + '</button></div><div class="tm-hint"></div>';
+    box.hidden = !S.team || S.creating;
+    if (box.hidden) { box.innerHTML = ""; return; }
+    var old = box.querySelector(".tm-input");
+    var draft = S.pending ? S.pending.text : old ? old.value : "";
+    var off = S.team.status === "archived";
+    box.innerHTML = '<div class="tm-sug" hidden></div><div class="tm-hint" hidden></div>' +
+      '<div class="tm-row"><button type="button" class="tm-mode tm-asjob" aria-pressed="' + (S.asJob ? "true" : "false") +
+      '" title="' + esc(tw("teams.as_job_title")) + '"' + (off ? " disabled" : "") + ">" + ic("list-todo") + "<span>" +
+      esc(tw("teams.as_job")) + "</span></button>" +
+      '<textarea class="tm-input" rows="1" placeholder="' + esc(tw(S.asJob ? "teams.placeholder_job" : "teams.placeholder")) + '"' +
+      (off ? " disabled" : "") + ">" + esc(draft) + "</textarea>" +
+      '<button type="button" class="tm-send" aria-label="' + esc(tw("teams.send")) + '" title="' + esc(tw("teams.send")) + '">' +
+      ic("send") + "</button></div>";
+    grow(box.querySelector(".tm-input"));
     drawHint();
+  }
+
+  // Khung soạn một dòng, tự cao theo chữ tới khoảng năm dòng rồi cuộn trong.
+  function grow(input) {
+    if (!input) return;
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight || 0, INPUT_MAX_PX) + "px";
+  }
+
+  function currentMentions() {
+    var input = S.el.querySelector(".tm-input");
+    return S.team ? mentionsFromText(input ? input.value : "", S.team.members) : [];
   }
 
   function drawHint() {
     var hintEl = S.el.querySelector(".tm-hint");
     if (!hintEl || !S.team) return;
-    var h = composerHint({ mentions: S.mentions, asJob: S.asJob, cap: (S.team.caps || {}).mentions, members: S.team.members,
-      leaderKey: S.team.leader_key, waiting: ((S.queue && S.queue.waiting) || []).length });
+    var h = composerHint({ mentions: currentMentions(), asJob: S.asJob, cap: (S.team.caps || {}).mentions,
+      members: S.team.members, leaderKey: S.team.leader_key });
     hintEl.textContent = h.text;
+    hintEl.hidden = !h.text;
+    hintEl.classList.toggle("tm-hint-bad", !h.ok);
     var send = S.el.querySelector(".tm-send");
     if (send) send.disabled = !h.ok || S.team.status === "archived";
   }
@@ -721,26 +991,45 @@
   function drawSide() {
     var side = S.el.querySelector(".tm-side");
     if (!side) return;
-    side.hidden = !S.team || S.creating;
-    side.classList.toggle("tm-open", !!S.side);
+    side.hidden = !S.side || !S.team || S.creating;
     var page = S.el.querySelector(".tm-page");
     if (page) page.setAttribute("data-side", side.hidden ? "0" : "1");
-    if (side.hidden) return;
-    var tabs = ["members", "jobs", "turns", "settings"].map(function (k) {
-      return '<button type="button" class="tm-tab" data-tab="' + k + '"' + (S.tab === k ? ' aria-selected="true"' : "") + ">" +
-        esc(tw(TAB_KEY[k])) + "</button>";
+    var scrim = S.el.querySelector(".tm-scrim");
+    if (scrim) scrim.hidden = side.hidden;
+    if (side.hidden) { side.innerHTML = ""; return; }
+    var keep = side.querySelector(".tm-side-body");
+    var top = keep ? keep.scrollTop : 0;
+    var tabs = ["jobs", "team"].map(function (k) {
+      return '<button type="button" class="tm-tab" role="tab" data-tab="' + k + '" aria-selected="' + (S.tab === k ? "true" : "false") +
+        '">' + esc(tw(TAB_KEY[k])) + "</button>";
     }).join("");
-    var body = "";
-    if (S.tab === "members") body = membersHtml(S.team, S.agents);
-    else if (S.tab === "jobs") body = queueHtml(S.queue);
-    else if (S.tab === "turns") body = turnsHtml(S.turns || [], S.team);
-    else body = settingsFormHtml(S.team) + authorityHtml(S.team);
-    side.innerHTML = '<div class="tm-bar"><strong>' + esc(tw("teams.settings_btn")) + '</strong><button type="button" class="ws-btn tm-close" aria-label="' +
-      esc(tw("teams.close")) + '">×</button></div><div class="tm-tabs" role="tablist">' + tabs + '</div><div class="tm-side-body">' + body + "</div>";
+    var body = S.tab === "jobs" ? queueHtml(S.queue)
+      : teamTabHtml(S.team, S.agents, { openMember: S.openMember, advOpen: S.advOpen, turns: S.turns });
+    side.innerHTML = '<div class="tm-bar tm-side-bar"><div class="tm-tabs" role="tablist">' + tabs + "</div>" +
+      '<button type="button" class="ws-btn tm-icon tm-close" aria-label="' + esc(tw("teams.close")) + '" title="' +
+      esc(tw("teams.close")) + '">' + ic("x") + '</button></div><div class="tm-side-body">' + body + "</div>";
+    var nb = side.querySelector(".tm-side-body");
+    if (nb && keep) nb.scrollTop = top;
   }
 
   function drawAll(stick) {
-    drawPage(); drawList(); drawHead(); drawMsgs(stick); drawRunbar(); drawComposer(); drawSide();
+    drawPage(); drawList(); drawHead(); drawJobs(); drawMsgs(stick); drawComposer(); drawSide();
+  }
+
+  function openSide(tab) {
+    S.side = true;
+    S.tab = tab;
+    drawSide();
+    if (tab === "team") loadAgents().then(function () { if (S.side && S.tab === "team") drawSide(); });
+    var first = S.el.querySelector(".tm-side .tm-tab[aria-selected=\"true\"]");
+    if (first) first.focus();
+  }
+
+  function closeSide() {
+    S.side = false;
+    drawSide();
+    var gear = S.el.querySelector(".tm-gear");
+    if (gear) gear.focus();
   }
 
   function learnTitles(qq) {
@@ -756,8 +1045,10 @@
       if (r.code !== 200) return fail(r);
       S.teams = append ? S.teams.concat(r.j.teams || []) : (r.j.teams || []);
       S.next = r.j.next || null;
+      S.loaded = true;
       S.teams.forEach(function (t) { S.teamNames[t.team_id] = t.name; });
       drawList();
+      if (!S.team && !S.creating) drawMsgs(false);
     });
   }
 
@@ -769,17 +1060,20 @@
 
   function loadQueue() {
     if (!S.activeId) return Promise.resolve();
+    var forTeam = S.activeId;
     return call("GET", teamUrl("/queue")).then(function (r) {
-      if (r.code !== 200) return;
+      if (r.code !== 200 || S.activeId !== forTeam) return;
       S.queue = r.j;
       learnTitles(S.queue);
-      drawRunbar(); drawHint(); if (S.tab === "jobs") drawSide();
+      drawHead(); drawJobs(); if (S.tab === "jobs") drawSide();
     });
   }
 
   function loadTeam() {
     if (!S.activeId) return Promise.resolve();
+    var forTeam = S.activeId;
     return call("GET", teamUrl()).then(function (r) {
+      if (S.activeId !== forTeam) return;
       if (r.code !== 200) return fail(r);
       S.team = r.j.team;
       drawHead(); drawHint(); drawSide();
@@ -792,7 +1086,9 @@
     if (!older) S.jumped = null;
     var url = S.filterTask ? teamUrl("/tasks/" + q(S.filterTask)) : teamUrl("/messages");
     if (older && S.msgs.length && !S.filterTask) url += "?before_ts=" + q(S.msgs[0].ts) + "&before_id=" + q(S.msgs[0].id);
+    var forTeam = S.activeId;
     return call("GET", url).then(function (r) {
+      if (S.activeId !== forTeam) return;
       if (r.code !== 200) return fail(r);
       var got = r.j.messages || [];
       S.msgs = older ? got.concat(S.msgs) : got;
@@ -804,16 +1100,20 @@
   function loadTurns() {
     if (!S.activeId) return Promise.resolve();
     return call("GET", teamUrl("/turns?since=" + (Date.now() / 1000 - 7 * 86400))).then(function (r) {
-      if (r.code === 200) { S.turns = r.j.turns || []; if (S.tab === "turns") drawSide(); }
+      if (r.code === 200) { S.turns = r.j.turns || []; if (S.side && S.tab === "team") drawSide(); }
     });
   }
 
   function openTeam(id) {
     S.jumped = null; S.searchResults = null; S.searchQuery = ""; S.searchOpen = false;
-    S.activeId = id; S.creating = false; S.view = "chat"; S.mentions = []; S.asJob = false; S.pending = null; S.filterTask = "";
-    S.team = null; S.queue = null; S.msgs = []; S.taskTitles = {};
+    S.activeId = id; S.creating = false; S.view = "chat"; S.asJob = false; S.pending = null; S.filterTask = "";
+    S.team = null; S.queue = null; S.msgs = []; S.taskTitles = {}; S.side = false; S.openMember = null; S.turns = [];
+    S.picker = null; S.draft = null;
+    var input = S.el.querySelector(".tm-input");
+    if (input) input.value = "";
+    setNote("");
     drawAll(true);
-    Promise.all([loadTeam(), loadQueue(), loadMsgs(false)]).then(function () { drawAll(true); });
+    Promise.all([loadTeam(), loadQueue(), loadMsgs(false)]).then(function () { if (S.activeId === id) drawAll(true); });
   }
 
   function send() {
@@ -821,17 +1121,22 @@
     if (!input || !S.team) return;
     var text = input.value.trim();
     if (!text) return;
+    var mentions = mentionsFromText(text, S.team.members);
     // Gửi lại sau rớt mạng: cùng chữ thì giữ ĐÚNG mã cũ để server trả tin cũ, không thêm lượt.
     if (!S.pending || S.pending.text !== text) S.pending = { text: text, id: newClientId() };
-    var body = { text: text, mentions: S.mentions.slice(), as_job: S.asJob, client_msg_id: S.pending.id };
+    var body = { text: text, mentions: mentions, as_job: S.asJob, client_msg_id: S.pending.id };
     var btn = S.el.querySelector(".tm-send");
     if (btn) btn.disabled = true;
+    var forTeam = S.activeId;
     call("POST", teamUrl("/messages"), body).then(function (r) {
+      if (S.activeId !== forTeam) return;
       if (r.code !== 200) { fail(r); drawHint(); return; }
-      S.pending = null; S.mentions = []; input.value = "";
+      S.pending = null; S.asJob = false; input.value = "";
       setNote(r.j.notes && r.j.notes.length ? r.j.notes.filter(function (n) { return n.indexOf("_") < 0; }).join(" · ") : "");
       if ((r.j.notes || []).indexOf("daily_cap") >= 0) setNote(tw("teams.daily_cap"));
       drawComposer();
+      var again = S.el.querySelector(".tm-input");
+      if (again) again.focus();
       loadMsgs(false); loadQueue();
     }).catch(function () {
       setNote(tw("teams.err", { e: "network" }));
@@ -846,11 +1151,11 @@
     var before = input.value.slice(0, input.selectionStart || 0);
     var m = before.match(/@([^\s@]*)$/);
     if (!m) { box.hidden = true; return; }
-    var list = mentionMatches(S.team.members, m[1], S.mentions);
+    var list = mentionMatches(S.team.members, m[1], mentionsFromText(input.value, S.team.members));
     box.hidden = !list.length;
     box.innerHTML = list.map(function (a) {
-      return '<button type="button" class="tm-sug-item" data-mention="' + esc(a.agent_key) + '"><span class="tm-ava" aria-hidden="true">' +
-        esc(initial(a.name)) + "</span>" + esc(a.name || a.slug) + "</button>";
+      return '<button type="button" class="tm-sug-item" data-mention="' + esc(a.agent_key) + '">' + avaHtml(a.name || a.slug) +
+        esc(a.name || a.slug) + "</button>";
     }).join("");
   }
 
@@ -860,17 +1165,19 @@
       var pos = input.selectionStart || input.value.length;
       var before = input.value.slice(0, pos).replace(/@([^\s@]*)$/, "@" + nameOf(S.team.members, key) + " ");
       input.value = before + input.value.slice(pos);
+      try { input.setSelectionRange(before.length, before.length); } catch (e) {}
+      input.focus();
+      grow(input);
     }
-    if (S.mentions.indexOf(key) < 0) S.mentions.push(key);
     S.pending = null;
-    drawComposer();
-    var again = S.el.querySelector(".tm-input");
-    if (again) again.focus();
+    var box = S.el.querySelector(".tm-sug");
+    if (box) box.hidden = true;
+    drawHint();
   }
 
   function act(r, after) {
     if (r.code === 409 && r.j && r.j.queue) {
-      S.queue = r.j.queue; learnTitles(S.queue); setNote(tw("teams.queue_changed")); drawRunbar(); drawSide(); return;
+      S.queue = r.j.queue; learnTitles(S.queue); setNote(tw("teams.queue_changed")); drawJobs(); drawSide(); return;
     }
     if (r.code !== 200) return fail(r);
     if (r.j && r.j.team) S.team = r.j.team;
@@ -879,42 +1186,79 @@
     loadQueue(); loadTeam(); loadTeams(false);
   }
 
+  function setLevel(n, input) {
+    if (!S.team) return;
+    var was = levelOf(S.team);
+    if (n === 3 && typeof confirm === "function" && !confirm(tw("teams.level_3_confirm"))) {
+      if (input) input.checked = false;
+      drawSide();
+      return;
+    }
+    var body = n === 1 ? { mode: "limited", reason: "owner_level_1" } : { mode: "full", grant: grantFor(n) };
+    if (n === 1 && was === 1) return;
+    call("POST", teamUrl("/authority"), body).then(function (r) {
+      if (r.code === 200) setNote(tw("teams.saved"));
+      act(r, drawSide);
+    });
+  }
+
   function onClick(e) {
-    var t = e.target.closest ? e.target.closest("button, [data-team]") : null;
+    var t = e.target.closest ? e.target.closest("button, [data-team], summary, .tm-scrim") : null;
     if (!t || !S.el.contains(t)) return;
     var d = t.dataset || {};
     if (d.team) return openTeam(d.team);
+    if (t.classList.contains("tm-scrim")) return closeSide();
+    if (t.classList.contains("tm-adv-sum")) {
+      // Nhớ Nâng cao đang mở để lần vẽ lại sau (có tin mới, đổi thành viên) không đóng nó; mở thì tải sổ lượt.
+      var det = t.parentNode;
+      S.advOpen = !(det && det.open);
+      if (S.advOpen) loadTurns();
+      return;
+    }
     if (t.classList.contains("tm-new")) {
-      S.creating = true; S.view = "chat"; S.team = null; S.activeId = "";
+      S.creating = true; S.view = "chat"; S.team = null; S.activeId = ""; S.side = false;
       S.searchOpen = false; S.searchResults = null; S.searchQuery = ""; S.jumped = null;
       drawSearch();
       loadAgents().then(function () { drawAll(true); });
       return;
     }
     if (t.classList.contains("tm-more-teams")) return loadTeams(true);
-    if (t.classList.contains("tm-back")) { S.view = "list"; S.creating = false; drawAll(false); return; }
-    if (t.classList.contains("tm-gear")) {
-      S.side = !S.side; drawSide();
-      if (S.side) { loadAgents().then(drawSide); if (S.tab === "turns") loadTurns(); }
+    if (t.classList.contains("tm-back")) {
+      S.view = "list"; S.creating = false; S.side = false;
+      if (!S.team) S.activeId = "";
+      drawAll(false);
       return;
     }
-    if (t.classList.contains("tm-close")) { S.side = false; drawSide(); return; }
+    if (t.classList.contains("tm-gear")) {
+      if (S.side && S.tab === "team") return closeSide();
+      return openSide("team");
+    }
+    if (d.openJobs) {
+      if (S.side && S.tab === "jobs") return closeSide();
+      return openSide("jobs");
+    }
+    if (d.openTeam) return openSide("team");
+    if (t.classList.contains("tm-close")) return closeSide();
     if (d.tab) {
       S.tab = d.tab; drawSide();
-      if (d.tab === "turns") loadTurns();
-      if (d.tab === "members") loadAgents().then(drawSide);
+      if (d.tab === "team") loadAgents().then(function () { if (S.side && S.tab === "team") drawSide(); });
       return;
     }
+    if (d.expand) { S.openMember = S.openMember === d.expand ? null : d.expand; drawSide(); return; }
     if (t.classList.contains("tm-create-save")) return createTeam();
+    if (t.classList.contains("tm-asjob")) {
+      S.asJob = !S.asJob;
+      // Đổi loại tin là một tin KHÁC: mã client cũ thuộc tin trước, gửi lại bằng nó sẽ được trả tin cũ khác loại.
+      S.pending = null;
+      t.setAttribute("aria-pressed", S.asJob ? "true" : "false");
+      var inp = S.el.querySelector(".tm-input");
+      if (inp) { inp.placeholder = tw(S.asJob ? "teams.placeholder_job" : "teams.placeholder"); inp.focus(); }
+      drawHint();
+      return;
+    }
     if (t.classList.contains("tm-send")) return send();
     if (t.classList.contains("tm-older")) return loadMsgs(true);
     if (d.mention) return pickMention(d.mention);
-    if (d.unmention) {
-      S.mentions = S.mentions.filter(function (k) { return k !== d.unmention; });
-      S.pending = null;
-      drawComposer();
-      return;
-    }
     if (t.classList.contains("tm-search-btn")) {
       S.searchOpen = !S.searchOpen;
       if (!S.searchOpen) { S.searchResults = null; S.searchQuery = ""; }
@@ -926,6 +1270,7 @@
     if (t.classList.contains("tm-search-go")) return runSearch();
     if (d.jump) return jumpTo(d.jump, d.ts);
     if (t.classList.contains("tm-jump-back")) { S.jumped = null; loadMsgs(false); return; }
+    if (t.classList.contains("tm-filter-clear")) { S.filterTask = ""; drawFilterbar(); loadMsgs(false); return; }
     if (d.reactOpen) {
       var was = S.picker;
       S.picker = S.picker === Number(d.reactOpen) ? null : Number(d.reactOpen);
@@ -947,12 +1292,18 @@
       return sendReaction(Number(d.reactSave), (cm && cm.reaction && cm.reaction.value) || "none", fv.reasons, fv.comment);
     }
     if (d.reactClear) return sendReaction(Number(d.reactClear), "none", [], "");
-    if (d.task && t.classList.contains("tm-tag")) { S.filterTask = d.task; drawHead(); loadMsgs(false); return; }
+    if ((d.task && t.classList.contains("tm-tag")) || d.viewTask) {
+      S.filterTask = d.task || d.viewTask;
+      if (d.viewTask && window.matchMedia && window.matchMedia("(max-width: 1060px)").matches) S.side = false;
+      drawSide(); drawFilterbar(); loadMsgs(false);
+      return;
+    }
     if (d.accept) return call("POST", teamUrl("/messages/" + q(d.accept) + "/accept")).then(function (r) { act(r); });
     if (d.skip) { S.skipped["p" + d.skip] = true; drawMsgs(false); return; }
     if (d.decision) {
       return call("POST", teamUrl("/messages/" + q(d.decision) + "/decision"), { on: d.on === "1" }).then(function (r) {
         if (r.code !== 200) return fail(r);
+        S.picker = null; S.draft = null;
         loadMsgs(false);
       });
     }
@@ -971,16 +1322,25 @@
       if (!text || !text.trim()) return;
       return call("POST", teamUrl("/tasks/" + q(d.amend) + "/amend"), { text: text.trim() }).then(function (r) { act(r); });
     }
+    if (d.extend) {
+      t.disabled = true;
+      return call("POST", teamUrl("/tasks/" + q(d.extend) + "/extend")).then(function (r) {
+        // Nhóm đang tạm dừng thì việc chỉ về hàng chờ: nói rõ phải bật lại nhóm, đừng hứa "chạy tiếp".
+        if (r.code === 200) setNote(tw(S.team && S.team.status === "paused" ? "teams.extended_paused" : "teams.extended"));
+        act(r);
+      });
+    }
     if (d.unblock) {
       return call("POST", teamUrl("/tasks/" + q(d.unblock) + "/unblock"), { action: d.action }).then(function (r) { act(r); });
     }
+    if (d.teamResume) return call("PATCH", teamUrl(), { status: "active" }).then(function (r) { act(r, drawAll); });
     if (d.leader !== undefined && t.hasAttribute("data-leader")) {
       return call("POST", teamUrl("/leader"), { agent_key: d.leader || null }).then(function (r) { act(r, drawAll); });
     }
     if (d.remove) {
       var nm = nameOf(S.team && S.team.members, d.remove);
       if (typeof confirm === "function" && !confirm(tw("teams.remove_confirm", { name: nm }))) return;
-      return call("DELETE", teamUrl("/members/" + q(d.remove))).then(function (r) { act(r, drawAll); });
+      return call("DELETE", teamUrl("/members/" + q(d.remove))).then(function (r) { S.openMember = null; act(r, drawAll); });
     }
     if (t.classList.contains("tm-add-go")) {
       var pick = S.el.querySelector(".tm-add-pick");
@@ -988,6 +1348,7 @@
       return call("POST", teamUrl("/members"), { slug: pick.value }).then(function (r) { act(r, drawAll); });
     }
     if (t.classList.contains("tm-save")) return saveSettings();
+    if (t.classList.contains("tm-caps-save")) return saveCaps();
     if (t.classList.contains("tm-auth-save")) {
       var sec = S.el.querySelector(".tm-auth");
       return call("POST", teamUrl("/authority"), { mode: "full", grant: readGrant(sec) }).then(function (r) {
@@ -1038,20 +1399,24 @@
 
   function saveSettings() {
     var status = (S.el.querySelector('input[name="tm-status"]:checked') || {}).value || S.team.status;
+    if (status === "archived" && S.team.status !== "archived" && typeof confirm === "function" &&
+        !confirm(tw("teams.archive_confirm"))) return;
+    call("PATCH", teamUrl(), { name: val("tm-set-name"), description: val("tm-set-desc"), status: status }).then(function (r) {
+      if (r.code === 200) setNote(tw("teams.saved"));
+      act(r, drawAll);
+    });
+  }
+
+  function saveCaps() {
     var caps = {};
     CAP_FIELDS.forEach(function (k) {
       var v = val("tm-cap-" + k);
       if (v !== "" && Number(v) !== Number((S.team.caps || {})[k])) caps[k] = Number(v);
     });
-    var lead = val("tm-leader-set");
-    var steps = [call("PATCH", teamUrl(), { name: val("tm-set-name"), description: val("tm-set-desc"), status: status })];
-    if (Object.keys(caps).length) steps.push(call("POST", teamUrl("/caps"), { caps: caps }));
-    if ((lead || null) !== (S.team.leader_key || null)) steps.push(call("POST", teamUrl("/leader"), { agent_key: lead || null }));
-    Promise.all(steps).then(function (rs) {
-      var bad = rs.filter(function (r) { return r.code !== 200; })[0];
-      if (bad) return fail(bad);
-      setNote(tw("teams.saved"));
-      act(rs[rs.length - 1], drawAll);
+    if (!Object.keys(caps).length) { setNote(tw("teams.saved")); return; }
+    call("POST", teamUrl("/caps"), { caps: caps }).then(function (r) {
+      if (r.code === 200) setNote(tw("teams.saved"));
+      act(r, drawSide);
     });
   }
 
@@ -1066,23 +1431,13 @@
     });
   }
 
-  function onInput(e) {
+  function onChange(e) {
     if (e.target.name === "tm-reason" && S.picker !== null) {
       var pv = panelValues(S.picker, msgById(S.picker));
       S.draft = { mid: S.picker, reasons: pv.reasons, comment: pv.comment };
       return;
     }
-    if (e.target.classList.contains("tm-input")) { suggest(); return; }
-    if (e.target.classList.contains("tm-asjob")) {
-      S.asJob = !!e.target.checked;
-      // Đổi loại tin là một tin KHÁC: mã client cũ thuộc tin trước, gửi lại bằng nó sẽ được trả tin cũ khác loại.
-      S.pending = null;
-      var btn = S.el.querySelector(".tm-send");
-      if (btn) btn.textContent = tw(S.asJob ? "teams.as_job" : "teams.send");
-      drawHint();
-      return;
-    }
-    if (e.target.classList.contains("tm-filter")) { S.filterTask = e.target.value; loadMsgs(false); return; }
+    if (e.target.name === "tm-level") { setLevel(Number(e.target.value), e.target); return; }
     if (e.target.name && /^tm-auth-(cap|ceil)-[a-z_]+-unl$/.test(e.target.name)) {
       // Tích Không giới hạn thì ô số tắt (giá trị là null + cờ, không phải một số lớn).
       var num = S.el.querySelector('[name="' + e.target.name.slice(0, -4) + '"]');
@@ -1123,6 +1478,7 @@
       return;
     }
     if (e.key === "Escape" && S.picker !== null) { S.focusBack = S.picker; S.picker = null; S.draft = null; drawMsgs(false); return; }
+    if (e.key === "Escape" && S.side) { closeSide(); return; }
     if (e.target.classList && e.target.classList.contains("tm-input") && e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       send();
@@ -1148,25 +1504,36 @@
     }, 300);
   }
 
+  // Rời trang (console.js gọi qua _pageLeave): đóng ngăn, bỏ hẹn giờ; trang dựng lại từ đầu lần ghé sau.
+  function leave() {
+    clearTimeout(refreshTimer);
+    if (S) { S.side = false; S.picker = null; }
+  }
+
   function render(el) {
     S = fresh(el);
     shell();
     el.addEventListener("click", onClick);
-    el.addEventListener("change", onInput);
+    el.addEventListener("change", onChange);
     el.addEventListener("input", function (e) {
       if (e.target.classList.contains("tm-react-comment") && S.picker !== null) {
         S.draft = { mid: S.picker, reasons: panelValues(S.picker, msgById(S.picker)).reasons, comment: e.target.value };
         return;
       }
-      if (e.target.classList.contains("tm-input")) { S.pending = S.pending && S.pending.text === e.target.value.trim() ? S.pending : null; suggest(); }
+      if (e.target.classList.contains("tm-input")) {
+        S.pending = S.pending && S.pending.text === e.target.value.trim() ? S.pending : null;
+        grow(e.target);
+        suggest();
+        drawHint();
+      }
     });
     el.addEventListener("keydown", onKey);
-    // Điện thoại: nhấn giữ tin của trợ lý mở bộ chọn cảm xúc (spec 14.3).
+    // Điện thoại: nhấn giữ một tin mở bảng của tin đó (cảm xúc và ghim cho tin trợ lý, ghim cho tin của chủ; spec 14.3).
     var hold = null, hx = 0, hy = 0, held = false;
     var stopHold = function () { clearTimeout(hold); hold = null; };
     el.addEventListener("pointerdown", function (e) {
-      if (e.pointerType === "mouse") return;   // chuột đã có nút mặt cười khi rê; giữ chuột để bôi chữ như thường
-      var msg = e.target.closest && e.target.closest(".tm-msg-agent");
+      if (e.pointerType === "mouse") return;   // chuột đã có nút khi rê; giữ chuột để bôi chữ như thường
+      var msg = e.target.closest && e.target.closest(".tm-msg");
       if (!msg || e.target.closest("button, a, input, textarea, select")) return;
       stopHold();
       hx = e.clientX; hy = e.clientY;
@@ -1191,11 +1558,14 @@
     window.addEventListener("javis:team-event", onTeamEvent);
   }
 
-  var api = { render: render, teamListHtml: teamListHtml, messageHtml: messageHtml, queueHtml: queueHtml,
-    mentionMatches: mentionMatches, composerHint: composerHint, newClientId: newClientId, membersHtml: membersHtml,
-    settingsFormHtml: settingsFormHtml, turnsHtml: turnsHtml, createFormHtml: createFormHtml, bannersHtml: bannersHtml,
-    reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml, nextReaction: nextReaction,
-    REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant, searchResultsHtml: searchResultsHtml };
+  var api = { render: render, leave: leave, teamListHtml: teamListHtml, messageHtml: messageHtml, queueHtml: queueHtml,
+    jobStripHtml: jobStripHtml, blockedAction: blockedAction, jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
+    mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, composerHint: composerHint, newClientId: newClientId,
+    membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, teamTabHtml: teamTabHtml,
+    levelOf: levelOf, grantFor: grantFor, levelsHtml: levelsHtml, turnsHtml: turnsHtml, createFormHtml: createFormHtml,
+    bannersHtml: bannersHtml, reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml,
+    nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
+    searchResultsHtml: searchResultsHtml };
   if (typeof window !== "undefined") window.JavisTeams = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

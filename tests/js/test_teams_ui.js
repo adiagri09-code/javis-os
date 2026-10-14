@@ -35,17 +35,28 @@ const team = { team_id: "tm_1", name: "Ra mắt <i>", description: "", leader_ke
 let h = TM.teamListHtml([team, Object.assign({}, team, { team_id: "tm_2", name: "Nội dung", counts: { running: 0, waiting: 0, blocked: 0 } })], "tm_1");
 check("danh sách: tên nhóm được escape", h.includes("Ra mắt &lt;i&gt;") && !h.includes("<i>"), h);
 check("danh sách: nhóm đang mở được đánh dấu", /data-team="tm_1"[^>]*aria-current="true"/.test(h), h);
-check("danh sách: số việc chờ anh bằng chữ", h.includes(vi["teams.waiting_owner"].replace("{n}", "1")), h);
-check("danh sách rỗng: lời mời tạo nhóm", TM.teamListHtml([], "").includes(vi["teams.empty"]));
+check("T5 danh sách: nhóm có việc chờ chủ mang nhãn Cần bạn", h.includes(vi["teams.needs_you"]), h);
+check("T5 danh sách rỗng: thẻ hướng dẫn ba bước kèm nút Tạo nhóm", (function (g) {
+  return g.includes(vi["teams.guide_title"]) && ["teams.guide_1", "teams.guide_2", "teams.guide_3"].every(function (k) {
+    return g.includes(vi[k]); }) && g.includes("tm-new");
+})(TM.teamListHtml([], "")));
 
 // ───────────── tin ─────────────
 const ctx = { members: members, leaderKey: "ag_lan", taskTitles: { t_1: "Soạn kế hoạch" } };
 h = TM.messageHtml({ id: 1, author_kind: "owner", content: "Giao <b>việc</b>", meta: { as_job: true, mentions: ["ag_minh"] } }, ctx);
-check("tin chủ nhóm: nhãn Chủ nhóm, nội dung escape", h.includes(vi["teams.owner"]) && h.includes("&lt;b&gt;việc"), h);
-h = TM.messageHtml({ id: 2, author_kind: "agent", author_ref: "ag_minh", content: "Xong", task_id: "t_1", step_id: "st_1",
+check("T5 tin của chủ: bong bóng bên phải, không tên, không ảnh, nội dung escape, nhãn Giao việc",
+      h.includes("tm-msg-owner") && !h.includes(vi["teams.owner"]) && !h.includes("tm-ava") && h.includes("&lt;b&gt;việc")
+      && h.includes(vi["teams.as_job"]), h);
+h = TM.messageHtml({ id: 2, author_kind: "agent", author_ref: "ag_minh", content: "Bài viết", task_id: "t_1", step_id: "st_1",
   meta: { role: "work", status: "done", applied: true } }, ctx);
-check("tin agent: tên, vai, nhãn việc bấm được, trạng thái bằng chữ", h.includes("Minh &lt;b&gt;") && h.includes(vi["teams.role.work"])
-      && /data-task="t_1"/.test(h) && h.includes(vi["teams.status.done"]), h);
+check("T5 tin agent: ảnh, tên, vai, nhãn việc bấm được; trạng thái Xong (bình thường) không hiện",
+      h.includes("tm-ava") && h.includes("Minh &lt;b&gt;") && h.includes(vi["teams.role.work"]) && /data-task="t_1"/.test(h)
+      && !h.includes(">" + vi["teams.status.done"] + "<"), h);
+check("T5 câu trả lời trò chuyện không mang nhãn vai", !TM.messageHtml({ id: 9, author_kind: "agent", author_ref: "ag_lan",
+  content: "Chào", meta: { role: "leader_reply", status: "done" } }, ctx).includes("tm-role"));
+h = TM.messageHtml({ id: 10, author_kind: "system", content: "Chủ nhóm đã <b>bật</b>", meta: { kind: "x" } }, ctx);
+check("T5 tin hệ thống: dòng xám ở giữa, escape, không bong bóng", h.includes('class="tm-sys"') && h.includes("&lt;b&gt;bật")
+      && !h.includes("tm-bubble"), h);
 h = TM.messageHtml({ id: 3, author_kind: "agent", author_ref: "ag_lan", content: "Tổng hợp", task_id: "t_1",
   meta: { role: "synthesize", status: "done", applied: true, job_result: true } }, ctx);
 check("bản tổng hợp cuối: nhãn Kết quả việc", h.includes(vi["teams.job_result"]), h);
@@ -77,13 +88,14 @@ check("hàng chờ đánh số đúng thứ tự chạy", h.indexOf("Bảng giá
 check("việc ưu tiên: dấu sao kèm chữ, nút Bỏ ưu tiên", /data-prio="t_3"[^>]*data-on="0"/.test(h) && h.includes(vi["teams.unprioritize"])
       && h.includes(vi["teams.prioritized"]), h);
 check("việc thường: nút Ưu tiên có chữ", /data-prio="t_2"[^>]*data-on="1"/.test(h) && h.includes(vi["teams.prioritize"]), h);
-check("bị chặn: lý do bằng chữ; lỗi thì Chạy lại bước; chạm trần thì Cho chạy tiếp", h.includes("Lượt lỗi: hết giờ")
-      && /data-unblock="t_4"[^>]*data-action="retry"/.test(h) && /data-unblock="t_5"[^>]*data-action="resume"/.test(h), h);
+check("T5 chờ bạn: lý do bằng chữ; lỗi thì Thử lại; hết lượt thì Cho thêm lượt (một nút giải quyết)",
+      h.includes("Lượt lỗi: hết giờ") && /data-unblock="t_4"[^>]*data-action="retry"/.test(h)
+      && /data-extend="t_5"/.test(h) && h.includes(vi["teams.act.extend"]) && !/data-unblock="t_5"/.test(h), h);
 h = TM.queueHtml({ version: 1, running: [], waiting: [], blocked: [{ id: "t_6", title: "Lặp", block_kind: "no_progress", block_reason: "x" }] });
-check("không tiến triển: nút Chạy lại bước (không phải Cho chạy tiếp ra kết quả lặp)",
+check("không tiến triển: nút Thử lại (chạy lại bước, không phải cho chạy tiếp ra kết quả lặp)",
       /data-unblock="t_6"[^>]*data-action="retry"/.test(h), h);
 check("đổi công tắc Giao việc thì gửi lại là tin MỚI (không trả nhầm tin cũ khác loại)",
-      /tm-asjob[\s\S]{0,200}S\.pending = null/.test(teamsJs));
+      /tm-asjob[\s\S]{0,260}S\.pending = null/.test(teamsJs));
 check("mọi lớp đặt display có luật [hidden] riêng", [".tm-job", ".tm-sug-item", ".tm-radio", ".tm-check", ".tm-ava"]
   .every(function (c) { return css.includes(c + "[hidden]"); }));
 check("hàng rỗng: có chữ", TM.queueHtml({ version: 0, running: [], waiting: [], blocked: [] }).includes(vi["teams.queue_empty"]));
@@ -93,7 +105,9 @@ const sug = TM.mentionMatches(members, "mi", []);
 check("@ gợi ý theo tên hay slug, chỉ thành viên đang hoạt động", sug.length === 1 && sug[0].agent_key === "ag_minh");
 check("@ đã chọn thì không gợi ý lại", TM.mentionMatches(members, "", ["ag_minh"]).every(function (m) { return m.agent_key !== "ag_minh"; }));
 let hint = TM.composerHint({ mentions: ["ag_minh"], asJob: true, cap: 3, waiting: 2, members: members });
-check("Giao việc: nói rõ tạo một việc, giao cho ai, vị trí trong hàng", hint.text.includes("Minh") && hint.text.includes("3") && hint.ok, hint.text);
+check("T5 Giao việc: một dòng nói rõ tạo việc cho ai (không còn vị trí hàng)", hint.text.includes("Minh") && !hint.text.includes("3")
+      && hint.ok, hint.text);
+check("T5 không Giao việc: không có dòng gợi ý", TM.composerHint({ mentions: [], asJob: false, cap: 3, members: members }).text === "");
 hint = TM.composerHint({ mentions: ["a", "b", "c", "d"], asJob: false, cap: 3, waiting: 0, members: members });
 check("quá trần @: tắt nút Gửi, nói rõ trần", !hint.ok && hint.text.includes("3"), hint.text);
 hint = TM.composerHint({ mentions: [], asJob: true, cap: 3, waiting: 0, members: members, leaderKey: "ag_lan" });
@@ -107,9 +121,12 @@ check("thành viên: vai bằng chữ, trạng thái Cộng hưởng bằng ch�
 check("thành viên: nút Đặt làm trưởng nhóm, Bỏ khỏi nhóm", /data-leader="ag_minh"/.test(h) && /data-remove="ag_minh"/.test(h), h);
 check("thêm thành viên: chỉ agent chưa trong nhóm", h.includes('value="hoa"') && !h.includes('value="lan"'), h);
 h = TM.settingsFormHtml(team);
-check("cài đặt một cột, nút Lưu ở cuối", h.lastIndexOf("tm-save") > h.lastIndexOf("tm-cap") && !h.includes("<table"), h);
+check("T5 tên, mô tả, trạng thái một cột, nút Lưu ở cuối, không có số giới hạn", h.lastIndexOf("tm-save") > h.lastIndexOf("tm-status")
+      && !h.includes("tm-cap") && !h.includes("<table"), h);
 check("ba trạng thái nhóm bằng chữ", h.includes(vi["teams.status_active"]) && h.includes(vi["teams.status_paused"])
       && h.includes(vi["teams.status_archived"]), h);
+h = TM.capsFormHtml(team);
+check("T5 số giới hạn riêng một form, nút Lưu ở cuối", h.lastIndexOf("tm-caps-save") > h.lastIndexOf("tm-cap-") && !h.includes("<table"), h);
 h = TM.turnsHtml([{ agent_key: "ag_lan", role: "plan", status: "ok", created_at: Date.now() / 1000, tokens_in: 10, tokens_out: 2 },
                   { agent_key: "ag_minh", role: "work", status: "refunded", created_at: Date.now() / 1000 }], team);
 check("lượt: lượt hoàn không tính, theo agent và vai", h.includes(vi["teams.turns_today"].replace("{n}", "1").replace("{cap}", "100"))
@@ -117,8 +134,11 @@ check("lượt: lượt hoàn không tính, theo agent và vai", h.includes(vi["
 h = TM.createFormHtml([{ slug: "lan", name: "Lan" }, { slug: "minh", name: "M<x>" }]);
 check("tạo nhóm: tên, mô tả, chọn thành viên, trưởng nhóm, nút Tạo ở cuối", h.includes('name="tm-name"') && h.includes("M&lt;x&gt;")
       && h.includes('name="tm-leader"') && h.lastIndexOf("tm-create-save") > h.lastIndexOf('name="tm-leader"'), h);
-check("băng rôn nhóm chưa có trưởng nhóm", TM.bannersHtml(Object.assign({}, team, { leader_key: null })).includes(vi["teams.no_leader"]));
-check("băng rôn tạm dừng", TM.bannersHtml(Object.assign({}, team, { status: "paused" })).includes(vi["teams.paused_banner"]));
+h = TM.bannersHtml(Object.assign({}, team, { leader_key: null }));
+check("T5 băng nhóm chưa có trưởng nhóm kèm nút Chọn", h.includes(vi["teams.no_leader"]) && /data-open-team="1"/.test(h), h);
+h = TM.bannersHtml(Object.assign({}, team, { status: "paused" }));
+check("T5 băng tạm dừng kèm nút Bật lại", h.includes(vi["teams.paused_banner"]) && /data-team-resume="1"/.test(h)
+      && h.includes(vi["teams.resume_team"]), h);
 check("băng rôn thành viên bận ở nhóm khác", TM.bannersHtml(Object.assign({}, team, { busy: { ag_minh: "tm_9" } }), { tm_9: "Nhóm Y" })
       .includes("Nhóm Y"));
 
@@ -132,10 +152,10 @@ check("app.js chuyển gói team_message, team_state thành sự kiện trang", 
 check("lớp flex của trang có luật [hidden]", /\.tm-page\[hidden\]\{display:none\}|\.tm-[a-z-]+\[hidden\]\s*\{\s*display:\s*none/.test(css)
       && css.includes(".tm-"), "");
 check("nút .ws-btn bị hidden thật sự ẩn (smoke: nút Trang sau vẫn hiện)", /\.tm-page \.ws-btn\[hidden\]\s*\{\s*display:\s*none/.test(css));
-check("chưa mở nhóm: không chừa cột cài đặt trống", /\.tm-page\[data-side="0"\]\s*\{\s*grid-template-columns/.test(css)
+check("ngăn đóng: không chừa cột trống", /\.tm-page\[data-side="0"\]\s*\{\s*grid-template-columns/.test(css)
       && teamsJs.includes('setAttribute("data-side"'));
-check("màn hẹp: đầu khung chat xuống hai hàng, tên nhóm không bị ép (smoke 375px)",
-      /\.tm-chat-head\s*\{\s*flex-wrap:\s*wrap/.test(css) && /\.tm-chat-head \.tm-title\s*\{\s*flex:\s*1 1 calc\(100% - 60px\)/.test(css));
+check("T5 đầu khung chat một hàng; điện thoại bỏ ảnh nhóm và chữ của chip việc để tên còn chỗ",
+      /\.tm-chat-head \{[^}]*flex-wrap: nowrap/.test(css) && /\.tm-chat-head > \.tm-ava, \.tm-chip-label \{ display: none; \}/.test(css));
 check("ngăn kéo cài đặt có nền đặc (smoke 375px: nhìn xuyên thấy tin)",
       /\.tm-side \{ position: fixed;[^}]*background: var\(--bg\)/.test(css));
 check("màn hẹp: nút tối thiểu 44px", /@media[^{]*max-width[^{]*\{[\s\S]*\.tm-[\s\S]*min-height:\s*44px/.test(css));
@@ -199,9 +219,10 @@ check("CSS: nút mặt cười hiện khi rê chuột, luôn hiện trên máy c
 check("đang soạn góp ý thì vẽ lại giữ con trỏ, chỗ cuộn, không kéo xuống cuối",
       /typing = S\.picker !== null && act && act\.classList/.test(teamsJs) && /ta\.setSelectionRange\(typing\.start, typing\.end\)/.test(teamsJs)
       && /\(stick \|\| atEnd\) && S\.picker === null/.test(teamsJs));
-check("mở bộ chọn đưa focus vào emoji đầu; đóng trả focus về nút mặt cười",
-      /S\.focusPicker = true/.test(teamsJs) && /\.tm-react-panel \.tm-react-pick"\);\s*if \(first\) first\.focus\(\)/.test(teamsJs)
-      && /\.tm-react-btn\[data-react-open="' \+ S\.focusBack/.test(teamsJs));
+check("mở bộ chọn đưa focus vào emoji đầu (bảng của tin chủ: nút đầu); đóng trả focus về nút đã mở",
+      /S\.focusPicker = true/.test(teamsJs)
+      && /\.tm-react-panel \.tm-react-pick"\) \|\| box\.querySelector\("\.tm-react-panel button"\);\s*if \(first\) first\.focus\(\)/.test(teamsJs)
+      && /\.tm-react-btn\[data-react-open="' \+ S\.focusBack/.test(teamsJs) && /\.tm-more-btn\[data-react-open="' \+ S\.focusBack/.test(teamsJs));
 check("nhấn giữ chỉ cho chạm và bút, không cho chuột; chặn menu ngữ cảnh của lần giữ đó",
       teamsJs.includes('if (e.pointerType === "mouse") return;') && /"contextmenu"[\s\S]{0,80}if \(held\) \{ e\.preventDefault\(\)/.test(teamsJs));
 check("CSS: điện thoại hàng ngang lớn, vùng chạm >= 44px", /\.tm-react-pick \{ flex: 1 1 0; min-width: 44px; min-height: 48px/.test(css));
@@ -241,7 +262,7 @@ const mh3 = TM.membersHtml(fullTeam, []);
 check("tab Thành viên có công tắc Nhóm quản lý theo trạng thái", (mh3.match(/class="tm-managed-toggle"/g) || []).length === 2
       && /data-key="ag_minh" checked/.test(mh3) && mh3.includes(vi["teams.managed"]), mh3);
 check("review T3 #6: Toàn quyền bật thì form trần báo trần lấy theo mục Toàn quyền; giới hạn thì không",
-      TM.settingsFormHtml(fullTeam).includes(vi["teams.caps_full_note"]) && !TM.settingsFormHtml(limitedTeam).includes(vi["teams.caps_full_note"]));
+      TM.capsFormHtml(fullTeam).includes(vi["teams.caps_full_note"]) && !TM.capsFormHtml(limitedTeam).includes(vi["teams.caps_full_note"]));
 // ───────────── T4: tìm trong nhóm, nhảy tới tin cũ ─────────────
 const hits = [{ id: 41, ts: 100.5, author_kind: "agent", author_ref: "ag_lan", snippet: "Kế hoạch <script>" },
   { id: 12, ts: 50, author_kind: "owner", author_ref: "", snippet: "Ra mắt" }];
@@ -275,5 +296,142 @@ const authKeys = ["teams.cap.help_depth", "teams.auth.provider_aux", "teams.auth
 check("khoá Toàn quyền tra qua bảng có ở cả vi và en", authKeys.every(function (k) { return vi[k] && en[k]; }));
 check("CSS: lớp flex mới của Toàn quyền có luật [hidden] riêng", /\.tm-auth\[hidden\]/.test(css) && /\.tm-auth-pair\[hidden\]/.test(css)
       && /\.tm-unl\[hidden\]/.test(css));
+
+// ───────────── T5: trang Nhóm gọn như app chat ─────────────
+// Danh sách kiểu app chat: ảnh, tên, giờ, dòng xem trước (ai nói gì), nhãn trạng thái.
+const now = new Date(2026, 9, 14, 18, 0, 0).getTime() / 1000;
+const at = new Date(2026, 9, 14, 9, 5, 0).getTime() / 1000;
+h = TM.teamListHtml([Object.assign({}, team, { counts: { running: 1, waiting: 0, blocked: 0 },
+  last: { author_kind: "agent", author: "Lan", text: "Kế hoạch <xong>", ts: at } })], "", now);
+check("T5 dòng nhóm: ảnh, giờ hôm nay, xem trước 'Lan: ...' escape, nhãn Đang làm", h.includes("tm-ava") && h.includes("09:05")
+      && h.includes("Lan: Kế hoạch &lt;xong&gt;") && h.includes(vi["teams.badge_running"]), h);
+h = TM.teamListHtml([Object.assign({}, team, { counts: {}, status: "paused", last: { author_kind: "owner", text: "Chào", ts: at - 86400 } })], "", now);
+check("T5 tin của chủ xem trước là 'Bạn: ...', ngày khác hiện ngày/tháng, nhãn Tạm dừng",
+      h.includes(vi["teams.you"] + ": Chào") && h.includes("13/10") && h.includes(vi["teams.status_paused"]), h);
+check("T5 nhóm chưa có tin: nói rõ", TM.teamListHtml([Object.assign({}, team, { last: null })], "", now).includes(vi["teams.no_messages"]));
+check("T5 giờ ngắn: hôm nay HH:MM, ngày khác dd/mm, rỗng khi không có", TM.timeShort(at, now) === "09:05"
+      && TM.timeShort(at - 86400, now) === "13/10" && TM.timeShort(0, now) === "");
+
+// @ theo chữ: người được gọi là các "@Tên" còn trong chữ.
+const mem3 = members.concat([{ agent_key: "ag_la", slug: "la", name: "Lan Anh", status: "active" },
+  { agent_key: "ag_cu", slug: "cu", name: "Cũ", status: "left" }]);
+check("T5 @ lấy từ chữ theo thứ tự xuất hiện, theo tên hay slug, không phân biệt hoa thường",
+      TM.mentionsFromText("@minh <b> làm, @LAN xem", mem3).join() === "ag_minh,ag_lan"
+      && TM.mentionsFromText("nhờ @minh nhé", mem3).join() === "ag_minh");
+check("T5 @ tên dài hơn thắng ('@Lan Anh' không gọi nhầm Lan)", TM.mentionsFromText("@Lan Anh làm giúp", mem3).join() === "ag_la");
+check("T5 @ phải hết tên ('@Lanx' không gọi Lan); người đã rời không được gọi; xoá chữ là bỏ gọi",
+      TM.mentionsFromText("@Lanx", mem3).length === 0 && TM.mentionsFromText("@Cũ", mem3).length === 0
+      && TM.mentionsFromText("không gọi ai", mem3).length === 0);
+check("T5 gửi tin lấy người được gọi từ chữ, không còn hàng chip @ trùng chữ",
+      /var mentions = mentionsFromText\(text, S\.team\.members\);/.test(teamsJs) && !teamsJs.includes("tm-chips")
+      && !teamsJs.includes("data-unmention"));
+
+// Một nút giải quyết cho việc bị chặn.
+const BA = TM.blockedAction;
+check("T5 nút giải quyết theo lý do chặn", BA("cap_reached").act === "extend" && BA("failed").act === "retry"
+      && BA("no_progress").act === "retry" && BA("interrupted").key === "teams.act.continue" && BA("no_leader").act === "leader"
+      && BA("agent_busy_long").act === "resume" && BA("waiting_user").act === "resume" && BA("assignee_removed") === null);
+h = TM.jobStripHtml({ running: [{ id: "t_1", title: "Soạn <kế>" }], waiting: [{ id: "t_9", title: "x" }],
+  blocked: [{ id: "a", title: "A", block_kind: "cap_reached", block_reason: "Nhóm đã dùng hết số lần trả lời hôm nay" },
+    { id: "b", title: "B", block_kind: "no_leader", block_reason: "" }, { id: "c", title: "C", block_kind: "failed" }] });
+check("T5 dải việc đầu khung chat: đang làm một dòng (Sửa, Huỷ), tối đa hai thẻ chờ bạn có nút giải quyết, còn lại gom một nút",
+      h.includes("Soạn &lt;kế&gt;") && /data-amend="t_1"/.test(h) && /data-extend="a"/.test(h) && /data-open-team="1"/.test(h)
+      && !h.includes('data-cancel="c"') && h.includes(vi["teams.blocked_more"].replace("{n}", "1")) && !h.includes("t_9"), h);
+check("T5 lý do trống thì dùng nhãn lý do bằng chữ", h.includes(vi["teams.block.no_leader"]), h);
+check("T5 dải việc trống khi không có việc chạy hay chờ bạn", TM.jobStripHtml({ running: [], waiting: [{ id: "x", title: "x" }], blocked: [] }) === "");
+check("T5 chip việc: ẩn khi không có việc; có việc chờ bạn thì Cần bạn N (cảnh báo); không thì Việc N",
+      TM.jobsChip({}) === null && TM.jobsChip({ blocked: [1, 2], running: [1] }).warn === true
+      && TM.jobsChip({ blocked: [1, 2] }).n === 2 && TM.jobsChip({ running: [1], waiting: [1, 2] }).n === 3
+      && TM.jobsChip({ running: [1] }).warn === false);
+check("T5 chip việc tách chữ và số (điện thoại chỉ hiện icon kèm số)", /tm-chip-label[\s\S]*tm-chip-n/.test(TM.jobsChipHtml({ running: [1] })));
+check("T5 Cho thêm lượt gọi route extend rồi báo đã cho thêm; nhóm tạm dừng thì nhắc Bật lại",
+      /"\/extend"\)\)\.then[\s\S]{0,300}"teams\.extended_paused" : "teams\.extended"/.test(teamsJs)
+      && vi["teams.extended_paused"].includes(vi["teams.resume_team"]));
+
+// Ba mức tự quyết đặt lên Toàn quyền.
+check("T5 mức 1 = chưa bật Toàn quyền", TM.levelOf(limitedTeam) === 1);
+const withGrant = function (g) { return Object.assign({}, team, { authority: { authority: { leader_key: "ag_lan", grant: g } } }); };
+const g2 = TM.grantFor(2), g3 = TM.grantFor(3);
+check("T5 hộp quyền mức 2: trần tối đa vừa phải, không ngắt việc, không provider Không giới hạn, gói thuê bao",
+      g2.ceilings.task_turns === 24 && g2.ceilings.daily_turns === 200 && g2.can_interrupt === false
+      && g2.providers_unlimited.length === 0 && g2.billing === "subscription" && Object.keys(g2.caps).length === 0);
+check("T5 hộp quyền mức 3: trần tối đa không giới hạn, được ngắt việc, vẫn không provider Không giới hạn",
+      ["task_turns", "task_steps", "help_depth", "daily_turns"].every(function (k) { return g3.ceilings[k].unlimited === true; })
+      && g3.can_interrupt === true && g3.providers_unlimited.length === 0);
+check("T5 đọc lại đúng mức 2, 3; trưởng nhóm tự chỉnh số trong khoảng cho phép vẫn là mức đó",
+      TM.levelOf(withGrant(g2)) === 2 && TM.levelOf(withGrant(g3)) === 3
+      && TM.levelOf(withGrant(Object.assign({}, g2, { caps: { task_turns: 20 } }))) === 2);
+check("T5 hộp quyền đặt tay khác ba mức: Tuỳ chỉnh", TM.levelOf(withGrant(Object.assign({}, g2, { can_interrupt: true }))) === "custom"
+      && TM.levelOf(withGrant(Object.assign({}, g3, { providers_unlimited: ["aux"] }))) === "custom");
+check("T5 mức 1 không có hộp quyền (là thu hồi)", TM.grantFor(1) === null);
+h = TM.teamTabHtml(Object.assign({}, withGrant(g2), { usage: { today: 7, cap: 100 } }), [], {});
+check("T5 tab Nhóm: thành viên, câu hỏi tự quyết, ba lựa chọn có mô tả (mức 2 được chọn), số đã dùng hôm nay",
+      h.includes(vi["teams.level_title"]) && (h.match(/name="tm-level"/g) || []).length === 3 && /value="2" checked/.test(h)
+      && ["teams.level_1", "teams.level_2", "teams.level_3", "teams.level_1_desc", "teams.level_3_desc"].every(function (k) {
+        return h.includes(vi[k]); }) && h.includes(vi["teams.usage_today"].replace("{n}", "7").replace("{cap}", "100")), h);
+check("T5 tab Nhóm: mọi con số và quyền chi tiết trong Nâng cao, đóng sẵn",
+      /<details class="tm-adv">/.test(h) && h.indexOf("tm-adv") < h.indexOf("tm-caps-form") && h.indexOf("tm-adv") < h.indexOf("tm-auth")
+      && h.indexOf("tm-adv") < h.indexOf("tm-turns") && h.indexOf("tm-adv") > h.indexOf("tm-level"), h);
+check("T5 Nâng cao đã mở thì vẽ lại vẫn mở", /<details class="tm-adv" open>/.test(TM.teamTabHtml(team, [], { advOpen: true })));
+check("T5 chưa có trưởng nhóm: không chọn mức được, nhắc chọn trưởng nhóm",
+      TM.levelsHtml(Object.assign({}, team, { leader_key: null })).includes(vi["teams.level_need_leader"])
+      && !TM.levelsHtml(Object.assign({}, team, { leader_key: null })).includes("tm-level\""));
+check("T5 không giới hạn số lần trả lời: nói rõ", TM.teamTabHtml(Object.assign({}, team, { usage: { today: 3, cap: null } }), [], {})
+      .includes(vi["teams.usage_today_unl"].replace("{n}", "3")));
+check("T5 mức 3 hỏi lại trước khi bật; mức 1 là thu hồi", /n === 3 && typeof confirm === "function" && !confirm\(tw\("teams\.level_3_confirm"\)\)/.test(teamsJs)
+      && /n === 1 \? \{ mode: "limited"/.test(teamsJs));
+
+// Thành viên: một dòng, chạm mở thao tác.
+h = TM.membersHtml(team, [], null);
+check("T5 thành viên: tên đủ trong dòng riêng, vai ở dòng dưới, thao tác ẩn tới khi chạm",
+      h.includes('class="tm-mname">Minh &lt;b&gt;') && (h.match(/class="tm-mact" hidden/g) || []).length === 2
+      && /data-expand="ag_minh" aria-expanded="false"/.test(h), h);
+h = TM.membersHtml(team, [], "ag_minh");
+check("T5 chạm một thành viên mở thao tác của người đó", /data-expand="ag_minh" aria-expanded="true"/.test(h)
+      && (h.match(/class="tm-mact" hidden/g) || []).length === 1, h);
+
+// Bảng của tin: tin trợ lý có cảm xúc kèm Ghim; tin của chủ chỉ Ghim.
+h = TM.messageHtml({ id: 20, author_kind: "owner", content: "Chốt", meta: {} }, { members: members, picker: 20 });
+check("T5 tin của chủ: bảng chỉ có Ghim làm quyết định", h.includes("tm-owner-panel") && /data-decision="20" data-on="1"/.test(h)
+      && !h.includes("tm-react-pick"), h);
+h = TM.messageHtml({ id: 21, author_kind: "agent", author_ref: "ag_lan", content: "x", meta: {} }, { members: members, picker: 21 });
+check("T5 tin trợ lý: bảng cảm xúc kèm Ghim; tin đã ghim thì không lặp nút Ghim", /data-decision="21" data-on="1"/.test(h)
+      && !/data-on="1"/.test(TM.messageHtml({ id: 22, author_kind: "agent", author_ref: "ag_lan", content: "x", meta: { decision: true } },
+        { members: members, picker: 22 })), h);
+check("T5 nút mở bảng nằm cạnh bong bóng, không thêm hàng dưới tin", (function (x) {
+  return x.indexOf("tm-bubble") < x.indexOf("tm-react-btn") && !/tm-foot[^>]*>[^<]*<button type="button" class="tm-react-btn"/.test(x);
+})(TM.messageHtml(am, { members: members })));
+check("T5 nhấn giữ mở bảng cho mọi tin (cả tin của chủ)", teamsJs.includes('e.target.closest(".tm-msg")'));
+
+// Trang chiếm trọn chiều cao, khung soạn một hàng ở đáy.
+check("T5 console.js: trang Nhóm dùng cview-flush, body.on-teams; rời trang gỡ cả hai và báo teams.js",
+      /id === "teams"[\s\S]{0,700}el\.classList\.add\("cview-flush"\);\s*document\.body\.classList\.add\("on-teams"\);/.test(consoleJs)
+      && /_pageLeave = \(\) => \{\s*el\.classList\.remove\("cview-flush"\);\s*document\.body\.classList\.remove\("on-teams"\);/.test(consoleJs));
+check("T5 điện thoại: bỏ đầu trang chung và linh vật trên trang Nhóm",
+      /@media \(max-width: 760px\) \{[\s\S]*body\.on-teams \.cview-head \{ display: none; \}[\s\S]*body\.on-teams #javisPet \{ display: none; \}/.test(css));
+check("T5 khung soạn một hàng: công tắc Giao việc, ô chữ, nút gửi; ô chữ không còn chiếm trọn hàng",
+      /class="tm-mode tm-asjob" aria-pressed=/.test(teamsJs) && /textarea class="tm-input" rows="1"/.test(teamsJs)
+      && !/\.tm-input \{ flex-basis: 100%; \}/.test(css) && /\.tm-row \{ display: flex; align-items: flex-end;/.test(css));
+check("T5 ô chữ tự cao tới khoảng năm dòng", /Math\.min\(input\.scrollHeight \|\| 0, INPUT_MAX_PX\)/.test(teamsJs)
+      && /\.tm-input \{[^}]*max-height: 132px/.test(css));
+check("T5 khung soạn chừa vùng an toàn đáy máy", /\.tm-composer \{[^}]*env\(safe-area-inset-bottom/.test(css));
+check("T5 lọc tin theo việc là một băng có nút Xem tất cả (bỏ ô chọn)", !teamsJs.includes("tm-filter\"") && teamsJs.includes("tm-filter-clear")
+      && !teamsJs.includes('"teams.filter_all"'));
+check("T5 ngăn Việc | Nhóm đóng sẵn, mở từ chip việc hay nút ba chấm; Escape và nền mờ đóng được",
+      /side: false/.test(teamsJs) && /d\.openJobs/.test(teamsJs) && /tm-gear/.test(teamsJs) && /e\.key === "Escape" && S\.side/.test(teamsJs)
+      && /\.tm-scrim \{ display: block; position: fixed;/.test(css));
+const t5Hidden = [".tm-jobs", ".tm-jcard", ".tm-filterbar", ".tm-mact", ".tm-mrow", ".tm-level", ".tm-guide", ".tm-banner",
+  ".tm-late", ".tm-radios", ".tm-mode", ".tm-composer", ".tm-jobs-chip", ".tm-scrim", ".tm-hint", ".tm-foot", ".tm-msg"];
+check("T5 CSS: mọi lớp flex mới có luật [hidden] riêng", t5Hidden.every(function (c) { return css.includes(c + "[hidden]"); }),
+      t5Hidden.filter(function (c) { return !css.includes(c + "[hidden]"); }).join(","));
+check("T5 điện thoại: vùng chạm 44px cho nút mới", /\.tm-jobs-chip,\s*\.tm-filter-clear, \.tm-banner \.ws-btn, \.tm-adv-sum, \.tm-decision, \.tm-jmore \{ min-height: 44px; \}/.test(css)
+      && /\.tm-send \{ width: 44px; height: 44px; \}/.test(css));
+const t5keys = ["teams.needs_you", "teams.guide_title", "teams.act.extend", "teams.level_title", "teams.level_2_desc", "teams.advanced",
+  "teams.tab_team", "teams.usage_today", "teams.filter_on", "teams.extended"];
+check("T5 khoá mới có ở cả vi và en", t5keys.every(function (k) { return vi[k] && en[k]; }));
+check("T5 chữ hiện ra không còn 'trần', 'lượt model', 'Toàn quyền' ở phần chính (Nâng cao thì được)",
+      ["teams.block.cap_reached", "teams.queue_empty", "teams.cap.task_turns", "teams.cap.daily_turns", "teams.daily_cap",
+        "teams.level_1_desc", "teams.level_2_desc", "teams.level_3_desc", "teams.auth.title", "teams.caps"].every(function (k) {
+        return !/trần|lượt model|Toàn quyền/i.test(vi[k]); }));
 
 process.exit(fails ? 1 : 0);

@@ -535,10 +535,21 @@
     if (id === "selfimprove") return renderSelfImprove(el);
     if (id === "chatbots") return renderChatbots(el);
     if (id === "teams") {
-      // Trang Nhóm do teams.js dựng, uỷ quyền như trang Gói.
-      if (window.JavisTeams) return window.JavisTeams.render(el);
-      el.innerHTML = placeholder("teams", window.t("cs.mod_not_ready", { ten: "teams.js" }));
-      return;
+      // Trang Nhóm do teams.js dựng, uỷ quyền như trang Gói. Trang chat chiếm trọn khung và tự cuộn bên trong (khung soạn
+      // luôn ở đáy) nên dùng .cview-flush như trang Code; body.on-teams để CSS bỏ đầu trang và linh vật trên điện thoại.
+      // _pageLeave gỡ cả hai (renderPage clone cviewBody GIỮ class) và báo teams.js dọn.
+      if (!window.JavisTeams) {
+        el.innerHTML = placeholder("teams", window.t("cs.mod_not_ready", { ten: "teams.js" }));
+        return;
+      }
+      el.classList.add("cview-flush");
+      document.body.classList.add("on-teams");
+      _pageLeave = () => {
+        el.classList.remove("cview-flush");
+        document.body.classList.remove("on-teams");
+        try { if (window.JavisTeams.leave) window.JavisTeams.leave(); } catch (e) {}
+      };
+      return window.JavisTeams.render(el);
     }
     if (id === "conversations") return renderConversations(el);
     if (id === "learn")    return renderLearn(el);

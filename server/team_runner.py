@@ -79,6 +79,9 @@ FIXED_LIMITS = {
     "account": "Quyền của tài khoản model đang dùng",
     "technical": "Giới hạn kỹ thuật: lượt nhóm chỉ chữ, một lượt mỗi agent cùng lúc, hạn khoá bận",
 }
+# Nhãn bằng lời thường cho tin hệ thống chủ đọc (T5); CAP_LABEL ở trên dùng trong lời nhắc của trưởng nhóm.
+CAP_PLAIN = {"task_turns": "số lần trả lời tối đa mỗi việc", "task_steps": "số bước tối đa mỗi việc",
+             "help_depth": "số lần nhờ nhau lồng nhau", "daily_turns": "số lần trả lời tối đa mỗi ngày"}
 # Nút "Cho thêm lượt" (T5): mỗi lần bấm nâng đúng trần đã chạm thêm một nấc, kèm tin hệ thống bằng lời thường.
 EXTEND_STEP = {"daily_turns": 20, "task_turns": 6, "task_steps": 4}
 EXTEND_TEXT = {"daily_turns": "Chủ nhóm cho nhóm thêm {n} lần trả lời hôm nay để làm tiếp \"{title}\".",
@@ -556,7 +559,7 @@ class TeamRunner:
         with self.accept_lock:
             row = self.teams.grant_authority(team_id, clean, by=by)
         team = self._team(team_id)
-        self._post(team, f"Chủ nhóm đã bật Toàn quyền cho trưởng nhóm {self._name(team, row['leader_key'])}.",
+        self._post(team, f"Chủ nhóm đã cho trưởng nhóm {self._name(team, row['leader_key'])} tự quyết trong nhóm.",
                    author_kind="system", meta={"kind": "authority_granted"})
         self._state(team_id)
         return row
@@ -566,7 +569,7 @@ class TeamRunner:
         with self.accept_lock:
             done = self.teams.revoke_authority(team_id, by=by, reason=reason or "chủ thu hồi")
         if done:
-            self._post(self._team(team_id), "Chủ nhóm đã thu hồi Toàn quyền. Nhóm về Quyền giới hạn.",
+            self._post(self._team(team_id), "Chủ nhóm đã thu lại quyền tự quyết. Trưởng nhóm chỉ đề xuất, chủ nhóm quyết.",
                        author_kind="system", meta={"kind": "authority_revoked"})
             self._state(team_id)
         return done
@@ -701,7 +704,7 @@ class TeamRunner:
                 if not self.teams.update_authority_caps(auth["id"], {cap: value}, by):
                     raise TeamError("Toàn quyền vừa bị thu hồi")
                 shown = "Không giới hạn" if isinstance(value, dict) else str(value)
-                self._system(team, f"Trưởng nhóm {lead} đã đặt trần {CAP_LABEL.get(cap, cap)}: {shown}.", "caps_changed")
+                self._system(team, f"Trưởng nhóm {lead} đã đặt {CAP_PLAIN.get(cap, cap)}: {shown}.", "caps_changed")
             elif kind == "interrupt":
                 if not grant.get("can_interrupt"):
                     raise TeamError("chưa được chủ cho quyền ngắt việc đang chạy")
