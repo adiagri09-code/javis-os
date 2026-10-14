@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.119.0] - 2026-10-14
+### Thêm mới
+- **Thả cảm xúc cho tin của trợ lý trong nhóm:** 👍 ❤️ 😂 😮 😢 😡.
+
 ## [0.111.0] - 2026-10-13
 ### Thêm mới
 - **Trang Nhóm: nhiều trợ lý cùng một khung chat.** Tạo nhóm, chọn thành viên và trưởng nhóm ở thanh bên, mục **Nhóm**.

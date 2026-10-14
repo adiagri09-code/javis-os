@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.119.0] - 2026-10-14
+### Added
+- **React to assistant messages in a team:** 👍 ❤️ 😂 😮 😢 😡.
+
 ## [0.111.0] - 2026-10-13
 ### Added
 - **Teams page: several assistants in one chat.** Create a team, pick members and a team lead from the **Teams** item in the sidebar.
