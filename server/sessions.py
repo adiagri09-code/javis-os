@@ -659,6 +659,38 @@ class SessionStore:
                           (session_id, int(message_id)))
         return self._team_msg(rows[0]) if rows else None
 
+    def team_message_count(self, session_id: str) -> int:
+        """Số tin của một phiên nhóm (khối tóm tắt phần cũ, T4)."""
+        rows = self._read("SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,))
+        return int(rows[0][0] or 0) if rows else 0
+
+    @staticmethod
+    def fold_text(text: str) -> str:
+        """Chữ để so khi tìm: bỏ dấu tiếng Việt (cả đ), không phân biệt hoa thường. "Việt" khớp "viet", "VIỆT"."""
+        import unicodedata
+        s = unicodedata.normalize("NFD", str(text or ""))
+        s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+        return s.replace("đ", "d").replace("Đ", "D").casefold()
+
+    def team_search(self, session_id: str, query: str, limit: int = 50, scan_max: int = 50000) -> List[Dict[str, Any]]:
+        """Tìm trong MỘT phiên nhóm (T4, spec mục 19): khớp mọi từ của câu tìm, không phân biệt hoa thường và dấu, mới
+        nhất trước, tối đa `limit` kết quả. Lọc ở Python sau khi đọc theo chỉ mục phiên, vì LIKE của SQLite chỉ bỏ hoa
+        thường cho chữ ASCII; quét tối đa `scan_max` tin mới nhất."""
+        words = [w for w in self.fold_text(query).split() if w]
+        if not words:
+            return []
+        out: List[Dict[str, Any]] = []
+        rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+                          (session_id, max(1, int(scan_max))))
+        for r in rows:
+            m = self._team_msg(r)
+            hay = self.fold_text(m.get("content") or "")
+            if all(w in hay for w in words):
+                out.append(m)
+                if len(out) >= max(1, min(int(limit), 200)):
+                    break
+        return out
+
     def last_message_id_by(self, session_id: str, author_ref: str) -> int:
         """Mã tin mới nhất do `author_ref` (agent_key) viết trong phiên nhóm; 0 nếu chưa có. Khối ngữ cảnh nhóm lấy tin
         mới kể từ đây (spec 11.2)."""

@@ -191,7 +191,8 @@
     var pin = '<button type="button" class="tm-pin" data-decision="' + esc(m.id) + '" data-on="' + (meta.decision ? "0" : "1") + '">' +
       esc(tw(meta.decision ? "teams.decision_unpin" : "teams.decision_pin")) + "</button>";
     var cls = "tm-msg" + (mine ? " tm-msg-owner" : "") + (LATE.indexOf(meta.status) >= 0 ? " tm-msg-late" : "") +
-      (meta.job_result ? " tm-msg-result" : "");
+      (meta.job_result ? " tm-msg-result" : "") + (ctx.jumped !== undefined && ctx.jumped !== null && Number(ctx.jumped) === Number(m.id)
+        ? " tm-msg-hit" : "");
     var react = "";
     if (m.author_kind === "agent") {
       cls += " tm-msg-agent";
@@ -428,6 +429,19 @@
       billing: bill ? bill.value : "subscription", can_interrupt: !!(intr && intr.checked) };
   }
 
+  // Kết quả tìm trong nhóm (T4): mỗi dòng là nút nhảy tới tin, kèm người gửi và đoạn trích.
+  function searchResultsHtml(results, members, query) {
+    if (results === null || results === undefined) return "";
+    if (!results.length) return '<div class="tm-search-none">' + esc(tw("teams.search_none", { q: query || "" })) + "</div>";
+    return '<div class="tm-search-count">' + esc(tw("teams.search_results", { n: results.length })) + "</div>" +
+      results.map(function (x) {
+        var who = x.author_kind === "owner" ? tw("teams.owner") : x.author_kind === "agent" ? nameOf(members, x.author_ref)
+          : tw("teams.system");
+        return '<button type="button" class="tm-search-hit" data-jump="' + esc(x.id) + '" data-ts="' + esc(x.ts) + '">' +
+          '<span class="tm-who">' + esc(who) + "</span> " + '<span class="tm-search-snip">' + esc(x.snippet) + "</span></button>";
+      }).join("");
+  }
+
   function dayStart() {
     var d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -507,7 +521,7 @@
     return { el: el, teams: [], next: null, activeId: "", team: null, queue: null, msgs: [], hasMore: false,
       agents: [], mentions: [], asJob: false, pending: null, tab: "jobs", side: false, view: "list",
       filterTask: "", taskTitles: {}, teamNames: {}, note: "", creating: false, skipped: {}, picker: null, draft: null,
-      focusPicker: false, focusBack: null };
+      focusPicker: false, focusBack: null, searchOpen: false, searchResults: null, searchQuery: "", jumped: null };
   }
 
   function teamUrl(path) { return "/teams/" + q(S.activeId) + (path || ""); }
@@ -558,14 +572,67 @@
     head.innerHTML = '<button type="button" class="ws-btn tm-back" aria-label="' + esc(tw("teams.back")) + '">‹</button>' +
       '<div class="tm-title"><strong>' + esc(t.name) + '</strong><span class="tm-sub">' + esc(lead) + "</span></div>" +
       '<select class="tm-filter" aria-label="' + esc(tw("teams.filter_all")) + '">' + opts + "</select>" +
+      '<button type="button" class="ws-btn tm-search-btn" aria-label="' + esc(tw("teams.search")) + '" title="' +
+      esc(tw("teams.search")) + '"' + (S.searchOpen ? ' aria-expanded="true"' : ' aria-expanded="false"') + ">" + ic("search") +
+      "</button>" +
       '<button type="button" class="ws-btn tm-gear">' + esc(tw("teams.settings_btn")) + "</button>";
+    drawSearch();
     var b = S.el.querySelector(".tm-banners");
     if (b) b.innerHTML = bannersHtml(t, S.teamNames);
   }
 
+  // Thanh tìm và kết quả, ngay dưới đầu khung chat (một vùng riêng, không vẽ lại khi có tin mới).
+  function drawSearch() {
+    var bar = S.el.querySelector(".tm-search");
+    if (!bar) {
+      var head = S.el.querySelector(".tm-chat-head");
+      if (!head || !head.parentNode) return;
+      bar = document.createElement("div");
+      bar.className = "tm-search";
+      head.parentNode.insertBefore(bar, head.nextSibling);
+    }
+    bar.hidden = !S.searchOpen || !S.team || S.creating;
+    if (bar.hidden) { bar.innerHTML = ""; return; }
+    if (!bar.querySelector(".tm-search-input")) {
+      bar.innerHTML = '<div class="tm-search-row"><input type="search" class="tm-search-input" maxlength="100" placeholder="' +
+        esc(tw("teams.search_ph")) + '" aria-label="' + esc(tw("teams.search")) + '">' +
+        '<button type="button" class="ws-btn tm-search-go">' + esc(tw("teams.search")) + "</button></div>" +
+        '<div class="tm-search-list" role="list"></div>';
+    }
+    var list = bar.querySelector(".tm-search-list");
+    if (list) list.innerHTML = searchResultsHtml(S.searchResults, S.team ? S.team.members : [], S.searchQuery);
+  }
+
+  function runSearch() {
+    var inp = S.el.querySelector(".tm-search-input");
+    var qq = inp ? inp.value.trim() : "";
+    if (qq.length < 2) { setNote(tw("teams.search_short")); return; }
+    S.searchQuery = qq;
+    call("GET", teamUrl("/search?q=" + q(qq))).then(function (r) {
+      if (r.code !== 200) return fail(r);
+      S.searchResults = r.j.results || [];
+      drawSearch();
+    });
+  }
+
+  // Nhảy tới một tin cũ: tải trang kết thúc ở đúng tin đó (tin đó và các tin trước), tô sáng, có nút về tin mới nhất.
+  function jumpTo(mid, ts) {
+    S.filterTask = "";
+    return call("GET", teamUrl("/messages?before_ts=" + q(ts) + "&before_id=" + q(Number(mid) + 1))).then(function (r) {
+      if (r.code !== 200) return fail(r);
+      S.msgs = r.j.messages || [];
+      S.hasMore = !!r.j.has_more;
+      S.jumped = Number(mid);
+      drawHead();
+      drawMsgs(false);
+      var hit = S.el.querySelector('.tm-msg[data-mid="' + Number(mid) + '"]');
+      if (hit && hit.scrollIntoView) hit.scrollIntoView({ block: "center" });
+    });
+  }
+
   function ctx() {
     return { members: S.team ? S.team.members : [], leaderKey: S.team && S.team.leader_key, taskTitles: S.taskTitles,
-      picker: S.picker, draft: S.draft };
+      picker: S.picker, draft: S.draft, jumped: S.jumped };
   }
 
   function drawMsgs(stick) {
@@ -581,7 +648,9 @@
     var typing = S.picker !== null && act && act.classList && act.classList.contains("tm-react-comment") ?
       { start: act.selectionStart, end: act.selectionEnd, top: box.scrollTop } : null;
     var list = S.msgs.filter(function (m) { return !S.skipped[m.id]; });
-    box.innerHTML = (S.hasMore ? '<button type="button" class="ws-btn tm-older">' + esc(tw("teams.older")) + "</button>" : "") +
+    box.innerHTML = (S.jumped !== null && S.jumped !== undefined ? '<div class="tm-jumped">' + esc(tw("teams.search_viewing")) +
+      ' <button type="button" class="ws-btn tm-jump-back">' + ic("chevrons-down") + esc(tw("teams.search_back")) +
+      "</button></div>" : "") + (S.hasMore ? '<button type="button" class="ws-btn tm-older">' + esc(tw("teams.older")) + "</button>" : "") +
       list.map(function (m) {
         var mm = m;
         if (S.skipped["p" + m.id] && m.meta && m.meta.proposal) mm = Object.assign({}, m, { meta: Object.assign({}, m.meta, { proposal: null }) });
@@ -734,6 +803,7 @@
   }
 
   function openTeam(id) {
+    S.jumped = null; S.searchResults = null; S.searchQuery = ""; S.searchOpen = false;
     S.activeId = id; S.creating = false; S.view = "chat"; S.mentions = []; S.asJob = false; S.pending = null; S.filterTask = "";
     S.team = null; S.queue = null; S.msgs = []; S.taskTitles = {};
     drawAll(true);
@@ -837,6 +907,17 @@
       drawComposer();
       return;
     }
+    if (t.classList.contains("tm-search-btn")) {
+      S.searchOpen = !S.searchOpen;
+      if (!S.searchOpen) { S.searchResults = null; S.searchQuery = ""; }
+      drawHead();
+      var si = S.el.querySelector(".tm-search-input");
+      if (si && S.searchOpen) si.focus();
+      return;
+    }
+    if (t.classList.contains("tm-search-go")) return runSearch();
+    if (d.jump) return jumpTo(d.jump, d.ts);
+    if (t.classList.contains("tm-jump-back")) { S.jumped = null; loadMsgs(false); return; }
     if (d.reactOpen) {
       var was = S.picker;
       S.picker = S.picker === Number(d.reactOpen) ? null : Number(d.reactOpen);
@@ -1028,6 +1109,11 @@
   }
 
   function onKey(e) {
+    if (e.target.classList && e.target.classList.contains("tm-search-input") && e.key === "Enter") {
+      e.preventDefault();
+      runSearch();
+      return;
+    }
     if (e.key === "Escape" && S.picker !== null) { S.focusBack = S.picker; S.picker = null; S.draft = null; drawMsgs(false); return; }
     if (e.target.classList && e.target.classList.contains("tm-input") && e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
@@ -1044,7 +1130,7 @@
       // Gói không mang phản hồi (tin đổi nhãn, kết quả việc): giữ phản hồi đang có của tin.
       var nm = d.message;
       if (i >= 0 && !("reaction" in nm)) nm = Object.assign({}, nm, { reaction: S.msgs[i].reaction });
-      if (i >= 0) S.msgs[i] = nm; else S.msgs.push(nm);
+      if (i >= 0) S.msgs[i] = nm; else if (S.jumped === null || S.jumped === undefined) S.msgs.push(nm);
       drawMsgs(false);
     }
     clearTimeout(refreshTimer);
@@ -1101,7 +1187,7 @@
     mentionMatches: mentionMatches, composerHint: composerHint, newClientId: newClientId, membersHtml: membersHtml,
     settingsFormHtml: settingsFormHtml, turnsHtml: turnsHtml, createFormHtml: createFormHtml, bannersHtml: bannersHtml,
     reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml, nextReaction: nextReaction,
-    REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant };
+    REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant, searchResultsHtml: searchResultsHtml };
   if (typeof window !== "undefined") window.JavisTeams = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

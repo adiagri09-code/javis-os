@@ -297,6 +297,16 @@ r = c.post(f"/teams/{T3ID}/authority{Q}", json={"mode": "limited"})
 check("T3 chủ thu hồi: về Quyền giới hạn", r.status_code == 200 and r.json()["team"]["authority"]["authority"] is None
       and r.json()["team"]["authority"]["effective_caps"]["task_turns"] == 12)
 
+# T4: tìm trong nhóm qua route
+main.get_store().append_team_message(T3["session_id"], "user", "Kế hoạch RA MẮT tháng Mười", author_kind="owner",
+                                     client_msg_id="t4s1")
+r = c.get(f"/teams/{T3ID}/search{Q}&q=ra%20mat%20thang")
+check("T4 route tìm: 200, khớp không dấu, có id và đoạn trích", r.status_code == 200 and len(r.json()["results"]) == 1
+      and r.json()["results"][0]["snippet"].startswith("Kế hoạch") and r.json()["results"][0]["id"], r.text)
+check("T4 route tìm: không lẫn nhóm khác", c.get(f"/teams/{TID}/search{Q}&q=ra%20mat%20thang").json()["results"] == [])
+check("T4 route tìm: câu quá ngắn 400, brain khác 404", c.get(f"/teams/{T3ID}/search{Q}&q=a").status_code == 400
+      and c.get(f"/teams/{T3ID}/search?brain={BR2}&q=ra%20mat").status_code == 404)
+
 # Vòng nền: cài mới (chưa có team.sqlite3 lúc khởi động) thì KHÔNG chạy phục hồi về sau, kẻo chặn nhầm việc đang chạy.
 import dataclasses  # noqa: E402
 import team_api  # noqa: E402

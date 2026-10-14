@@ -54,6 +54,9 @@ INPUT_CHARS = 4000            # mỗi đầu vào của bước
 DECISION_LIMIT = 20           # sổ quyết định (spec 11.2)
 DECISION_CHARS = 500
 REMIND_AFTER_S = 24 * 3600    # nhắc việc bị chặn quá 24 giờ (spec 8.4)
+SUMMARY_JOBS = 8              # tóm tắt phần cũ: số việc đã xong gần đây (T4)
+SUMMARY_RESULT_CHARS = 160
+SUMMARY_CHARS = 2000
 FEEDBACK_LIMIT = 5            # khối phản hồi ở lượt kế (spec 14.4)
 FEEDBACK_DAYS = 30
 FEEDBACK_EXCERPT = 160
@@ -708,6 +711,52 @@ class TeamRunner:
         except Exception as ex:  # noqa: BLE001
             notes.append(f"Lệnh '{kind}' không áp dụng được: {ex}")
 
+    # ───────────── lịch sử dài (T4, spec mục 19) ─────────────
+
+    def _older_summary(self, team: dict, shown: int) -> list:
+        """Khối "Tóm tắt phần cũ" do CODE dựng (không gọi model): số tin cũ hơn cửa sổ lịch sử, các việc đã xong gần đây
+        kèm trích kết quả. Chỉ dữ liệu của chính nhóm này; có trần ký tự. Rỗng khi cửa sổ đã phủ hết phiên."""
+        older = self.sessions.team_message_count(team["session_id"]) - int(shown)
+        if older <= 0:
+            return []
+        lines = [f"\n## Tóm tắt phần cũ của nhóm (máy tự tóm, không phải model)",
+                 f"Có {older} tin cũ hơn phần lịch sử ở trên. Quyết định đã ghim vẫn ở Sổ quyết định."]
+        done = [t for t in self.tasks.team_history(team["team_id"], SUMMARY_JOBS * 2) if t.get("status") == "done"]
+        size = sum(len(x) for x in lines)
+        rows = []
+        for t in done[:SUMMARY_JOBS]:
+            result = re.sub(r"\s+", " ", str(t.get("result") or "")).strip()
+            if len(result) > SUMMARY_RESULT_CHARS:
+                result = result[:SUMMARY_RESULT_CHARS] + "..."
+            row = f'- Việc "{t["title"]}": {result or "(không có kết quả chữ)"}'
+            if size + len(row) > SUMMARY_CHARS:
+                break
+            rows.append(row)
+            size += len(row)
+        if rows:
+            lines.append("Việc đã xong gần đây (mới trước):")
+            lines.extend(rows)
+        return lines
+
+    def search(self, team_id: str, query: str, limit: int = 50) -> list:
+        """Tìm tin trong CHÍNH nhóm này (không lẫn phiên khác); trả tin kèm đoạn trích quanh chỗ khớp."""
+        team = self._team(team_id)
+        query = str(query or "").strip()[:100]
+        if len(query) < 2:
+            raise TeamError("câu tìm cần ít nhất 2 ký tự")
+        found = self.sessions.team_search(team["session_id"], query, limit)
+        words = [w for w in self.sessions.fold_text(query).split() if w]
+        out = []
+        for m in found:
+            text = re.sub(r"\s+", " ", str(m.get("content") or "")).strip()
+            folded = self.sessions.fold_text(text)
+            at = min((folded.find(w) for w in words if folded.find(w) >= 0), default=0)
+            start = max(0, at - 60)
+            snippet = ("..." if start else "") + text[start:start + 200] + ("..." if start + 200 < len(text) else "")
+            out.append({"id": m["id"], "ts": m["ts"], "author_kind": m["author_kind"], "author_ref": m["author_ref"],
+                        "task_id": m.get("task_id"), "snippet": snippet})
+        return out
+
     # ───────────── phản hồi (T2, spec mục 14) ─────────────
 
     def react(self, team_id: str, message_id: int, value: Optional[str], *, reasons: Optional[list] = None,
@@ -788,6 +837,8 @@ class TeamRunner:
                 break
             rendered.append(row)
             size += len(row)
+        # Lịch sử dài (T4): phần cũ hơn cửa sổ được tóm bằng code, đặt trước phần lịch sử gần đây.
+        lines.extend(self._older_summary(team, len(rendered)))
         if rendered:
             lines.append(f"\n## Lịch sử gần đây của nhóm (tối đa {NEW_MSG_LIMIT} tin, cũ trước; "
                          "\"mới\" là tin sau lượt trước của bạn)")

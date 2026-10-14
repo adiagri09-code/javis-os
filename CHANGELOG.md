@@ -8,7 +8,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.124.0] - 2026-10-14
 ### Thêm mới
-- **Tìm trong nhóm** và tóm tắt phần lịch sử cũ cho trợ lý.
+- **Tìm trong nhóm.** Bấm kính lúp ở đầu khung chat, gõ vài chữ (không cần gõ dấu), bấm một kết quả để nhảy tới đúng tin đó; nút Về tin mới nhất đưa bạn trở lại.
+- **Trợ lý nhớ phần cũ của nhóm dài.** Khi trò chuyện dài hơn 20 tin gần nhất, trợ lý nhận thêm bản tóm tắt do máy dựng: còn bao nhiêu tin cũ và các việc đã xong kèm kết quả. Không tốn thêm lượt.
 
 ## [0.121.0] - 2026-10-14
 ### Thêm mới

@@ -10,7 +10,8 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.124.0] - 2026-10-14
 ### Added
-- **Search inside a team** and a summary of older history for assistants.
+- **Search inside a team.** Tap the magnifier at the top of the chat, type a few words (accents optional), and tap a result to jump to that message; Back to latest returns you.
+- **Assistants keep track of long team chats.** When a chat is longer than the 20 latest messages, assistants also get a machine-built summary: how many older messages there are and the finished jobs with their results. It costs no extra turns.
 
 ## [0.121.0] - 2026-10-14
 ### Added
