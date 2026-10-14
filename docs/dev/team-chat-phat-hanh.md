@@ -37,6 +37,51 @@ Sáu PR chồng nhau, thẳng, không merge commit, cùng nền `bfb1c29f` (0.10
 - **Test mới `test_team_release.py`:** kho nhóm đời T1 (lược đồ chép nguyên văn, chưa có `pinned_at`, `identity_json`, `committed_at`) mở bằng mã phát hành thì tự thêm cột. Dữ liệu cũ giữ nguyên, ghim và chụp nhân dạng chạy được, mở lại lần hai không lỗi.
 - **CHANGELOG một khối 0.138.0** ngắn theo điều người dùng thấy; các khối giữ chỗ 0.110.0 tới 0.129.0 không đưa lên main.
 
+## Review toàn bộ kết quả tích hợp
+
+Một người review mới (model mạnh nhất) soi cả `origin/main..HEAD`, không chỉ các bản sửa cuối. Kết luận "Ready with fixes": 2 Important, 8 Minor.
+
+**Đã kiểm, không có lỗi:**
+- Mọi hàm của main mà mã nhóm gọi vẫn có, chữ ký tương thích.
+- Phần nhóm trong `main.py` không chồng với 38 commit của main. Tính năng mới của main (Zalo trả lời khi chủ im, `agy update`, câu trả lời khi lượt lỗi) không bị đụng.
+- i18n gộp đúng; route nhóm nằm sau route cuối; nhãn snapshot thống nhất.
+- Việc nhóm tách hẳn khỏi bảng Việc (mọi truy vấn lọc theo làn).
+
+Sửa, mỗi mục có test chạy đỏ trước:
+
+| Mục | Sửa | Test |
+|---|---|---|
+| Important: bấm thư về việc nhóm bị chặn thì mở vào khung chat chính, gõ tiếp thành tin không tác giả trong phiên nhóm | Thư kênh `team:<id>` mở đúng nhóm ở trang Nhóm qua `JavisTeams.open`; chưa ở trang Nhóm thì sang trang rồi mở khi danh sách về | `test_teams_ui.js`; smoke trình duyệt (dưới) |
+| Important: `conversations.db.pre-0.138.0`, `.post-0.138.0-*` không bị gitignore, chép toàn bộ chat có thể lên git | `.gitignore` thêm `server/conversations.db.pre-*`, `.post-*` | `test_team_release.py` (`git check-ignore` cho cả ba kho) |
+| Nâng lên Important: bí danh giọng nói "nhom" khớp cụm con, nên "nhóm việc" mở trang Nhóm thay vì Việc (cả "nhóm code", "mở nhóm trợ lý", "nhóm hệ thống") | "nhom" chỉ khớp khi cả câu đúng là nó; bỏ "nhom tro ly" | `test_team_release.py`: câu về nhóm thanh bên ra đúng như 0.137.0 |
+| Nâng lên Important: lời nhắc chung của trợ lý hứa "bộ công cụ của hub" mà lượt nhóm chỉ chữ, gọi công cụ là hỏng lượt | Mọi lượt nhóm nối thêm đoạn cố định `TEXT_ONLY_NOTE` sau lời nhắc của trợ lý | `test_team_ux.py` |
+| Minor: nhắc việc chặn quá 24 giờ chỉ tra 500 sự kiện cuối, nhóm bận bị nhắc lặp | `TeamStore.has_reminder` tra thẳng trong kho | `test_team_ux.py`: hơn 600 sự kiện, không nhắc lặp |
+| Minor: việc nền của API nhóm không được giữ tham chiếu | `TeamApi._bg` giữ tới khi xong | `test_team_ux.py` |
+| Minor: tạo kho, bộ chạy lười không khoá giữa các luồng | `RLock` khi tạo | |
+| Minor: chú thích `console.js` còn "0.111.0" | sửa | `test_teams_ui.js` |
+
+**Để lại** (ghi rõ, không sửa trong bản này):
+- Server chưa chặn lượt của khung chat chính trên phiên `team:`. Đường UI dẫn tới đó đã đóng, và tìm kiếm đã lọc phiên nhóm từ T1.
+- Lần đầu chạy 0.138.0 chụp đồng bộ một bản `conversations.db` (chưa đo trên kho lớn; bản chụp không tự dọn).
+- Phiên nhóm lưu tên brain thô (`brain`, không qua `_brain_key`); hiện không ảnh hưởng chức năng.
+
 ## Kiểm
 
-Ghi ở mục cuối sau khi chạy đủ (máy local và CI đúng HEAD).
+**Máy local** (`.venv` dự án, SQLite tạm, engine giả, không gọi model):
+- Biên dịch `server`, `system/plugins`; nạp `main` được.
+- `tests/run.py --js`: 186/186.
+- `tests/run.py` toàn bộ Python: 678/692. 14 file đỏ, không file nào thuộc nhóm chat:
+  - 12 file nằm trong danh sách đỏ sẵn trên máy này (agy, antigravity_cli, grok_cli, terminal, windows_no_console, cai_windows, install_admin, link_file_uri, memory_hoa_thuong, model_theo_phien, ollama_local, ba_loi_mac_va_telegram);
+  - `test_machine_translations` đọc các file dịch mà nhánh không đụng tới (giống hệt main);
+  - `test_project_khung` chạy riêng thì xanh.
+- Sau đợt sửa review: các test `team*`, `route_table`, `ui_targets`, `ui_bridge` 20/20; `test_team_rollback` 31 ca với mã 0.137.0 thật.
+
+**Smoke trình duyệt** (sandbox cổng 7788, trần ngày 0):
+- Bật lại nhóm "Ra mắt sản phẩm": ba việc chờ bị chặn ngay ở bước giữ lượt, ba thư kênh `team:` vào hộp thư.
+- Ở trang chủ bấm chuông rồi bấm thư: sang trang Nhóm, mở đúng nhóm, có nút Cho thêm lượt.
+- Ba nhóm đều 0 lượt, 0 lần gọi engine; nhóm được tạm dừng lại sau khi thử.
+- Ảnh: `exports/reviews/team-release-0.138.0/chuong-mo-dung-nhom.jpg`.
+
+**CI:**
+- `9d8ce139` (commit phát hành): xanh cả push và pull_request.
+- Kết quả CI của HEAD cuối ghi ở mô tả PR #649 và báo cáo phát hành.
