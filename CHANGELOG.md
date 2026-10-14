@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.117.0] - 2026-10-14
+### Bảo mật
+- **Việc nền chạy bằng ChatGPT (Codex) giữ đúng mức quyền.** Nhắc hẹn, việc lặp hay việc Kanban đặt ở mức Chỉ đọc hoặc Ghi nháp mà chạy bằng Codex trước đây vẫn gọi được công cụ ở mức Toàn quyền. Giờ chúng chạy đúng mức đã đặt, như các engine khác.
+
 ## [0.114.0] - 2026-10-14
 ### Sửa lỗi
 - **Bot Zalo không còn im sau khi Javis khởi động lại.** Javis tắt không êm (crash, dừng cứng khi cập nhật) từng để lại tiến trình Zalo cũ còn chạy, nên tài khoản có hai phiên nghe. Zalo chỉ gửi tin về một phiên, bot đọc phiên kia và im luôn. Giờ Javis ghi lại mọi tiến trình kết nối nó mở và tự dọn phần sót của lần chạy trước.

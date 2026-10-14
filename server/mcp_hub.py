@@ -1654,6 +1654,25 @@ def codex_vault_override(vault_root):
     return f"{CODEX_VAULT_KEY}={_toml_str(ma_hoa_vault(vault))}"
 
 
+CODEX_MODE_KEY = "mcp_servers.javis.http_headers.X-Javis-Mode"
+_CODEX_MODES = ("suggest", "auto", "full")
+
+
+def dat_codex_mode(extra_config, mode):
+    """Pin the hub permission level of ONE Codex process with a `-c` override, replacing any earlier one.
+
+    The shared Codex profile is written with `X-Javis-Mode: full` (the chat path). Before 0.117.0 a
+    background job at suggest or auto (reminder, loop, Kanban) reached hub tools at FULL through that
+    profile, while Grok and Antigravity already got the job's own level. An unknown level falls back to
+    the strictest one, as every other mode mapping here does."""
+    m = str(mode or "full").strip().lower()
+    if m not in _CODEX_MODES:
+        m = "suggest"
+    extra_config[:] = [x for x in extra_config if not str(x).startswith(CODEX_MODE_KEY + "=")]
+    extra_config.append(f"{CODEX_MODE_KEY}={_toml_str(m)}")
+    return extra_config
+
+
 def dat_codex_vault(extra_config, vault_root):
     """Gắn override brain vào danh sách `-c` của MỘT CodexCLI, THAY override brain cũ nếu có.
 
