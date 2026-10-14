@@ -302,5 +302,71 @@ check("TC36 không tiến triển ở Không giới hạn: việc tạm dừng (
       t["status"] == "team_blocked" and t["block_kind"] == "no_progress" and inbox, (t["status"], t["block_kind"], inbox))
 check("TC36 số lượt có hạn dù Không giới hạn", len(tm.turns(T["team_id"])) <= 4, len(tm.turns(T["team_id"])))
 
+# ═════ Review T3 ═════
+# #1: bỏ thành viên thì bỏ cờ "do nhóm quản lý"; thêm lại không tự sống lại; nhóm khác giao quản lý được.
+r, tm, ts, ss, fake, admin, T = world("rv1")
+tidB = team_store.new_team_id()
+tm.create_team(T["brain_id"], "B", "", ss.create_session(brain="B", channel=f"team:{tidB}"), team_id=tidB)
+r.set_managed(T["team_id"], "ag_minh", True)
+tm.remove_member(T["team_id"], "ag_minh")
+tm.add_member(tidB, "ag_minh", "minh")
+try:
+    r.set_managed(tidB, "ag_minh", True)
+    moved = True
+except team_store.TeamError:
+    moved = False
+check("review #1: bỏ khỏi nhóm A thì nhóm B giao quản lý được", moved)
+tm.add_member(T["team_id"], "ag_minh", "minh")
+check("review #1: thêm lại vào A không tự sống lại cờ quản lý", tm.member(T["team_id"], "ag_minh")["managed_by_team"] == 0)
+
+# #2: provider của lượt lấy đúng như engine thật (engine_for), không suy riêng.
+r, tm, ts, ss, fake, admin, T = world("rv2")
+labels = {"ag_lan": "anthropic-cli"}
+orig = fake.engine_for
+fake.engine_for = lambda team, key, role: (labels.get(key, "aux"),) + tuple(orig(team, key, role)[1:])
+r.engine_for = fake.engine_for
+r.grant_authority(T["team_id"], dict(FULL, caps={"task_turns": {"unlimited": True}},
+                                     ceilings={"task_turns": {"unlimited": True}}, providers_unlimited=["aux"]))
+check("review #2: agent chạy anthropic-cli (theo engine) không được Không giới hạn khi chủ chỉ tích aux",
+      r._caps(tm.get(T["team_id"]), "ag_lan")["task_turns"] == 12 and r._caps(tm.get(T["team_id"]), "ag_minh")["task_turns"] is None)
+
+# #3: trần ngày Không giới hạn cho provider của trưởng nhóm thì tin của chủ vẫn có trả lời dù đã vượt trần thường.
+r, tm, ts, ss, fake, admin, T = world("rv3")
+orig3 = fake.engine_for
+r.engine_for = lambda team, key, role: ("anthropic-cli",) + tuple(orig3(team, key, role)[1:])
+tm.set_caps(T["team_id"], {"daily_turns": 1})
+reply(r, T, "Một", "d1")
+r.grant_authority(T["team_id"], dict(FULL, caps={"daily_turns": {"unlimited": True}},
+                                     ceilings={"daily_turns": {"unlimited": True}}, providers_unlimited=["anthropic-cli"]))
+sub = r.submit(T["team_id"], "Hai", client_msg_id="d2")
+check("review #3: trần ngày theo provider của người nhận, không chặn nhầm", sub["replies"] == ["ag_lan"]
+      and "daily_cap" not in sub["notes"], sub)
+
+# #4: việc trưởng nhóm mở không trỏ nhầm tin nguồn.
+r, tm, ts, ss, fake, admin, T = world("rv4")
+r.grant_authority(T["team_id"], FULL)
+fake.say("ag_lan", "leader_reply", "Mở." + directive(op="open_job", title="Việc mở", brief="x", agent="minh"))
+reply(r, T, "Mở việc đi", "o1")
+jt = [t for t in ts.team_queue(T["team_id"])["waiting"] if t["title"] == "Việc mở"][0]
+check("review #4: nguồn của việc trưởng nhóm mở không thành số tin giả", r._source_id(jt) == [], jt["source_ref"])
+
+# #7: chủ đặt trần cố định (không có trần tối đa) được; trưởng nhóm không đổi được trần đó.
+r, tm, ts, ss, fake, admin, T = world("rv7")
+r.grant_authority(T["team_id"], dict(FULL, caps={"task_steps": 4}, ceilings={}))
+check("review #7: chủ đặt trần không kèm trần tối đa", r.effective_caps(T["team_id"])["task_steps"] == 4)
+notes = []
+with r.accept_lock:
+    r._apply_admin(T["team_id"], "ag_lan", {"op": "set_cap", "cap": "task_steps", "value": 6}, notes, "x")
+check("review #7: trưởng nhóm không đổi được trần không có trần tối đa", r.effective_caps(T["team_id"])["task_steps"] == 4
+      and notes, notes)
+
+# #8: tối đa 10 lệnh quản trị mỗi lượt.
+r, tm, ts, ss, fake, admin, T = world("rv8")
+r.grant_authority(T["team_id"], FULL)
+fake.say("ag_lan", "leader_reply", "Nhiều." + "".join(directive(op="open_job", title=f"V{i}", brief="x") for i in range(14)))
+reply(r, T, "Nhiều việc", "m1")
+check("review #8: tối đa 10 lệnh quản trị mỗi lượt, phần thừa có ghi chú", len(ts.team_queue(T["team_id"])["waiting"]) == 10
+      and any("10 lệnh" in n for n in msgs(ss, T)[-1]["meta"]["notes"]), len(ts.team_queue(T["team_id"])["waiting"]))
+
 print(f"\n{'FAIL' if fails else 'PASS'} - test_team_authority: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)

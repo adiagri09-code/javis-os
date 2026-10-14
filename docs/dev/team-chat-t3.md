@@ -48,4 +48,20 @@ Spec: [2026-10-13-team-chat-design.md](../superpowers/specs/2026-10-13-team-chat
 | `tests/python/test_team_api.py` | thêm ca route `authority`, `managed`, `_TeamAdmin` thật (không ghi đè, giữ frontmatter, Cộng hưởng) |
 | `tests/js/test_teams_ui.js` | thêm ca hộp cấp quyền và công tắc Nhóm quản lý |
 
+## Review cuối (người review mới, model mạnh nhất)
+
+Kết luận "Ready with fixes": 0 Critical, 2 Important, 6 Minor. Xếp lại theo tác động:
+- **Important:** cờ "do nhóm quản lý" sót lại sau khi bỏ thành viên: nhóm khác không giao quản lý được, chủ không tắt được, thêm lại thì cờ tự sống lại. Nay bỏ hay thêm lại thành viên đều xoá cờ; kiểm "nhóm khác đang quản lý" chỉ tính thành viên đang hoạt động.
+- **Important:** D6 suy provider riêng, lệch với engine thật (agent cũ có model Claude mà thiếu provider chạy Claude Code nhưng bị coi là model việc nền, lọt Không giới hạn). Nay provider lấy đúng nhãn `engine_for` trả; chỉ dựng khi nhóm đang Toàn quyền.
+- Sửa thêm:
+  - trần ngày của tin trò chuyện tính theo provider của người nhận, không chặn nhầm khi trưởng nhóm được Không giới hạn;
+  - khoá nguồn việc trưởng nhóm mở không kết thúc bằng số (`_source_id` từng đọc nhầm thứ tự lệnh thành mã tin);
+  - sửa lời nhắc trên file không đọc được frontmatter bị từ chối (trước đây xoá tên, vai, model);
+  - chủ đặt trần không kèm trần tối đa được, trưởng nhóm không đổi được trần đó;
+  - tối đa 10 lệnh quản trị mỗi lượt;
+  - form trần ở Cài đặt báo rõ khi Toàn quyền đang bật (trần lấy theo mục Toàn quyền).
+- Để lại: lần thu hồi chen giữa lúc đọc Toàn quyền và lúc giữ chỗ lượt có thể cho một lượt chạy theo trần cũ (một lượt, chấp nhận).
+
+Ca review #1 tới #4, #7, #8 trong `test_team_authority.py` đỏ trước rồi xanh; ca #5 (`test_team_api.py`) và #6 (`test_teams_ui.js`) viết sau khi sửa.
+
 **Smoke giao diện** (sandbox cổng 7788, nhóm tạm dừng, trần ngày 0, không mở trần ngày): bật Toàn quyền bằng giao diện với "Không giới hạn" lượt mỗi việc (ô số tự tắt), trạng thái và trần đang áp hiện đúng, tin hệ thống trong nhóm; thu hồi về Quyền giới hạn; 375px không cuộn ngang. Ảnh `exports/reviews/team-t3-smoke/`.

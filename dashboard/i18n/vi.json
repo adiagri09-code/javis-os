@@ -3860,6 +3860,7 @@
   "teams.auth.update": "Lưu Toàn quyền",
   "teams.auth.revoke": "Thu hồi Toàn quyền",
   "teams.auth.revoke_confirm": "Thu hồi Toàn quyền của trưởng nhóm? Nhóm về Quyền giới hạn ngay.",
+  "teams.caps_full_note": "Toàn quyền đang bật: trần đang áp lấy theo mục Toàn quyền bên dưới, sửa ở đó.",
   "teams.decision_pinned": "Quyết định",
   "teams.queue_running": "Đang làm",
   "teams.queue_waiting": "Chờ (theo thứ tự chạy)",

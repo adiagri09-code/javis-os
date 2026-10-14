@@ -3860,6 +3860,7 @@
   "teams.auth.update": "Save full authority",
   "teams.auth.revoke": "Revoke full authority",
   "teams.auth.revoke_confirm": "Revoke the lead's full authority? The team goes back to limited mode now.",
+  "teams.caps_full_note": "Full authority is on: the caps in force come from the Full authority section below; change them there.",
   "teams.decision_pinned": "Decision",
   "teams.queue_running": "Running",
   "teams.queue_waiting": "Queued (in run order)",

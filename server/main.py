@@ -22187,6 +22187,9 @@ class _TeamAdmin:
             if path is None:
                 raise FileNotFoundError(slug)
             meta, _old = _read_md(path)
+            if not meta:
+                # Frontmatter hỏng hay không có: ghi lại sẽ xoá tên, vai, model, tag của trợ lý (review T3).
+                raise ValueError("file trợ lý không có frontmatter đọc được, không sửa")
             meta["updated"] = _today()
             _write_md(path, meta, prompt)
 

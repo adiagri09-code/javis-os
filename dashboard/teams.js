@@ -331,7 +331,10 @@
       '<label class="tm-field"><span>' + esc(tw("teams.description")) + '</span><textarea name="tm-set-desc" rows="2">' + esc(team.description) + "</textarea></label>" +
       '<div class="tm-field"><span>' + esc(tw("teams.status")) + "</span>" + st + "</div>" +
       '<label class="tm-field"><span>' + esc(tw("teams.leader")) + "</span>" + lead + "</label>" +
-      '<div class="tm-qhead">' + esc(tw("teams.caps")) + "</div>" + capRows +
+      '<div class="tm-qhead">' + esc(tw("teams.caps")) + "</div>" +
+      // Toàn quyền đang bật: trần trong hộp Toàn quyền đè trần ở đây; nói rõ thay vì để "Đã lưu" mà không đổi gì.
+      (team.authority && team.authority.authority ? '<div class="tm-note-line">' + esc(tw("teams.caps_full_note")) + "</div>" : "") +
+      capRows +
       '<button type="button" class="ws-btn tm-save">' + esc(tw("teams.save")) + "</button></form>";
   }
 

@@ -276,8 +276,10 @@ class TeamStore:
                 c.execute("INSERT INTO team_members(team_id,agent_key,slug_at_join,role,status,joined_at) "
                           "VALUES(?,?,?,?,?,?)", (team_id, agent_key, slug, "member", "active", now))
             else:
+                # Vào lại là thành viên thường: cờ "do nhóm quản lý" không tự sống lại (chủ phải giao lại; review T3).
                 c.execute("UPDATE team_members SET status='active', role='member', slug_at_join=?, joined_at=?, "
-                          "left_at=NULL WHERE team_id=? AND agent_key=?", (slug, now, team_id, agent_key))
+                          "left_at=NULL, managed_by_team=0 WHERE team_id=? AND agent_key=?",
+                          (slug, now, team_id, agent_key))
             c.execute("UPDATE teams SET updated_at=? WHERE team_id=?", (now, team_id))
             self._event(c, team_id, "member_added", by, None, {"agent_key": agent_key, "slug": slug})
             return self._member(c.execute("SELECT * FROM team_members WHERE team_id=? AND agent_key=?",
@@ -288,8 +290,8 @@ class TeamStore:
                       (team_id, agent_key)).fetchone()
         if r is None:
             return False
-        c.execute("UPDATE team_members SET status=?, role='member', left_at=? WHERE team_id=? AND agent_key=?",
-                  (status, now, team_id, agent_key))
+        c.execute("UPDATE team_members SET status=?, role='member', left_at=?, managed_by_team=0 "
+                  "WHERE team_id=? AND agent_key=?", (status, now, team_id, agent_key))
         t = c.execute("SELECT leader_key FROM teams WHERE team_id=?", (team_id,)).fetchone()
         if t is not None and t["leader_key"] == agent_key:
             # Không âm thầm mất điều phối (spec 6.3): nhóm thành "chưa có trưởng nhóm", ghi sự kiện, giao diện báo.
@@ -598,7 +600,7 @@ class TeamStore:
                 raise TeamError("không phải thành viên đang hoạt động")
             if on:
                 other = c.execute("SELECT team_id FROM team_members WHERE agent_key=? AND managed_by_team=1 "
-                                  "AND team_id != ?", (agent_key, team_id)).fetchone()
+                                  "AND status='active' AND team_id != ?", (agent_key, team_id)).fetchone()
                 if other is not None:
                     raise TeamError("agent này đã do một nhóm khác quản lý")
             c.execute("UPDATE team_members SET managed_by_team=? WHERE team_id=? AND agent_key=?",

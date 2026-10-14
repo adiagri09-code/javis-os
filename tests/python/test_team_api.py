@@ -281,6 +281,15 @@ check("T3 host tạo agent mới không ghi đè agent cùng tên, có tag", s1 
 adm.edit_prompt(str(BR), "lan-2", "Lời nhắc mới")
 check("T3 host sửa lời nhắc, giữ frontmatter", (BR / "agents" / "lan-2.md").read_text(encoding="utf-8").rstrip()
       .endswith("Lời nhắc mới") and "name: Lan" in (BR / "agents" / "lan-2.md").read_text(encoding="utf-8"))
+(BR / "agents" / "hong.md").write_text("Chỉ có thân, không frontmatter", encoding="utf-8", newline="\n")
+try:
+    adm.edit_prompt(str(BR), "hong", "Lời nhắc mới")
+    refused = False
+except ValueError:
+    refused = True
+check("T3 review #5: file không có frontmatter thì không sửa (không xoá tên, vai, model)", refused
+      and (BR / "agents" / "hong.md").read_text(encoding="utf-8") == "Chỉ có thân, không frontmatter")
+(BR / "agents" / "hong.md").unlink()
 adm.set_resonance(str(BR), "lan-2", True, "leader:test")
 ra = {a["slug"]: a for a in c.get(f"/resonance/agents{Q}").json()["agents"]}
 check("T3 host bật Cộng hưởng cho agent do nhóm quản lý (ghi by=leader)", ra["lan-2"]["enabled"])

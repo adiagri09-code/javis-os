@@ -240,6 +240,8 @@ check("chưa có trưởng nhóm: chỉ nhắc chọn trưởng nhóm", TM.autho
 const mh3 = TM.membersHtml(fullTeam, []);
 check("tab Thành viên có công tắc Nhóm quản lý theo trạng thái", (mh3.match(/class="tm-managed-toggle"/g) || []).length === 2
       && /data-key="ag_minh" checked/.test(mh3) && mh3.includes(vi["teams.managed"]), mh3);
+check("review T3 #6: Toàn quyền bật thì form trần báo trần lấy theo mục Toàn quyền; giới hạn thì không",
+      TM.settingsFormHtml(fullTeam).includes(vi["teams.caps_full_note"]) && !TM.settingsFormHtml(limitedTeam).includes(vi["teams.caps_full_note"]));
 const authKeys = ["teams.cap.help_depth", "teams.auth.provider_aux", "teams.auth.provider_claude", "teams.auth.billing_sub",
   "teams.auth.billing_api", "teams.auth.fixed_server", "teams.auth.fixed_provider", "teams.auth.fixed_account",
   "teams.auth.fixed_technical"];

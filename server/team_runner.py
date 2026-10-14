@@ -63,6 +63,7 @@ FEEDBACK_NOTE = ("Emoji là cảm xúc của chủ nhóm, có thể về sự vi
 # Toàn quyền (T3, spec 13, 15.2). Trần trưởng nhóm đổi được (trong trần trần của chủ) và lệnh quản trị.
 AUTH_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns")
 MODEL_TURN_CAPS = ("task_turns", "daily_turns")   # "Không giới hạn" của hai trần này chỉ cho provider chủ tích (D6)
+ADMIN_OPS_PER_TURN = 10   # trần lệnh quản trị mỗi lượt (review T3)
 ADMIN_OPS = ("open_job", "reprioritize", "add_member", "remove_member", "create_agent", "set_cap", "set_resonance",
              "edit_agent", "interrupt")
 CAP_LABEL = {"task_turns": "lượt mỗi việc", "task_steps": "bước mỗi việc", "help_depth": "độ sâu nhờ hỗ trợ",
@@ -320,7 +321,11 @@ class TeamRunner:
         return time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
 
     def _daily_left(self, team: dict) -> bool:
-        cap = self._caps(team)["daily_turns"]
+        return self._daily_left_for(team, None)
+
+    def _daily_left_for(self, team: dict, agent_key: Optional[str]) -> bool:
+        """Còn lượt trong ngày cho lượt của `agent_key` (trần theo provider của chính agent đó, D6)."""
+        cap = self._caps(team, agent_key)["daily_turns"]
         return cap is None or self.teams.count_team_turns(team["team_id"], self._day_start()) < int(cap)
 
     def _post(self, team: dict, text: str, *, author_kind: str, author_ref: str = "", reply_to=None,
@@ -401,7 +406,8 @@ class TeamRunner:
             return out
         if team["status"] != "active":
             out["notes"].append("team_paused")
-        elif not self._daily_left(team):
+        elif (valid if wanted else [team["leader_key"]] if team["leader_key"] else []) and not any(
+                self._daily_left_for(team, k) for k in (valid if wanted else [team["leader_key"]])):
             out["notes"].append("daily_cap")
         elif wanted:
             out["replies"] = valid
@@ -466,14 +472,15 @@ class TeamRunner:
     # ───────────── Toàn quyền (T3, spec mục 13) ─────────────
 
     def _provider(self, team: dict, agent_key: Optional[str]) -> str:
-        """Provider của lượt (để áp D6), suy như adapter: model Claude riêng của agent thì `anthropic-cli`, còn lại model
-        việc nền (`aux`)."""
+        """Provider của lượt (để áp D6): đúng nhãn mà `engine_for` trả, tức cùng luật chọn engine thật (review T3: suy
+        riêng thì agent cũ có model Claude mà thiếu provider bị coi nhầm là model việc nền). `engine_for` chỉ dựng closure,
+        không gọi model. Lỗi thì coi như model việc nền."""
         if not agent_key:
             return "aux"
-        info = self.agent_info(team["brain_id"], agent_key) or {}
-        if info.get("model") and str(info.get("model_provider") or "") == "anthropic-cli":
-            return "anthropic-cli"
-        return "aux"
+        try:
+            return str(self.engine_for(team, agent_key, "work")[0] or "aux")
+        except Exception:  # noqa: BLE001
+            return "aux"
 
     def effective_caps(self, team_id: str, provider: str = "aux", team: Optional[dict] = None) -> dict:
         """Trần đang áp cho nhóm (spec 13.2). Quyền giới hạn: trần của nhóm (chủ đặt, luôn là số). Toàn quyền còn hiệu
@@ -498,6 +505,9 @@ class TeamRunner:
         return caps
 
     def _caps(self, team: dict, agent_key: Optional[str] = None) -> dict:
+        # Quyền giới hạn (đa số nhóm): không cần biết provider, khỏi dựng engine_for.
+        if self.teams.active_authority(team["team_id"]) is None:
+            return {k: team["caps"][k] for k in team["caps"]}
         return self.effective_caps(team["team_id"], self._provider(team, agent_key), team)
 
     @staticmethod
@@ -524,7 +534,8 @@ class TeamRunner:
         ceilings = {k: self._cap_value(v) for k, v in (grant.get("ceilings") or {}).items() if k in AUTH_CAPS}
         caps = {k: self._cap_value(v) for k, v in (grant.get("caps") or {}).items() if k in AUTH_CAPS}
         for k, v in caps.items():
-            if not self._within(v, ceilings.get(k)):
+            # Không có trần tối đa: chủ đặt trần cố định, trưởng nhóm không đổi được (kiểm ở `set_cap`).
+            if k in ceilings and not self._within(v, ceilings[k]):
                 raise TeamError(f"trần {k} vượt trần trần")
         providers = [str(p) for p in (grant.get("providers_unlimited") or []) if str(p).strip()]
         return {"caps": caps, "ceilings": ceilings, "can_interrupt": bool(grant.get("can_interrupt")),
@@ -980,7 +991,11 @@ class TeamRunner:
                 if not applied or role not in LEADER_ROLES:
                     notes.append(f"Lệnh '{op['op']}' không dùng được ở lượt này, đã bỏ")
                     continue
-                self._apply_admin(team_id, agent_key, op, notes, f"{turn_id}:{i}")
+                if i >= ADMIN_OPS_PER_TURN:
+                    notes.append(f"Mỗi lượt tối đa {ADMIN_OPS_PER_TURN} lệnh quản trị, đã bỏ phần thừa")
+                    break
+                # Khoá nguồn không kết thúc bằng số: `_source_id` không đọc nhầm thứ tự lệnh thành mã tin (review T3).
+                self._apply_admin(team_id, agent_key, op, notes, f"{turn_id}#op{i}")
         allowed = OPS_BY_ROLE.get(role, set())
         allowed = OPS_BY_ROLE.get(role, set())
         kept = []
