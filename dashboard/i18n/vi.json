@@ -4099,5 +4099,8 @@
   "resonance.auto_not_full": "Auto không phải Toàn quyền: trợ lý vẫn trong giới hạn quyền đang có. Tắt Auto thì trợ lý vẫn chat và nhận việc trực tiếp như thường; việc đang có không bị huỷ.",
   "resonance.auto_label": "Auto",
   "resonance.auto_menu_on": "Auto: Bật",
-  "resonance.auto_menu_off": "Auto: Tắt"
+  "resonance.auto_menu_off": "Auto: Tắt",
+  "teams.reply.why.leader_changed": "Trưởng nhóm vừa đổi",
+  "teams.reply.why.superseded": "Đã có câu trả lời mới hơn",
+  "teams.reply.stuck": "chờ quá lâu mà chưa bắt đầu"
 }

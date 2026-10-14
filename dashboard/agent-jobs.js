@@ -197,10 +197,10 @@
           load();
         }, function () { st.ui.sending = false; st.ui.assignError = tw("ajobs.net_err"); draw(); });
     }
-    host.addEventListener("input", function (e) {
+    function onInput(e) {
       if (e.target.classList.contains("aj-text")) { st.ui.draft = e.target.value; st.nonce = ""; }
-    });
-    host.addEventListener("click", function (e) {
+    }
+    function onClick(e) {
       var t = e.target.closest ? e.target.closest("button") : null;
       if (!t || !host.contains(t)) return;
       var d = t.dataset || {};
@@ -221,10 +221,20 @@
         else if (j.open.kind === "chat" && j.open.session_id && opts.openChat) opts.openChat(j.open.session_id);
         else if (opts.openWork) opts.openWork(j.open.task_id);
       }
-    });
+    }
+    // Khung `host` sống qua nhiều lần gắn (đổi trợ lý, đổi tab). Trình nghe gắn MỘT lần cho khung và chuyển cho lần gắn
+    // đang sống; gắn chồng là một lần bấm Giao gửi nhiều việc, một lần Huỷ hỏi nhiều lần (review 0.142.0, #1).
+    host._ajActive = { input: onInput, click: onClick };
+    if (!host._ajWired) {
+      host._ajWired = true;
+      host.addEventListener("input", function (e) { if (host._ajActive) host._ajActive.input(e); });
+      host.addEventListener("click", function (e) { if (host._ajActive) host._ajActive.click(e); });
+    }
+    var mine = host._ajActive;
     draw();
     load();
-    return { reload: load, destroy: function () { alive = false; }, state: function () { return st; } };
+    return { reload: load, state: function () { return st; },
+      destroy: function () { alive = false; if (host._ajActive === mine) host._ajActive = null; } };
   }
 
   var api = { html: html, jobHtml: jobHtml, filterHtml: filterHtml, assignHtml: assignHtml, mount: mount,

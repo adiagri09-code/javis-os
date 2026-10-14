@@ -287,7 +287,9 @@
   var REPLY_WHY = { engine_unavailable: "teams.reply.why.engine_unavailable", engine: "teams.reply.why.engine",
     cap: "teams.reply.why.cap", busy: "teams.reply.why.busy", team_paused: "teams.reply.why.team_paused",
     member_left: "teams.reply.why.member_left", restart: "teams.reply.why.restart",
-    interrupted: "teams.reply.why.interrupted", internal: "teams.reply.why.internal" };
+    interrupted: "teams.reply.why.interrupted", internal: "teams.reply.why.internal",
+    leader_changed: "teams.reply.why.leader_changed", superseded: "teams.reply.why.superseded" };
+  var STUCK_QUEUED_S = 600;   // khớp team_store.STUCK_QUEUED_S: chờ lâu hơn thì cho Thử lại
   function replyStatusHtml(m, ctx) {
     var rows = (m.replies || []).filter(function (x) { return x.status !== "done"; });
     if (!rows.length) return "";
@@ -307,6 +309,13 @@
             esc(tw(busy ? "teams.reply.retrying" : "teams.reply.retry")) + "</button>" : "") + "</div>";
       }
       var answering = x.status === "running" && x.reason === "answering";
+      var stuck = x.status === "queued" && x.updated_at && (Date.now() / 1000 - Number(x.updated_at)) > STUCK_QUEUED_S;
+      if (stuck) {
+        return '<div class="tm-reply tm-reply-error" role="status">' + face + '<span class="tm-reply-main"><b>' + esc(who) +
+          "</b> " + esc(tw("teams.reply.stuck")) + '</span><button type="button" class="ws-btn tm-reply-retry" data-retry="' +
+          esc(m.id) + '" data-retry-key="' + esc(x.agent_key) + '"' + (busy ? " disabled" : "") + ">" + ic("rotate-cw") +
+          esc(tw(busy ? "teams.reply.retrying" : "teams.reply.retry")) + "</button></div>";
+      }
       return '<div class="tm-reply tm-reply-' + (answering ? "answering" : "queued") + '" role="status">' + face +
         '<span class="tm-reply-main"><b>' + esc(who) + "</b> " + esc(tw(answering ? "teams.reply.answering" :
           "teams.reply.queued")) + '<span class="tm-dots" aria-hidden="true"><i></i><i></i><i></i></span></span></div>';
@@ -1872,7 +1881,7 @@
     if (e.key === "Escape" && S.pickSt) { closePicker(); return; }
     if (e.target.classList && e.target.classList.contains("tmp-name-input") && e.key === "Enter") {
       e.preventDefault();
-      var srch = S.el.querySelector(".tmp-search-input");
+      var srch = S.pickHost && S.pickHost.querySelector(".tmp-search-input");
       if (srch) srch.focus();
       return;
     }

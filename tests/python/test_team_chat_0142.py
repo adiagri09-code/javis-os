@@ -11,6 +11,7 @@ lại không nhân đôi tin, lượt hay kết quả, và khởi động lại 
 """
 from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -292,6 +293,80 @@ sysm = [m for m in ss.get_team_messages_page(t["session_id"], limit=200)["messag
         if m["author_kind"] == "system" and (m.get("meta") or {}).get("kind") == "job_blocked"]
 check("việc bị chặn: có tin hệ thống trong chat kèm lý do", ts.get_task(job)["status"] == "team_blocked"
       and len(sysm) == 1 and "rate limit" in sysm[0]["content"] and sysm[0]["task_id"] == job, sysm)
+
+# ───────────── review 0.142.0 ─────────────
+# #3: lượt cũ về muộn không ghi đè kết cục của lần thử mới.
+eng = Script({})
+r, tm, ts, ss, t, ev = world("stale", eng)
+sub = r.submit(t["team_id"], "Chào", client_msg_id="s1")
+att1 = tm.claim_reply(t["team_id"], sub["message_id"], "agent-one")
+tm.interrupt_open_replies()                          # tiến trình mới coi lượt đang chạy là dở
+again = r.retry_reply(t["team_id"], sub["message_id"], "agent-one")
+late = tm.settle_reply(t["team_id"], sub["message_id"], "agent-one", "done", attempt=att1, result_msg_id=999)
+rp = replies(tm, t, sub["message_id"])["agent-one"]
+check("review #3: lượt cũ (attempt 1) về muộn không ghi đè lần thử 2", att1 == 1 and again is not None and late is False
+      and rp["status"] == "queued" and rp["attempt"] == 2 and rp["result_msg_id"] is None, rp)
+# #3: phục hồi chỉ đụng lượt của tiến trình trước, không đụng lượt vừa gửi trong tiến trình này.
+eng = Script({})
+r, tm, ts, ss, t, ev = world("scoped", eng)
+sub = r.submit(t["team_id"], "Chào", client_msg_id="s2")
+r3 = TR.TeamRunner(teams=tm, tasks=ts, sessions=ss, engine_for=eng, agent_info=ident)
+r3.started_at = 0.0                                  # mốc khởi động cũ hơn mọi lượt: không có lượt "của tiến trình trước"
+r3.recover()
+check("review #3: lượt gửi sau mốc khởi động không bị đánh 'restart'",
+      replies(tm, t, sub["message_id"])["agent-one"]["status"] == "queued")
+# #4: bị huỷ giữa chừng: lượt chưa chạy phía sau cũng thành lỗi có Thử lại.
+
+
+class Hang:
+    def __call__(self, team, key, role):
+        async def run_(req):
+            await req["engine_started"]()
+            await asyncio.sleep(30)
+            return {"text": "x"}
+        run_.marks_engine = True
+        return "fake", "m", run_
+
+
+r, tm, ts, ss, t, ev = world("cancel", Hang())
+sub = r.submit(t["team_id"], "Hai bạn", mentions=["agent-one", "agent-two"], client_msg_id="c1")
+
+
+async def cancel_mid():
+    task = asyncio.ensure_future(r.run_replies(sub))
+    for _ in range(100):
+        await asyncio.sleep(0.02)
+        if replies(tm, t, sub["message_id"])["agent-one"]["reason"] == "answering":
+            break
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+run(cancel_mid())
+rp = replies(tm, t, sub["message_id"])
+check("review #4: huỷ giữa chừng: lượt đang chạy và lượt chưa chạy đều thành lỗi có Thử lại",
+      rp["agent-one"]["status"] == "error" and rp["agent-two"]["status"] == "error"
+      and rp["agent-two"]["reason"] == "interrupted", rp)
+# #4: lượt kẹt ở "đang chờ" quá lâu thì Thử lại được; chưa quá lâu thì không.
+eng = Script({})
+r, tm, ts, ss, t, ev = world("stuck", eng)
+sub = r.submit(t["team_id"], "Chào", client_msg_id="k1")
+check("lượt mới chờ: chưa cho Thử lại", tm.retry_reply(t["team_id"], sub["message_id"], "agent-one") is None)
+check("lượt chờ quá lâu: Thử lại được", tm.retry_reply(t["team_id"], sub["message_id"], "agent-one", stuck_after_s=-1)
+      is not None)
+# #2: quyền "Không giới hạn" cấp trước 0.142.0 không nới sang lượt chạy model chính.
+r, tm, ts, ss, t, ev = world("grant", Script({}))
+r.grant_authority(t["team_id"], {"caps": {"daily_turns": {"unlimited": True}}, "providers_unlimited": ["anthropic-cli"]})
+check("quyền mới (providers_v=2) vẫn cho Không giới hạn với provider đã tích",
+      r.effective_caps(t["team_id"], "anthropic-cli")["daily_turns"] is None)
+import sqlite3 as _sq  # noqa: E402
+with _sq.connect(str(tm.path)) as c:
+    g = json.loads(c.execute("SELECT grant_json FROM team_authority WHERE team_id=?", (t["team_id"],)).fetchone()[0])
+    g.pop("providers_v", None)
+    c.execute("UPDATE team_authority SET grant_json=? WHERE team_id=?", (json.dumps(g), t["team_id"]))
+check("review #2: quyền cũ (không providers_v) không cho provider nào Không giới hạn",
+      r.effective_caps(t["team_id"], "anthropic-cli")["daily_turns"] == t["caps"]["daily_turns"])
 
 print(("FAIL" if fails else "PASS") + f" - test_team_chat_0142: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)

@@ -185,6 +185,38 @@ check("bảng trợ lý: mô tả Auto và câu Auto không phải Toàn quyền
 check("hỏi lại khi tắt: nói rõ không huỷ việc, vẫn chat và nhận việc trực tiếp",
   /không bị huỷ/.test(vi["resonance.t0_off_confirm"]) && /nhận việc trực tiếp/.test(vi["resonance.t0_off_confirm"]));
 
+// review #1: gắn lại tab Công việc trên cùng một khung không chồng trình nghe (một lần Giao chỉ gửi một việc).
+(function () {
+  const listeners = {};
+  const host = { innerHTML: "", isConnected: true, addEventListener(t, f) { (listeners[t] = listeners[t] || []).push(f); },
+    querySelector() { return null; }, contains() { return true; } };
+  global.document = { activeElement: null };
+  let posts = 0;
+  global.fetch = function (url, o) {
+    if (o && o.method === "POST") posts++;
+    return Promise.resolve({ json: function () { return Promise.resolve({ ok: true, jobs: [], counts: {}, errors: [] }); } });
+  };
+  const opts = { slug: "minh", name: "Minh", brain: function () { return "brain"; } };
+  const a = AJ.mount(host, opts); a.destroy();
+  const b = AJ.mount(host, opts); b.destroy();
+  AJ.mount(host, opts);
+  const fire = function (type, target) { (listeners[type] || []).forEach(function (f) { f({ target: target }); }); };
+  const cls = function (c) { return { contains: function (x) { return x === c; } }; };
+  fire("input", { classList: cls("aj-text"), value: "Soạn email" });
+  const btn = { classList: cls("aj-assign-send"), dataset: {} };
+  btn.closest = function () { return btn; };
+  fire("click", Object.assign({}, btn, { closest: function () { return btn; } }));
+  check("review #1: gắn ba lần, mỗi loại sự kiện chỉ một trình nghe, một lần Giao chỉ một POST",
+    (listeners.input || []).length === 1 && (listeners.click || []).length === 1 && posts === 1, JSON.stringify({ posts: posts }));
+})();
+// review #4: lượt nằm "đang chờ" quá lâu có nút Thử lại.
+h = TM.replyStatusHtml({ id: 9, replies: [{ agent_key: "ag_lan", status: "queued", reason: "", updated_at: Date.now() / 1000 - 3600 }] }, ctx);
+check("review #4: chờ quá lâu thì có Thử lại", h.includes(vi["teams.reply.stuck"]) && /data-retry="9"/.test(h), h);
+h = TM.replyStatusHtml({ id: 9, replies: [{ agent_key: "ag_lan", status: "queued", reason: "", updated_at: Date.now() / 1000 }] }, ctx);
+check("vừa gửi thì chỉ là đang chờ", !h.includes("data-retry") && h.includes(vi["teams.reply.queued"]), h);
+h = TM.replyStatusHtml({ id: 9, replies: [{ agent_key: "ag_lan", status: "error", reason: "leader_changed" }] }, ctx);
+check("review #5: lý do Trưởng nhóm vừa đổi có nhãn", h.includes(vi["teams.reply.why.leader_changed"]), h);
+
 // ───────────── nối dây ─────────────
 check("app.js chuyển gói team_replies cho trang Nhóm", /data\.type === "team_replies"/.test(appJs));
 check("chữ của dòng trạng thái tối thiểu 16px, nút Thử lại cao 44px", /\.tm-reply \{[^}]*font-size: 16px/.test(css)

@@ -141,5 +141,17 @@ check("thứ tự ngăn đúng", order == sorted(order, key=lambda b: rank[b]), 
 check("không nguồn nào lỗi ngầm", j["errors"] == [], j["errors"])
 check("đếm theo ngăn khớp danh sách", all(j["counts"][b] == order.count(b) for b in rank), j["counts"])
 
+# review #8: nonce chỉ toàn ký tự lạ thì từ chối, không dùng chung một khoá.
+r = client.post("/agents/minh/jobs", params={"brain": B}, json={"text": "Việc lạ", "nonce": "!!! ###"})
+check("review #8: nonce rỗng sau khi lọc: 400", r.status_code == 400, r.text)
+# review #7: phiên chat cũ đã ghim mã của trợ lý trước (cùng slug) không nhận việc của trợ lý hiện tại.
+old_sid = main.get_store().create_session(brain=B, channel="agent:hoa", title="Hoa cũ")
+with main._resonance_store()._conn() as c:
+    c.execute("INSERT INTO session_agents(session_id,brain_id,agent_key,by,created_at) VALUES(?,?,?,?,?)",
+              (old_sid, str(BR), "ag_tro_ly_cu", "test", 0))
+r = client.post("/agents/hoa/jobs", params={"brain": B}, json={"text": "Gửi báo giá", "nonce": "h1"})
+check("review #7: Giao việc không báo vào phiên của trợ lý cũ cùng slug, mở phiên mới",
+      r.json()["ok"] and r.json()["session_id"] != old_sid, r.json())
+
 print(("FAIL" if fails else "PASS") + f" - test_agent_jobs_0142: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)

@@ -4,7 +4,7 @@ Gom việc của MỘT trợ lý (theo `agent_key` bền, trong đúng một bra
 - **Nhóm** (`kanban.sqlite3` làn `team` + bước trong `team.sqlite3`): việc giao thẳng cho trợ lý, việc trợ lý điều phối,
   và việc trợ lý chỉ làm một bước con, hỗ trợ hay tổng hợp (người làm bước con cũng thấy việc liên quan).
 - **Chat riêng** (Kanban thường): việc xếp hàng từ cuộc chat riêng với trợ lý (`chat_id` là phiên `agent:<slug>` đã ghim
-  đúng mã), và việc giao bằng nút Giao việc ở chính tab này (`metadata.agent_key`).
+  đúng mã), và việc giao bằng nút Giao việc ở chính tab này (khoá idempotency `agent:<mã>:<slug>:<nonce>`).
 - **Auto** (mục tiêu Cộng hưởng, `resonance.sqlite3`): mục tiêu của trợ lý, cùng mục tiêu cũ trợ lý đang là người review.
 
 Mỗi việc rơi vào đúng một trong bốn ngăn: `running` (Đang làm), `waiting` (Đang chờ), `needs_you` (Cần bạn), `done`
@@ -190,7 +190,14 @@ ASSIGN_PREFIX = "agent:"
 def assign_key(agent_key: str, slug: str, nonce: str) -> str:
     """Khoá idempotency của việc giao cho trợ lý: `agent:<mã>:<slug>:<nonce>`. Bền suốt đời việc (metadata thì bị ghi đè
     khi việc chạy xong), nên vừa là dấu "việc của ai" vừa chống gửi trùng khi bấm hai lần hay gửi lại sau rớt mạng."""
-    return f"{ASSIGN_PREFIX}{agent_key}:{slug}:{re.sub(r'[^A-Za-z0-9_-]', '', str(nonce or ''))[:64]}"
+    n = clean_nonce(nonce)
+    if not n:
+        raise ValueError("nonce rỗng sau khi lọc")
+    return f"{ASSIGN_PREFIX}{agent_key}:{slug}:{n}"
+
+
+def clean_nonce(nonce: Any) -> str:
+    return re.sub(r"[^A-Za-z0-9_-]", "", str(nonce or ""))[:64]
 
 
 def parse_assign_key(key: Any) -> Optional[tuple]:

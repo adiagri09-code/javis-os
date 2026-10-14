@@ -92,6 +92,8 @@ EXTEND_STEP = {"daily_turns": 20, "task_turns": 6, "task_steps": 4}
 EXTEND_TEXT = {"daily_turns": "Chủ nhóm cho nhóm thêm {n} lần trả lời hôm nay để làm tiếp \"{title}\".",
                "task_turns": "Chủ nhóm cho việc \"{title}\" thêm {n} lần trả lời.",
                "task_steps": "Chủ nhóm cho việc \"{title}\" thêm {n} bước."}
+# Phiên bản nghĩa của `providers_unlimited` trong hộp cấp quyền (0.142.0: provider thật của lượt).
+PROVIDERS_GRANT_V = 2
 REASON_LABEL = {"on_point": "Đúng ý", "wrong_facts": "Sai dữ kiện", "missing": "Thiếu ý", "too_long": "Quá dài",
                 "unclear": "Khó hiểu", "off_topic": "Lạc đề"}
 
@@ -252,6 +254,8 @@ class TeamRunner:
         self.worker_id = worker_id
         self.max_parallel_teams = max(1, int(max_parallel_teams))
         self.clock = clock
+        # Mốc khởi động của bộ chạy: phục hồi chỉ coi là "dở" các lượt trả lời ghi trước mốc này (của tiến trình trước).
+        self.started_at = time.time()
         # Thao tác của host mà lệnh quản trị Toàn quyền cần (tạo agent, sửa lời nhắc, Cộng hưởng, cấp mã). None: lệnh
         # cần host bị từ chối kèm ghi chú.
         self.admin = admin
@@ -446,8 +450,9 @@ class TeamRunner:
             return
         self.teams.queue_replies(team["team_id"], mid, keys)
         for k in keys:
-            if self.teams.claim_reply(team["team_id"], mid, k):
-                self.teams.settle_reply(team["team_id"], mid, k, "error", reason=reason, detail=detail)
+            att = self.teams.claim_reply(team["team_id"], mid, k)
+            if att is not None:
+                self.teams.settle_reply(team["team_id"], mid, k, "error", attempt=att, reason=reason, detail=detail)
         self._publish_replies(team["team_id"], mid)
 
     def _publish_replies(self, team_id: str, mid: int) -> None:
@@ -469,24 +474,32 @@ class TeamRunner:
         với nút Thử lại; trước 0.142.0 kết cục lỗi bị bỏ đi nên nhóm im lặng."""
         outcomes = []
         team_id, mid = submitted["team_id"], int(submitted["message_id"])
-        for key in submitted.get("replies") or []:
-            if not await self._io(self.teams.claim_reply, team_id, mid, key):
+        keys = list(submitted.get("replies") or [])
+        for i, key in enumerate(keys):
+            att = await self._io(self.teams.claim_reply, team_id, mid, key)
+            if att is None:
                 continue   # đã chạy, đang chạy ở chỗ khác, hay đã có kết cục: không nhân đôi lượt
             await self._io(self._publish_replies, team_id, mid)
             try:
-                out = await self._reply_turn(team_id, key, mid, submitted["text"])
+                out = await self._reply_turn(team_id, key, mid, submitted["text"], att)
             except asyncio.CancelledError:
-                await self._io(self._settle_reply_out, team_id, mid, key,
+                # Bị huỷ: lượt này và các lượt CHƯA chạy phía sau đều thành lỗi có Thử lại, không nằm "đang chờ" mãi.
+                await self._io(self._settle_reply_out, team_id, mid, key, att,
                                {"status": "error", "error": "lượt bị huỷ giữa chừng"}, "interrupted")
+                for rest in keys[i + 1:]:
+                    ratt = await self._io(self.teams.claim_reply, team_id, mid, rest)
+                    if ratt is not None:
+                        await self._io(self._settle_reply_out, team_id, mid, rest, ratt,
+                                       {"status": "error", "error": "lượt bị huỷ trước khi chạy"}, "interrupted")
                 raise
             except Exception as ex:  # noqa: BLE001
                 out = {"status": "error", "error": f"lỗi nội bộ: {type(ex).__name__}: {str(ex)[:200]}",
                        "internal": True}
-            await self._io(self._settle_reply_out, team_id, mid, key, out)
+            await self._io(self._settle_reply_out, team_id, mid, key, att, out)
             outcomes.append(out)
         return outcomes
 
-    async def _reply_turn(self, team_id: str, key: str, mid: int, text: str) -> dict:
+    async def _reply_turn(self, team_id: str, key: str, mid: int, text: str, attempt: int) -> dict:
         team = self._team(team_id)
         role = "leader_reply" if key == team["leader_key"] else "member_reply"
         body = (f"Chủ nhóm vừa nhắn (tin #{mid}):\n{text}\n\n"
@@ -496,8 +509,8 @@ class TeamRunner:
                      '<!-- JAVIS_TEAM: {"op": "propose_job", "title": "...", "brief": "..."} -->')
 
         async def started(engine: str, model: str) -> None:
-            await self._io(self.teams.settle_reply, team_id, mid, key, "running", reason="answering",
-                           engine=engine, model=model)
+            await self._io(self.teams.settle_reply, team_id, mid, key, "running", attempt=attempt,
+                           reason="answering", engine=engine, model=model)
             await self._io(self._publish_replies, team_id, mid)
 
         return await self._turn(team, key, role, body, reply_to=mid, vet=self._vet_reply, on_engine=started)
@@ -506,20 +519,22 @@ class TeamRunner:
     _REPLY_REASON = {"cap": "cap", "busy_long": "busy", "team_paused": "team_paused", "member_left": "member_left",
                      "superseded": "superseded"}
 
-    def _settle_reply_out(self, team_id: str, mid: int, key: str, out: dict, reason: str = "") -> None:
+    def _settle_reply_out(self, team_id: str, mid: int, key: str, attempt: int, out: dict, reason: str = "") -> None:
         st = out.get("status")
         if out.get("message_id"):
             # Đã có tin trả lời (kể cả đầu ra đến muộn, chỉ còn là bằng chứng): lượt đã xong, không cho Thử lại.
-            self.teams.settle_reply(team_id, mid, key, "done", reason="" if out.get("applied") else str(st or ""),
+            self.teams.settle_reply(team_id, mid, key, "done", attempt=attempt,
+                                    reason="" if out.get("applied") else str(st or ""),
                                     turn_id=out.get("turn_id"), result_msg_id=int(out["message_id"]))
         elif st == "error":
             why = reason or ("internal" if out.get("internal") else
                              "engine_unavailable" if out.get("before_engine") else "engine")
-            self.teams.settle_reply(team_id, mid, key, "error", reason=why,
+            self.teams.settle_reply(team_id, mid, key, "error", attempt=attempt, reason=why,
                                     detail=str(out.get("detail") or out.get("error") or ""),
                                     turn_id=out.get("turn_id"))
         else:
-            self.teams.settle_reply(team_id, mid, key, "error", reason=self._REPLY_REASON.get(st, str(st or "unknown")),
+            self.teams.settle_reply(team_id, mid, key, "error", attempt=attempt,
+                                    reason=self._REPLY_REASON.get(st, str(st or "unknown")),
                                     detail=str(out.get("cap") or ""), turn_id=out.get("turn_id"))
         self._publish_replies(team_id, mid)
 
@@ -592,7 +607,12 @@ class TeamRunner:
         if not auth:
             return caps
         grant = auth["grant"] or {}
-        allowed = set(grant.get("providers_unlimited") or [])
+        # Quyền cấp trước 0.142.0 (không có `providers_v`) nói về provider của lượt THEO LUẬT CŨ: "anthropic-cli" chỉ là
+        # trợ lý có model Claude riêng, còn lại là model việc nền ("aux"). Nay lượt nhóm chạy model chính khi trợ lý không
+        # đặt model, nên đọc quyền cũ theo luật mới là nới rộng "Không giới hạn" sang những lượt chủ chưa từng đồng ý
+        # (review 0.142.0, #2). Quyền cũ không cho provider nào "Không giới hạn" nữa: trần về mức của nhóm cho tới khi
+        # chủ cấp lại.
+        allowed = set(grant.get("providers_unlimited") or []) if grant.get("providers_v") == PROVIDERS_GRANT_V else set()
         for k, v in (grant.get("caps") or {}).items():
             if k not in AUTH_CAPS:
                 continue
@@ -639,7 +659,8 @@ class TeamRunner:
                 raise TeamError(f"trần {k} vượt trần trần")
         providers = [str(p) for p in (grant.get("providers_unlimited") or []) if str(p).strip()]
         return {"caps": caps, "ceilings": ceilings, "can_interrupt": bool(grant.get("can_interrupt")),
-                "providers_unlimited": providers, "billing": str(grant.get("billing") or "")[:40]}
+                "providers_unlimited": providers, "providers_v": PROVIDERS_GRANT_V,
+                "billing": str(grant.get("billing") or "")[:40]}
 
     def grant_authority(self, team_id: str, grant: dict, by: str = "owner") -> dict:
         """Chủ bật hay sửa Toàn quyền (trưởng nhóm không có đường nào gọi tới đây)."""
@@ -1884,7 +1905,7 @@ class TeamRunner:
         """Sau restart (spec 8.6): lượt chưa tới mốc engine thì hoàn, bước về chờ, việc chạy tiếp; lượt đã qua mốc thì
         `interrupted` (tính một lần), bước `interrupted`, việc chặn với nút "Chạy lại bước". Không tự chạy lại."""
         interrupted_tasks = set()
-        for r in self.teams.interrupt_open_replies():
+        for r in self.teams.interrupt_open_replies(before=self.started_at):
             self._publish_replies(r["team_id"], r["message_id"])
         for t in self.teams.open_turns():
             self.teams.release_busy(t["agent_key"], t["turn_id"])

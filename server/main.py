@@ -22454,7 +22454,8 @@ async def agent_jobs_assign(slug: str, request: Request, brain: str = "brain"):
     if not text:
         return JSONResponse({"ok": False, "error": localefmt.chu("Chưa nhập việc cần làm", "Describe the job first")},
                             status_code=400)
-    if not nonce:
+    if not agent_jobs.clean_nonce(nonce):
+        # Kiểm SAU khi lọc ký tự: nonce chỉ toàn ký tự lạ thành rỗng thì mọi lần giao dùng chung một khoá (review #8).
         return JSONResponse({"ok": False, "error": "nonce"}, status_code=400)
     path = _agent_md_path(root, slug)
     if not path:
@@ -22466,8 +22467,11 @@ async def agent_jobs_assign(slug: str, request: Request, brain: str = "brain"):
         meta, _body = _read_md(path)
         name = str((meta or {}).get("name") or slug)
         ss = get_store()
-        chats = ss.list_sessions(limit=1, brain=_brain_keys(brain), channel=f"agent:{slug}")
-        sid = chats[0]["id"] if chats else ss.create_session(brain=brain, channel=f"agent:{slug}", title=name[:120])
+        # Phiên chat riêng của ĐÚNG mã này: phiên đã ghim mã của trợ lý cũ cùng slug (xoá rồi tạo lại) không nhận báo cáo
+        # của trợ lý mới (review 0.142.0, #7); chưa có phiên hợp lệ thì mở mới.
+        sid = next(iter(agent_jobs._chat_sessions(key, slug, _brain_keys(brain), ss, _resonance_store())), None)
+        if not sid:
+            sid = ss.create_session(brain=brain, channel=f"agent:{slug}", title=name[:120])
         tid = tasks_feature.enqueue(brain, agent_jobs.assign_title(name, text), text, chat_id=f"web:{sid}",
                                     idempotency_key=agent_jobs.assign_key(key, slug, nonce), dedupe_title=False)
         return {"ok": True, "task_id": tid, "session_id": sid, "board": tasks_feature.store.board_mode(root)}

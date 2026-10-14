@@ -113,7 +113,28 @@ thật, model việc nền đặt Codex để tái hiện ca lỗi gốc, không
   chi tiết lỗi hiện "(success)" thay vì câu lỗi thật, nhãn việc đã xong chỉ còn mã sau khi tải lại, ghi chú thừa dấu
   chấm, "Nhóm Nhóm ..." ở nguồn của việc.
 
-## 4. Hạn chế còn lại
+## 4. Review độc lập toàn bộ thay đổi
+
+Một agent review mới đọc cả `origin/main..HEAD` (không chỉ bản sửa cuối), tự chạy test nhóm, 0142, A5, i18n.
+Kết luận: 1 Blocking, 2 Important, 6 Minor. Đã sửa hết, mỗi mục có test:
+
+| Mức | Phát hiện | Sửa | Test |
+|---|---|---|---|
+| Blocking | Tab Công việc gắn lại trên cùng khung thì chồng trình nghe: một lần bấm Giao tạo nhiều việc, Huỷ hỏi nhiều lần | Trình nghe gắn một lần cho khung, chuyển cho lần gắn đang sống | `test_team_chat_0142.js` (gắn ba lần, một POST) |
+| Important | Quyền "Không giới hạn" cũ (`anthropic-cli`) nay phủ cả lượt chạy model chính mà chủ chưa từng đồng ý | Quyền có `providers_v=2`; quyền cũ không cho provider nào Không giới hạn, trần về mức nhóm tới khi chủ cấp lại | `test_team_chat_0142.py` |
+| Important | Lượt cũ về muộn ghi đè kết cục của lần Thử lại; phục hồi đánh "restart" cả lượt vừa gửi | `settle_reply` theo `attempt` và chỉ khi lượt còn mở; phục hồi chỉ đụng lượt ghi trước lúc tiến trình khởi động | `test_team_chat_0142.py` |
+| Minor | Bị huỷ giữa chừng thì lượt phía sau nằm "đang chờ" mãi; việc nền không tạo được cũng vậy | Huỷ thì chốt cả lượt chưa chạy là lỗi `interrupted`; chờ quá 10 phút thì có Thử lại | `test_team_chat_0142.py`, `.js` |
+| Minor | Lý do `leader_changed`, `superseded` không có nhãn | Thêm nhãn vi/en | `.js` |
+| Minor | Enter ở ô tên nhóm không chuyển sang ô tìm (hộp chọn đã ra `<body>`) | Tìm trong lớp phủ | |
+| Minor | Giao việc báo vào phiên của trợ lý cũ cùng slug | Chọn phiên đã ghim đúng mã, không có thì mở mới | `test_agent_jobs_0142.py` |
+| Minor | Nonce toàn ký tự lạ thành rỗng, mọi lần giao chung một khoá | Kiểm sau khi lọc, 400 | `test_agent_jobs_0142.py` |
+| Minor | Tham số `metadata` thừa | Bỏ | |
+
+Đã kiểm không có lỗi: lượt nhóm không bao giờ có công cụ (Claude, Codex, API, Grok và Antigravity bị từ chối), không lẫn
+dữ liệu giữa các brain, mọi HTML mới đều escape, migration không tự đạt và không xoá lịch sử, chat thường không tạo việc,
+tắt Auto không đụng việc nhóm hay Kanban.
+
+## 5. Hạn chế còn lại
 
 - Smoke với provider thật chỉ có Claude (container không có đăng nhập ChatGPT). Đường Codex được kiểm bằng Codex CLI thật
   với máy chủ Responses giả, không phải một lượt ChatGPT thật.

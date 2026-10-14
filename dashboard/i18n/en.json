@@ -4099,5 +4099,8 @@
   "resonance.auto_not_full": "Auto is not Full access: the assistant stays within its current permissions. With Auto off it still chats and takes direct jobs as usual; existing jobs are not cancelled.",
   "resonance.auto_label": "Auto",
   "resonance.auto_menu_on": "Auto: On",
-  "resonance.auto_menu_off": "Auto: Off"
+  "resonance.auto_menu_off": "Auto: Off",
+  "teams.reply.why.leader_changed": "The team lead just changed",
+  "teams.reply.why.superseded": "A newer answer replaced it",
+  "teams.reply.stuck": "has waited too long without starting"
 }
