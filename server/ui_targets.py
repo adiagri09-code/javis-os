@@ -18,7 +18,7 @@ import unicodedata
 # Trang hợp lệ = RAIL_ITEMS trong dashboard/console.js và PAGES trong dashboard/ui-actions.js.
 # Thêm trang mới thì thêm ở cả ba chỗ.
 PAGES = (
-    "home", "chat", "settings", "workspace", "skills", "chatbots", "conversations", "files",
+    "home", "chat", "settings", "workspace", "teams", "skills", "chatbots", "conversations", "files",
     "terminal", "coding", "selfimprove", "learn", "kanban", "models", "channels", "mcp", "plugins",
     "packs", "logs", "account", "usage", "pet", "share",
 )
@@ -69,6 +69,8 @@ ALIASES = {
     # Id trang số nhiều cũ (trước 0.59.0) - prompt/bookmark cũ gọi thẳng "agents"/"workflows"
     # vẫn phải ra đúng trang, không chỉ id chuẩn "workspace".
     "agents": "workspace", "workflows": "workspace",
+    # Trang Nhóm (nhóm chat team, 0.111.0): thanh bên gọi là "Nhóm".
+    "nhom": "teams", "nhom chat": "teams", "team": "teams", "teams": "teams", "nhom tro ly": "teams",
 }
 
 # Nhóm trên thanh bên = RAIL_GROUPS trong dashboard/console.js (khoá `id`) và GROUPS trong

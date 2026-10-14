@@ -2478,3 +2478,125 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   .ach-actions .gcard-btn { flex: 1 1 auto; }
   .ach-actions { justify-content: stretch; }
 }
+
+/* ── Trang Nhóm (nhóm chat team, 0.111.0; teams.js). Ba cột: danh sách nhóm, khung chat, cài đặt nhóm.
+   Dưới 1060px cài đặt thành ngăn kéo; dưới 760px một cột (danh sách là trang đầu, chạm nhóm mở khung chat toàn màn,
+   cài đặt trượt lên). Mọi lớp flex/grid kèm luật [hidden] riêng vì display của lớp đè thuộc tính hidden. */
+.tm-page { display: grid; grid-template-columns: 260px minmax(0, 1fr) 330px; height: 100%; min-height: 0; gap: 0; }
+.tm-page[data-side="0"] { grid-template-columns: 260px minmax(0, 1fr); }
+.tm-page[hidden] { display: none; }
+/* .ws-btn đặt display:inline-flex nên đè thuộc tính hidden (vd. nút Trang sau khi không còn trang). */
+.tm-page .ws-btn[hidden] { display: none; }
+.tm-list, .tm-chat, .tm-side { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.tm-list[hidden], .tm-chat[hidden], .tm-side[hidden] { display: none; }
+.tm-list { border-right: 1px solid var(--border); padding: 10px; gap: 6px; overflow-y: auto; }
+.tm-side { border-left: 1px solid var(--border); padding: 10px; gap: 8px; overflow-y: auto; background: var(--surface-1); }
+.tm-bar { display: flex; align-items: center; gap: 8px; justify-content: space-between; min-height: 36px; }
+.tm-bar[hidden] { display: none; }
+.tm-chat-head { padding: 8px 12px; border-bottom: 1px solid var(--border); justify-content: flex-start; }
+.tm-title { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.tm-title strong, .tm-team-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.tm-sub, .tm-team-sub { font-size: 12px; color: var(--text3); }
+.tm-team { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; padding: 8px 10px;
+  border-radius: 10px; border: 1px solid transparent; background: none; color: var(--text); cursor: pointer; }
+.tm-team[hidden] { display: none; }
+.tm-team:hover { background: var(--surface-2); }
+.tm-team[aria-current="true"] { background: var(--accent-wash); border-color: var(--accent-line); }
+.tm-badge-owner { color: var(--warn-ink); background: var(--warn-wash); border-radius: 6px; padding: 0 6px; }
+.tm-empty { color: var(--text3); font-size: 13px; padding: 12px; }
+.tm-note, .tm-banner { margin: 6px 12px 0; padding: 6px 10px; border-radius: 8px; font-size: 13px; background: var(--warn-wash); color: var(--warn-ink); }
+.tm-note[hidden] { display: none; }
+.tm-msgs { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+.tm-msgs[hidden] { display: none; }
+.tm-msg { border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; background: var(--surface-1); max-width: 760px; }
+.tm-msg-owner { align-self: flex-end; background: var(--accent-wash); border-color: var(--accent-line); }
+.tm-msg-late { opacity: .78; border-style: dashed; }
+.tm-msg-result { border-color: var(--green); }
+.tm-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text2); margin-bottom: 4px; }
+.tm-head[hidden] { display: none; }
+.tm-ava { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface-2); color: var(--text); font-size: 11px; font-weight: 600; flex: none; }
+.tm-who { font-weight: 600; color: var(--text); }
+.tm-role, .tm-decision, .tm-result, .tm-star { border-radius: 6px; padding: 0 6px; background: var(--surface-2); }
+.tm-result { background: var(--green); color: var(--on-accent, #fff); }
+.tm-state-late { color: var(--warn-ink); }
+.tm-state .ic, .tm-star .ic { margin-right: 3px; }
+.tm-tag { border: 1px solid var(--border); background: none; color: var(--accent); border-radius: 6px; padding: 0 6px; cursor: pointer; font-size: 12px; }
+.tm-text { overflow-wrap: anywhere; font-size: 14px; color: var(--text); }
+.tm-note-line { font-size: 12px; color: var(--warn-ink); margin-top: 4px; }
+.tm-proposal { margin-top: 8px; padding: 8px; border: 1px dashed var(--accent-line); border-radius: 10px; }
+.tm-foot { display: flex; justify-content: flex-end; }
+.tm-foot[hidden] { display: none; }
+.tm-pin { border: none; background: none; color: var(--text3); font-size: 11.5px; cursor: pointer; }
+.tm-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.tm-actions[hidden] { display: none; }
+.tm-runbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--border); font-size: 13px; }
+.tm-runbar[hidden] { display: none; }
+.tm-composer { border-top: 1px solid var(--border); padding: 8px 12px; position: relative; }
+.tm-row { display: flex; align-items: flex-end; gap: 8px; }
+.tm-row[hidden] { display: none; }
+.tm-input { flex: 1; min-width: 0; resize: vertical; border-radius: 10px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); padding: 8px; font: inherit; }
+.tm-job { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; }
+.tm-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.tm-chips[hidden] { display: none; }
+.tm-chip { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 999px; background: var(--accent-wash); font-size: 12.5px; }
+.tm-chip[hidden] { display: none; }
+.tm-chip button { border: none; background: none; color: var(--text2); cursor: pointer; }
+.tm-sug { position: absolute; bottom: 100%; left: 12px; display: flex; flex-direction: column; background: var(--surface-1);
+  border: 1px solid var(--border); border-radius: 10px; padding: 4px; z-index: 5; min-width: 200px; }
+.tm-sug[hidden] { display: none; }
+.tm-sug-item { display: flex; align-items: center; gap: 6px; border: none; background: none; color: var(--text); padding: 6px 8px; text-align: left; cursor: pointer; border-radius: 8px; }
+.tm-sug-item:hover { background: var(--surface-2); }
+.tm-hint { font-size: 12px; color: var(--text3); min-height: 1.2em; margin-top: 4px; }
+.tm-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.tm-tabs[hidden] { display: none; }
+.tm-tab { border: 1px solid var(--border); background: none; color: var(--text2); border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+.tm-tab[aria-selected="true"] { background: var(--accent-wash); color: var(--text); border-color: var(--accent-line); }
+.tm-qhead { font-size: 12px; font-weight: 600; color: var(--text3); text-transform: uppercase; margin: 10px 0 4px; }
+.tm-qrow, .tm-mrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--hairline, var(--border)); font-size: 13px; }
+.tm-qrow[hidden], .tm-mrow[hidden] { display: none; }
+.tm-qtitle, .tm-mname { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tm-qpos { width: 1.6em; text-align: right; color: var(--text3); }
+.tm-qwhy { flex-basis: 100%; font-size: 12px; color: var(--warn-ink); }
+.tm-mrole { font-size: 12px; color: var(--text3); }
+.tm-rs { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text2); }
+.tm-rs[hidden] { display: none; }
+.tm-add { display: flex; gap: 6px; margin-top: 8px; }
+.tm-add[hidden] { display: none; }
+.tm-form { display: flex; flex-direction: column; gap: 10px; }
+.tm-form[hidden] { display: none; }
+.tm-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.tm-field[hidden] { display: none; }
+.tm-field input, .tm-field textarea, .tm-field select { border-radius: 8px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); padding: 6px 8px; font: inherit; }
+.tm-radio, .tm-check { display: inline-flex; align-items: center; gap: 6px; }
+.tm-job[hidden], .tm-sug-item[hidden], .tm-radio[hidden], .tm-check[hidden], .tm-ava[hidden] { display: none; }
+.tm-create { max-width: 560px; }
+.tm-save, .tm-create-save { align-self: flex-start; }
+.tm-back, .tm-close { display: none; }
+@media (min-width: 1061px) { .tm-gear { display: none; } }
+@media (max-width: 1060px) {
+  .tm-page, .tm-page[data-side="0"] { grid-template-columns: 240px minmax(0, 1fr); }
+  /* Ngăn kéo nằm ĐÈ lên khung chat nên phải đặc: --surface-1 là lớp kính mờ, nhìn xuyên thấy tin bên dưới. */
+  .tm-side { position: fixed; top: 0; right: 0; bottom: 0; width: min(380px, 100%); z-index: 40; transform: translateX(105%);
+    transition: transform .2s ease; box-shadow: 0 0 24px rgba(0, 0, 0, .25); background: var(--bg); }
+  .tm-side.tm-open { transform: none; }
+  .tm-close { display: inline-flex; }
+}
+@media (max-width: 760px) {
+  .tm-page, .tm-page[data-side="0"] { grid-template-columns: minmax(0, 1fr); }
+  .tm-list { border-right: none; }
+  .tm-page[data-view="list"] .tm-chat { display: none; }
+  .tm-page[data-view="chat"] .tm-list { display: none; }
+  .tm-back { display: inline-flex; }
+  .tm-side { top: auto; left: 0; width: 100%; height: 88vh; border-radius: 16px 16px 0 0; transform: translateY(105%); }
+  .tm-side.tm-open { transform: none; }
+  /* Hàng 1: nút quay lại + tên nhóm (đủ rộng để đọc); hàng 2: lọc việc + cài đặt nhóm. */
+  .tm-chat-head { flex-wrap: wrap; row-gap: 6px; }
+  .tm-chat-head .tm-title { flex: 1 1 calc(100% - 60px); }
+  .tm-filter { flex: 1 1 140px; min-width: 0; width: auto; min-height: 44px; }
+  .tm-team, .tm-tab, .tm-send, .tm-back, .tm-gear, .tm-close, .tm-tag, .tm-pin, .tm-sug-item, .tm-actions .ws-btn, .tm-job { min-height: 44px; }
+  .tm-back, .tm-close { min-width: 44px; justify-content: center; }
+  .tm-add select, .tm-add .ws-btn, .tm-field input, .tm-field select { min-height: 44px; }
+  .tm-row { flex-wrap: wrap; }
+  .tm-input { flex-basis: 100%; }
+}

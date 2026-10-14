@@ -4198,5 +4198,195 @@
    "POST"
   ],
   "trong": null
+ },
+ {
+  "order": 418,
+  "type": "APIRoute",
+  "path": "/teams",
+  "name": "teams_list",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 419,
+  "type": "APIRoute",
+  "path": "/teams",
+  "name": "teams_create",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 420,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}",
+  "name": "teams_get",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 421,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}",
+  "name": "teams_patch",
+  "methods": [
+   "PATCH"
+  ],
+  "trong": null
+ },
+ {
+  "order": 422,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/members",
+  "name": "teams_member_add",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 423,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/members/{agent_key}",
+  "name": "teams_member_remove",
+  "methods": [
+   "DELETE"
+  ],
+  "trong": null
+ },
+ {
+  "order": 424,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/leader",
+  "name": "teams_leader",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 425,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/caps",
+  "name": "teams_caps",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 426,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/queue",
+  "name": "teams_queue",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 427,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/queue/{task_id}/priority",
+  "name": "teams_priority",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 428,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/tasks/{task_id}",
+  "name": "teams_task",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 429,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/tasks/{task_id}/cancel",
+  "name": "teams_task_cancel",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 430,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/tasks/{task_id}/amend",
+  "name": "teams_task_amend",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 431,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/tasks/{task_id}/unblock",
+  "name": "teams_task_unblock",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 432,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/messages",
+  "name": "teams_messages",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 433,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/messages",
+  "name": "teams_send",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 434,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/messages/{message_id}/accept",
+  "name": "teams_accept",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 435,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/messages/{message_id}/decision",
+  "name": "teams_decision",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 436,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/turns",
+  "name": "teams_turns",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
  }
 ]

@@ -6796,6 +6796,9 @@ async def save_agent(name: str = Form(...), role: str = Form(""), skills: str = 
                      avatar_eye_size: str = Form(None), tags: str = Form(None)):
     # Trợ lý MỚI đặt tên file không dấu ("Bống Work" -> bong-work.md), đúng quy ước slug của Javis. Trước
     # 0.88.1 tên giữ nguyên dấu; các file đó vẫn đọc, sửa, xoá được nhờ skill_router.valid_file_slug.
+    # TẠO MỚI = form không gửi slug. Nhóm chat team (spec 2026-10-13 mục 5.1): tạo mới mà slug suy từ tên đã có file thì
+    # KHÔNG ghi đè agent cũ (trước đây ghi đè âm thầm tên, vai, lời nhắc của người khác); trả 409 kèm gợi ý slug trống.
+    creating = not (slug or "").strip()
     slug = slug or _ascii_slug(name)
     skills_list = [s.strip() for s in re.split(r"[,\n]", skills) if s.strip()]
     # `model_provider` nói RÕ model thuộc nhà nào - cùng một tên model có thể có ở hai nhà
@@ -6812,6 +6815,14 @@ async def save_agent(name: str = Form(...), role: str = Form(""), skills: str = 
         # và chạy ở worker. Đọc ngoài khoá rồi mới khoá lúc ghi thì một thao tác thêm/bỏ tag chen giữa sẽ
         # bị snapshot cũ của form ghi đè (review PR #617 vòng 1, R4).
         with _AGENT_META_LOCK:
+            if creating and path.is_file():
+                n = 2
+                while (_agents_dir(brain) / f"{slug}-{n}.md").is_file():
+                    n += 1
+                return JSONResponse({"ok": False, "code": "slug_taken", "suggest": f"{slug}-{n}", "error": localefmt.chu(
+                    f"Đã có trợ lý mang tên tệp {slug}. Đổi tên trợ lý mới, hoặc sửa trợ lý đang có.",
+                    f"An assistant with file name {slug} already exists. Rename the new one, or edit the existing one.")},
+                    status_code=409)
             previous = _read_md(path)[0] if path.is_file() else None
             try:
                 avatar = agent_avatar.for_save(previous, slug, avatar_shape, avatar_palette,
@@ -6857,7 +6868,9 @@ async def delete_agent(slug: str = Form(...), brain: str = Form("brain")):
         # Tìm và xoá file TRONG khoá ghi agent, ở worker (R5): thao tác tag hay form đang giữ khoá thì xoá
         # đợi nó ghi xong rồi mới xoá; thao tác tới sau thấy file đã mất và không tạo lại. Đợi khoá ở
         # worker nên event loop không bị chặn (R4).
-        with _AGENT_META_LOCK:
+        # Nhóm chat team (review T1, R3): xoá trong khoá chấp nhận đầu ra của bộ chạy nhóm, nên một lượt nhóm đang về
+        # không thể ghi bài học vào agent vừa bị xoá.
+        with _TEAM_API.guard(), _AGENT_META_LOCK:
             f = _agent_file(brain, slug)
             if f:
                 f.unlink()
@@ -6866,7 +6879,15 @@ async def delete_agent(slug: str = Form(...), brain: str = Form("brain")):
     # tiêu và phiên cũ giữ mã cũ. Chưa có kho thì không tạo kho chỉ để ghi việc này.
     try:
         if _RESONANCE_STORE is not None or (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
-            _resonance_store().agent_retire(resonance_store.Principal("owner", "owner", _brain_key(brain)), slug)
+            gone = _resonance_store().agent_retire(resonance_store.Principal("owner", "owner", _brain_key(brain)), slug)
+            # Nhóm chat team (spec 11.4): mã nghỉ thì thành viên thành `agent_gone` ở mọi nhóm của brain, xử lý như bỏ
+            # thành viên. Chưa có kho nhóm thì không tạo kho.
+            if gone and _TEAM_API.exists():
+                # Cùng khoá chấp nhận, áp dụng đầu ra của bộ chạy nhóm (review T1 R3, R7), ở luồng phụ.
+                def _gone(root=_brain_key(brain), key=gone["agent_key"]):
+                    with _TEAM_API.guard():
+                        _TEAM_API.teams().mark_agent_gone(root, key)
+                await asyncio.to_thread(_gone)
     except Exception as e:  # noqa: BLE001
         print(f"[resonance agent retire] {type(e).__name__}: {e}", file=sys.stderr)
     return {"ok": True}
@@ -22229,6 +22250,98 @@ resonance_api.register_learning(app, _RESONANCE_API_DEPS)
 resonance_api.register_a4(app, _RESONANCE_API_DEPS)
 # A5: chọn người review cho một trợ lý làm (đăng ký cuối, bảng route chỉ thêm ở cuối).
 resonance_api.register_a5(app, _RESONANCE_API_DEPS)
+
+
+# ── Nhóm chat team (T1, spec docs/superpowers/specs/2026-10-13-team-chat-design.md) ──
+import team_api  # noqa: E402
+import team_runner  # noqa: E402
+
+
+def _team_agent_info(root, agent_key):
+    """Thành viên theo mã bền: slug hiện tại, tên, lời nhắc hệ thống của agent (vai, bộ nhớ, luật chủ dặn, bài học) và
+    model riêng. None khi mã đã nghỉ, file mất hay chưa có sổ danh tính: bộ chạy coi như thành viên đã rời."""
+    try:
+        if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+            return None
+        reg = _resonance_store().agent_by_key(root, agent_key)
+    except Exception:  # noqa: BLE001
+        return None
+    if not reg or reg.get("status") != "active" or not _agent_md_path(root, reg["slug"]):
+        return None
+    name, system, model, provider = _workflow_agent_helpers(root, None)[1](reg["slug"])
+    return {"slug": reg["slug"], "name": name, "system": system, "model": model or "", "model_provider": provider or ""}
+
+
+def _team_engine_for(team, agent_key, role):
+    """Engine CHỈ CHỮ cho một lượt nhóm (phán quyết R3 của kế hoạch T1): thư mục trống, không MCP, cổng từ chối mọi công
+    cụ. Agent có model Claude riêng (`model` + provider anthropic-cli) thì chạy model đó; còn lại dùng model việc nền như
+    lượt Cộng hưởng, không tự đổi provider.
+
+    Review T1:
+    - R4: engine được DỰNG xong (và báo sẵn sàng) rồi mới gọi `req["engine_started"]`, mốc tính lượt của bộ chạy; dựng
+      hỏng thì ném EngineUnavailable trước mốc, lượt được hoàn.
+    - R1: kết cục đọc theo hợp đồng chỉ chữ (`team_runner.TextOnlyOutcome`): final lỗi, lỗi đăng nhập, lỗi sau final,
+      gọi công cụ, thiếu final, câu trả lời rỗng đều là lượt lỗi, không bao giờ thành sản phẩm.
+    - R3: JAVIS_LESSON / JAVIS_RULE chỉ được BÓC ở đây (không ghi gì). Việc ghi vào bộ nhớ agent là `commit`, bộ chạy chỉ
+      gọi sau khi kiểm đầu ra còn hợp lệ; `commit` kiểm lại danh tính (mã bền còn trỏ đúng slug) ngay trước khi ghi."""
+    root = team["brain_id"]
+    info = _team_agent_info(root, agent_key) or {}
+    model = info.get("model") or ""
+    own_claude = bool(model) and _agent_model_provider(model, info.get("model_provider") or "") == "anthropic-cli"
+
+    def _build(system, tag):
+        if own_claude:
+            eng = _reply_policy_sandbox_engine(system, tag, cwd_name="team_cwd")
+            eng.model = model
+        else:
+            eng, why = _resonance_engine(system, tag)
+            if eng is None:
+                raise team_runner.EngineUnavailable(
+                    f"model việc nền chưa chạy được lượt chỉ chữ: {(why or {}).get('reason') or why}")
+        avail = getattr(eng, "is_available", None)
+        if callable(avail) and not avail():
+            raise team_runner.EngineUnavailable("engine chưa sẵn sàng (kiểm tra trang Models)")
+        return eng
+
+    async def run(req):
+        tag = f"team-{str(req['team_id'])[-8:]}"
+        eng = await asyncio.to_thread(_build, req["system"], tag)
+        await req["engine_started"]()
+        outcome = team_runner.TextOnlyOutcome()
+        async for ev in eng.query(req["prompt"]):
+            outcome.note(ev)
+        res = outcome.result()
+        slug = info.get("slug") or ""
+        # JAVIS_RULE trong lượt nhóm không có chủ nói trực tiếp với agent: hạ thành bài học (như bước workflow).
+        rules, text = agent_rules.extract_rules(res["text"])
+        lessons, clean = _boc_bai_hoc(text)
+        lessons = list(lessons) + list(rules)
+
+        def commit():
+            now = _team_agent_info(root, agent_key) or {}
+            if not slug or now.get("slug") != slug:
+                raise RuntimeError("agent đã đổi danh tính, không ghi bài học")
+            if lessons:
+                _ghi_bai_hoc(root, slug, lessons)
+            _log_agent_run(root, slug, "", clean)
+
+        return {"text": clean, "tokens_in": res["tokens_in"], "tokens_out": res["tokens_out"],
+                "lessons": lessons, "commit": commit}
+
+    run.marks_engine = True
+    return ("anthropic-cli" if own_claude else "aux"), model, run
+
+
+async def _team_notify(session_id, text):
+    await _bo_vao_hom_thu(f"{WEB_CHAT_PREFIX}{session_id}", text, kind="report",
+                          label=localefmt.chu("Nhóm", "Team"), source="team")
+
+
+_TEAM_API = team_api.register(app, team_api.TeamApiDeps(
+    brain_key=lambda b: _brain_key(b), session_store=lambda: get_store(),
+    task_store=lambda: tasks_feature.store, resonance_store=lambda: _resonance_store(),
+    agents_meta=_resonance_agents_meta, agent_info=_team_agent_info, engine_for=_team_engine_for,
+    broadcast=lambda ev: _CHAT_RUNTIME.publish(ev), notify=_team_notify))
 
 
 if __name__ == "__main__":
