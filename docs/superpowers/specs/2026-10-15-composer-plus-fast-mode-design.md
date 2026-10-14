@@ -37,8 +37,9 @@ PR 2 merge ngay sau PR 1. Giữa hai bản, nút tia sét lưu được nhưng c
 ```
 
 - Gốc khung vẫn là `#hudVoice.hud-voice`. Khối `.hud-voice {` trong style.css giữ `align-items: flex-end` và
-  `border-radius: 18px;` đứng trước `background: var(--bg2)` (test ghim), thêm `flex-direction: column` và cho con
-  `align-self: stretch`. Khung `position: relative`, không `overflow: hidden` (popover và #voiceFocusResume nổi ra ngoài).
+  `border-radius` đứng trước `background: var(--bg2)` (test ghim thứ tự), thêm `flex-direction: column` và cho con
+  `align-self: stretch`. Bo góc tăng từ 18px lên **24px** theo ý chủ repo (duyệt phác thảo 15/10): sửa có chủ ý hai
+  test đang ghim 18px (test_theme_tokens, test_o_chat_no_theo_chu) và cp-css `.chatpage-slot .hud-voice` cho đồng bộ. Khung `position: relative`, không `overflow: hidden` (popover và #voiceFocusResume nổi ra ngoài).
 - `#attachBar` dời vào khung. Bỏ `"attachBar"` khỏi `CHAT_NODE_IDS` (console.js), không thì trang Chat, Coding,
   Workspace kéo nó ra khỏi khung. `CHAT_NODE_IDS` giữ thứ tự `callBar, chatArea, bgStrip, ...`, giữ `modelBar`.
 - `#modelBar` ở lại làm anh em của khung (test ghim id và chỗ trong `CHAT_NODE_IDS`, coding.js chèn chip vào đó).
