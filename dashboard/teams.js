@@ -570,8 +570,11 @@
     // Lựa chọn từ gợi ý thắng mọi cách đọc theo tên, ở đúng chỗ token của nó (mỗi lựa chọn giữ một chỗ).
     var claimed = {};
     var legacy = [];
-    (picked || []).forEach(function (p) {
-      if (!p || typeof p !== "object") { legacy.push(p); return; }
+    // Lựa chọn MỚI NHẤT xét trước (review 0.142.0, #1): chọn "Lan" rồi xoá, chọn lại "Lan Anh" thì "Lan Anh" giữ chỗ token,
+    // lựa chọn cũ không còn token nào của riêng nó nên mất.
+    (picked || []).forEach(function (p) { if (p && typeof p !== "object") legacy.push(p); });
+    (picked || []).slice().reverse().forEach(function (p) {
+      if (!p || typeof p !== "object") return;
       if (!active[p.key]) return;
       var n = norm(p.label).trim();
       if (!n) return;
@@ -608,13 +611,38 @@
   // Bỏ một người khỏi tin đang soạn: xoá token "@tên" của họ trong chữ (token đã chọn trước, rồi tới tên gõ tay) và bỏ
   // lựa chọn tương ứng. Trả {text, picked} mới.
   function removeMention(text, members, picked, key) {
-    var labels = [];
-    (picked || []).forEach(function (p) { if (p && typeof p === "object" && p.key === key) labels.push(String(p.label)); });
-    (members || []).forEach(function (m) { if (m.agent_key === key) labels.push(String(m.name || ""), String(m.slug || "")); });
-    var t = String(text || "");
-    labels.filter(Boolean).sort(function (a, b) { return b.length - a.length; }).forEach(function (label) {
-      var esc2 = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      t = t.replace(new RegExp("(^|[^\\p{L}\\p{N}_])@" + esc2 + "(?![\\p{L}\\p{M}\\p{N}_]) ?", "giu"), "$1");
+    var norm = function (s) { s = String(s || ""); return (s.normalize ? s.normalize("NFC") : s); };
+    var t = norm(text);
+    var low = t.toLowerCase();
+    var word = /[\p{L}\p{M}\p{N}_]/u;
+    var mine = [], others = [];
+    (picked || []).forEach(function (p) {
+      if (p && typeof p === "object") (p.key === key ? mine : others).push(norm(p.label).toLowerCase());
+    });
+    (members || []).forEach(function (m) {
+      if (m.status && m.status !== "active") return;
+      [m.name, m.slug].forEach(function (n) { n = norm(n).trim().toLowerCase(); if (n) (m.agent_key === key ? mine : others).push(n); });
+    });
+    var at = function (i, n) {
+      if (low.substr(i + 1, n.length) !== n) return false;
+      var prev = i ? low.charAt(i - 1) : "", next = low.charAt(i + 1 + n.length);
+      return (!prev || !word.test(prev)) && (!next || !word.test(next));
+    };
+    // Xoá từ cuối lên để chỉ số phía trước không lệch. Ở một chỗ mà tên của NGƯỜI KHÁC dài hơn cũng khớp ("@Lan Anh" khi
+    // bỏ "Lan") thì đó là token của người kia, không đụng (review 0.142.0, #4).
+    var cuts = [];
+    for (var i = low.length - 1; i >= 0; i--) {
+      if (low.charAt(i) !== "@") continue;
+      var best = 0;
+      mine.forEach(function (n) { if (n.length > best && at(i, n)) best = n.length; });
+      if (!best) continue;
+      if (others.some(function (n) { return n.length > best && at(i, n); })) continue;
+      cuts.push([i, best]);
+    }
+    cuts.forEach(function (c) {
+      var endAt = c[0] + 1 + c[1];
+      if (t.charAt(endAt) === " ") endAt++;
+      t = t.slice(0, c[0]) + t.slice(endAt);
     });
     return { text: t, picked: (picked || []).filter(function (p) { return !(p && typeof p === "object" ? p.key === key : p === key); }) };
   }
@@ -1434,6 +1462,13 @@
       if (S.activeId !== forTeam) return;
       if (r.code !== 200) return fail(r);
       var got = r.j.messages || [];
+      // Lọc theo một việc đã xong (mở từ tab Công việc): việc không còn trong hàng đợi, học tên từ chính bản ghi việc để
+      // thanh lọc và nhãn tin hiện tên việc thay vì mã (0.142.0).
+      if (S.filterTask && r.j.task && r.j.task.id) {
+        S.taskTitles[r.j.task.id] = r.j.task.title || S.taskTitles[r.j.task.id] || "";
+        got.forEach(function (m) { if (m.task_id === r.j.task.id && !m.task_title) m.task_title = r.j.task.title || ""; });
+        drawFilterbar();
+      }
       S.msgs = older ? got.concat(S.msgs) : got;
       S.hasMore = !S.filterTask && !!r.j.has_more;
       drawMsgs(!older);
@@ -1579,8 +1614,14 @@
       try { input.setSelectionRange(before.length, before.length); } catch (e) {}
       input.focus();
       grow(input);
-      // Ghi đúng mã đã chọn kèm chữ của token: trùng tên vẫn gọi đúng người, sửa token thì bỏ gọi.
-      S.picked = (S.picked || []).concat([{ key: key, label: label }]);
+      // Ghi đúng mã đã chọn kèm chữ của token: trùng tên vẫn gọi đúng người, sửa token thì bỏ gọi. Lựa chọn cũ mà token
+      // không còn trong chữ thì bỏ luôn, kẻo nó giành chỗ của token mới.
+      var low = (input.value.normalize ? input.value.normalize("NFC") : input.value).toLowerCase();
+      S.picked = (S.picked || []).filter(function (p) {
+        if (!p || typeof p !== "object") return true;
+        var l = String(p.label || "");
+        return low.indexOf("@" + (l.normalize ? l.normalize("NFC") : l).toLowerCase()) >= 0;
+      }).concat([{ key: key, label: label }]);
     }
     S.pending = null;
     hideSug();

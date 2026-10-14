@@ -336,11 +336,13 @@
   // Gộp nhịp: gói nhóm, mục tiêu đổi, việc nền báo về, việc vừa tạo hay huỷ ở tab Công việc đều đọc lại huy hiệu sau 800ms.
   var _henDem = null;
   function henDemViec() {
-    if (!active) return;
+    // Chỉ đọc khi danh sách trợ lý đang hiện và tab trình duyệt đang mở (review 0.142.0, #6): đếm việc tốn một lượt đọc
+    // mỗi trợ lý, không cần chạy cho mọi gói nhóm khi đang xem Quy trình hay tab ẩn. Quay lại thì taiDanhSach đọc lại.
+    if (!active || S.loai !== "agent" || (typeof document !== "undefined" && document.hidden)) return;
     if (_henDem) clearTimeout(_henDem);
     _henDem = setTimeout(function () {
       _henDem = null;
-      if (active) loadJobCounts().then(function (ok) { if (ok && active && S.loai === "agent") veDanhSach(); });
+      if (active && S.loai === "agent") loadJobCounts().then(function (ok) { if (ok && active && S.loai === "agent") veDanhSach(); });
     }, 800);
   }
   // Bật, tắt Auto của MỘT trợ lý (0.142.0): một hàm cho công tắc trên thẻ và mục Auto trong menu ba chấm, nên hai chỗ

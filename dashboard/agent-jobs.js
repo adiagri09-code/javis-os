@@ -54,6 +54,20 @@
   var REASON_KEY = { review_removed: "ajobs.reason.review_removed", paused: "ajobs.reason.paused" };
   var SOURCE_ICON = { team: "users", chat: "message-circle", auto: "zap" };
 
+  // Tên nhóm đã mở đầu bằng chữ "Nhóm" thì không ghép thêm chữ đó lần nữa ("Nhóm Nhóm kiểm thử"): `teamLabel` cho nhãn
+  // "Nhóm {name}", `bareTeam` bỏ chữ đầu khi câu đã có sẵn "nhóm {team}".
+  function teamHead() { return tw("ajobs.src.team", { name: "" }).trim().toLowerCase(); }
+  function teamLabel(name) {
+    name = String(name || "");
+    var head = teamHead();
+    return head && name.toLowerCase().indexOf(head + " ") === 0 ? name : tw("ajobs.src.team", { name: name });
+  }
+  function bareTeam(name) {
+    name = String(name || "");
+    var head = teamHead();
+    return head && name.toLowerCase().indexOf(head + " ") === 0 ? name.slice(head.length + 1) : name;
+  }
+
   function sourceText(j) {
     if (j.source === "team") {
       // Tên nhóm đã mở đầu bằng chữ "Nhóm" thì không ghép thêm ("Nhóm Nhóm kiểm thử").
@@ -78,8 +92,8 @@
   function nextText(j) {
     var n = j && j.next;
     if (!n || !n.code) return "";
-    if (n.code === "queue") return n.n ? tw("ajobs.next.queue", { n: n.n, team: n.team || "" }) : "";
-    if (n.code === "busy") return tw("ajobs.next.busy", { team: n.team || "" });
+    if (n.code === "queue") return n.n ? tw("ajobs.next.queue", { n: n.n, team: bareTeam(n.team) }) : "";
+    if (n.code === "busy") return tw("ajobs.next.busy", { team: bareTeam(n.team) });
     if (n.code === "needs_you") return n.reason ? tw("ajobs.next.needs_you", { reason: n.reason }) : tw("ajobs.next.needs_you_plain");
     if (n.code === "board_off") return tw("ajobs.next.board_off");
     if (n.code === "agent_busy") return tw("ajobs.next.agent_busy");
@@ -171,7 +185,7 @@
     if (!target || target === "chat") return tw("ajobs.dest_chat", { name: name });
     var id = target.slice(5);
     var tm = ((data && data.teams) || []).filter(function (x) { return x.team_id === id; })[0];
-    return tw("ajobs.dest_team", { name: tm ? tm.name : id });
+    return teamLabel(tm ? tm.name : id);
   }
   function verifierName(ui) {
     var a = (ui.agents || []).filter(function (x) { return x.slug === ui.verifier; })[0];
@@ -223,7 +237,7 @@
         '<select id="ajTarget" class="aj-sel aj-target"><option value="chat"' + (!ui.target || ui.target === "chat" ? " selected" : "") + ">" +
         esc(destLabel(ui, data, "chat")) + "</option>" + teams.map(function (tm) {
           var v = "team:" + tm.team_id;
-          return '<option value="' + esc(v) + '"' + (ui.target === v ? " selected" : "") + ">" + esc(tw("ajobs.dest_team", { name: tm.name })) +
+          return '<option value="' + esc(v) + '"' + (ui.target === v ? " selected" : "") + ">" + esc(teamLabel(tm.name)) +
             "</option>";
         }).join("") + "</select>";
     }
@@ -369,10 +383,22 @@
         draw();
       }, function () { st.ui.loadingMore = false; st.ui.note = tw("ajobs.net_err"); draw(); });
     }
+    // Đang gõ trong form Giao việc (hay đang dùng bộ gõ IME): không vẽ lại cả khung, kẻo mất chữ hay nhảy con trỏ (review
+    // 0.142.0, #3). Hẹn lại tới khi rời form; đóng form thì tải lại như thường.
+    function typing() {
+      var act = typeof document !== "undefined" ? document.activeElement : null;
+      return st.ui.assignOpen || !!host._ajComposing || !!(act && host.contains && host.contains(act) &&
+        (act.tagName === "TEXTAREA" || act.tagName === "INPUT" || act.tagName === "SELECT"));
+    }
     function schedule() {
       if (!alive) return;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(function () { timer = null; if (alive && host.isConnected) load(true); }, RELOAD_MS);
+      timer = setTimeout(function () {
+        timer = null;
+        if (!alive || !host.isConnected) return;
+        if (typing()) { schedule(); return; }
+        load(true);
+      }, RELOAD_MS);
     }
     function loadTargets() {
       st.ui.targetsLoading = true; draw();
@@ -521,6 +547,8 @@
       host.addEventListener("input", function (e) { if (host._ajActive) host._ajActive.input(e); });
       host.addEventListener("change", function (e) { if (host._ajActive) host._ajActive.input(e); });
       host.addEventListener("click", function (e) { if (host._ajActive) host._ajActive.click(e); });
+      host.addEventListener("compositionstart", function () { host._ajComposing = true; });
+      host.addEventListener("compositionend", function () { host._ajComposing = false; });
     }
     var mine = host._ajActive;
     // Đồng bộ trực tiếp: các sự kiện của app gộp nhịp rồi tải lại tại chỗ. Gỡ ở destroy.

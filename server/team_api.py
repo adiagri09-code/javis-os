@@ -377,9 +377,17 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             tid = team_store.new_team_id()
             sid = deps.session_store().create_session(brain=brain, channel=f"team:{tid}", title=name[:120])
             # Người tạo: luôn là chủ máy đã qua cổng đăng nhập của server (Javis có một tài khoản), không đọc từ client.
-            team = teams.create_team(root, name, str(body.get("description") or ""), sid, team_id=tid,
-                                     members=[(keys[s], s) for s in keys], leader_key=keys[leader] if leader else None,
-                                     client_req_id=req or None, by="owner")
+            try:
+                team = teams.create_team(root, name, str(body.get("description") or ""), sid, team_id=tid,
+                                         members=[(keys[s], s) for s in keys], leader_key=keys[leader] if leader else None,
+                                         client_req_id=req or None, by="owner")
+            except Exception:
+                # Không tạo được nhóm (kho bận quá lâu...): phiên vừa mở không gắn nhóm nào thì bỏ, không để mồ côi.
+                try:
+                    deps.session_store().delete(sid)
+                except Exception:  # noqa: BLE001
+                    pass
+                raise
             if team["team_id"] != tid:
                 # Hai yêu cầu cùng mã chạy song song: yêu cầu kia thắng, phiên vừa mở không gắn nhóm nào thì bỏ.
                 try:

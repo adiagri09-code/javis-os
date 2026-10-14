@@ -225,6 +225,51 @@ task = ts.get_task(sub["task_id"]) if sub.get("task_id") else None
 check("việc nhóm có tiêu chí: tiêu đề là đoạn đầu, nội dung giữ đủ tiêu chí",
       task and task["title"] == "Viết bài giới thiệu sản phẩm" and "dưới 300 chữ" in (task.get("intent") or ""), task)
 
+# Nhóm tạm dừng VÀ chưa có điều phối: tin thường vẫn có dòng kết cục (review 0.142.0, #5).
+r, tm, ts, ss, t, ev = world("paused-noleader", ok_engine, leader=None)
+
+if tm.get(t["team_id"])["status"] != "paused":
+    with sqlite3.connect(tm.path) as cx:
+        cx.execute("UPDATE teams SET status='paused' WHERE team_id=?", (t["team_id"],))
+sub = r.submit(t["team_id"], "Có ai không", client_msg_id="pn1")
+rp = replies(tm, t, sub["message_id"])
+check("nhóm tạm dừng, chưa có điều phối: vẫn có dòng kết cục team_paused", rp.get(TR.LEADER_SLOT, {}).get("reason") == "team_paused",
+      rp)
+
+# Lượt bị huỷ hay quá trần thời gian: tiến trình engine của ĐÚNG lượt đó bị giết trước khi khoá bận được nhả (review #2).
+from unittest.mock import patch  # noqa: E402
+killed = []
+
+
+class HangEngine:
+    async def query(self, prompt):
+        await asyncio.sleep(30)
+        yield {"type": "result"}
+
+
+with patch.object(main.cfgmod, "read_settings", return_value={"model": {"main": {"provider": "openai-oauth",
+                                                                                  "model": "gpt-6.1-sol"}}}), \
+        patch.object(main, "_team_agent_info", return_value={"slug": "one", "name": "One", "system": "S", "model": ""}), \
+        patch.object(main.aux_engine, "availability", return_value=(True, "")), \
+        patch.object(main.team_engine, "build", return_value=HangEngine()), \
+        patch.object(main.claude_cli, "cancel_all", side_effect=lambda tag=None: killed.append(tag) or 1):
+    _p, _m, fn = main._team_engine_for({"brain_id": str(BR), "team_id": "tm_abcdef123456"}, "agent-one", "leader_reply")
+
+    async def go():
+        async def started():
+            return None
+        req = {"team_id": "tm_abcdef123456", "turn_id": "tu_0123456789", "system": "S", "prompt": "P",
+               "engine_started": started}
+        try:
+            await asyncio.wait_for(fn(req), timeout=4)
+        except asyncio.TimeoutError:
+            return True
+        return False
+
+    timed_out = run(go())
+check("quá trần thời gian: giết tiến trình engine của đúng lượt (tag riêng theo lượt) rồi mới trả lỗi",
+      timed_out and killed == ["team-ef123456-0123456789"], killed)
+
 # ───────────── 5. Grok/Antigravity: model chính kèm ghi chú ─────────────
 
 MAIN = {"provider": "anthropic-cli", "model": "sonnet"}

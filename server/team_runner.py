@@ -453,7 +453,8 @@ class TeamRunner:
         targets = valid if wanted else ([team["leader_key"]] if team["leader_key"] else [])
         if team["status"] != "active":
             out["notes"].append("team_paused")
-            self._blocked_replies(team, mid, targets, "team_paused")
+            # Tin thường lúc nhóm vừa tạm dừng vừa chưa có điều phối: vẫn có dòng kết cục (chỗ của điều phối).
+            self._blocked_replies(team, mid, targets or ([] if wanted else [LEADER_SLOT]), "team_paused")
         elif targets and not any(self._daily_left_for(team, k) for k in targets):
             out["notes"].append("daily_cap")
             self._blocked_replies(team, mid, targets, "cap", "daily_turns")
@@ -541,7 +542,7 @@ class TeamRunner:
             await self._io(self._publish_replies, team_id, mid)
 
         async def waiting(holder: dict) -> None:
-            other = self.teams.get(holder.get("team_id") or "") if holder.get("team_id") else None
+            other = await self._io(self.teams.get, holder.get("team_id") or "") if holder.get("team_id") else None
             where = other["name"] if other and other["team_id"] != team_id else ""
             await self._io(self.teams.settle_reply, team_id, mid, key, "running", attempt=attempt,
                            reason="waiting_busy", detail=where)

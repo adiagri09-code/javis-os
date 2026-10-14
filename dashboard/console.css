@@ -2722,8 +2722,10 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .tm-hint { font-size: 12px; color: var(--text2); margin: 0 4px 6px; }
 .tm-hint[hidden] { display: none; }
 .tm-hint-bad { color: var(--warn-ink); }
-.tm-sug { position: absolute; bottom: 100%; left: 10px; display: flex; flex-direction: column; background: var(--surface-1);
-  border: 1px solid var(--border); border-radius: 10px; padding: 4px; z-index: 5; min-width: 200px; }
+/* Nền đặc (0.142.0): --surface-1 ở giao diện tối là lớp gần trong suốt, danh sách gợi ý đè lên tin phía sau không đọc được. */
+.tm-sug { position: absolute; bottom: 100%; left: 10px; display: flex; flex-direction: column; background: var(--bg2);
+  border: 1px solid var(--border); border-radius: 10px; padding: 4px; z-index: 5; min-width: 200px;
+  max-width: calc(100% - 20px); max-height: min(320px, 50vh); overflow-y: auto; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
 .tm-sug[hidden] { display: none; }
 .tm-sug-item { display: flex; align-items: center; gap: 8px; border: none; background: none; color: var(--text); padding: 6px 8px; text-align: left; cursor: pointer; border-radius: 8px; font: inherit; }
 .tm-sug-item:hover { background: var(--surface-2); }
@@ -2959,6 +2961,9 @@ span.tmp-lead { cursor: default; }
   body.kb-open .tmp-layer { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-h, 100dvh); }
   body.kb-open .tmp-dialog { height: 100%; }
   body.kb-open .tmp-foot { padding-bottom: 12px; }
+  /* Nút nhỏ trong chip (bỏ chọn, Điều phối, bỏ gọi): vùng chạm 44px trên điện thoại. */
+  .tmp-sel-x, .tm-call-x { min-width: 44px; min-height: 44px; }
+  .tmp-lead { min-height: 44px; }
 }
 /* Gợi ý @ (0.142.0): ảnh, tên, mã khi trùng tên, vai; mục đang chọn bằng phím có nền riêng. Hàng "Gọi:" là các token. */
 .tm-sug-item.is-active { background: var(--surface-2); outline: 2px solid var(--accent); outline-offset: -2px; }

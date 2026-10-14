@@ -10,12 +10,12 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.142.0] - 2026-10-14
 ### Fixed
-- **Team chat is no longer silent.** Assistants answer with their own model, or the main model when they have none, and are no longer blocked when the background model is ChatGPT (Codex). Each message shows who is waiting, answering, or could not answer with the reason and a **Try again** button, and it survives a reload.
+- **Team chat is no longer silent.** Assistants answer with their own model, or the main model when they have none, ChatGPT (Codex) included. Each message shows who is waiting, answering or could not answer, with the reason and a fix (**Try again**, change the model, pick a coordinator); it survives a dropped connection or a reload.
 ### Added
-- **Create a team like on a messaging app:** search assistants without accents, filter by tag, pick several at once, choose the coordinator among them; you always show as the team creator and manager. Typing @ calls the right assistant even when two share a name.
-- **Jobs tab on the Partners page** (replacing the Folder tab): every job of one assistant from teams, private chat and Auto, split into In progress, Waiting, Needs you and Done, with **Assign a job**, Open and Cancel per job.
+- **Create a team and add members like on a messaging app:** accent-free search, tag filters, a ready-made team picture, members already in the team marked "Already in the team", the coordinator picked right on the chosen people; the team reads "You + N assistants". Typing @ works with the keyboard, each person called shows as its own chip, and two assistants with the same name still get the right one.
+- **Jobs tab on the Partners page** (replacing the Folder tab): every job of one assistant from teams, private chat and Auto, filtered by source, with the next step. **Assign a job** takes done criteria, lets you choose where the result goes and shows a review before creating; you can also assign a **verification** job to another assistant.
 ### Improved
-- **Resonance is now called Auto**, with its switch right inside the assistant card and in the three-dot menu. Fixed reviewers are gone: old goals waiting for review are paused for you to check, never counted as passed.
+- **Resonance is now called Auto**, with its switch right inside the assistant card and in the three-dot menu, separate from the job badge. Fixed reviewers are gone: old goals waiting for review are paused for you to check, never counted as passed.
 
 ## [0.141.0] - 2026-10-14
 ### Improved

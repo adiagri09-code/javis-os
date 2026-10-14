@@ -125,8 +125,11 @@
       .join(", ");
   }
 
+  // Tạo nhóm cần một người điều phối trong số người đã chọn (review 0.142.0, #9): bỏ điều phối thì nút Tạo khoá cho tới
+  // khi chủ chọn lại, thay vì tạo một nhóm mà mọi tin chung đều không ai trả lời.
   function canSubmit(st) {
-    return !st.saving && (st.selected || []).length > 0;
+    if (st.saving || !(st.selected || []).length) return false;
+    return st.mode !== "create" || !!st.leader;
   }
 
   function face(a, size) {

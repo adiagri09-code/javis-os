@@ -147,3 +147,104 @@ tắt Auto không đụng việc nhóm hay Kanban.
 - Quyền "Không giới hạn lượt" cũ ghi `aux` không còn khớp lượt nào (lượt nhóm nay ghi provider thật): trần về mức của
   nhóm, tức chặt hơn.
 - Chưa merge, chưa triển khai VPS.
+
+## 6. Đối chiếu goal-claude-v2 và audit
+
+Phiên thứ hai (14/10/2026, máy Windows của chủ repo, đọc được `exports/reviews/team-chat-zalo-ux-2026-10-14/`): đối chiếu
+từng yêu cầu của `goal-claude-v2.txt`, từng phát hiện của `audit.md` và ảnh 01 tới 08 với mã trên nhánh (HEAD `f225ba1`).
+Ba agent đọc mã song song theo nhóm mục (1-3 và 7, 4-5, 6 và 8-9), mỗi mục ghi Đạt, Thiếu hay Sai kèm `file:dòng`; phần
+thiếu và sai sửa trên cùng nhánh, giữ số 0.142.0. Mục đã Đạt từ phiên trước là các mục ở phần 2 phía trên.
+
+### Bảng đối chiếu (mục Thiếu hay Sai lúc đối chiếu)
+
+| Mục goal / audit | Lúc đối chiếu | Đã sửa | Bằng chứng |
+|---|---|---|---|
+| 1. Ngữ cảnh nhóm nội bộ trong lời nhắc (không phải nhóm Zalo khách, không im theo luật chatbot, không gửi ra Zalo) | Thiếu | `INTERNAL_GROUP_NOTE` nối sau lời nhắc trợ lý trong mọi lượt nhóm | `team_runner._prepare`, `test_team_chat_0142_review.py` mục 1 |
+| 1. Tin của AI không phải lệnh mới của chủ | Thiếu | Cùng đoạn trên: chỉ tin "Chủ nhóm" là yêu cầu | như trên |
+| 1. Ghi rõ thay đổi hợp đồng T1/R3 | Thiếu ở tài liệu thiết kế | Ghi chú dưới R3 | `docs/dev/team-chat-t1.md` |
+| 1. Grok/Antigravity | Sai so với biên bản (báo lỗi thay vì model chính) | Chạy model chính, ghi chú trên tin | `team_engine.text_only_supported`, test mục 5 |
+| 2. Timeout | Thiếu: lượt treo nằm "đang trả lời" mãi | Trần `JAVIS_TEAM_TURN_TIMEOUT` (600 giây), lỗi `timeout` có Thử lại; giết đúng tiến trình engine của lượt trước khi nhả khoá bận | `team_runner._turn`, `main._team_engine_for.run` (tag theo lượt) |
+| 2. Lỗi đăng nhập, model | Sai: chung một nhãn, chỉ có Thử lại | Lý do `auth`; nút Mở trang Models, Đổi model của trợ lý | `replyActions` (`teams.js`) |
+| 2. Thiếu điều phối | Sai: tin không có dòng kết cục | Dòng `__leader__` lý do `no_leader`, nút Chọn điều phối; Thử lại giao đúng một lượt cho điều phối hiện tại | `team_runner.retry_reply`, test mục 3 |
+| 2. Hết lượt, tạm dừng, điều phối rời | Sai: chỉ Thử lại | Mở giới hạn của nhóm, Chạy lại nhóm, Chọn điều phối; nhóm tạm dừng chưa có điều phối vẫn có dòng | như trên |
+| 2. Bận việc khác | Yếu: chỉ "Đang chờ" | "Đang chờ: trợ lý đang làm việc ở nhóm X" | `_acquire(on_wait)`, test mục 4 |
+| 2. Mất WebSocket | Sai: gói lỡ không tải lại | `hello` lần hai phát `team_resync`, trang Nhóm tải lại tin, hàng việc, nhóm | `app.js`, `onTeamEvent` |
+| 3. Chọn từ gợi ý không suy lại theo tên | Sai | Lựa chọn lưu `{agent_key, label}`; token còn nguyên thì gọi đúng mã, sửa hay xoá token thì bỏ; lựa chọn mới nhất thắng | `mentionScan`, `pickMention` |
+| 3. Token riêng trong composer, xoá token là bỏ gọi | Thiếu | Hàng "Gọi:" mỗi người một thẻ có nút x (xoá đúng token, không phá token dài hơn của người khác) | `callsHtml`, `removeMention` |
+| 3. Tìm không dấu; lên/xuống, Enter, Escape; ảnh, tên, vai, slug | Sai, Thiếu | Tìm không dấu theo đầu từ bất kỳ (tên, slug, vai); listbox có `aria-activedescendant`; phím xử lý trước Escape của ngăn; bỏ qua khi đang gõ IME | `mentionMatches`, `sugKey`, `member_views.title` |
+| 3. Email không mở gợi ý | Sai một phần | `emailBefore` | `test_team_chat_0142_review.js` |
+| 4. Chip "Chưa có tag", ảnh ghép xem trước, mô tả thu gọn | Thiếu, Sai | Có | `team-picker.js` |
+| 4. Điều phối chọn ngay trên danh sách đã chọn; bỏ điều phối thể hiện rõ | Sai (select riêng, chuyển ngầm) | Nút Điều phối trên chip; bỏ thì để trống, báo rõ, khoá nút Tạo tới khi chọn lại | `normalize`, `canSubmit` |
+| 4. Chống tạo trùng phía server, ít nhất một trợ lý, một giao dịch | Thiếu | `client_req_id` (chỉ mục duy nhất theo brain), 400 khi không có trợ lý, nhóm + thành viên + điều phối trong một giao dịch, phiên mồ côi bị xoá | `team_store.create_team`, `team_api.teams_create`, test mục 6 |
+| 4. Tạo xong focus composer; đang tải, lỗi tải | Sai, Thiếu | Có | `drawComposer`, `loadRoster` |
+| 4. Thêm thành viên: "Đã tham gia", chỉ đếm người mới | Sai (ẩn người đã có) | Hiện, khoá ô chọn, "N người mới" | `team-picker.js` |
+| 5. Người tạo lấy từ phiên xác thực server; nhóm cũ migration | Thiếu | Cột `created_by` (nhóm cũ nhận `owner`), `team.creator` do server điền, client khai thì bỏ qua | `team_store`, `team_api.creator` |
+| 5. "Bạn + N trợ lý" ở đầu nhóm và danh sách thành viên | Sai | `headLine`, tiêu đề mục Thành viên | `teams.js` |
+| 5. Không bị bàn phím che (hộp chọn) | Sai trên iOS | Hộp chọn co theo `--vv-h` khi `kb-open` | `console.css` |
+| 6. Lọc nguồn, phân trang | Thiếu | Có (không còn trần ẩn việc) | `agent_jobs.collect`, `agent-jobs.js` |
+| 6. Thẻ: cập nhật gần nhất, bước cần làm | Thiếu | `updated_at`, `next` (vị trí hàng, đang chờ nhóm khác, cần bạn, bật AI tự vận hành) | như trên |
+| 6. Vai Điều phối, Thực hiện, Hỗ trợ, Kiểm chứng | Sai nhãn | Đổi | i18n `ajobs.role.*` |
+| 6. Giao việc: tiêu chí xong, nơi nhận kết quả, xác nhận | Thiếu | Có; giao vào nhóm đi đúng `runner.submit` của nhóm; tiêu đề việc nhóm lấy đoạn đầu | `main.agent_jobs_assign`, `_enqueue_for` |
+| 6. Tiếp tục, ưu tiên; Huỷ mục tiêu có revision | Thiếu | Tiếp tục (`resume` + `expected_revision`), Ưu tiên việc nhóm qua route sẵn có | `agent-jobs.js` |
+| 6. Sửa ở một nơi đồng bộ nơi khác | Thiếu | Nghe sự kiện nhóm, mục tiêu, phiên, việc; không vẽ lại khi đang gõ form hay IME | `agent-jobs.js` |
+| 7. Không mở nhiều lượt model chỉ vì nhiều việc | Thiếu ở việc giao từ Cộng sự | Kanban: một việc `agent:` đang chạy mỗi trợ lý, việc khác vẫn chạy (FIFO) | `task_store.next_candidate`, `claim` |
+| 7. Vai theo nhân dạng | Sai: tra theo slug | `_agent_persona(root, slug, agent_key)` kiểm mã | `tasks._persona` |
+| 8. Kiểm chứng là việc riêng, liên kết rõ | Thiếu | Kiểu "Kiểm chứng" trong Giao việc, bắt buộc tiêu chí, liên kết mục được kiểm, chặn tự kiểm việc của mình; nút "Giao kiểm chứng" trên thẻ | `agent_jobs.resolve_link`, `/agents/{slug}/jobs/verify-targets` |
+| 8. Test migration đủ trạng thái | Thiếu | `review_changes`, đang chạy, bị chặn lý do khác, chưa bắt đầu, thất bại | `test_review_removed_0142.py` |
+| 9. Còn chữ "Cộng hưởng", "trưởng nhóm" trên giao diện | Sai | "Auto" ở cài đặt và tin hệ thống; "trưởng nhóm" thành "điều phối" trong giao diện nhóm (vi/en) | i18n, `team_runner.py`, `index.html` |
+| 9. Đồng bộ Auto với trang Nhóm; badge việc tách Auto | Thiếu | Trang Nhóm nghe `javis:resonance-agents-changed`; huy hiệu việc (đang làm, cần bạn) riêng trên thẻ | `teams.js`, `workspace.js`, `/agents/jobs/counts` |
+| Ảnh 01 (khung chat im) | Đạt sau sửa | Smoke thật bên dưới | `smoke-0142/1366-error-row.png` |
+| Ảnh 02, 04, 07 (form phẳng; luồng Zalo) | Đạt sau sửa | | `smoke-0142/1366-picker.png`, `375-picker.png`, `1366-add-members.png` |
+| Ảnh 03, 05, 06 (thông tin nhóm Zalo) | Đạt trong phạm vi | Panel có người tạo, điều phối, thành viên, Thêm, ghim, trạng thái, quyền; link mời, bình chọn, xoá lịch sử ngoài phạm vi goal | `smoke-0142/1366-team-panel.png` |
+| Ảnh 08 (hàng "Cộng hưởng: Bật" ngoài thẻ) | Đạt | Công tắc Auto trong thẻ, cam khi bật | `smoke-0142/375-auto-on.png`, `375-menu.png` |
+
+### Review độc lập vòng 2 (phần thay đổi mới, `f225ba1..81eb61c8`)
+
+Không có lỗi chặn. Đã sửa, mỗi mục có test:
+
+| Mức | Phát hiện | Sửa |
+|---|---|---|
+| Important | Lựa chọn @ cũ giành token của lựa chọn mới ("Lan" rồi "Lan Anh") | Xét lựa chọn mới nhất trước; bỏ lựa chọn mất token khi chọn người mới |
+| Important | Quá trần thời gian chỉ huỷ phía đọc, tiến trình Codex còn sống, khoá bận đã nhả | Tag theo lượt, `cancel_all(tag)` và `aclose()` trước khi nhả khoá |
+| Important | Tab Công việc vẽ lại cả khung lúc đang gõ form | Hoãn tải lại khi form mở, ô nhập đang focus hay đang gõ IME |
+| Minor | Bỏ gọi một người phá token dài hơn của người khác | Bỏ qua chỗ mà tên người khác dài hơn cũng khớp |
+| Minor | Nhóm tạm dừng mà chưa có điều phối: tin không có dòng | Dòng `__leader__` lý do `team_paused` |
+| Minor | Đếm việc cho huy hiệu chạy cả khi đang xem Quy trình hay tab ẩn | Chỉ khi danh sách trợ lý đang hiện |
+| Minor | Đọc kho trên vòng sự kiện trong `waiting` | Đưa qua `_io` |
+| Minor | Phiên mồ côi khi tạo nhóm lỗi | Xoá phiên |
+| Minor | Tạo được nhóm không có điều phối | Khoá nút Tạo tới khi chọn |
+| Minor | Kanban từ chat riêng (không có khoá `agent:`) và lượt nhóm vẫn có thể chạy cùng lúc với việc được giao | Ghi ở hạn chế, chưa sửa |
+
+### Smoke với provider thật (sandbox cổng 7788, state và brain tạm, không Zalo, Telegram hay khách)
+
+Cấu hình như máy thật trong audit: model chính và model việc nền đều OpenAI OAuth (Codex CLI 0.160.0 trên máy),
+`gpt-6.1-sol`. Javis Vũ Zalo đặt riêng Codex `gpt-6.1-sol`, lời nhắc có luật chatbot Zalo "im lặng khi không được gọi";
+Coach không đặt model (theo model chính); hai trợ lý cùng tên One đặt Claude `haiku`.
+
+Năm lần gọi model, dừng ở đó:
+
+1. Tin thường: Javis Vũ Zalo (điều phối) trả lời sau 10 giây bằng `openai-oauth gpt-6.1-sol`, không im theo luật chatbot.
+2. @One chọn bản A bằng phím mũi tên: đúng bản A trả lời (`anthropic-cli haiku`).
+3. Giao việc ngắn cho Coach: chạy bằng model chính Codex, kết quả về nhóm, hiện ở tab Công việc ngăn Đã xong sau tải lại;
+   Mở đưa về đúng nhóm.
+4. One bản B đặt model không tồn tại: dòng "Chưa trả lời được: Model báo lỗi..." kèm câu lỗi thật, nút Đổi model và Thử
+   lại; khởi động lại server rồi tải lại trang vẫn còn.
+5. Sửa model rồi bấm đúp Thử lại: đúng một lượt mới, bản B trả lời.
+
+Không gọi model: tạo nhóm bấm đúp (một nhóm), bỏ điều phối có cảnh báo, Thêm thành viên ("Đã tham gia", "0 người mới"),
+Giao việc vào chat riêng có tiêu chí và bước xem lại (bấm đúp Xác nhận vẫn một việc; AI tự vận hành tắt nên ghi rõ chỉ nằm
+chờ), email không mở gợi ý, token Gọi bỏ được, Auto bật trên thẻ và tắt trong menu ba chấm.
+
+Số đo: 1366, 768, 375 không tràn ngang (`scrollWidth` bằng bề ngang); hộp chọn ở 375 đầy màn hình, footer 743 tới 812;
+chữ nhỏ nhất trong hộp chọn 16px; công tắc Auto 87x44. Smoke bắt thêm hai lỗi, đã sửa: danh sách gợi ý @ ở giao diện tối
+có nền gần trong suốt (`--surface-1`, lỗi có sẵn); thanh lọc theo việc đã xong hiện mã việc thay vì tên. Ảnh:
+`exports/reviews/team-chat-zalo-ux-2026-10-14/smoke-0142/`.
+
+### Hạn chế còn lại
+
+- Kanban từ chat riêng và lượt nhóm chưa chung khoá bận với việc giao từ tab Công việc; trần chung vẫn là
+  `JAVIS_KANBAN_MAX_WORKERS` và khoá bận của nhóm.
+- Việc Kanban chưa có route ưu tiên nên tab Công việc chỉ có Ưu tiên cho việc nhóm. Lần chạy quy trình (`wf:`) chưa có
+  định danh trợ lý nên chưa vào tab.
+- Ảnh nhóm chưa đổi được (ghép từ ảnh trợ lý), nên không có nút đổi ảnh. Link mời, bình chọn, nhiều tài khoản ngoài phạm vi.
+- Chưa merge, chưa triển khai VPS.

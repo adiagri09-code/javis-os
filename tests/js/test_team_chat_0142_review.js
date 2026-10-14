@@ -151,6 +151,33 @@ check("socket nối lại phát team_resync", /if \(_daChao\) \{ try \{ window\.
 check("trang Nhóm nhận team_resync: tải lại tin, hàng việc, nhóm", /d\.type === "team_resync"\)[\s\S]{0,260}loadMsgs\(false\); loadQueue\(\); loadTeam\(\);/.test(teamsJs));
 check("Auto đổi ở nơi khác: trang Nhóm đọc lại thành viên", teamsJs.includes('addEventListener("javis:resonance-agents-changed"'));
 
+// ───────────── review độc lập 0.142.0 ─────────────
+const mem2 = [
+  { agent_key: "k_lan", slug: "lan", name: "Lan", status: "active" },
+  { agent_key: "k_la", slug: "lan-anh", name: "Lan Anh", status: "active" },
+];
+sc = TM.mentionScan("@Lan Anh làm giúp", mem2, [{ key: "k_lan", label: "Lan" }, { key: "k_la", label: "Lan Anh" }]);
+check("review #1: chọn Lan rồi xoá, chọn lại Lan Anh: lựa chọn MỚI giữ token, gọi Lan Anh", sc.keys.join() === "k_la",
+  JSON.stringify(sc));
+sc = TM.mentionScan("@One 🚀 xem", mem, [{ key: "ag_one", label: "One 🚀" }, { key: "ag_one2", label: "One 🚀" }]);
+check("review #1: hai trợ lý trùng tên, chọn lại bản sau: gọi bản sau", sc.keys.join() === "ag_one2", JSON.stringify(sc));
+let rm2 = TM.removeMention("@Lan Anh và @Lan", mem2, [], "k_lan");
+check("review #4: bỏ gọi Lan không phá token '@Lan Anh' của người khác", rm2.text === "@Lan Anh và ", JSON.stringify(rm2));
+rm2 = TM.removeMention("@Lan Anh và @Lan", mem2, [], "k_la");
+check("review #4: bỏ gọi Lan Anh chỉ xoá token của Lan Anh", rm2.text === "và @Lan", JSON.stringify(rm2));
+check("review #9: bỏ điều phối thì nút Tạo nhóm khoá tới khi chọn lại",
+  !TP.canSubmit({ mode: "create", selected: ["a", "b"], leader: "", leaderDropped: true }) &&
+  TP.canSubmit({ mode: "create", selected: ["a", "b"], leader: "a" }) && TP.canSubmit({ mode: "add", selected: ["a"] }));
+const ajJs = fs.readFileSync(path.join(ROOT, "dashboard", "agent-jobs.js"), "utf8");
+check("review #3: tab Công việc không vẽ lại khi đang gõ form Giao việc hay đang dùng IME",
+  /function typing\(\)[\s\S]{0,300}st\.ui\.assignOpen \|\| !!host\._ajComposing/.test(ajJs) &&
+  /if \(typing\(\)\) \{ schedule\(\); return; \}/.test(ajJs) && ajJs.includes('addEventListener("compositionstart"'));
+const wsJs = fs.readFileSync(path.join(ROOT, "dashboard", "workspace.js"), "utf8");
+check("review #6: đếm việc chỉ khi danh sách trợ lý đang hiện và tab đang mở",
+  /function henDemViec\(\) \{[\s\S]{0,400}S\.loai !== "agent"[\s\S]{0,80}document\.hidden/.test(wsJs));
+check("lọc theo việc đã xong: thanh lọc và nhãn hiện tên việc (không hiện mã)",
+  /S\.filterTask && r\.j\.task && r\.j\.task\.id\)[\s\S]{0,200}S\.taskTitles\[r\.j\.task\.id\]/.test(teamsJs));
+
 // ───────────── i18n đủ hai thứ tiếng ─────────────
 const need = ["teams.calls", "teams.uncall", "teams.head_people", "teams.head_leader", "teams.reply.why.timeout",
   "teams.reply.why.auth", "teams.reply.why.no_leader", "teams.reply.act.models", "teams.reply.act.agent",

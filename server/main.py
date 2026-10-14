@@ -22308,12 +22308,26 @@ def _team_engine_for(team, agent_key, role):
         return eng
 
     async def run(req):
-        tag = f"team-{str(req['team_id'])[-8:]}"
+        # Tag riêng cho TỪNG lượt (0.142.0): lượt bị huỷ hay quá trần thời gian (team_runner.TURN_TIMEOUT_S) thì giết đúng
+        # tiến trình engine của lượt này TRƯỚC khi khoá bận được nhả, để Thử lại không chạy song song với một tiến trình
+        # cũ còn sống (review 0.142.0, #2).
+        tag = f"team-{str(req['team_id'])[-8:]}-{str(req.get('turn_id') or '')[-10:]}"
         eng = await asyncio.to_thread(_build, req["system"], tag)
         await req["engine_started"]()
         outcome = team_runner.TextOnlyOutcome()
-        async for ev in eng.query(req["prompt"]):
-            outcome.note(ev)
+        stream = eng.query(req["prompt"])
+        try:
+            async for ev in stream:
+                outcome.note(ev)
+        except asyncio.CancelledError:
+            try:
+                await asyncio.to_thread(claude_cli.cancel_all, tag)
+            finally:
+                try:
+                    await stream.aclose()
+                except BaseException:  # noqa: BLE001 - generator đang bị huỷ
+                    pass
+            raise
         res = outcome.result()
         slug = info.get("slug") or ""
         # JAVIS_RULE trong lượt nhóm không có chủ nói trực tiếp với agent: hạ thành bài học (như bước workflow).
