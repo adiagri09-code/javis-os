@@ -1,4 +1,4 @@
-/* Khung gõ một khối (0.148.0): mọi thứ nằm trong #hudVoice, các id cũ còn nguyên.
+/* Khung gõ một khối (0.153.0): mọi thứ nằm trong #hudVoice, các id cũ còn nguyên.
 
        node tests/js/test_khung_go.js
 */

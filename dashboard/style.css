@@ -1353,7 +1353,7 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .voice-focus-resume[hidden] { display: none; }
 .hud-voice {
   position: relative;
-  /* Một khung bo tròn kiểu Claude (0.148.0): ảnh đính kèm, ô gõ, hàng nút xếp dọc. Từng con tự
+  /* Một khung bo tròn kiểu Claude (0.153.0): ảnh đính kèm, ô gõ, hàng nút xếp dọc. Từng con tự
      giãn hết bề ngang (align-self: stretch bên dưới); flex-end giữ các con không co về giữa khi
      khung cao lên. */
   display: flex; flex-direction: column; align-items: flex-end; gap: 4px;

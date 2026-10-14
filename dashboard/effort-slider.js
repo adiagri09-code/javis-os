@@ -1,4 +1,4 @@
-/* effort-slider.js - thanh trượt mức suy nghĩ ở khung gõ (0.148.0).
+/* effort-slider.js - thanh trượt mức suy nghĩ ở khung gõ (0.153.0).
  * Phần thuần (nấc, vị trí, khoá) test bằng node; phần vẽ (canvas hạt cam) chỉ chạy trong trình duyệt.
  */
 (function () {

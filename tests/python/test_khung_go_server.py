@@ -1,4 +1,4 @@
-"""Khung gõ mới (0.148.0): khoá Fast mode trong settings và đường gắn file có sẵn trong brain.
+"""Khung gõ mới (0.153.0): khoá Fast mode trong settings và đường gắn file có sẵn trong brain.
 
     python tests/run.py khung_go_server
 """

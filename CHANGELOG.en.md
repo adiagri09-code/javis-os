@@ -8,6 +8,13 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.153.0] - 2026-10-15
+### Improved
+- **The chat composer is redesigned in the style of Claude:** one rounded card holding attachments, the text box and a single button row underneath (the **+** button, model chip, Effort chip, Fast mode bolt, a small mic and a round send button).
+- **The + button opens a menu:** attach a file or photo (Ctrl+U), attach a whole folder (skips hidden files, .git and node_modules, up to 50 files), pick a file already in the brain, commands and skills "/", **Connections** with the health of each, and **Assistants and workflows** for a quick call.
+- **Effort is now its own chip** next to the model chip, opening a six-stop slider Off, Light, Medium, High, Extra, Ultra with an orange particle effect.
+- **Fast mode bolt:** click to turn it on (an animated orange wave), click again to turn it off; hover for a cost note for the selected brain. This release stores the choice; wiring it into each engine comes next.
+
 ## [0.151.0] - 2026-10-15
 ### Improved
 - **Resizable panels:** on the graph page (folder column and chat panel) and the Chat page (conversation list), hover the edge and drag; double-click to reset. The width is remembered.

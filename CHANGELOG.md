@@ -6,6 +6,13 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.153.0] - 2026-10-15
+### Cải thiện
+- **Khung gõ chat làm lại theo kiểu Claude:** một thẻ bo tròn chứa file đính kèm, ô gõ và một hàng nút duy nhất ở dưới (nút **+**, chip model, chip Effort, tia sét Fast mode, mic nhỏ và nút gửi tròn).
+- **Nút + mở menu:** đính kèm file hoặc ảnh (Ctrl+U), đính kèm cả thư mục (bỏ qua file ẩn, .git, node_modules, tối đa 50 file), chọn file có sẵn trong brain, lệnh và skill "/", **Kết nối** kèm tình trạng từng cái, và **Trợ lý và quy trình** để gọi nhanh.
+- **Effort tách thành chip riêng** cạnh chip model, bấm mở thanh trượt sáu nấc Off, Light, Medium, High, Extra, Ultra với hiệu ứng hạt cam.
+- **Tia sét Fast mode:** bấm để bật (sóng cam chuyển động), bấm lần nữa để tắt; rê chuột xem ghi chú chi phí theo bộ não. Bản này mới lưu lựa chọn, nối vào từng engine ở bản sau.
+
 ## [0.151.0] - 2026-10-15
 ### Cải thiện
 - **Kéo đổi bề rộng khung:** ở trang đồ thị (cột thư mục và khung hội thoại) và trang Trò chuyện (cột Hội thoại), rê chuột vào đường biên rồi kéo; nhấp đúp để về mặc định. Bề rộng được nhớ cho lần sau.

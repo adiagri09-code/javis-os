@@ -3551,7 +3551,7 @@ fileInput.addEventListener("change", () => {
   fileInput.value = "";
 });
 
-// Menu "+" của khung gõ (composer-plus.js, 0.148.0) dùng chung đường tải lên và danh sách đính kèm.
+// Menu "+" của khung gõ (composer-plus.js, 0.153.0) dùng chung đường tải lên và danh sách đính kèm.
 window.JavisAttach = {
   pick: () => fileInput.click(),
   upload: (f) => uploadFile(f),

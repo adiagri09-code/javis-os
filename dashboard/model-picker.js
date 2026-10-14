@@ -12,7 +12,7 @@
   // chọn xong server lọc về "off" mà giao diện vẫn khoe đang bật.
   const EFFORT = [["off", "models.r_off"], ["low", "models.r_low"], ["medium", "models.r_med"],
                   ["high", "models.r_high"], ["xhigh", "models.r_xhigh"], ["ultra", "models.r_ultra"]];
-  // Nhãn chip mức suy nghĩ (0.148.0, tiếng Anh theo ý chủ repo): khoá đầy đủ để test i18n đọc được.
+  // Nhãn chip mức suy nghĩ (0.153.0, tiếng Anh theo ý chủ repo): khoá đầy đủ để test i18n đọc được.
   const EFF_KEY = { off: "eff.off", low: "eff.low", medium: "eff.medium", high: "eff.high", xhigh: "eff.xhigh", ultra: "eff.ultra" };
   // FAST_NOTE_BEGIN
   // Fast mode theo bộ não (nghiên cứu 15/10/2026, xem docs/superpowers/specs/2026-10-15-composer-plus-fast-mode-design.md).
@@ -129,7 +129,7 @@
     // (o.cho). Trước đây popup mở ra trống trơn trong lúc chờ (Codex mất vài giây).
     const o = {
     // Thân bảng (ô tìm + nhà + model + hàng khoá) dựng bởi model-list.js, dùng CHUNG với ô
-    // Model của trợ lý bên Studio. Mức suy nghĩ có chip và khung riêng từ 0.148.0.
+    // Model của trợ lý bên Studio. Mức suy nghĩ có chip và khung riêng từ 0.153.0.
       providers: state.providers,
       expanded, filter,
       selected: effective(),
@@ -170,7 +170,7 @@
   function close() { const pop = $("mbPop"); if (pop) pop.hidden = true; }
   function isOpen() { const pop = $("mbPop"); return pop && !pop.hidden; }
 
-  // Chip mức suy nghĩ (0.148.0): tách khỏi bảng chọn model, mở một khung nhỏ có thanh trượt.
+  // Chip mức suy nghĩ (0.153.0): tách khỏi bảng chọn model, mở một khung nhỏ có thanh trượt.
   let effSlider = null;
   function effOpen() {
     const pop = $("effPop"), btn = $("effBtn");

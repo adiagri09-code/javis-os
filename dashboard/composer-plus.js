@@ -1,4 +1,4 @@
-/* composer-plus.js - menu "+" của khung gõ (0.148.0).
+/* composer-plus.js - menu "+" của khung gõ (0.153.0).
  * Một sổ đăng ký: tính năng mới chỉ cần JavisComposerMenu.register({...}), không sửa khung gõ.
  * Phần thuần (sổ, lọc thư mục, hàng đợi) test bằng node.
  */

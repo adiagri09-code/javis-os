@@ -48,7 +48,7 @@ check(f"cp-css không gõ cứng màu (còn: {_hard})", not _hard)
 
 check("khung nhập ở tab Trò chuyện dùng đúng nền của thanh nhập màn Javis",
       ".chatpage-slot .hud-voice{ background:var(--bg2);" in CP_CSS)
-# 0.148.0: chủ repo duyệt khung gõ bo tròn hơn (18px -> 24px).
+# 0.153.0: chủ repo duyệt khung gõ bo tròn hơn (18px -> 24px).
 check("khung nhập ở tab Trò chuyện bo góc bằng bản gốc (24px)",
       re.search(r"\.chatpage-slot \.hud-voice\{[^}]*border-radius:24px", CP_CSS) is not None)
 

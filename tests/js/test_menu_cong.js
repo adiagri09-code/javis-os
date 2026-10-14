@@ -1,4 +1,4 @@
-/* Menu "+" của khung gõ (0.148.0): sổ đăng ký, lọc thư mục, hàng đợi tải lên.
+/* Menu "+" của khung gõ (0.153.0): sổ đăng ký, lọc thư mục, hàng đợi tải lên.
 
        node tests/js/test_menu_cong.js
 */

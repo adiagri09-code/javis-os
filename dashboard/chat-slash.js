@@ -250,7 +250,7 @@
     function hide() { inputSeq++; if (box) box.style.display = "none"; items = []; active = 0; }
 
     function positionBox(input) {
-      // Tu 0.148.0 o go nam trong mot khung co anh dinh kem phia tren; neo vao khung de khong che anh.
+      // Tu 0.153.0 o go nam trong mot khung co anh dinh kem phia tren; neo vao khung de khong che anh.
       var anchor = input.closest(".hud-voice") || input;
       var rect = anchor.getBoundingClientRect();
       box.style.left = rect.left + "px";

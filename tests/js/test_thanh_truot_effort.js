@@ -1,4 +1,4 @@
-/* Thanh trượt mức suy nghĩ (0.148.0): 6 nấc, nhãn tiếng Anh, model gắn sẵn mức thì khoá.
+/* Thanh trượt mức suy nghĩ (0.153.0): 6 nấc, nhãn tiếng Anh, model gắn sẵn mức thì khoá.
 
        node tests/js/test_thanh_truot_effort.js
 */

@@ -1,4 +1,4 @@
-/* Tia sét Fast mode (0.148.0): tooltip theo bộ não, nút mờ khi bộ não không có, lưu settings.model.fast.
+/* Tia sét Fast mode (0.153.0): tooltip theo bộ não, nút mờ khi bộ não không có, lưu settings.model.fast.
 
        node tests/js/test_tia_set_fast.js
 */
