@@ -3458,6 +3458,7 @@ async function uploadFile(file, att) {
     att.uploading = false; att.loi = true; att.statusText = window.t("app.att_empty");
     att.xong = Promise.resolve();
     if (moi) pendingAttachments.push(att);
+    if (att._cho) { att._cho(); att._cho = null; }
     renderChips();
     return;
   }
@@ -3465,7 +3466,9 @@ async function uploadFile(file, att) {
   // Lời hứa "tải xong" (thành hay hỏng đều xong) để sendMessage đợi được thay vì gửi thiếu.
   att.xong = new Promise(r => { _xong = r; });
   if (moi) pendingAttachments.push(att);
-  attachNote = "";
+  // Chip xếp hàng từ thư mục mang theo ghi chú (bỏ file ẩn, quá 50 file): lần tải đầu không xoá nó.
+  if (!att._hangDoi) attachNote = "";
+  att._hangDoi = false;
   renderChips();
   try {
     await _taiLen(file, att);
@@ -3473,6 +3476,8 @@ async function uploadFile(file, att) {
     att.uploading = false;
     renderChips();
     if (_xong) _xong();
+    // Lời hứa chờ của chip xếp hàng: sendMessage có thể đã bắt nó trước khi file này bắt đầu tải.
+    if (att._cho) { att._cho(); att._cho = null; }
   }
 }
 function _mb(b) { return (b / 1048576).toFixed(1).replace(/\.0$/, ""); }
@@ -3554,10 +3559,29 @@ fileInput.addEventListener("change", () => {
 // Menu "+" của khung gõ (composer-plus.js, 0.153.0) dùng chung đường tải lên và danh sách đính kèm.
 window.JavisAttach = {
   pick: () => fileInput.click(),
-  upload: (f) => uploadFile(f),
+  // Thư mục: đưa MỌI file vào danh sách ngay (đang tải, có lời hứa chờ) để gửi tin đợi đủ,
+  // rồi composer-plus tải dần 4 file một lúc bằng upload(f, att).
+  queue: (files, note) => {
+    const atts = files.map(f => {
+      const isImg = (f.type || "").startsWith("image/");
+      const att = { name: f.name || "file", kind: isImg ? "image" : "file", preview: isImg ? URL.createObjectURL(f) : null,
+        path: null, size: f.size, sources: null, attachments: null, uploading: true, loi: false,
+        statusText: window.t("app.att_uploading"), _hangDoi: true };
+      att.xong = new Promise(r => { att._cho = r; });
+      return att;
+    });
+    pendingAttachments.push(...atts);
+    attachNote = String(note || "");
+    renderChips();
+    return atts;
+  },
+  upload: (f, att) => {
+    if (att && !pendingAttachments.includes(att)) { if (att._cho) att._cho(); return Promise.resolve(); }
+    return uploadFile(f, att);
+  },
   addBrainFile: (it) => {
     if (!it || !it.path || pendingAttachments.some(a => a.path === it.path)) return;
-    pendingAttachments.push({ name: it.name, kind: it.kind || "file", preview: null, path: it.path,
+    pendingAttachments.push({ name: it.name, kind: it.kind || "file", preview: null, url: it.url || null, path: it.path,
       size: it.size || 0, sources: null, attachments: null, uploading: false, loi: false, xong: Promise.resolve() });
     renderChips();
   },

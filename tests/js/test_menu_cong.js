@@ -35,6 +35,40 @@ check("thư mục toàn file ẩn: không còn file nào", r.files.length === 0 
   }, 4);
   check("hàng đợi: tối đa 4 file cùng lúc, file hỏng không chặn file sau", max === 4 && xong.length === 9);
 
+  // Thư mục: mọi file vào danh sách đính kèm TRƯỚC khi tải file đầu (gửi không thiếu file),
+  // và dòng ghi chú (bỏ file ẩn, quá 50 file) không bị lần tải đầu xoá mất.
+  const tw = (k, v) => k + (v ? JSON.stringify(v) : "");
+  const goi = [];
+  const stub = {
+    queue: (files, note) => { goi.push(["queue", files.length, note]); return files.map((f, i) => ({ f, id: i })); },
+    upload: (f, att) => { goi.push(["upload", f.name, att && att.f === f]); return Promise.resolve(); },
+    note: (s) => goi.push(["note", s]),
+  };
+  const nhieu = []; for (let i = 0; i < 61; i++) nhieu.push(f("d/" + i + ".txt"));
+  nhieu.push(f("d/.env"), f("d/.git/HEAD"), f("d/node_modules/a.js"));
+  await P.handleFolder(nhieu, stub, tw);
+  check("thư mục: xếp hàng cả 50 file một lần, trước lần tải đầu", goi[0][0] === "queue" && goi[0][1] === 50);
+  check("thư mục: ghi chú nói rõ bỏ file ẩn và quá 50 file", /folder_skipped/.test(goi[0][2]) && /folder_over/.test(goi[0][2]));
+  const tai = goi.filter(g => g[0] === "upload");
+  check("thư mục: tải đúng 50 file, mỗi file gắn đúng chip đã xếp hàng", tai.length === 50 && tai.every(g => g[2] === true));
+  check("thư mục: không gọi note riêng làm lần tải đầu xoá ghi chú", !goi.some(g => g[0] === "note"));
+  goi.length = 0;
+  await P.handleFolder([f("d/.DS_Store")], stub, tw);
+  check("thư mục toàn file ẩn: không xếp hàng, chỉ báo", !goi.some(g => g[0] === "queue") && goi.some(g => g[0] === "note" && /folder_empty/.test(g[1])));
+
+  check("mũi tên trái trong ô tìm không thoát ô tìm", P.shouldGoBack({ key: "ArrowLeft", target: { tagName: "INPUT" } }, true) === false);
+  check("mũi tên trái trên một dòng menu con thì quay lại", P.shouldGoBack({ key: "ArrowLeft", target: { tagName: "BUTTON" } }, true) === true);
+  check("menu gốc không có nút quay lại thì không làm gì", P.shouldGoBack({ key: "ArrowLeft", target: { tagName: "BUTTON" } }, false) === false);
+
+  const anh = P.brainAttachment({ ok: true, path: "D:/b/attachments/x.jpg", name: "x.jpg", size: 9, kind: "image" }, "attachments/x.jpg", "D:/b");
+  check("ảnh chọn từ brain có url xem được (không thành 'hết hạn')", anh.url === "/files/raw?brain=" + encodeURIComponent("D:/b") + "&path=" + encodeURIComponent("attachments/x.jpg"));
+  check("file thường chọn từ brain không cần url", !P.brainAttachment({ ok: true, path: "D:/b/a.md", name: "a.md", kind: "file" }, "a.md", "D:/b").url);
+  check("app.js giữ url của file chọn từ brain", /addBrainFile[\s\S]{0,400}url: it\.url/.test(app));
+  check("app.js có JavisAttach.queue xếp hàng file trước khi tải", /window\.JavisAttach = \{[\s\S]*queue:/.test(app));
+  check("uploadFile giải lời hứa chờ của chip đã xếp hàng", app.indexOf("att._cho") !== -1);
+  check("uploadFile không xoá ghi chú của chip xếp hàng từ thư mục", /if \(!att\._hangDoi\) attachNote = ""/.test(app));
+  check("tìm file trong brain hỏng thì báo, không đóng lặng lẽ", src.indexOf('tw("cp.brain_failed")') !== -1);
+
   ["attach", "folder", "brain_file", "commands", "connections", "partners"].forEach(id =>
     check("mục mặc định có id " + id, src.indexOf('id: "' + id + '"') !== -1));
   check("Ctrl+U chặn mặc định của trình duyệt (xem mã nguồn)", /key === "u"[\s\S]{0,400}preventDefault/.test(src));

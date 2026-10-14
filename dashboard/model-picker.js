@@ -19,7 +19,8 @@
   // Claude chỉ Opus 5.5, Opus 5, Opus 4.8; model rỗng = mặc định của Claude Code (Opus) nên coi là có.
   function fastNote(provider, model) {
     const m = String(model || "").toLowerCase();
-    const opusOk = !m || /opus-(5-5|5|4-8)(?![0-9])/.test(m);
+    // Bí danh "opus" của Claude Code trỏ tới Opus 5.5 (đứng đầu danh mục, cũng là mặc định dự phòng).
+    const opusOk = !m || m === "opus" || /opus-(5-5|5|4-8)(?![0-9])/.test(m);
     if (provider === "anthropic-cli") return opusOk ? { supported: true, note: "fast.claude" } : { supported: false, note: "fast.model_none" };
     if (provider === "anthropic-api") return opusOk ? { supported: true, note: "fast.api" } : { supported: false, note: "fast.model_none" };
     if (provider === "openai-oauth") return { supported: true, note: "fast.codex" };
@@ -113,7 +114,8 @@
     const n = fastNote(eff.provider, eff.model);
     fb.setAttribute("aria-pressed", n.supported && state.fast ? "true" : "false");
     fb.setAttribute("aria-disabled", n.supported ? "false" : "true");
-    fb.title = "Fast mode\n" + window.t(n.note);
+    // Bản này chỉ lưu lựa chọn, nối vào engine ở bản sau; spec bắt tooltip nói rõ (bỏ khi nối xong).
+    fb.title = "Fast mode\n" + window.t(n.note) + (n.supported ? "\n" + window.t("fast.pending") : "");
   }
 
   // Màn cảm ứng (điện thoại, máy tính bảng): focus một ô nhập là bật bàn phím ảo.

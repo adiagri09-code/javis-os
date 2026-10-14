@@ -20,6 +20,8 @@ const cases = [
   ["openrouter", "openai/gpt-6", true, "fast.api"], ["gemini", "gemini-4-argon", true, "fast.api"],
   ["grok-cli", "", false, "fast.none"], ["antigravity-cli", "gemini-3.8-flash-high", false, "fast.none"],
   ["groq", "x", false, "fast.none"], ["deepseek", "x", false, "fast.none"], ["ollama", "x", false, "fast.none"],
+  // Bí danh "opus" của Claude Code trỏ tới Opus 5.5 (đứng đầu danh mục, là mặc định dự phòng).
+  ["anthropic-cli", "opus", true, "fast.claude"], ["anthropic-cli", "sonnet", false, "fast.model_none"],
 ];
 cases.forEach(([p, mo, sup, note]) => {
   const r = fastNote(p, mo);
@@ -28,6 +30,8 @@ cases.forEach(([p, mo, sup, note]) => {
 ["fast.claude", "fast.codex", "fast.api", "fast.none", "fast.model_none"].forEach(k =>
   check("khoá " + k + " có ở vi và en", !!vi[k] && !!en[k]));
 check("tooltip mở đầu bằng 'Fast mode', không có chữ bật/tắt hiện trên trang", src.indexOf('"Fast mode\\n" + window.t(') !== -1);
+// Spec: giữa hai bản, tia sét lưu được nhưng chưa đổi tốc độ, tooltip phải nói rõ điều đó.
+check("tooltip nói rõ mới lưu, bản sau mới có hiệu lực", src.indexOf('window.t("fast.pending")') !== -1 && !!vi["fast.pending"] && !!en["fast.pending"]);
 check("bấm tia sét lưu settings.model.fast", src.indexOf("saveModel({ fast: state.fast })") !== -1);
 check("nút mờ dùng aria-disabled, không disabled", src.indexOf('setAttribute("aria-disabled"') !== -1 && src.indexOf("fb.disabled") === -1);
 

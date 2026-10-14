@@ -40,7 +40,40 @@
     return Promise.all(lanes);
   }
 
-  var pure = { createRegistry: createRegistry, pickFolderFiles: pickFolderFiles, runQueue: runQueue, MAX_FOLDER_FILES: MAX_FOLDER_FILES };
+  // Thư mục: xếp hàng MỌI file vào danh sách đính kèm trước khi tải file đầu. Gửi tin chỉ đợi
+  // các chip đã có trong danh sách, nên chip nào chưa xếp hàng sẽ bị gửi thiếu. Ghi chú đi cùng
+  // lần xếp hàng, để lần tải đầu không xoá nó trước khi người dùng kịp đọc.
+  function handleFolder(fileList, attach, tw) {
+    var r = pickFolderFiles(fileList);
+    var notes = [];
+    if (r.skipped) notes.push(tw("cp.folder_skipped", { n: r.skipped }));
+    if (r.over) notes.push(tw("cp.folder_over", { max: MAX_FOLDER_FILES }));
+    if (!r.files.length) {
+      notes.push(tw("cp.folder_empty"));
+      if (attach) attach.note(notes.join(" "));
+      return Promise.resolve();
+    }
+    notes.push(tw("cp.folder_flat"));
+    if (!attach) return Promise.resolve();
+    var atts = attach.queue(r.files, notes.join(" "));
+    var pairs = r.files.map(function (f, i) { return [f, atts[i]]; });
+    return runQueue(pairs, function (p) { return attach.upload(p[0], p[1]); }, UPLOAD_PARALLEL);
+  }
+  // Mũi tên trái quay về menu gốc, trừ khi đang gõ trong ô tìm (lúc đó nó chỉ dời con trỏ).
+  function shouldGoBack(e, hasBack) {
+    var tag = e && e.target && e.target.tagName;
+    return !!(e && e.key === "ArrowLeft" && hasBack && tag !== "INPUT" && tag !== "TEXTAREA");
+  }
+  // File chọn từ brain: ảnh cần url /files/raw (đường tính theo trần như /files/search trả về),
+  // thiếu nó thì bong bóng vẽ thành "ảnh đã hết hạn".
+  function brainAttachment(r, rel, brainPath) {
+    var a = { path: r.path, name: r.name, size: r.size || 0, kind: r.kind || "file" };
+    if (a.kind === "image") a.url = "/files/raw?brain=" + encodeURIComponent(brainPath) + "&path=" + encodeURIComponent(rel);
+    return a;
+  }
+
+  var pure = { createRegistry: createRegistry, pickFolderFiles: pickFolderFiles, runQueue: runQueue, MAX_FOLDER_FILES: MAX_FOLDER_FILES,
+    handleFolder: handleFolder, shouldGoBack: shouldGoBack, brainAttachment: brainAttachment };
   if (typeof module !== "undefined" && module.exports) module.exports = pure;
   if (typeof document === "undefined") return;
 
@@ -199,7 +232,10 @@
           el.addEventListener("click", function () {
             var it = items[+el.getAttribute("data-file")];
             getJson("/files/resolve?brain=" + encodeURIComponent(brain()) + "&path=" + encodeURIComponent(it.path)).then(function (r) {
-              if (r && r.ok && window.JavisAttach) window.JavisAttach.addBrainFile(r);
+              if (window.JavisAttach) {
+                if (r && r.ok) window.JavisAttach.addBrainFile(brainAttachment(r, it.path, brain()));
+                else window.JavisAttach.note(tw("cp.brain_failed"));
+              }
               close(); var i2 = input(); if (i2) i2.focus();
             });
           });
@@ -211,15 +247,9 @@
 
   // ---- thư mục ----
   function onFolder(e) {
-    var r = pickFolderFiles(e.target.files);
+    var list = Array.prototype.slice.call(e.target.files || []);   // chép ra trước khi xoá value
     e.target.value = "";
-    var notes = [];
-    if (r.skipped) notes.push(tw("cp.folder_skipped", { n: r.skipped }));
-    if (r.over) notes.push(tw("cp.folder_over", { max: MAX_FOLDER_FILES }));
-    if (!r.files.length) notes.push(tw("cp.folder_empty"));
-    else notes.push(tw("cp.folder_flat"));
-    if (window.JavisAttach) window.JavisAttach.note(notes.join(" "));
-    if (r.files.length && window.JavisAttach) runQueue(r.files, function (f) { return window.JavisAttach.upload(f); }, UPLOAD_PARALLEL);
+    handleFolder(list, window.JavisAttach, tw);
   }
 
   // ---- gắn sự kiện ----
@@ -237,7 +267,7 @@
       if (e.key === "ArrowDown") { e.preventDefault(); focusRow(active + 1); }
       else if (e.key === "ArrowUp") { e.preventDefault(); focusRow(active - 1); }
       else if (e.key === "Escape") { e.preventDefault(); close(); btn.focus(); }
-      else if (e.key === "ArrowLeft" && menu.querySelector("[data-back]")) { e.preventDefault(); render(topRows()); }
+      else if (shouldGoBack(e, !!menu.querySelector("[data-back]"))) { e.preventDefault(); render(topRows()); }
     });
     document.addEventListener("click", function (e) { if (isOpen() && !menu.contains(e.target)) close(); });
     var fi = $("folderInput"); if (fi) fi.addEventListener("change", onFolder);
