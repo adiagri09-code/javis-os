@@ -371,6 +371,10 @@ class _NenTinh:
 
 
 app.add_middleware(_NenTinh, minimum_size=1024)
+# Every WebSocket handshake passes the same Origin/Host rules as HTTP writes (web_security.ws_decision).
+# The http middlewares below never see websocket scopes, and the WS routes only check a session when a
+# password is set, so without this a web page could open /ws/terminal on a default local install.
+app.add_middleware(web_security.WebSocketGuard, gate_active=lambda: cfgmod.gate_active())
 
 
 @app.middleware("http")
