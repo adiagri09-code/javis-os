@@ -224,7 +224,7 @@ st = [(s["kind"], s["status"]) for s in tm.steps(job)]
 check("#3 thêm lại đủ hai bước, việc chạy tới xong", ts.get_task(job)["status"] == "done"
       and st.count(("work", "done")) == 2, (ts.get_task(job)["status"], ts.get_task(job)["block_reason"], st))
 
-# ═════ Review tích hợp 0.138.0: lời nhắc của MỌI lượt nhóm nói rõ lượt chỉ chữ, không có công cụ ═════
+# ═════ Review tích hợp 0.140.0: lời nhắc của MỌI lượt nhóm nói rõ lượt chỉ chữ, không có công cụ ═════
 r, tm, ts, ss, fake, T = world("textonly")
 r.agent_info = lambda root, key: {"slug": key, "name": key.title(),
                                   "system": "Bạn có toàn bộ bộ công cụ của hub, làm việc trong vault."}
@@ -239,7 +239,7 @@ check("lượt trả lời và lượt làm việc đều có đoạn chỉ ch�
 check("đoạn chỉ chữ nói rõ không có công cụ và gọi công cụ làm hỏng lượt", "không có công cụ" in TR.TEXT_ONLY_NOTE
       and "hỏng" in TR.TEXT_ONLY_NOTE)
 
-# ═════ Review tích hợp 0.138.0: nhắc việc chặn quá 24 giờ chỉ một lần, kể cả khi nhóm có hơn 500 sự kiện sau đó ═════
+# ═════ Review tích hợp 0.140.0: nhắc việc chặn quá 24 giờ chỉ một lần, kể cả khi nhóm có hơn 500 sự kiện sau đó ═════
 r, tm, ts, ss, fake, T = world("remind")
 notes_sent = []
 r._notify = lambda team_id, text: notes_sent.append(text)
@@ -256,7 +256,7 @@ for i in range(300):
 check("hơn 600 sự kiện sau đó: KHÔNG nhắc lại cùng lần chặn", r.remind_blocked(later + 3600) == 0 and len(notes_sent) == 1,
       notes_sent)
 
-# ═════ Review tích hợp 0.138.0: việc nền của API nhóm được giữ tham chiếu tới khi xong (không bị dọn rác giữa chừng) ═════
+# ═════ Review tích hợp 0.140.0: việc nền của API nhóm được giữ tham chiếu tới khi xong (không bị dọn rác giữa chừng) ═════
 import team_api  # noqa: E402
 
 

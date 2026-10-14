@@ -401,7 +401,7 @@ class TeamStore:
 
     def has_reminder(self, team_id: str, task_id: str, blocked_at: float) -> bool:
         """Đã nhắc lần chặn này (`blocked_reminder` cùng việc, cùng mốc chặn) chưa. Tra thẳng trong kho, không trong đuôi sự
-        kiện của nhóm (review tích hợp 0.138.0, cùng lỗi với `cap_record`)."""
+        kiện của nhóm (review tích hợp 0.140.0, cùng lỗi với `cap_record`)."""
         with closing(self._conn()) as c:
             return c.execute("SELECT 1 FROM team_events WHERE team_id=? AND kind='blocked_reminder' "
                              "AND json_extract(after_json, '$.task_id')=? AND json_extract(after_json, '$.blocked_at')=? "

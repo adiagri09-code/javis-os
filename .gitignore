@@ -71,9 +71,11 @@ server/antigravity-duong-prompt.json
 server/usage-marks.jsonl*
 server/conversations.db
 server/conversations.db.bak-*
-# Snapshot lúc nâng nhóm chat team (0.138.0) và bản giữ lại khi khôi phục: chứa toàn bộ chat của người dùng.
+# Snapshot lúc nâng nhóm chat team (0.140.0) và bản giữ lại khi khôi phục: chứa toàn bộ chat của người dùng.
 server/conversations.db.pre-*
 server/conversations.db.post-*
+# Sổ PID tiến trình MCP stdio (dọn tiến trình mồ côi, 0.114.0): dữ liệu chạy, ghi vào thư mục state mặc định server/.
+server/mcp-stdio-pids.json
 server/md_hong_da_soi.json
 server/conversations.db-wal
 server/conversations.db-shm

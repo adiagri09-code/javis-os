@@ -86,7 +86,7 @@ class TaskStore:
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        # 0.138.0: kho có từ trước thì chụp một bản trước khi thêm cột làn `team` (khôi phục khi hạ phiên bản).
+        # 0.140.0: kho có từ trước thì chụp một bản trước khi thêm cột làn `team` (khôi phục khi hạ phiên bản).
         team_migration.snapshot_once(self.path, "tasks", "lane")
         self._lock = threading.RLock()
         self._db = sqlite3.connect(str(self.path), check_same_thread=False)
@@ -202,7 +202,7 @@ class TaskStore:
                 self._db.execute(
                     "ALTER TABLE tasks ADD COLUMN not_before REAL NOT NULL DEFAULT 0"
                 )
-            # Làn `team` (0.138.0, nhóm chat): việc nhóm là dòng `tasks` với lane='team' và trạng
+            # Làn `team` (0.140.0, nhóm chat): việc nhóm là dòng `tasks` với lane='team' và trạng
             # thái riêng `team_*`, nên next_candidate/reclaim_stale của Kanban (kể cả bản cũ khi hạ
             # phiên bản) không bao giờ nhặt. `team_prio` để null = việc thường.
             for name, decl in _TEAM_COLUMNS:

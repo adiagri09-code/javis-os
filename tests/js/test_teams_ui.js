@@ -539,7 +539,7 @@ check("thông báo kèm nút Thử lại và nút đóng, chữ được escape"
 check("4f6268bd #2 pinTeam của trang dùng pinTeamWith với setNote (vùng thông báo chung)",
       /function pinTeam\(id, on, btn\) \{\s*return pinTeamWith\(id, on, btn,/.test(teamsJs));
 
-// Review tích hợp 0.138.0: bấm thư về việc nhóm (kênh team:<id>) phải mở ĐÚNG nhóm ở trang Nhóm, không đổ vào khung chat
+// Review tích hợp 0.140.0: bấm thư về việc nhóm (kênh team:<id>) phải mở ĐÚNG nhóm ở trang Nhóm, không đổ vào khung chat
 // của bộ não chính (gõ ở đó sẽ ghi tin không tác giả vào phiên nhóm).
 const notiJs = fs.readFileSync(path.join(ROOT, "dashboard", "notifications.js"), "utf8");
 check("hộp thư nhận ra thư của nhóm (kênh team:) và mở nhóm đó ở trang Nhóm, trước nhánh mở khung chat chính",

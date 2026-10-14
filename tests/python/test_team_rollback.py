@@ -1,14 +1,14 @@
-"""Nhóm chat team T1, nhiệm vụ 8: nâng từ 0.137.0, hạ về bằng snapshot (spec 2026-10-13-team-chat-design mục 18; ca TC39).
+"""Nhóm chat team T1, nhiệm vụ 8: nâng từ 0.139.0, hạ về bằng snapshot (spec 2026-10-13-team-chat-design mục 18; ca TC39).
 
     python tests/run.py team_rollback -v
 
-Nạp `server/task_store.py` và `server/sessions.py` của commit phát hành 0.137.0 (`24cfe57c` trên main, bản cuối trước nhóm
+Nạp `server/task_store.py` và `server/sessions.py` của commit phát hành 0.139.0 (`be1f8aa2` trên main, bản cuối trước nhóm
 chat) qua `git show`:
-1. mã 0.137.0 THẬT lập kho Kanban có một việc và kho phiên có một tin;
-2. mã T1 mở hai kho: mỗi kho có đúng một snapshot `.pre-0.138.0`, chụp TRƯỚC khi thêm cột; việc và tin cũ còn nguyên;
-3. hạ KHÔNG khôi phục: mã 0.137.0 mở được hai kho, KHÔNG nhặt việc nhóm (không chạy bằng aux); phiên `team:` hiện như
+1. mã 0.139.0 THẬT lập kho Kanban có một việc và kho phiên có một tin;
+2. mã T1 mở hai kho: mỗi kho có đúng một snapshot `.pre-0.140.0`, chụp TRƯỚC khi thêm cột; việc và tin cũ còn nguyên;
+3. hạ KHÔNG khôi phục: mã 0.139.0 mở được hai kho, KHÔNG nhặt việc nhóm (không chạy bằng aux); phiên `team:` hiện như
    phiên thường (giới hạn đã công bố);
-4. công cụ khôi phục giữ bản kho hiện tại `post-0.138.0-*` rồi ghi snapshot; mã 0.137.0 mở được, không còn cột hay việc
+4. công cụ khôi phục giữ bản kho hiện tại `post-0.140.0-*` rồi ghi snapshot; mã 0.139.0 mở được, không còn cột hay việc
    nhóm;
 5. nâng lại: snapshot đã có thì không chép lại.
 Không gọi model. Máy không có lịch sử git của commit đó thì in SKIP; trên CI (biến CI) thì ĐỎ.
@@ -31,7 +31,7 @@ import team_migration as TM  # noqa: E402
 sys.path.insert(0, str(ROOT / "tools"))
 import team_chat_restore_pre as RESTORE  # noqa: E402
 
-OLD_SHA = "24cfe57c9e2b84497805752c9455b5b94353ce8e"
+OLD_SHA = "be1f8aa215395471c4640e5e8e109d44e02dc190"
 fails = []
 
 
@@ -69,7 +69,7 @@ def _load(name, src):
 
 OLD_TS = _load("task_store_0109", srcs["task_store"])
 OLD_SS = _load("sessions_0109", srcs["sessions"])
-check("nạp đúng mã 0.137.0: chưa có làn team, chưa có tin có người gửi",
+check("nạp đúng mã 0.139.0: chưa có làn team, chưa có tin có người gửi",
       not hasattr(OLD_TS.TaskStore, "enqueue_team") and not hasattr(OLD_SS.SessionStore, "append_team_message"))
 
 
@@ -82,7 +82,7 @@ state = Path(tempfile.mkdtemp(prefix="state-team-rb-"))
 kdb, sdb = state / "kanban.sqlite3", state / "conversations.db"
 B = "D:/brain"
 
-# 1. Mã 0.137.0 lập hai kho.
+# 1. Mã 0.139.0 lập hai kho.
 ot = OLD_TS.TaskStore(kdb)
 k_old = ot.enqueue(B, "Việc cũ", "Việc cũ", status="ready")
 ot.close()
@@ -95,9 +95,9 @@ os_._conn.close()
 nt = NEW_TS.TaskStore(kdb)
 ns = NEW_SS.SessionStore(db_path=sdb)
 ksnap, ssnap = kdb.with_name(kdb.name + TM.SNAPSHOT_SUFFIX), sdb.with_name(sdb.name + TM.SNAPSHOT_SUFFIX)
-check("nâng lên: kanban có snapshot .pre-0.138.0, chụp TRƯỚC khi thêm cột làn team",
+check("nâng lên: kanban có snapshot .pre-0.140.0, chụp TRƯỚC khi thêm cột làn team",
       ksnap.is_file() and "lane" not in cols(ksnap, "tasks") and "lane" in cols(kdb, "tasks"))
-check("nâng lên: kho phiên có snapshot .pre-0.138.0, chụp TRƯỚC khi thêm cột người gửi",
+check("nâng lên: kho phiên có snapshot .pre-0.140.0, chụp TRƯỚC khi thêm cột người gửi",
       ssnap.is_file() and "author_kind" not in cols(ssnap, "messages") and "author_kind" in cols(sdb, "messages"))
 check("việc cũ và tin cũ còn nguyên sau nâng", nt.get_task(k_old)["status"] == "ready"
       and [m["content"] for m in ns.get_messages(s_old)] == ["tin cũ"])
@@ -108,10 +108,10 @@ k_mtime, s_mtime = ksnap.stat().st_mtime_ns, ssnap.stat().st_mtime_ns
 nt.close()
 ns._conn.close()
 
-# 3. Hạ KHÔNG khôi phục: mã 0.137.0 trên kho đã nâng.
+# 3. Hạ KHÔNG khôi phục: mã 0.139.0 trên kho đã nâng.
 ot = OLD_TS.TaskStore(kdb)
 cand = ot.next_candidate(B)
-check("hạ không khôi phục: mã 0.137.0 mở được kho, chỉ nhặt việc Kanban, không bao giờ nhặt việc nhóm",
+check("hạ không khôi phục: mã 0.139.0 mở được kho, chỉ nhặt việc Kanban, không bao giờ nhặt việc nhóm",
       cand is not None and cand["id"] == k_old and ot.claim(tid, "w-old") is None)
 ot.reclaim_stale(B, set())
 check("hạ không khôi phục: thu hồi của mã cũ không đụng việc nhóm", ot.get_task(tid)["status"] == "team_queued")
@@ -119,15 +119,15 @@ check("hạ không khôi phục: bảng Việc của mã cũ thấy dòng team_q
       any(t["id"] == tid and t["status"] == "team_queued" for t in ot.list_tasks(B)))
 ot.close()
 os_ = OLD_SS.SessionStore(db_path=sdb)
-check("hạ không khôi phục: mã 0.137.0 đọc được tin nhóm như tin thường, phiên team: hiện như phiên thường",
+check("hạ không khôi phục: mã 0.139.0 đọc được tin nhóm như tin thường, phiên team: hiện như phiên thường",
       [m["content"] for m in os_.get_messages(team_sid)] == ["tin nhóm"]
       and team_sid in {s["id"] for s in os_.list_sessions(limit=50)})
 os_._conn.close()
 
 # 4. Công cụ khôi phục.
 r = RESTORE.restore(str(state))
-check("công cụ khôi phục: ok, giữ bản hiện tại post-0.138.0 của cả hai kho", r["ok"] and len(r["kept"]) == 2
-      and all(Path(p).is_file() for p in r["kept"]) and all(".post-0.138.0-" in p for p in r["kept"]), r)
+check("công cụ khôi phục: ok, giữ bản hiện tại post-0.140.0 của cả hai kho", r["ok"] and len(r["kept"]) == 2
+      and all(Path(p).is_file() for p in r["kept"]) and all(".post-0.140.0-" in p for p in r["kept"]), r)
 kept_k = next(Path(p) for p in r["kept"] if "kanban" in p)
 with sqlite3.connect(str(kept_k)) as c:
     kept_team = c.execute("SELECT COUNT(*) FROM tasks WHERE lane='team'").fetchone()[0]
@@ -135,7 +135,7 @@ check("bản giữ lại còn việc nhóm để tra cứu", kept_team == 1)
 check("khôi phục: không còn cột mới", "lane" not in cols(kdb, "tasks") and "author_kind" not in cols(sdb, "messages"))
 ot = OLD_TS.TaskStore(kdb)
 os_ = OLD_SS.SessionStore(db_path=sdb)
-check("khôi phục rồi chạy 0.137.0: việc cũ còn, không còn việc nhóm hay phiên nhóm", ot.get_task(k_old) is not None
+check("khôi phục rồi chạy 0.139.0: việc cũ còn, không còn việc nhóm hay phiên nhóm", ot.get_task(k_old) is not None
       and ot.get_task(tid) is None and os_.get_session(team_sid) is None
       and [m["content"] for m in os_.get_messages(s_old)] == ["tin cũ"])
 ot.close()
@@ -171,7 +171,7 @@ def fake_engine_for(team, key, role):
 
 
 def old_state(prefix):
-    """Mã 0.137.0 thật lập kho Kanban (một việc) và kho phiên (một tin)."""
+    """Mã 0.139.0 thật lập kho Kanban (một việc) và kho phiên (một tin)."""
     st = Path(tempfile.mkdtemp(prefix=prefix))
     o = OLD_TS.TaskStore(st / "kanban.sqlite3")
     kid = o.enqueue(B, "Việc cũ", "Việc cũ", status="ready")
@@ -216,7 +216,7 @@ def count(db, sql):
         return c.execute(sql).fetchone()[0]
 
 
-# R6.1 Vòng đầy đủ: 0.137.0 -> T1 có nhóm thật -> khôi phục -> 0.137.0 -> T1 lại.
+# R6.1 Vòng đầy đủ: 0.139.0 -> T1 có nhóm thật -> khôi phục -> 0.139.0 -> T1 lại.
 st, k6, s6 = old_state("state-r6-round-")
 ss, ts, tm, r = t1_world(st)
 tid6, tsid6, job6 = t1_team(ss, tm, r)
@@ -225,7 +225,7 @@ check("R6 dựng nhóm thật trên kho đã nâng: có tin trả lời và vi�
 close(ss, ts)
 res = RESTORE.restore(str(st))
 team_db = st / "team.sqlite3"
-kept_team = [Path(p) for p in res["kept"] if Path(p).name.startswith("team.sqlite3.post-0.138.0-")]
+kept_team = [Path(p) for p in res["kept"] if Path(p).name.startswith("team.sqlite3.post-0.140.0-")]
 check("R6 khôi phục cả bộ: ok, gỡ team.sqlite3 khỏi chỗ chạy, giữ bản sao của cả ba kho",
       res["ok"] and not team_db.exists() and str(team_db) in res.get("removed", []) and len(res["kept"]) == 3
       and len(kept_team) == 1, res)
@@ -235,7 +235,7 @@ check("R6 bản sao kho nhóm còn nguyên nhóm, thành viên, sổ lượt đ�
       and count(kept_team[0], "SELECT COUNT(*) FROM team_turns WHERE status='ok'") >= 2)
 ot = OLD_TS.TaskStore(st / "kanban.sqlite3")
 os_ = OLD_SS.SessionStore(db_path=st / "conversations.db")
-check("R6 sau khôi phục, mã 0.137.0: việc và tin cũ còn, không còn việc, phiên nhóm",
+check("R6 sau khôi phục, mã 0.139.0: việc và tin cũ còn, không còn việc, phiên nhóm",
       ot.get_task(k6) is not None and ot.get_task(job6) is None and os_.get_session(tsid6) is None
       and [m["content"] for m in os_.get_messages(s6)] == ["tin cũ"])
 ot.close()

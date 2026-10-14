@@ -79,7 +79,7 @@ FIXED_LIMITS = {
     "account": "Quyền của tài khoản model đang dùng",
     "technical": "Giới hạn kỹ thuật: lượt nhóm chỉ chữ, một lượt mỗi agent cùng lúc, hạn khoá bận",
 }
-# Đoạn cố định nối SAU lời nhắc của trợ lý trong MỌI lượt nhóm (review tích hợp 0.138.0): lời nhắc chung của trợ lý có
+# Đoạn cố định nối SAU lời nhắc của trợ lý trong MỌI lượt nhóm (review tích hợp 0.140.0): lời nhắc chung của trợ lý có
 # đoạn "bộ công cụ của hub", còn lượt nhóm chạy chỉ chữ (phán quyết R3) nên mọi lần gọi công cụ đều làm hỏng lượt.
 TEXT_ONLY_NOTE = ("# LƯỢT NHÓM CHỈ CHỮ\nLượt này trong nhóm chat không có công cụ nào: không đọc hay ghi file, không gọi kết "
                   "nối (MCP), không chạy lệnh, dù phần trên có nhắc tới bộ công cụ. Chỉ trả lời bằng chữ; gọi công cụ sẽ làm "

@@ -379,7 +379,7 @@ class SessionStore:
         self._lock = threading.Lock()
         self._fts_enabled = False
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        # 0.138.0: kho có từ trước thì chụp một bản trước khi thêm cột người gửi (khôi phục khi hạ phiên bản).
+        # 0.140.0: kho có từ trước thì chụp một bản trước khi thêm cột người gửi (khôi phục khi hạ phiên bản).
         team_migration.snapshot_once(self.db_path, "messages", "author_kind")
 
         self._conn = sqlite3.connect(
