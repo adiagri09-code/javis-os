@@ -8,7 +8,7 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
-## [0.122.0] - 2026-10-14
+## [0.124.0] - 2026-10-14
 ### Added
 - **Search inside a team** and a summary of older history for assistants.
 
