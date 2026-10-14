@@ -88,6 +88,19 @@ _VERDICT_RE = re.compile(
     r"|verdict|reason|missing|failed)",
     re.IGNORECASE,
 )
+NEEDS_INPUT = "[[NEEDS_INPUT]]"
+# The marker counts only where the worker is told to put it: at the START of a line (after list
+# or quote marks). Field report 14/10/2026 on 0.108.0 (job t_dbe86f05c62f): a worker that met the
+# acceptance criteria wrote the marker inside a sentence saying it was NOT needed, and the job was
+# blocked anyway, because any mention anywhere used to count.
+_NEEDS_INPUT_LINE_RE = re.compile(r"^[\s>#*_`\-•|]*" + re.escape(NEEDS_INPUT), re.MULTILINE)
+
+
+def asks_for_input(result: str) -> bool:
+    """Whether a worker result asks for a person: a line that STARTS with [[NEEDS_INPUT]]."""
+    return bool(_NEEDS_INPUT_LINE_RE.search(result or ""))
+
+
 EXECUTION_MODES = {"suggest", "auto", "full"}
 # Gom thông báo việc KẸT: chờ ngần này giây kể từ việc kẹt đầu tiên rồi mới bắn MỘT tin cho
 # cả chùm. Điều phối lấy việc ra chạy theo lô nên việc kẹt hay kẹt thành chùm trong cùng một
@@ -851,7 +864,7 @@ nói rõ đã được phép tự hành động; nếu không thì để auto đ
             return (
                 result,
                 error,
-                "[[NEEDS_INPUT]]" in (result or ""),
+                asks_for_input(result),
                 {"route": route, "capability": task.get("capability")},
             )
 
@@ -886,7 +899,7 @@ gì, dữ liệu/file/artifact nào được tạo và cách đã kiểm chứng
         return (
             result[:MAX_RESULT_CHARS],
             error,
-            "[[NEEDS_INPUT]]" in result,
+            asks_for_input(result),
             {
                 "route": route,
                 "capability": task.get("capability"),
@@ -1003,7 +1016,7 @@ gì, dữ liệu/file/artifact nào được tạo và cách đã kiểm chứng
 
         raw = (result or "").splitlines()
         for ln in raw:
-            if "[[NEEDS_INPUT]]" in ln:
+            if asks_for_input(ln):
                 same = _clean(ln)
                 if len(same) > 8:
                     return same[:200]
