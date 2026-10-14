@@ -644,4 +644,20 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             return {"ok": True, "team": api.view(api.teams().get(team_id))}
         return await api.io(_do)
 
+    # ───────────── Lịch sử dài (T4, spec 19) ─────────────
+
+    @app.get("/teams/{team_id}/search")
+    async def teams_search(team_id: str, q: str = "", limit: int = 50, brain: str = "brain"):
+        """Tìm tin trong CHÍNH nhóm này: không phân biệt hoa thường và dấu, mới nhất trước, có đoạn trích."""
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            try:
+                results = api.runner().search(team_id, q, max(1, min(int(limit), 200)))
+            except TeamError as ex:
+                return _team_err(ex)
+            return {"ok": True, "results": results}
+        return await api.io(_do)
+
     return api

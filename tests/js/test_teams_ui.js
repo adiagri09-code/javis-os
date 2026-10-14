@@ -242,6 +242,33 @@ check("tab Thành viên có công tắc Nhóm quản lý theo trạng thái", (m
       && /data-key="ag_minh" checked/.test(mh3) && mh3.includes(vi["teams.managed"]), mh3);
 check("review T3 #6: Toàn quyền bật thì form trần báo trần lấy theo mục Toàn quyền; giới hạn thì không",
       TM.settingsFormHtml(fullTeam).includes(vi["teams.caps_full_note"]) && !TM.settingsFormHtml(limitedTeam).includes(vi["teams.caps_full_note"]));
+// ───────────── T4: tìm trong nhóm, nhảy tới tin cũ ─────────────
+const hits = [{ id: 41, ts: 100.5, author_kind: "agent", author_ref: "ag_lan", snippet: "Kế hoạch <script>" },
+  { id: 12, ts: 50, author_kind: "owner", author_ref: "", snippet: "Ra mắt" }];
+const sh = TM.searchResultsHtml(hits, members, "ke hoach");
+check("kết quả tìm: đếm, người gửi, đoạn trích escape, nút nhảy kèm id và ts",
+      sh.includes(vi["teams.search_results"].replace("{n}", "2")) && sh.includes("Lan") && sh.includes("Kế hoạch &lt;script&gt;")
+      && !sh.includes("<script>") && /data-jump="41" data-ts="100.5"/.test(sh), sh);
+check("không có kết quả: nói rõ câu đã tìm, escape", TM.searchResultsHtml([], members, "<b>x").includes("&lt;b&gt;x")
+      && TM.searchResultsHtml(null, members, "") === "");
+check("tin được nhảy tới được tô sáng", TM.messageHtml(am, { members: members, jumped: 7 }).includes("tm-msg-hit")
+      && !TM.messageHtml(am, { members: members, jumped: 8 }).includes("tm-msg-hit"));
+check("nhảy tới tin: tải trang kết thúc ở đúng tin đó, có nút về tin mới nhất",
+      /before_ts=" \+ q\(ts\) \+ "&before_id=" \+ q\(Number\(mid\) \+ 1\)/.test(teamsJs) && teamsJs.includes("tm-jump-back"));
+check("đang xem tin cũ: tin mới tới không chèn vào giữa khúc cũ",
+      teamsJs.includes("else if (S.jumped === null || S.jumped === undefined) S.msgs.push(nm);"));
+check("CSS: lớp flex mới của tìm có [hidden], vùng chạm 44px trên điện thoại",
+      /\.tm-search\[hidden\]/.test(css) && /\.tm-search-row\[hidden\]/.test(css) && /\.tm-jumped\[hidden\]/.test(css)
+      && /\.tm-search-btn, \.tm-search-go, \.tm-search-input, \.tm-search-hit, \.tm-jump-back \{ min-height: 44px; \}/.test(css));
+// Review T4
+check("review #1: tải lại trang tin mới nhất (gửi tin, lọc việc) thì thoát chế độ xem tin cũ",
+      /function loadMsgs\(older\) \{[\s\S]{0,200}if \(!older\) S\.jumped = null;/.test(teamsJs));
+check("review #5: mở form tạo nhóm thì đóng ô tìm", /tm-new"\)\) \{[\s\S]{0,160}S\.searchOpen = false/.test(teamsJs));
+check("review #6: băng xem tin cũ dính ở đầu khung", /\.tm-jumped \{[^}]*position: sticky; top: 0;/.test(css));
+check("review #7: nút tìm đủ 44px bề ngang trên điện thoại", /\.tm-back, \.tm-close, \.tm-search-btn \{ min-width: 44px;/.test(css));
+check("review #8: kết quả tìm, nhảy tới về muộn sau khi đổi nhóm thì bỏ",
+      /var forTeam = S\.activeId;[\s\S]{0,200}if \(S\.activeId !== forTeam\) return;/.test(teamsJs)
+      && (teamsJs.match(/if \(S\.activeId !== forTeam\) return;/g) || []).length >= 2);
 const authKeys = ["teams.cap.help_depth", "teams.auth.provider_aux", "teams.auth.provider_claude", "teams.auth.billing_sub",
   "teams.auth.billing_api", "teams.auth.fixed_server", "teams.auth.fixed_provider", "teams.auth.fixed_account",
   "teams.auth.fixed_technical"];

@@ -659,6 +659,52 @@ class SessionStore:
                           (session_id, int(message_id)))
         return self._team_msg(rows[0]) if rows else None
 
+    def team_message_count(self, session_id: str) -> int:
+        """Số tin của một phiên nhóm (khối tóm tắt phần cũ, T4)."""
+        rows = self._read("SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,))
+        return int(rows[0][0] or 0) if rows else 0
+
+    @staticmethod
+    def fold_text(text: str) -> str:
+        """Chữ để so khi tìm: bỏ dấu tiếng Việt (cả đ), không phân biệt hoa thường. "Việt" khớp "viet", "VIỆT"."""
+        import unicodedata
+        s = unicodedata.normalize("NFD", str(text or ""))
+        s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+        return s.replace("đ", "d").replace("Đ", "D").casefold()
+
+    def team_search(self, session_id: str, query: str, limit: int = 50, scan_max: int = 20000,
+                    batch: int = 2000) -> List[Dict[str, Any]]:
+        """Tìm trong MỘT phiên nhóm (T4, spec mục 19): khớp mọi từ của câu tìm, không phân biệt hoa thường và dấu, mới
+        nhất trước, tối đa `limit` kết quả. Lọc ở Python vì LIKE của SQLite chỉ bỏ hoa thường cho chữ ASCII.
+
+        Đọc theo LÔ nhỏ (chỉ id và nội dung) từ mới về cũ, dừng khi đủ kết quả hay đã quét `scan_max` tin: mỗi lần đọc
+        chỉ giữ khoá chung của kho phiên một chút, không chặn các phiên chat khác (review T4). Tin đầy đủ chỉ đọc cho
+        những tin khớp."""
+        words = [w for w in self.fold_text(query).split() if w]
+        if not words:
+            return []
+        want = max(1, min(int(limit), 200))
+        hits: List[int] = []
+        cursor, scanned = None, 0
+        while len(hits) < want and scanned < scan_max:
+            n = max(1, min(int(batch), int(scan_max) - scanned))
+            if cursor is None:
+                rows = self._read("SELECT id, content FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+                                  (session_id, n))
+            else:
+                rows = self._read("SELECT id, content FROM messages WHERE session_id = ? AND id < ? "
+                                  "ORDER BY id DESC LIMIT ?", (session_id, cursor, n))
+            if not rows:
+                break
+            for r in rows:
+                if all(w in self.fold_text(r[1] or "") for w in words):
+                    hits.append(int(r[0]))
+                    if len(hits) >= want:
+                        break
+            scanned += len(rows)
+            cursor = int(rows[-1][0])
+        return [m for m in (self.team_message(session_id, i) for i in hits) if m]
+
     def last_message_id_by(self, session_id: str, author_ref: str) -> int:
         """Mã tin mới nhất do `author_ref` (agent_key) viết trong phiên nhóm; 0 nếu chưa có. Khối ngữ cảnh nhóm lấy tin
         mới kể từ đây (spec 11.2)."""
