@@ -6,6 +6,11 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.122.0] - 2026-10-14
+### Bảo mật
+- **Công cụ mở file không còn chạy file chương trình.** Lệnh mở file trên máy chạy Javis giờ từ chối file chạy được (script, chương trình, lối tắt). Mở app theo tên vẫn như cũ.
+- **File phiên đăng nhập chỉ chủ máy đọc được**, giống khoá bí mật và token của hub.
+
 ## [0.119.0] - 2026-10-14
 ### Sửa lỗi
 - **Công cụ không còn chạy nhầm brain khi phiên ghi tên brain kiểu viết tắt.** Một số phiên chat lưu brain là "brain" (brain mặc định) thay vì đường dẫn đầy đủ, nên công cụ qua MCP Hub không xác định được brain, hoặc có lúc rơi vào một thư mục không phải brain. Giờ chúng về đúng brain. Cảm ơn @dev23072005 đã báo lỗi.
