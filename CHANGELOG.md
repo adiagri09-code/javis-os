@@ -6,6 +6,14 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.140.0] - 2026-10-14
+### Thêm mới
+- **Trang Nhóm: nhiều trợ lý trong một khung chat**, như nhóm Zalo. Nhắn chung thì trưởng nhóm trả lời, gõ @ để hỏi riêng một người. Bật **Giao việc** thì trưởng nhóm chia việc cho cả nhóm, tiến độ và kết quả hiện ngay trong chat.
+- **Việc của nhóm có hàng chờ** với Ưu tiên, Sửa yêu cầu, Huỷ. Việc bị chặn có sẵn một nút giải quyết như **Cho thêm lượt** hay **Thử lại**. Bạn chọn trưởng nhóm được tự quyết đến đâu: Hỏi tôi trước, Tự làm báo tôi, hoặc Tự quản cả nhóm.
+- **Thả cảm xúc và góp ý** cho câu trả lời để trợ lý rút kinh nghiệm ở lượt sau. **Tìm tin cũ** trong nhóm không cần gõ dấu. Ảnh nhóm ghép từ ảnh thật của các trợ lý, và có thể **ghim nhóm** lên đầu danh sách (trên điện thoại thì nhấn giữ).
+### Cải thiện
+- **Bật, tắt Cộng hưởng ngay trên danh sách trợ lý** ở trang Cộng sự. Công tắc chỉ đổi khi máy chủ xác nhận.
+
 ## [0.139.0] - 2026-10-14
 ### Sửa lỗi
 - **Gửi file Excel, PDF, Word qua Zalo không còn treo.** Trước đây Javis gửi file kiểu này phải chờ mãi tới 2 phút rồi báo lỗi, file không tới (ảnh thì vẫn gửi được). Giờ file đi qua đúng kết nối Zalo đang trực Hộp thư nên tới được người nhận.

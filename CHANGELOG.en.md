@@ -8,6 +8,14 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.140.0] - 2026-10-14
+### Added
+- **Teams page: several assistants in one chat**, like a group on a messaging app. Write to the team and the lead answers; type @ to ask one person. Turn on **Assign job** and the lead splits the work across the team, with progress and results right in the chat.
+- **Team jobs have a queue** with Prioritize, Edit request and Cancel. A blocked job comes with one button that resolves it, such as **Allow more turns** or **Try again**. You choose how much the lead decides alone: Ask me first, Act then tell me, or Run the whole team.
+- **React and leave feedback** on answers so assistants adjust on the next turn. **Search old messages** in a team without typing accents. A team's picture is built from its assistants' real avatars, and you can **pin a team** to the top of the list (press and hold on a phone).
+### Improved
+- **Turn Resonance on or off right from the assistant list** on the Partners page. The switch only changes once the server confirms.
+
 ## [0.139.0] - 2026-10-14
 ### Fixed
 - **Sending Excel, PDF and Word files on Zalo no longer hangs.** Javis used to wait up to 2 minutes on such a file, then fail without delivering it (images went fine). Files now go through the Zalo connection that serves the inbox, so they reach the recipient.

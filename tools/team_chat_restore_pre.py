@@ -1,17 +1,17 @@
-"""Hạ nhóm chat team về bản trước 0.111.0 bằng snapshot lúc nâng (spec 2026-10-13-team-chat-design mục 18).
+"""Hạ nhóm chat team về bản trước 0.138.0 bằng snapshot lúc nâng (spec 2026-10-13-team-chat-design mục 18).
 
     python tools/team_chat_restore_pre.py --yes
     python tools/team_chat_restore_pre.py --state-dir /duong/dan/state --yes
 
 CHẠY KHI JAVIS ĐÃ TẮT. Khôi phục CẢ BỘ ba kho liên quan, nhất quán với nhau (review T1, R6):
-- `kanban.sqlite3`, `conversations.db`: về snapshot `<tên>.pre-0.111.0` mà mã 0.111.0 tạo một lần lúc nâng.
-- `team.sqlite3`: trước 0.111.0 không có kho này, nên trạng thái trước nâng là KHÔNG CÓ. Kho được cất sang bên (bản sao
+- `kanban.sqlite3`, `conversations.db`: về snapshot `<tên>.pre-0.138.0` mà mã 0.138.0 tạo một lần lúc nâng.
+- `team.sqlite3`: trước 0.138.0 không có kho này, nên trạng thái trước nâng là KHÔNG CÓ. Kho được cất sang bên (bản sao
   bằng chứng) rồi gỡ khỏi chỗ chạy. Nhờ vậy nâng lại lần sau không có nhóm nào trỏ vào phiên đã mất.
 
 Thứ tự, để không bao giờ báo thành công cho một lần khôi phục dở:
 1. Kiểm trước điều kiện của cả bộ, chưa ghi gì: kho nào đã được nâng (có cột mới) thì PHẢI có snapshot hợp lệ (snapshot
    chưa có cột mới). Thiếu hay hỏng một snapshot là dừng, không đụng kho nào.
-2. Chép MỌI kho hiện tại sang `<tên>.post-0.111.0-<thời điểm>` bằng SQLite backup API (lấy cả phần còn trong WAL): hồ sơ
+2. Chép MỌI kho hiện tại sang `<tên>.post-0.138.0-<thời điểm>` bằng SQLite backup API (lấy cả phần còn trong WAL): hồ sơ
    sau nâng (việc nhóm, tin nhóm, nhóm, sổ lượt) giữ nguyên để đọc lại.
 3. Gỡ `team.sqlite3` (cùng file -wal, -shm) khỏi chỗ chạy.
 4. Ghi đè từng kho bằng snapshot. Một bước hỏng thì trả MỌI kho có thể đã bị đụng về đúng bản ở bước 2 (kho vốn không
@@ -19,8 +19,8 @@ Thứ tự, để không bao giờ báo thành công cho một lần khôi phụ
    ghi, không phải sau khi ghi xong (review T1 R9): lỗi sau khi backup đã commit (checkpoint, đóng kết nối) vẫn được trả
    về. Trả về không được thì báo rõ kho nào và bản sao nào để cứu tay; không bao giờ nói đã trả về khi chưa.
 
-Mất khỏi kho chạy: mọi việc Kanban, tin chat và nhóm sau lúc nâng. Giữ: các bản `.post-0.111.0-<thời điểm>` cạnh file
-kho, và snapshot `.pre-0.111.0` (nâng lại dùng lại đúng snapshot này, không chụp đè). Hạ KHÔNG khôi phục vẫn chạy được:
+Mất khỏi kho chạy: mọi việc Kanban, tin chat và nhóm sau lúc nâng. Giữ: các bản `.post-0.138.0-<thời điểm>` cạnh file
+kho, và snapshot `.pre-0.138.0` (nâng lại dùng lại đúng snapshot này, không chụp đè). Hạ KHÔNG khôi phục vẫn chạy được:
 mã cũ không nhặt việc nhóm, nhưng trang Việc hiện các dòng `team_*` với trạng thái lạ và phiên `team:` hiện như phiên
 thường.
 """
@@ -35,9 +35,9 @@ from contextlib import closing
 from pathlib import Path
 from typing import Optional
 
-SNAPSHOT_SUFFIX = ".pre-0.111.0"
-POST_TAG = ".post-0.111.0-"
-# (file kho, bảng, cột chỉ có từ 0.111.0): kiểm kho đã nâng và snapshot đúng là bản trước nâng.
+SNAPSHOT_SUFFIX = ".pre-0.138.0"
+POST_TAG = ".post-0.138.0-"
+# (file kho, bảng, cột chỉ có từ 0.138.0): kiểm kho đã nâng và snapshot đúng là bản trước nâng.
 STORES = (("kanban.sqlite3", "tasks", "lane"), ("conversations.db", "messages", "author_kind"))
 TEAM_STORE = "team.sqlite3"
 
@@ -78,20 +78,20 @@ def plan(state_dir: str) -> dict:
                 problems.append(f"snapshot {snap.name} hỏng: {ex}")
                 continue
             if marker in snap_cols:
-                problems.append(f"{snap.name} đã có cột {marker}; không phải bản trước 0.111.0")
+                problems.append(f"{snap.name} đã có cột {marker}; không phải bản trước 0.138.0")
                 continue
             if not snap_cols:
                 problems.append(f"{snap.name} không có bảng {table}")
                 continue
             todo.append((store, snap))
         elif upgraded:
-            problems.append(f"{name} đã được 0.111.0 nâng mà thiếu snapshot {snap.name}")
+            problems.append(f"{name} đã được 0.138.0 nâng mà thiếu snapshot {snap.name}")
     team = root / TEAM_STORE
     if problems:
         return {"ok": False, "todo": [], "team": None, "error": "; ".join(problems)}
     if not todo:
         return {"ok": False, "todo": [], "team": None,
-                "error": "không có snapshot .pre-0.111.0: kho chưa từng được 0.111.0 nâng lên, không có gì để khôi phục"}
+                "error": "không có snapshot .pre-0.138.0: kho chưa từng được 0.138.0 nâng lên, không có gì để khôi phục"}
     return {"ok": True, "todo": todo, "team": team if team.is_file() else None, "error": ""}
 
 
@@ -117,7 +117,7 @@ def _put_back(store: Path, copy: Optional[Path]) -> str:
 
 
 def restore(state_dir: str, *, _fail_on: str = "") -> dict:
-    """Khôi phục cả bộ kho trong `state_dir` về trước 0.111.0. Trả {ok, restored, kept, removed, error} và, khi trả về
+    """Khôi phục cả bộ kho trong `state_dir` về trước 0.138.0. Trả {ok, restored, kept, removed, error} và, khi trả về
     không trọn, `unrecoverable` [{store, copy, reason}].
 
     `_fail_on` (chỉ cho test): tên kho mà bước ghi đè giả lập hỏng TRƯỚC khi ghi."""
@@ -173,7 +173,7 @@ def restore(state_dir: str, *, _fail_on: str = "") -> dict:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="Khôi phục kho Kanban, kho phiên và kho nhóm về trước 0.111.0 "
+    ap = argparse.ArgumentParser(description="Khôi phục kho Kanban, kho phiên và kho nhóm về trước 0.138.0 "
                                              "(chạy khi Javis đã tắt).")
     ap.add_argument("--state-dir", default=os.environ.get("JAVIS_STATE_DIR", ""),
                     help="thư mục state của Javis (mặc định JAVIS_STATE_DIR)")
@@ -183,7 +183,7 @@ def main(argv=None) -> int:
         print("Thiếu --state-dir (hay biến JAVIS_STATE_DIR).", file=sys.stderr)
         return 2
     if not a.yes:
-        print("Tắt Javis trước, rồi chạy lại với --yes. Việc Kanban, tin chat và nhóm sau lúc nâng lên 0.111.0 sẽ không "
+        print("Tắt Javis trước, rồi chạy lại với --yes. Việc Kanban, tin chat và nhóm sau lúc nâng lên 0.138.0 sẽ không "
               "còn trong kho chạy; bản sao các kho hiện tại được giữ cạnh file kho.", file=sys.stderr)
         return 2
     res = restore(a.state_dir)

@@ -69,7 +69,7 @@ ALIASES = {
     # Id trang số nhiều cũ (trước 0.59.0) - prompt/bookmark cũ gọi thẳng "agents"/"workflows"
     # vẫn phải ra đúng trang, không chỉ id chuẩn "workspace".
     "agents": "workspace", "workflows": "workspace",
-    # Trang Nhóm (nhóm chat team, 0.111.0): thanh bên gọi là "Nhóm".
+    # Trang Nhóm (nhóm chat team, 0.138.0): thanh bên gọi là "Nhóm".
     "nhom": "teams", "nhom chat": "teams", "team": "teams", "teams": "teams", "nhom tro ly": "teams",
 }
 

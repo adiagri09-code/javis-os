@@ -3,7 +3,7 @@
     python tests/run.py team_t1_review -v
 
 Đi qua factory THẬT `main._team_engine_for` (chỉ thay `_resonance_engine` bằng engine giả có `query`) và kho SQLite thật
-trong thư mục tạm; không gọi model. R6 (hạ, nâng cả bộ kho) nằm ở test_team_rollback.py vì cần mã 0.109.0 thật.
+trong thư mục tạm; không gọi model. R6 (hạ, nâng cả bộ kho) nằm ở test_team_rollback.py vì cần mã 0.137.0 thật.
 Mỗi nhóm có đối chứng hợp lệ: đường đúng vẫn ra "done", bài học hợp lệ vẫn được ghi, v.v.
 """
 from _paths import ROOT, SERVER  # noqa: E402,F401
@@ -975,7 +975,7 @@ def section_r9():
         return out
 
     def posts(d):
-        return sorted(p.name.split(".post-")[0] for p in d.iterdir() if ".post-0.111.0-" in p.name)
+        return sorted(p.name.split(".post-")[0] for p in d.iterdir() if ".post-0.138.0-" in p.name)
 
     original = RT._backup
 
@@ -1030,7 +1030,7 @@ def section_r9():
     d = fixture("unrecoverable")
 
     def broken(src, dst):
-        if ".post-0.111.0-" in src.name and dst.name == "conversations.db":
+        if ".post-0.138.0-" in src.name and dst.name == "conversations.db":
             raise OSError("không đọc được bản sao")
         original(src, dst)
         if src.name == "conversations.db" + RT.SNAPSHOT_SUFFIX:
