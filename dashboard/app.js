@@ -1601,7 +1601,7 @@ function sendMessage(text, opts) {
   let outMsg = _isSkill ? _slash.message : _than;
   if (atts.length) {
     const lines = atts.map(a => `- ${a.path}`).join("\n");
-    const src = atts[0].sources || "", attDir = atts[0].attachments || "";
+    const src = (atts.find(a => a.sources) || {}).sources || "", attDir = (atts.find(a => a.attachments) || {}).attachments || "";
     if (_isSkill) {
       // Với lệnh skill (vd /notes): đưa path như dữ liệu, để chính skill quyết định lưu.
       outMsg = `[File đính kèm (đường dẫn), Sources="${src}", Attachments="${attDir}":\n${lines}]\n\n${_slash.message}`;
@@ -3544,7 +3544,8 @@ function taiLaiDinhKem(i) {
   uploadFile(a.file, a);
 }
 
-document.getElementById("attachBtn").addEventListener("click", () => fileInput.click());
+const attachBtn = document.getElementById("attachBtn");
+if (attachBtn) attachBtn.addEventListener("click", () => fileInput.click());
 fileInput.addEventListener("change", () => {
   [...fileInput.files].forEach(f => uploadFile(f));
   fileInput.value = "";

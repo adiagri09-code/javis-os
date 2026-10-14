@@ -1353,85 +1353,111 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .voice-focus-resume[hidden] { display: none; }
 .hud-voice {
   position: relative;
-  /* flex-end chứ không center: ô nhập LỚN DẦN theo chữ (kiểu claude.ai), các nút mic/gửi
-     phải neo ở đáy thay vì trôi lơ lửng giữa một ô nhập cao. */
-  display: flex; align-items: flex-end; gap: 12px;
-  margin: 4px 16px 16px; padding: 8px 12px;
-  border: 1px solid var(--border); border-radius: 18px; background: var(--bg2);
+  /* Một khung bo tròn kiểu Claude (0.148.0): ảnh đính kèm, ô gõ, hàng nút xếp dọc. Từng con tự
+     giãn hết bề ngang (align-self: stretch bên dưới); flex-end giữ các con không co về giữa khi
+     khung cao lên. */
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  margin: 4px 16px 16px; padding: 10px 12px 8px;
+  border: 1px solid var(--border); border-radius: 24px; background: var(--bg2);
+  transition: border-color .15s;
+}
+.hud-voice > * { align-self: stretch; }
+.hud-voice:focus-within { border-color: var(--accent-line); }
+/* Dải đính kèm nằm trong khung: bỏ lề ngang 20px của bản dải full-width. Viết .has-items.attach-bar
+   (không phải .attach-bar.has-items) để khối gốc bên dưới vẫn là khối đầu tiên mang tên đó. */
+.hud-voice .attach-bar { padding: 0 2px; }
+.hud-voice .has-items.attach-bar { padding: 2px 2px 6px; }
+.model-bar:empty { display: none; }
+.cp-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cp-chips { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 1 auto; }
+.cp-gap { flex: 1 1 auto; }
+.cp-plus, .cp-fast {
+  flex: none; width: 32px; height: 32px; border-radius: 50%; padding: 0;
+  border: 1px solid var(--border); background: transparent; color: var(--text2);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.cp-plus:hover, .cp-plus[aria-expanded="true"], .cp-fast:hover { border-color: var(--accent); color: var(--accent); }
+.cp-plus:focus-visible, .cp-fast:focus-visible, .cp-eff:focus-visible, .mic-big:focus-visible,
+.send-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cp-eff {
+  flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+  padding: 4px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg3);
+  color: var(--accent-ink); font-family: var(--font); font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.cp-eff:hover, .cp-eff[aria-expanded="true"] { border-color: var(--accent); }
+/* Tia sét Fast mode: tắt thì đứng yên, bật thì nền cam có dải sáng chạy ngang và tia sét đập nhẹ. */
+.cp-fast[aria-pressed="true"] {
+  color: var(--on-accent); border-color: var(--accent);
+  background: linear-gradient(110deg, var(--accent) 0%, var(--accent-ink) 25%, var(--accent) 50%, var(--accent-solid) 75%, var(--accent) 100%);
+  background-size: 250% 100%; animation: fastWave 1.6s linear infinite;
+}
+.cp-fast[aria-pressed="true"] svg { animation: fastZap 1.6s ease-in-out infinite; }
+.cp-fast[aria-disabled="true"] { opacity: .45; cursor: help; }
+@keyframes fastWave { to { background-position: -250% 0; } }
+@keyframes fastZap { 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) {
+  .cp-fast[aria-pressed="true"], .cp-fast[aria-pressed="true"] svg { animation: none; }
 }
 .mic-big {
-  background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
-  width: 46px; height: 46px; border-radius: 50%; cursor: pointer; flex-shrink: 0;
+  background: transparent; border: 1px solid transparent; color: var(--text2);
+  width: 34px; height: 34px; border-radius: 50%; cursor: pointer; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; transition: all 0.2s;
 }
 .mic-big:hover { border-color: var(--accent); color: var(--accent); }
 .mic-big.recording {
   border-color: var(--red); color: var(--red);
-  box-shadow: 0 0 0 4px var(--danger-wash); animation: micpulse 1.2s ease-in-out infinite;
+  box-shadow: 0 0 0 3px var(--danger-wash); animation: micpulse 1.2s ease-in-out infinite;
 }
-@keyframes micpulse { 50% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } }
+@keyframes micpulse { 50% { box-shadow: 0 0 0 6px rgba(239,68,68,0); } }
 .mic-big.focus-waiting { animation: none; opacity: .65; }
 /* Hands-free: luôn nghe - vòng cam cố định */
 .mic-big.handsfree {
   border-color: var(--accent); color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-line), 0 0 18px rgba(255,107,43,0.35);
+  box-shadow: 0 0 0 2px var(--accent-line), 0 0 10px rgba(255,107,43,0.35);
 }
 .mic-big.handsfree.recording {
   border-color: var(--accent); color: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-line);
   animation: micpulse-hf 1.2s ease-in-out infinite;
 }
-@keyframes micpulse-hf { 50% { box-shadow: 0 0 0 11px rgba(255,107,43,0); } }
+@keyframes micpulse-hf { 50% { box-shadow: 0 0 0 7px rgba(255,107,43,0); } }
 .voice-input {
-  flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
-  color: var(--text); font-size: 16px; padding: 11px 14px; resize: none; outline: none;
+  flex: none; background: transparent; border: none; border-radius: 0;
+  color: var(--text); font-size: 16px; padding: 6px 6px 8px; resize: none; outline: none;
   /* max-height 45vh chỉ là lưới đỡ - chiều cao thật do app.js đặt theo scrollHeight
      (nở theo chữ, xuống dòng là thấy toàn bộ văn bản). Trần cũ 90px từng chặn cứng
      autosize ở ~3 dòng trên desktop dù JS đã tính đúng - chủ báo 27/08. */
   line-height: 1.4; max-height: 45vh; font-family: var(--font-chat);
 }
-.voice-input:focus { border-color: var(--accent-line); }
+.voice-input:focus { border-color: transparent; }
 .voice-input::placeholder { color: var(--text3); }
 .send-btn {
-  background: var(--accent-solid); border: none; color: var(--on-accent); width: 44px; height: 44px;
-  border-radius: 12px; cursor: pointer; flex-shrink: 0;
+  background: var(--accent-solid); border: none; color: var(--on-accent); width: 34px; height: 34px;
+  border-radius: 50%; cursor: pointer; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; transition: opacity 0.2s;
 }
 .send-btn:hover { opacity: 0.85; }
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* ===== Mobile: ô nhập thành viên pill lớn (chat là chính) ===== */
+/* ===== Mobile: cùng khung, chỉ thu khoảng đệm; chip model lên đầu trang (mobile-chat.js) ===== */
 @media (max-width: 860px) {
   .hud-voice {
-    margin: 6px 10px 8px; padding: 5px 6px 5px 8px; gap: 4px;
+    margin: 6px 10px 8px; padding: 8px 8px 6px; gap: 2px;
     border: 1px solid var(--border); border-radius: 24px; background: var(--bg2);
     align-items: flex-end;
   }
-  .hud-voice .attach-btn { order: 1; width: 34px; height: 34px; border: none; background: transparent; }
-  .hud-voice .voice-input {
-    order: 2; border: none; background: transparent; border-radius: 0;
-    min-height: 36px; max-height: 40vh; padding: 8px 4px; font-size: 16px;
-  }
-  .hud-voice .voice-input:focus { border: none; }
-  .hud-voice .mic-big { order: 3; width: 34px; height: 34px; border: none; background: transparent; }
-  .hud-voice .stop-btn, .hud-voice .send-btn { order: 4; width: 36px; height: 36px; border-radius: 50%; }
+  .hud-voice .voice-input { min-height: 36px; max-height: 40vh; padding: 6px 6px; font-size: 16px; }
 }
 
 .stop-btn {
-  background: var(--red); border: none; color: white; width: 44px; height: 44px;
-  border-radius: 12px; cursor: pointer; flex-shrink: 0;
+  background: var(--red); border: none; color: white; width: 34px; height: 34px;
+  border-radius: 50%; cursor: pointer; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; transition: opacity 0.2s;
   animation: stoppulse 1.3s ease-in-out infinite;
 }
 .stop-btn:hover { opacity: 0.85; }
 @keyframes stoppulse { 50% { box-shadow: 0 0 0 5px var(--danger-wash); } }
-
-.attach-btn {
-  background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
-  width: 40px; height: 40px; border-radius: 10px; cursor: pointer; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center; transition: all 0.2s;
-}
-.attach-btn:hover { border-color: var(--accent); color: var(--accent); }
 /* Nút loa trên khung chat ĐÃ BỎ (02/09): loa đi theo mic, mic là công tắc duy nhất. */
 
 /* ===== Dải VIỆC NỀN ngay trên khung nhập (background-strip.js) =====
@@ -2117,10 +2143,15 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .mb-sep { opacity: .4; }
 .mb-eff { color: var(--accent2); }
 .mb-caret { opacity: .6; font-size: 10px; }
-.mb-pop { position: absolute; bottom: calc(100% + 6px); left: 12px; z-index: 60; width: 340px;
+.mb-pop { position: absolute; bottom: calc(100% + 6px); left: 8px; z-index: 60; width: 340px;
   max-height: 62vh; overflow: auto; background: var(--bg2); border: 1px solid var(--border);
   border-radius: 12px; box-shadow: var(--shadow-3); padding: 8px; }
 .mb-pop[hidden] { display: none; }
+.eff-pop, .cp-menu {
+  position: absolute; bottom: calc(100% + 6px); z-index: 60; background: var(--bg2);
+  border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-3);
+}
+.eff-pop[hidden], .cp-menu[hidden] { display: none; }
 .mb-search { width: 100%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--border);
   color: var(--text); border-radius: 8px; padding: 7px 9px; font-size: 13px; margin-bottom: 6px;
   font-family: var(--font); }

@@ -7486,7 +7486,8 @@
   // (giữ nguyên mọi handler + WebSocket + streaming đã gắn trong app.js) rồi TRẢ về HUD khi
   // rời trang. Cùng một cuộc trò chuyện hiển thị ở cả màn Javis lẫn tab này.
   // ============================================
-  const CHAT_NODE_IDS = ["callBar", "chatArea", "bgStrip", "attachBar", "modelBar", "hudVoice"];
+  // attachBar nằm TRONG #hudVoice từ 0.148.0 nên không mượn riêng nữa.
+  const CHAT_NODE_IDS = ["callBar", "chatArea", "bgStrip", "modelBar", "hudVoice"];
   let _chatSlots = [];        // vị trí gốc từng node để trả về đúng chỗ trong HUD
 
   function _injectChatCss() {
@@ -7596,7 +7597,7 @@
     .chatpage-slot .transcript{ flex:1 1 auto; min-height:0; max-height:none; background:transparent; }
     /* Khung nhập giữ NGUYÊN bộ mặt của thanh nhập ở màn Javis (--bg2 + bo 18px). Trước đây
        gõ cứng rgba(24,24,34,.6) nên tông sáng lòi ra một dải xám đen giữa nền giấy. */
-    .chatpage-slot .hud-voice{ background:var(--bg2); border:1px solid var(--border); border-radius:18px; }
+    .chatpage-slot .hud-voice{ background:var(--bg2); border:1px solid var(--border); border-radius:24px; }
     .chatpage-slot .attach-bar{ flex:none; }
     /* Màn hẹp: cả hàng tiêu đề phải nằm gọn MỘT dòng. Trước đây tiêu đề "Trò chuyện với Javis"
        xuống bốn dòng và chữ "Thu nhỏ" xuống hai dòng, đẩy khung chat tụt hẳn xuống - chủ repo
