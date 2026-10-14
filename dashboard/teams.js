@@ -49,6 +49,13 @@
   var RETRY_KINDS = ["failed", "interrupted", "no_progress"];
   var RESUME_KINDS = ["cap_reached", "agent_busy_long", "waiting_user"];
   var CAP_FIELDS = ["task_turns", "task_steps", "daily_turns", "mentions"];
+  // Toàn quyền (T3, spec 13): trần trưởng nhóm đổi được trong trần trần của chủ.
+  var AUTH_CAPS = ["task_turns", "task_steps", "help_depth", "daily_turns"];
+  var AUTH_CAP_KEY = { task_turns: "teams.cap.task_turns", task_steps: "teams.cap.task_steps",
+    help_depth: "teams.cap.help_depth", daily_turns: "teams.cap.daily_turns" };
+  var PROVIDERS = [{ id: "aux", key: "teams.auth.provider_aux" }, { id: "anthropic-cli", key: "teams.auth.provider_claude" }];
+  var FIXED_KEYS = ["teams.auth.fixed_server", "teams.auth.fixed_provider", "teams.auth.fixed_account",
+    "teams.auth.fixed_technical"];
   // Sáu reaction (spec mục 14.1). Emoji ở đây là DỮ LIỆU sản phẩm (giá trị chủ chọn, lưu nguyên loại), không phải icon
   // trang trí: test_icons.py cho phép đúng sáu ký tự này trong file này và kiểm cả sáu luôn có mặt.
   var REACTIONS = [
@@ -290,6 +297,8 @@
         '<label class="tm-rs"><input type="checkbox" class="tm-rs-toggle" data-slug="' + esc(m.slug) + '"' +
         (m.resonance_enabled ? " checked" : "") + ' aria-label="' + esc(rsText(m.resonance_enabled)) + '"><span>' +
         esc(rsText(m.resonance_enabled)) + "</span></label>" +
+        '<label class="tm-rs"><input type="checkbox" class="tm-managed-toggle" data-key="' + esc(m.agent_key) + '"' +
+        (m.managed ? " checked" : "") + "><span>" + esc(tw("teams.managed")) + "</span></label>" +
         '<span class="tm-actions">' + (lead
           ? '<button type="button" class="ws-btn" data-leader="">' + esc(tw("teams.remove_leader")) + "</button>"
           : '<button type="button" class="ws-btn" data-leader="' + esc(m.agent_key) + '">' + esc(tw("teams.make_leader")) + "</button>") +
@@ -324,6 +333,96 @@
       '<label class="tm-field"><span>' + esc(tw("teams.leader")) + "</span>" + lead + "</label>" +
       '<div class="tm-qhead">' + esc(tw("teams.caps")) + "</div>" + capRows +
       '<button type="button" class="ws-btn tm-save">' + esc(tw("teams.save")) + "</button></form>";
+  }
+
+  function capText(v) {
+    return v === null || v === undefined ? tw("teams.auth.unlimited") : String(v);
+  }
+
+  function capInputs(name, v) {
+    var unl = !!(v && typeof v === "object" && v.unlimited);
+    var num = !unl && v !== null && v !== undefined && typeof v !== "object" ? String(v) : "";
+    return '<input type="number" min="0" name="' + name + '" value="' + esc(num) + '"' + (unl ? " disabled" : "") + ">" +
+      '<label class="tm-unl"><input type="checkbox" name="' + name + '-unl"' + (unl ? " checked" : "") + "> " +
+      esc(tw("teams.auth.unlimited")) + "</label>";
+  }
+
+  // Hộp cấp quyền (spec 13.1): phạm vi, agent do nhóm quản lý, provider được Không giới hạn, nguồn thanh toán, trần và
+  // trần trần, quyền Được ngắt việc, các trần không bỏ được (luôn hiện).
+  function authorityHtml(team) {
+    var view = team.authority || {};
+    var auth = view.authority;
+    var grant = (auth && auth.grant) || {};
+    var eff = view.effective_caps || team.caps || {};
+    var leader = team.leader_key ? nameOf(team.members, team.leader_key) : "";
+    var managed = (team.members || []).filter(function (m) { return m.managed; }).map(function (m) { return m.name || m.slug; });
+    var status = auth ? tw("teams.auth.on", { name: leader, when: new Date(auth.granted_at * 1000).toLocaleString() })
+      : tw("teams.auth.off");
+    var now = AUTH_CAPS.map(function (k) { return tw(AUTH_CAP_KEY[k]) + ": " + capText(eff[k]); }).join(" · ");
+    var rows = AUTH_CAPS.map(function (k) {
+      return '<div class="tm-field tm-auth-cap"><span>' + esc(tw(AUTH_CAP_KEY[k])) + "</span>" +
+        '<span class="tm-auth-pair"><span class="tm-auth-lbl">' + esc(tw("teams.auth.cap_value")) + "</span>" +
+        capInputs("tm-auth-cap-" + k, (grant.caps || {})[k]) + "</span>" +
+        '<span class="tm-auth-pair"><span class="tm-auth-lbl">' + esc(tw("teams.auth.cap_ceiling")) + "</span>" +
+        capInputs("tm-auth-ceil-" + k, (grant.ceilings || {})[k]) + "</span></div>";
+    }).join("");
+    var allowed = {};
+    (grant.providers_unlimited || []).forEach(function (x) { allowed[x] = true; });
+    var prov = PROVIDERS.map(function (x) {
+      return '<label class="tm-unl"><input type="checkbox" name="tm-auth-prov" value="' + esc(x.id) + '"' +
+        (allowed[x.id] ? " checked" : "") + "> " + esc(tw(x.key)) + "</label>";
+    }).join("");
+    var bill = ["subscription", "api"].map(function (b) {
+      return '<label class="tm-radio"><input type="radio" name="tm-auth-bill" value="' + b + '"' +
+        ((grant.billing || "subscription") === b ? " checked" : "") + "><span>" +
+        esc(tw(b === "api" ? "teams.auth.billing_api" : "teams.auth.billing_sub")) + "</span></label>";
+    }).join("");
+    var fixed = FIXED_KEYS.map(function (k) { return "<li>" + esc(tw(k)) + "</li>"; }).join("");
+    if (!team.leader_key) {
+      return '<section class="tm-auth"><div class="tm-qhead">' + esc(tw("teams.auth.title")) + "</div>" +
+        '<div class="tm-note-line">' + esc(tw("teams.auth.need_leader")) + "</div></section>";
+    }
+    return '<section class="tm-auth" aria-label="' + esc(tw("teams.auth.title")) + '"><div class="tm-qhead">' +
+      esc(tw("teams.auth.title")) + "</div>" +
+      '<div class="tm-auth-status' + (auth ? " tm-auth-on" : "") + '">' + esc(status) + "</div>" +
+      '<div class="tm-react-sub">' + esc(tw("teams.auth.now", { caps: now })) + "</div>" +
+      '<div class="tm-react-sub">' + esc(tw("teams.auth.scope")) + "</div>" +
+      '<div class="tm-react-sub">' + esc(managed.length ? tw("teams.auth.managed", { names: managed.join(", ") })
+        : tw("teams.auth.managed_none")) + "</div>" +
+      '<div class="tm-qhead">' + esc(tw("teams.auth.caps_head")) + "</div>" + rows +
+      '<div class="tm-field"><span>' + esc(tw("teams.auth.providers")) + "</span>" + prov + "</div>" +
+      '<div class="tm-field"><span>' + esc(tw("teams.auth.billing")) + "</span>" + bill + "</div>" +
+      '<label class="tm-unl"><input type="checkbox" name="tm-auth-interrupt"' + (grant.can_interrupt ? " checked" : "") +
+      "> " + esc(tw("teams.auth.interrupt")) + "</label>" +
+      '<div class="tm-react-sub">' + esc(tw("teams.auth.fixed")) + '</div><ul class="tm-auth-fixed">' + fixed + "</ul>" +
+      '<div class="tm-actions"><button type="button" class="ws-btn tm-auth-save">' +
+      esc(tw(auth ? "teams.auth.update" : "teams.auth.grant")) + "</button>" +
+      (auth ? '<button type="button" class="ws-btn tm-auth-revoke">' + esc(tw("teams.auth.revoke")) + "</button>" : "") +
+      "</div></section>";
+  }
+
+  // Đọc hộp cấp quyền thành `grant` cho POST /teams/{id}/authority. Ô trống, không tích: bỏ (theo mặc định; trần trần
+  // vắng nghĩa là trưởng nhóm không đổi được trần đó).
+  function readGrant(root) {
+    function one(name) {
+      var box = root.querySelector('[name="' + name + '-unl"]');
+      if (box && box.checked) return { unlimited: true };
+      var inp = root.querySelector('[name="' + name + '"]');
+      var v = inp ? String(inp.value).trim() : "";
+      return v === "" ? undefined : Number(v);
+    }
+    var caps = {}, ceilings = {};
+    AUTH_CAPS.forEach(function (k) {
+      var c = one("tm-auth-cap-" + k), l = one("tm-auth-ceil-" + k);
+      if (c !== undefined) caps[k] = c;
+      if (l !== undefined) ceilings[k] = l;
+    });
+    var bill = root.querySelector('input[name="tm-auth-bill"]:checked');
+    var intr = root.querySelector('input[name="tm-auth-interrupt"]');
+    return { caps: caps, ceilings: ceilings,
+      providers_unlimited: Array.prototype.map.call(root.querySelectorAll('input[name="tm-auth-prov"]:checked'),
+        function (x) { return x.value; }),
+      billing: bill ? bill.value : "subscription", can_interrupt: !!(intr && intr.checked) };
   }
 
   function dayStart() {
@@ -559,7 +658,7 @@
     if (S.tab === "members") body = membersHtml(S.team, S.agents);
     else if (S.tab === "jobs") body = queueHtml(S.queue);
     else if (S.tab === "turns") body = turnsHtml(S.turns || [], S.team);
-    else body = settingsFormHtml(S.team);
+    else body = settingsFormHtml(S.team) + authorityHtml(S.team);
     side.innerHTML = '<div class="tm-bar"><strong>' + esc(tw("teams.settings_btn")) + '</strong><button type="button" class="ws-btn tm-close" aria-label="' +
       esc(tw("teams.close")) + '">×</button></div><div class="tm-tabs" role="tablist">' + tabs + '</div><div class="tm-side-body">' + body + "</div>";
   }
@@ -797,6 +896,17 @@
       return call("POST", teamUrl("/members"), { slug: pick.value }).then(function (r) { act(r, drawAll); });
     }
     if (t.classList.contains("tm-save")) return saveSettings();
+    if (t.classList.contains("tm-auth-save")) {
+      var sec = S.el.querySelector(".tm-auth");
+      return call("POST", teamUrl("/authority"), { mode: "full", grant: readGrant(sec) }).then(function (r) {
+        if (r.code === 200) setNote(tw("teams.saved"));
+        act(r, drawSide);
+      });
+    }
+    if (t.classList.contains("tm-auth-revoke")) {
+      if (typeof confirm === "function" && !confirm(tw("teams.auth.revoke_confirm"))) return;
+      return call("POST", teamUrl("/authority"), { mode: "limited" }).then(function (r) { act(r, drawSide); });
+    }
   }
 
   function msgById(id) {
@@ -881,6 +991,22 @@
       return;
     }
     if (e.target.classList.contains("tm-filter")) { S.filterTask = e.target.value; loadMsgs(false); return; }
+    if (e.target.name && /^tm-auth-(cap|ceil)-[a-z_]+-unl$/.test(e.target.name)) {
+      // Tích Không giới hạn thì ô số tắt (giá trị là null + cờ, không phải một số lớn).
+      var num = S.el.querySelector('[name="' + e.target.name.slice(0, -4) + '"]');
+      if (num) num.disabled = e.target.checked;
+      return;
+    }
+    if (e.target.classList.contains("tm-managed-toggle")) {
+      var mb = e.target;
+      var want = mb.checked;
+      mb.checked = !want;
+      mb.disabled = true;
+      call("POST", teamUrl("/members/" + q(mb.getAttribute("data-key")) + "/managed"), { on: want }).then(function (r) {
+        act(r, drawSide);
+      });
+      return;
+    }
     if (e.target.classList.contains("tm-rs-toggle")) {
       var box = e.target;
       var on = box.checked;
@@ -972,7 +1098,7 @@
     mentionMatches: mentionMatches, composerHint: composerHint, newClientId: newClientId, membersHtml: membersHtml,
     settingsFormHtml: settingsFormHtml, turnsHtml: turnsHtml, createFormHtml: createFormHtml, bannersHtml: bannersHtml,
     reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml, nextReaction: nextReaction,
-    REACTIONS: REACTIONS };
+    REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant };
   if (typeof window !== "undefined") window.JavisTeams = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

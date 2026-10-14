@@ -8,7 +8,11 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.121.0] - 2026-10-14
 ### Thêm mới
-- **Trưởng nhóm Toàn quyền:** chủ nhóm cấp quyền cho trưởng nhóm tự vận hành nhóm trong phạm vi được cho phép.
+- **Trưởng nhóm Toàn quyền.** Ở tab Cài đặt của nhóm, bạn có thể cho trưởng nhóm tự mở việc, đổi thứ tự việc chờ, thêm hay bỏ thành viên và tạo trợ lý mới cho nhóm.
+- **Bạn đặt giới hạn.** Mỗi trần có thể là một số, Không giới hạn, hay theo mặc định; trưởng nhóm chỉ đổi trong mức tối đa bạn cho. Không giới hạn lượt model chỉ áp cho model bạn tích.
+- **Trợ lý do nhóm quản lý.** Trưởng nhóm chỉ sửa được lời nhắc và Cộng hưởng của các trợ lý này; sửa trợ lý đang ở nhóm khác thì nhóm được báo rõ.
+- Ngắt việc đang chạy chỉ khi bạn cho phép. Mọi thao tác của trưởng nhóm hiện thành tin trong nhóm.
+- **Thu hồi bất cứ lúc nào**, hay đổi trưởng nhóm: nhóm về Quyền giới hạn ngay, lệnh tới sau đó bị từ chối.
 
 ## [0.120.0] - 2026-10-14
 ### Thêm mới

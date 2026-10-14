@@ -78,6 +78,11 @@ CREATE TABLE IF NOT EXISTS team_reactions(
   comment TEXT NOT NULL DEFAULT '', content_sha TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL,
   updated_at REAL NOT NULL, PRIMARY KEY(session_id, message_id, reactor));
 CREATE INDEX IF NOT EXISTS team_reactions_agent ON team_reactions(team_id, agent_key, updated_at);
+CREATE TABLE IF NOT EXISTS team_authority(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, team_id TEXT NOT NULL, leader_key TEXT NOT NULL,
+  grant_json TEXT NOT NULL DEFAULT '{}', granted_by TEXT NOT NULL DEFAULT '', granted_at REAL NOT NULL,
+  revoked_at REAL, revoke_reason TEXT NOT NULL DEFAULT '');
+CREATE INDEX IF NOT EXISTS team_authority_team ON team_authority(team_id, revoked_at);
 CREATE TABLE IF NOT EXISTS team_reaction_log(
   id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, message_id INTEGER NOT NULL, reactor TEXT NOT NULL,
   team_id TEXT NOT NULL, value TEXT, reasons_json TEXT NOT NULL DEFAULT '[]', comment TEXT NOT NULL DEFAULT '',
@@ -288,6 +293,7 @@ class TeamStore:
         t = c.execute("SELECT leader_key FROM teams WHERE team_id=?", (team_id,)).fetchone()
         if t is not None and t["leader_key"] == agent_key:
             # Không âm thầm mất điều phối (spec 6.3): nhóm thành "chưa có trưởng nhóm", ghi sự kiện, giao diện báo.
+            self._revoke_in(c, team_id, by, "leader_removed")
             c.execute("UPDATE teams SET leader_key=NULL, leader_mode='limited', updated_at=? WHERE team_id=?",
                       (now, team_id))
             self._event(c, team_id, "leader_removed", by, {"leader_key": agent_key}, {"leader_key": None})
@@ -324,7 +330,10 @@ class TeamStore:
             c.execute("UPDATE team_members SET role='member' WHERE team_id=? AND role='leader'", (team_id,))
             if agent_key is not None:
                 c.execute("UPDATE team_members SET role='leader' WHERE team_id=? AND agent_key=?", (team_id, agent_key))
-            # Đổi trưởng nhóm thì chế độ quyền về giới hạn (Toàn quyền gắn người, không gắn chức danh; spec 13.1, M11).
+            # Đổi trưởng nhóm thì chế độ quyền về giới hạn (Toàn quyền gắn người, không gắn chức danh; spec 13.1, M11):
+            # thu hồi dòng Toàn quyền trong CÙNG giao dịch.
+            if t["leader_key"] != agent_key:
+                self._revoke_in(c, team_id, by, "leader_changed")
             c.execute("UPDATE teams SET leader_key=?, leader_mode='limited', updated_at=? WHERE team_id=?",
                       (agent_key, now, team_id))
             self._event(c, team_id, "leader_set", by, {"leader_key": t["leader_key"]}, {"leader_key": agent_key})
@@ -508,6 +517,100 @@ class TeamStore:
         with closing(self._conn()) as c:
             return [dict(r) for r in c.execute(
                 "SELECT * FROM team_turns WHERE status IN ('reserved','running')").fetchall()]
+
+    # ───────────── Toàn quyền (T3, spec mục 13) ─────────────
+
+    @staticmethod
+    def _authority(r) -> dict:
+        return {"id": int(r["id"]), "team_id": r["team_id"], "leader_key": r["leader_key"],
+                "grant": json.loads(r["grant_json"] or "{}"), "granted_by": r["granted_by"],
+                "granted_at": r["granted_at"], "revoked_at": r["revoked_at"], "revoke_reason": r["revoke_reason"]}
+
+    @staticmethod
+    def _active_authority_row(c, team_id: str):
+        return c.execute("SELECT * FROM team_authority WHERE team_id=? AND revoked_at IS NULL ORDER BY id DESC LIMIT 1",
+                         (team_id,)).fetchone()
+
+    def grant_authority(self, team_id: str, grant: dict, by: str = "owner") -> dict:
+        """Chủ bật (hay sửa) Toàn quyền cho trưởng nhóm HIỆN TẠI. Dòng cũ còn hiệu lực bị thu hồi trong cùng giao dịch
+        (lý do `regranted`), nên mỗi nhóm có tối đa một dòng hiệu lực. Không có trưởng nhóm thì không bật được."""
+        now = time.time()
+        with self._Tx(self) as c:
+            t = c.execute("SELECT leader_key, status FROM teams WHERE team_id=?", (team_id,)).fetchone()
+            if t is None:
+                raise TeamError("không có nhóm này")
+            if not t["leader_key"]:
+                raise TeamError("nhóm chưa có trưởng nhóm, không bật được Toàn quyền")
+            old = self._active_authority_row(c, team_id)
+            if old is not None:
+                c.execute("UPDATE team_authority SET revoked_at=?, revoke_reason='regranted' WHERE id=?", (now, old["id"]))
+            cur = c.execute("INSERT INTO team_authority(team_id,leader_key,grant_json,granted_by,granted_at) "
+                            "VALUES(?,?,?,?,?)", (team_id, t["leader_key"], _j(grant), by, now))
+            c.execute("UPDATE teams SET leader_mode='full', updated_at=? WHERE team_id=?", (now, team_id))
+            self._event(c, team_id, "authority_granted", by, None, {"leader_key": t["leader_key"], "grant": grant})
+            return self._authority(c.execute("SELECT * FROM team_authority WHERE id=?", (cur.lastrowid,)).fetchone())
+
+    def revoke_authority(self, team_id: str, by: str = "owner", reason: str = "") -> bool:
+        """Thu hồi Toàn quyền: ghi `revoked_at`. Trả False nếu không có dòng hiệu lực."""
+        with self._Tx(self) as c:
+            return self._revoke_in(c, team_id, by, reason or "owner")
+
+    def _revoke_in(self, c, team_id: str, by: str, reason: str) -> bool:
+        old = self._active_authority_row(c, team_id)
+        if old is None:
+            return False
+        c.execute("UPDATE team_authority SET revoked_at=?, revoke_reason=? WHERE id=?", (time.time(), reason, old["id"]))
+        c.execute("UPDATE teams SET leader_mode='limited' WHERE team_id=?", (team_id,))
+        self._event(c, team_id, "authority_revoked", by, {"leader_key": old["leader_key"]}, {"reason": reason})
+        return True
+
+    def active_authority(self, team_id: str) -> Optional[dict]:
+        """Dòng Toàn quyền còn hiệu lực VÀ còn đúng trưởng nhóm hiện tại; None nếu nhóm ở Quyền giới hạn."""
+        with closing(self._conn()) as c:
+            r = self._active_authority_row(c, team_id)
+            if r is None:
+                return None
+            t = c.execute("SELECT leader_key FROM teams WHERE team_id=?", (team_id,)).fetchone()
+            if t is None or t["leader_key"] != r["leader_key"]:
+                return None
+            return self._authority(r)
+
+    def update_authority_caps(self, authority_id: int, caps: dict, by: str) -> bool:
+        """Trưởng nhóm đổi trần trong trần trần (người gọi đã kiểm). CAS theo dòng còn hiệu lực: dòng đã thu hồi thì
+        không đổi gì, trả False."""
+        with self._Tx(self) as c:
+            r = c.execute("SELECT * FROM team_authority WHERE id=? AND revoked_at IS NULL", (int(authority_id),)).fetchone()
+            if r is None:
+                return False
+            g = json.loads(r["grant_json"] or "{}")
+            before = dict(g.get("caps") or {})
+            g["caps"] = dict(before, **caps)
+            c.execute("UPDATE team_authority SET grant_json=? WHERE id=?", (_j(g), int(authority_id)))
+            self._event(c, r["team_id"], "caps_changed", by, before, g["caps"])
+            return True
+
+    def set_managed(self, team_id: str, agent_key: str, on: bool, by: str = "owner") -> None:
+        """Đánh dấu agent do nhóm này quản lý (spec 13.3). Mỗi agent tối đa một nhóm quản lý."""
+        with self._Tx(self) as c:
+            m = c.execute("SELECT * FROM team_members WHERE team_id=? AND agent_key=? AND status='active'",
+                          (team_id, agent_key)).fetchone()
+            if m is None:
+                raise TeamError("không phải thành viên đang hoạt động")
+            if on:
+                other = c.execute("SELECT team_id FROM team_members WHERE agent_key=? AND managed_by_team=1 "
+                                  "AND team_id != ?", (agent_key, team_id)).fetchone()
+                if other is not None:
+                    raise TeamError("agent này đã do một nhóm khác quản lý")
+            c.execute("UPDATE team_members SET managed_by_team=? WHERE team_id=? AND agent_key=?",
+                      (1 if on else 0, team_id, agent_key))
+            self._event(c, team_id, "managed_set" if on else "managed_unset", by, None, {"agent_key": agent_key})
+
+    def teams_with_member(self, agent_key: str) -> list:
+        """Nhóm (id, tên) mà agent đang là thành viên (để báo nhóm bị ảnh hưởng khi sửa cấu hình chung)."""
+        with closing(self._conn()) as c:
+            return [dict(r) for r in c.execute(
+                "SELECT t.team_id, t.name FROM team_members m JOIN teams t ON t.team_id=m.team_id "
+                "WHERE m.agent_key=? AND m.status='active'", (agent_key,)).fetchall()]
 
     # ───────────── reaction (T2, spec mục 14) ─────────────
 

@@ -252,6 +252,42 @@ check("route reaction: không mở lượt nào, chỉ đẩy gói WS", len(c.ge
       == turns0 and not ({"run_replies", "dispatch_once"} & set(kinds)) and "fake_publish" in kinds, kinds)
 drain()
 
+# T3: Toàn quyền qua route của chủ, thao tác host thật (_TeamAdmin) cho lệnh quản trị.
+r = c.post(f"/teams{Q}", json={"name": "Tự vận hành", "members": ["lan", "minh"], "leader_slug": "lan"})
+T3 = r.json()["team"]
+T3ID = T3["team_id"]
+k3 = {m["slug"]: m["agent_key"] for m in T3["members"]}
+check("T3 nhóm mới ở Quyền giới hạn, view có authority và trần hiệu lực", T3["authority"]["authority"] is None
+      and T3["authority"]["effective_caps"]["task_turns"] == 12 and "provider_quota" in T3["authority"]["fixed_limits"])
+grant = {"caps": {"task_turns": {"unlimited": True}}, "ceilings": {"task_turns": {"unlimited": True}, "daily_turns": 150},
+         "providers_unlimited": ["aux"], "can_interrupt": False}
+r = c.post(f"/teams/{T3ID}/authority{Q}", json={"mode": "full", "grant": grant})
+v = r.json().get("team", {}).get("authority", {})
+check("T3 chủ bật Toàn quyền qua route: 200, Không giới hạn là null", r.status_code == 200
+      and v["authority"]["leader_key"] == k3["lan"] and v["effective_caps"]["task_turns"] is None, r.text)
+check("T3 hộp cấp quyền sai khuôn: 400", c.post(f"/teams/{T3ID}/authority{Q}", json={
+    "mode": "full", "grant": {"caps": {"task_turns": 99}, "ceilings": {"task_turns": 20}}}).status_code == 400)
+check("T3 chế độ lạ: 400", c.post(f"/teams/{T3ID}/authority{Q}", json={"mode": "god"}).status_code == 400)
+r = c.post(f"/teams/{T3ID}/members/{k3['minh']}/managed{Q}", json={"on": True})
+check("T3 chủ giao agent cho nhóm quản lý", r.status_code == 200
+      and [m["managed"] for m in r.json()["team"]["members"] if m["slug"] == "minh"] == [True], r.text)
+check("T3 agent đã do nhóm khác quản lý: 409", c.post(f"/teams/{TID}/members/{k3['minh']}/managed{Q}",
+                                                       json={"on": True}).status_code in (404, 409))
+adm = main._TeamAdmin()
+before = (BR / "agents" / "lan.md").read_bytes()
+s1 = adm.create_agent(str(BR), "Lan", "Người viết", "Bạn viết.")
+check("T3 host tạo agent mới không ghi đè agent cùng tên, có tag", s1 == "lan-2" and (BR / "agents" / "lan.md").read_bytes()
+      == before and "Nhóm" in (BR / "agents" / "lan-2.md").read_text(encoding="utf-8"), s1)
+adm.edit_prompt(str(BR), "lan-2", "Lời nhắc mới")
+check("T3 host sửa lời nhắc, giữ frontmatter", (BR / "agents" / "lan-2.md").read_text(encoding="utf-8").rstrip()
+      .endswith("Lời nhắc mới") and "name: Lan" in (BR / "agents" / "lan-2.md").read_text(encoding="utf-8"))
+adm.set_resonance(str(BR), "lan-2", True, "leader:test")
+ra = {a["slug"]: a for a in c.get(f"/resonance/agents{Q}").json()["agents"]}
+check("T3 host bật Cộng hưởng cho agent do nhóm quản lý (ghi by=leader)", ra["lan-2"]["enabled"])
+r = c.post(f"/teams/{T3ID}/authority{Q}", json={"mode": "limited"})
+check("T3 chủ thu hồi: về Quyền giới hạn", r.status_code == 200 and r.json()["team"]["authority"]["authority"] is None
+      and r.json()["team"]["authority"]["effective_caps"]["task_turns"] == 12)
+
 # Vòng nền: cài mới (chưa có team.sqlite3 lúc khởi động) thì KHÔNG chạy phục hồi về sau, kẻo chặn nhầm việc đang chạy.
 import dataclasses  # noqa: E402
 import team_api  # noqa: E402

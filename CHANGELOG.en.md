@@ -10,7 +10,11 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.121.0] - 2026-10-14
 ### Added
-- **Full-authority team lead:** you can let a team lead run the team on its own, within the limits you set.
+- **Full-authority team lead.** In the team's Settings tab you can let the lead open jobs, reorder waiting jobs, add or remove members and create new assistants for the team.
+- **You set the limits.** Each cap can be a number, Unlimited or the default; the lead can only change it up to the maximum you allow. Unlimited model turns only apply to the models you tick.
+- **Team-managed assistants.** The lead can only edit the prompt and Resonance of these assistants; changing one that is also in other teams tells the team which ones.
+- Interrupting a running job needs your permission. Everything the lead does shows up as a message in the team.
+- **Revoke at any time**, or change the lead: the team goes back to limited mode at once and later commands are refused.
 
 ## [0.120.0] - 2026-10-14
 ### Added
