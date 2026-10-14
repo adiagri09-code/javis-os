@@ -10,7 +10,11 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.152.0] - 2026-10-15
 ### Fixed
-- In progress: team chat T1 foundation (per-turn authority, busy lock for long turns, limits table).
+- **Taking back the right to decide alone now covers a turn already running.** If the coordinator is mid-reply when you take it back and give it again, or give it for the first time, that turn's admin commands are dropped with a note; only the next turn uses the new permission.
+- **Long jobs are not cut in on:** an assistant working on a long step keeps its slot until done, so another team cannot grab it midway.
+- When the coordinator turns Auto back on for an assistant the team manages, that assistant's goals resume right away instead of waiting up to 6 hours.
+### Improved
+- **Limits table under the team's Advanced section:** every limit, grouped by what you can change, what the coordinator can change, what the server fixes and what the provider decides. Replies, steps and nested help can be set to **Unlimited** right in Team limits.
 
 ## [0.151.0] - 2026-10-15
 ### Improved

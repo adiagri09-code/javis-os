@@ -8,7 +8,11 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.152.0] - 2026-10-15
 ### Sửa lỗi
-- Đang làm: chốt nền nhóm chat T1 (quyền theo lượt, khoá bận cho lượt dài, bảng giới hạn).
+- **Thu quyền là thu cả lượt đang chạy.** Người điều phối đang trả lời dở mà bạn thu lại rồi cho lại, hay mới cho quyền tự quyết, thì lệnh quản trị của lượt đó bị bỏ kèm ghi chú; lượt sau mới dùng quyền mới.
+- **Việc dài không bị chen ngang:** trợ lý đang làm một bước dài giữ chỗ tới khi xong, nhóm khác không giành được trợ lý đó giữa chừng.
+- Người điều phối bật lại Auto cho trợ lý do nhóm quản lý thì mục tiêu của trợ lý chạy tiếp ngay, không phải chờ tới 6 giờ.
+### Cải thiện
+- **Bảng giới hạn trong Nâng cao của nhóm:** mọi giới hạn chia theo bạn chỉnh được, người điều phối chỉnh được, máy chủ cố định và nhà cung cấp quyết. Số lần trả lời, số bước, số lần nhờ nhau có lựa chọn **Không giới hạn** ngay ở mục Giới hạn của nhóm.
 
 ## [0.151.0] - 2026-10-15
 ### Cải thiện

@@ -27,7 +27,8 @@ import time
 import unicodedata
 from typing import Any, Awaitable, Callable, Optional
 
-from team_store import REACTION_EMOJI, TeamError, TurnCapReached
+from team_store import (DEFAULT_CAPS, FIXED_CAPS, OWNER_CAPS, REACTION_EMOJI, UNLIMITED_CAPS, TeamError,
+                        TurnCapReached)
 
 DIRECTIVE_RE = re.compile(r"<!--\s*JAVIS_TEAM:\s*(.*?)-->", re.S)
 # Op được phép theo vai của lượt (spec 15.2, Quyền giới hạn). Lượt trò chuyện không mở việc, không nhờ ai.
@@ -50,6 +51,11 @@ ROLE_LABEL = {
     "synthesize": "Tổng hợp",
 }
 BUSY_LEASE_S = 900.0          # hạn khoá bận một lượt; tiến trình chết thì tự nhả
+# Hạn giữ việc nhóm (làn team của Kanban) và nhịp gia hạn (GOAL T1): bước có thể chạy tới STEP_TIMEOUT_S, lâu hơn cả hai
+# hạn, nên trong lúc lời gọi engine còn chạy bộ chạy gia hạn khoá bận của agent và hạn giữ việc theo nhịp này; lượt xong
+# hay bị huỷ thì dừng. Tiến trình chết thì không ai gia hạn, hạn tự hết như trước.
+JOB_LEASE_S = 90.0
+LEASE_RENEW_S = 30.0
 NEW_MSG_LIMIT = 20            # cửa sổ lịch sử trong khối nhóm (spec 11.2, review T1 R2)
 NEW_MSG_CHARS = 8000
 INPUT_CHARS = 4000            # mỗi đầu vào của bước
@@ -125,6 +131,8 @@ REASON_LABEL = {"on_point": "Đúng ý", "wrong_facts": "Sai dữ kiện", "miss
                 "unclear": "Khó hiểu", "off_topic": "Lạc đề"}
 
 EngineFn = Callable[[dict], Awaitable[dict]]
+# Gọi không kèm ghim quyền của lượt (đường cũ, test trực tiếp): dùng dòng Toàn quyền đang hiệu lực như trước.
+_UNPINNED = object()
 
 
 def parse_directives(text: str) -> tuple[str, list, list]:
@@ -285,6 +293,9 @@ class TeamRunner:
         self.started_at = time.time()
         self.turn_timeout = TURN_TIMEOUT_S
         self.step_timeout = STEP_TIMEOUT_S
+        self.busy_lease_s = BUSY_LEASE_S
+        self.job_lease_s = JOB_LEASE_S
+        self.lease_renew_s = LEASE_RENEW_S
         # Thao tác của host mà lệnh quản trị Toàn quyền cần (tạo agent, sửa lời nhắc, Cộng hưởng, cấp mã). None: lệnh
         # cần host bị từ chối kèm ghi chú.
         self.admin = admin
@@ -296,6 +307,8 @@ class TeamRunner:
         # Pool chung của tiến trình (review T1 R8): task_id -> team_id của việc đang giữ chỗ. Đọc, ghi trong `_pool_lock`.
         self._pool: dict[str, str] = {}
         self._pool_lock = threading.Lock()
+        # Nhịp gia hạn khoá bận và hạn giữ việc của các lượt đang chạy (GOAL T1).
+        self._lease_tasks: set = set()
         # Khoá chấp nhận đầu ra (R3): kiểm "đầu ra còn hợp lệ" và ghi bài học bền nằm trong cùng một khoá với các thao
         # tác làm đầu ra hết hợp lệ (bỏ thành viên, đổi trưởng nhóm, huỷ, sửa yêu cầu, xoá agent). Không có khe nào giữa
         # lúc kiểm và lúc ghi để một thao tác như vậy chen vào.
@@ -755,7 +768,48 @@ class TeamRunner:
         team = self._team(team_id)
         auth = self.teams.active_authority(team_id)
         return {"authority": auth, "effective_caps": self.effective_caps(team_id, "aux", team),
-                "fixed_limits": dict(FIXED_LIMITS)}
+                "fixed_limits": dict(FIXED_LIMITS), "limits": self.limits_table(team_id, team, auth)}
+
+    def limits_table(self, team_id: str, team: Optional[dict] = None, auth: Any = _UNPINNED) -> list:
+        """Bảng MỌI giới hạn của nhóm (GOAL T1 mục 9), đọc từ đúng hằng và trần mà code đang áp. Mỗi dòng:
+        `key`, `category` ("owner": chủ chỉnh được; "leader": trưởng nhóm chỉnh được trong Toàn quyền, trong trần tối đa
+        của chủ; "server": máy chủ cố định; "provider": nhà cung cấp model quyết), `value` (số, None là Không giới hạn,
+        hay None với `unit` "rule" là luật không có con số), `unit` ("count", "seconds", "rule"), `unlimited_ok` (có lựa
+        chọn Không giới hạn). Dòng "leader" có thêm `granted` (Toàn quyền đang bật) và `editable` (trưởng nhóm đổi được
+        lúc này: có trần tối đa cho trần đó). Không có dòng nào nói "bỏ mọi giới hạn": nhóm server và provider luôn áp."""
+        team = team or self._team(team_id)
+        if auth is _UNPINNED:
+            auth = self.teams.active_authority(team_id)
+        caps = team["caps"]
+        rows = []
+        for k in OWNER_CAPS:
+            rows.append({"key": k, "category": "owner", "value": caps.get(k, DEFAULT_CAPS.get(k)),
+                         "unit": "seconds" if k == "busy_wait_s" else "count", "unlimited_ok": k in UNLIMITED_CAPS})
+        ceilings = ((auth or {}).get("grant") or {}).get("ceilings") or {}
+        for k in AUTH_CAPS:
+            ce = ceilings.get(k)
+            value = None if isinstance(ce, dict) and ce.get("unlimited") else (int(ce) if ce is not None else None)
+            rows.append({"key": k, "category": "leader", "value": value, "unit": "count", "unlimited_ok": True,
+                         "granted": bool(auth), "editable": bool(auth) and ce is not None,
+                         "model_turns": k in MODEL_TURN_CAPS})
+        ceiling = os.environ.get("JAVIS_RESONANCE_CALL_CEILING", "").strip()
+        server = [
+            ("running_jobs", FIXED_CAPS["running_jobs"], "count"),
+            ("max_parallel_teams", self.max_parallel_teams, "count"),
+            ("agent_one_turn", 1, "count"),
+            ("busy_lease", int(self.busy_lease_s), "seconds"),
+            ("no_progress", FIXED_CAPS["no_progress"], "count"),
+            ("turn_timeout", int(self.turn_timeout), "seconds"),
+            ("step_timeout", int(self.step_timeout), "seconds"),
+            ("admin_ops_per_turn", ADMIN_OPS_PER_TURN, "count"),
+            ("history_window", NEW_MSG_LIMIT, "count"),
+            ("text_only", None, "rule"),
+            ("server_call_ceiling", int(ceiling) if ceiling.isdigit() else None, "count" if ceiling.isdigit() else "rule"),
+        ]
+        rows += [{"key": k, "category": "server", "value": v, "unit": u, "unlimited_ok": False} for k, v, u in server]
+        rows += [{"key": k, "category": "provider", "value": None, "unit": "rule", "unlimited_ok": False}
+                 for k in ("provider_quota", "account")]
+        return rows
 
     def _authority_lines(self, team: dict, auth: dict, agent_key: str) -> list:
         """Khối "Toàn quyền" trong lời nhắc của trưởng nhóm: trần đang áp, lệnh quản trị dùng được (đúng cú pháp khối
@@ -784,13 +838,24 @@ class TeamRunner:
     def _system(self, team: dict, text: str, kind: str) -> None:
         self._post(team, text, author_kind="system", meta={"kind": kind})
 
-    def _apply_admin(self, team_id: str, leader_key: str, op: dict, notes: list, source: str) -> None:
-        """Một lệnh quản trị của trưởng nhóm Toàn quyền (spec 13, 15.2). Người gọi giữ `accept_lock` và đã kiểm Toàn
-        quyền còn hiệu lực cho đúng `leader_key`. Lỗi thì ghi chú trên tin, không ném."""
+    def _apply_admin(self, team_id: str, leader_key: str, op: dict, notes: list, source: str,
+                     authority_pin: Any = _UNPINNED) -> None:
+        """Một lệnh quản trị của trưởng nhóm Toàn quyền (spec 13, 15.2). Người gọi giữ `accept_lock`. Lỗi thì ghi chú
+        trên tin, không ném.
+
+        Lượt cũ không hưởng quyền cấp lại (GOAL T1 mục 9): lệnh chỉ áp dưới ĐÚNG dòng Toàn quyền đang hiệu lực lúc lượt
+        giữ chỗ (`authority_pin`, ghi ở `team_turns.authority_id` trong cùng giao dịch giữ chỗ). Chủ thu hồi rồi cấp lại,
+        cấp mới hay sửa hộp cấp quyền (mỗi lần là một dòng mới), hoặc cấp khi lượt bắt đầu ở Quyền giới hạn (ghim None),
+        đều làm lệnh của lượt đang chạy bị từ chối kèm ghi chú. Trưởng nhóm tự đổi trần trong dòng (`set_cap`) không đổi
+        id nên không ảnh hưởng. Không kèm ghim (`_UNPINNED`) thì chỉ kiểm dòng đang hiệu lực như trước."""
         team = self._team(team_id)
         auth = self.teams.active_authority(team_id)
         if not auth or auth["leader_key"] != leader_key:
             notes.append(f"Lệnh '{op.get('op')}' cần Toàn quyền, đã bỏ")
+            return
+        if authority_pin is not _UNPINNED and auth["id"] != authority_pin:
+            notes.append(f"Lệnh '{op.get('op')}' bị bỏ: quyền tự quyết của nhóm đã đổi sau khi lượt này bắt đầu; lượt cũ "
+                         "không dùng quyền mới được cấp")
             return
         grant = auth["grant"] or {}
         by = f"leader:{leader_key}"
@@ -847,6 +912,13 @@ class TeamRunner:
                 self._system(team, f"Trưởng nhóm {lead} đã tạo trợ lý {name} (do nhóm quản lý) và thêm vào nhóm.",
                              "agent_created")
             elif kind in ("set_resonance", "edit_agent"):
+                # Luật (GOAL T1, mục 4.3 và 9): trưởng nhóm chỉ bật/tắt Auto (Cộng hưởng) hay sửa lời nhắc của trợ lý do
+                # CHÍNH nhóm này quản lý (`managed_by_team`, mỗi trợ lý tối đa một nhóm), và chỉ dưới dòng Toàn quyền ghim
+                # cho lượt này (Toàn quyền bao gồm quản lý trợ lý do nhóm quản lý, spec 13.3; kiểm ở đầu hàm). Chủ đã tắt
+                # Auto cho một trợ lý mà nhóm không quản lý (chỉ tham gia, hay do nhóm khác quản lý) thì trưởng nhóm không
+                # bật lại được. Reaction, @ hay lịch thức không có đường nào bật lại; đây là lệnh quản trị tường minh,
+                # có nhật ký ở team_events (`agent_set_resonance`) và resonance_agent_events (by=leader:<mã>). Bật thì host
+                # đánh thức mục tiêu của trợ lý như route bật của chủ (`_TeamAdmin.set_resonance`).
                 key = self._resolve(team, op.get("agent"))
                 m = self.teams.member(team_id, key) if key else None
                 if not m or not m.get("managed_by_team"):
@@ -994,8 +1066,12 @@ class TeamRunner:
 
     # ───────────── một lượt ─────────────
 
-    def _context(self, team: dict, agent_key: str, role: str, task: Optional[dict], step: Optional[dict]) -> str:
-        """Khối nhóm do code dựng (spec 11.2). Chỉ dữ liệu của CHÍNH nhóm này."""
+    def _context(self, team: dict, agent_key: str, role: str, task: Optional[dict], step: Optional[dict],
+                 authority_pin: Any = _UNPINNED) -> str:
+        """Khối nhóm do code dựng (spec 11.2). Chỉ dữ liệu của CHÍNH nhóm này. `authority_pin`: id dòng Toàn quyền ghim
+        lúc giữ chỗ lượt (None: lượt bắt đầu ở Quyền giới hạn); khối Toàn quyền chỉ hiện khi đúng dòng đó còn hiệu lực,
+        để lời nhắc không mời trưởng nhóm dùng một quyền mà pha áp dụng sẽ từ chối. Gọi không kèm ghim (`_UNPINNED`) thì
+        dùng dòng đang hiệu lực như trước."""
         lines = [f"# NHÓM: {team['name']}"]
         if team.get("description"):
             lines.append(f"Mô tả: {team['description']}")
@@ -1034,6 +1110,8 @@ class TeamRunner:
                          "\"mới\" là tin sau lượt trước của bạn)")
             lines.extend(reversed(rendered))
         auth = self.teams.active_authority(team["team_id"]) if agent_key == team.get("leader_key") else None
+        if auth and authority_pin is not _UNPINNED and auth["id"] != authority_pin:
+            auth = None
         if auth and role in LEADER_ROLES:
             lines.extend(self._authority_lines(team, auth, agent_key))
         feedback = self._feedback_lines(team, agent_key)
@@ -1080,7 +1158,7 @@ class TeamRunner:
         try:
             # Bị huỷ khi luồng phụ đang lấy dòng khoá: run_io chờ nó xong rồi nhả đúng dòng vừa lấy (undo).
             while not await self._io(self.teams.acquire_busy, agent_key, team["team_id"], turn_id,
-                                     lease_s=BUSY_LEASE_S,
+                                     lease_s=self.busy_lease_s,
                                      undo=lambda got: got and self.teams.release_busy(agent_key, turn_id)):
                 if time.monotonic() > deadline:
                     lock.release()
@@ -1131,10 +1209,11 @@ class TeamRunner:
         if pre != "done":
             return {"pre": pre}
         engine, model, fn = self.engine_for(team, agent_key, role)
+        pin = (self.teams.turn(turn_id) or {}).get("authority_id")
         req = {"team_id": team_id, "brain": team["brain_id"], "agent_key": agent_key, "role": role,
                "system": (str(info.get("system") or "").rstrip() + "\n\n" + TEXT_ONLY_NOTE + "\n\n" +
                           "\n".join(INTERNAL_GROUP_NOTE)).lstrip(),
-               "prompt": self._context(team, agent_key, role, task, step) + "\n\n" + body,
+               "prompt": self._context(team, agent_key, role, task, step, authority_pin=pin) + "\n\n" + body,
                "thread": f"teammate:{team_id}:{agent_key}", "task_id": task["id"] if task else None,
                "step_id": step["step_id"] if step else None, "turn_id": turn_id, "tools": []}
         return {"pre": "done", "engine": str(engine or ""), "model": str(model or ""), "fn": fn, "req": req}
@@ -1164,6 +1243,10 @@ class TeamRunner:
             await self._io(self._refund_if_unmarked, turn_id)
             return {"status": "busy_long", "turn_id": turn_id}
         marked = False
+        # Gia hạn khoá bận và hạn giữ việc suốt lượt (GOAL T1): lời gọi engine của một bước có thể dài hơn cả hai hạn.
+        renewer = asyncio.ensure_future(self._keep_leases(agent_key, turn_id, task_id))
+        self._lease_tasks.add(renewer)
+        renewer.add_done_callback(self._lease_tasks.discard)
         try:
             try:
                 prep = await self._io(self._prepare, team_id, agent_key, role, task, step, body, turn_id)
@@ -1231,8 +1314,29 @@ class TeamRunner:
             await self._io(self.teams.settle_turn, turn_id, "ok", res.get("tokens_in"), res.get("tokens_out"),
                            res.get("cost_usd"))
         finally:
+            # Dừng gia hạn TRƯỚC khi nhả khoá. Một lần gia hạn đang chạy dở ở luồng phụ chỉ UPDATE đúng dòng của lượt này,
+            # nên sau khi khoá đã nhả nó không tạo lại dòng nào (renew_busy không giành khoá).
+            renewer.cancel()
             await self._release(agent_key, turn_id)
         return await self._io(self._accept, team_id, agent_key, role, task, step, turn_id, res, reply_to, vet)
+
+    async def _keep_leases(self, agent_key: str, turn_id: str, task_id: Optional[str]) -> None:
+        """Nhịp gia hạn của một lượt: khoá bận của agent (BUSY_LEASE_S) và, với bước của việc nhóm, hạn giữ việc
+        (JOB_LEASE_S), để tiến trình khác không giành cùng agent hay cùng việc giữa lượt. Chạy tới khi bị huỷ."""
+        while True:
+            every = max(0.01, min(float(self.lease_renew_s), float(self.busy_lease_s) / 3, float(self.job_lease_s) / 3))
+            await asyncio.sleep(every)
+            try:
+                await self._io(self._renew_leases, agent_key, turn_id, task_id)
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 - kho bận một nhịp: hạn còn thời gian, nhịp sau thử lại
+                pass
+
+    def _renew_leases(self, agent_key: str, turn_id: str, task_id: Optional[str]) -> None:
+        self.teams.renew_busy(agent_key, turn_id, self.busy_lease_s)
+        if task_id:
+            self.tasks.team_heartbeat(task_id, self.worker_id, lease_s=self.job_lease_s)
 
     def _accept(self, team_id: str, agent_key: str, role: str, task: Optional[dict], step: Optional[dict],
                 turn_id: str, res: dict, reply_to, vet) -> dict:
@@ -1253,6 +1357,8 @@ class TeamRunner:
             # TRONG khoá này, cùng khoá với thu hồi, nên lệnh tới sau mốc thu hồi bị từ chối (13.5).
             admin_ops = [op for op in ops if op["op"] in ADMIN_OPS]
             ops = [op for op in ops if op["op"] not in ADMIN_OPS]
+            # Quyền ghim lúc giữ chỗ lượt (GOAL T1 mục 9). Đọc trong khoá, cùng khoá với cấp và thu hồi.
+            pin = (self.teams.turn(turn_id) or {}).get("authority_id") if admin_ops else None
             for i, op in enumerate(admin_ops):
                 if not applied or role not in LEADER_ROLES:
                     notes.append(f"Lệnh '{op['op']}' không dùng được ở lượt này, đã bỏ")
@@ -1261,7 +1367,7 @@ class TeamRunner:
                     notes.append(f"Mỗi lượt tối đa {ADMIN_OPS_PER_TURN} lệnh quản trị, đã bỏ phần thừa")
                     break
                 # Khoá nguồn không kết thúc bằng số: `_source_id` không đọc nhầm thứ tự lệnh thành mã tin (review T3).
-                self._apply_admin(team_id, agent_key, op, notes, f"{turn_id}#op{i}")
+                self._apply_admin(team_id, agent_key, op, notes, f"{turn_id}#op{i}", authority_pin=pin)
         allowed = OPS_BY_ROLE.get(role, set())
         kept = []
         for op in ops:
@@ -1567,7 +1673,7 @@ class TeamRunner:
             return ("return", "cancelled")
         if team["status"] != "active":
             return ("return", "paused")
-        self.tasks.team_heartbeat(task_id, self.worker_id)
+        self.tasks.team_heartbeat(task_id, self.worker_id, lease_s=self.job_lease_s)
         step = self.teams.next_queued_step(task_id)
         if step is None:
             res = self._after_steps(team, task)
@@ -1734,8 +1840,10 @@ class TeamRunner:
                     team = self.teams.get(team_id)
                     if not team or team["status"] != "active":
                         continue
-                    task = self.tasks.claim_team_next(team_id, self.worker_id,
-                                                      max_running=int(team["caps"]["running_jobs"]))
+                    # Một việc chạy mỗi nhóm là giới hạn MÁY CHỦ (team_store.FIXED_CAPS, GOAL T1 mục 9), không phải trần
+                    # chủ chỉnh: nhóm đã có việc trong pool bị bỏ qua ở trên.
+                    task = self.tasks.claim_team_next(team_id, self.worker_id, lease_s=self.job_lease_s,
+                                                      max_running=FIXED_CAPS["running_jobs"])
                     if not task:
                         continue
                     current = task["id"]

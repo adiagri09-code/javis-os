@@ -22388,9 +22388,16 @@ class _TeamAdmin:
             _write_md(path, meta, prompt)
 
     def set_resonance(self, root, slug, on, by):
+        """Lệnh `set_resonance` của trưởng nhóm Toàn quyền. Bộ chạy đã kiểm luật (trợ lý do CHÍNH nhóm quản lý, dưới dòng
+        Toàn quyền ghim cho lượt, `team_runner._apply_admin`). Bật thì đánh thức mục tiêu của trợ lý NGAY, đúng như route
+        bật của chủ (`POST /resonance/agents/toggle`), thay vì để chờ lần kiểm lại `agent_recheck` tới 6 giờ (GOAL T1)."""
         if on and _agent_md_path(root, slug) is None:
             raise FileNotFoundError(slug)
-        _resonance_store().agent_set_enabled(resonance_store.Principal("owner", by, _brain_key(root)), slug, bool(on))
+        store = _resonance_store()
+        brain = _brain_key(root)
+        a = store.agent_set_enabled(resonance_store.Principal("owner", by, brain), slug, bool(on))
+        if on and a is not None:
+            store.wake_agent_goals(brain, a["agent_key"])
 
 
 async def _team_notify(session_id, text):

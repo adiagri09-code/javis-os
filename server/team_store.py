@@ -36,6 +36,16 @@ DEFAULT_CAPS = {
     "running_jobs": 1,         # việc chạy cùng lúc mỗi nhóm
     "busy_wait_s": 1800,       # chờ khoá bận trước khi báo chặn
 }
+# Trần chủ nhóm đổi được (POST /teams/{id}/caps). GOAL T1 mục 9 (bảng giới hạn): `running_jobs` và `no_progress` vẫn nằm
+# trong DEFAULT_CAPS để hiện và để đọc dòng cũ, nhưng do MÁY CHỦ cố định:
+# - running_jobs: bộ điều phối giữ đúng một việc chạy mỗi nhóm (pool chung bỏ qua nhóm đã có việc chạy, review T1 R8), nên
+#   số > 1 trước đây nhận được mà không bao giờ có tác dụng. Chọn thay đổi nhỏ và an toàn: bỏ khỏi trần chỉnh được, hiện là
+#   giới hạn kỹ thuật, thay vì mở song song trong một nhóm (đụng khoá bận theo agent, thứ tự hàng đợi, ngữ cảnh chung).
+# - no_progress: bộ chạy dừng ở hai kết quả GIỐNG HỆT liên tiếp (so sha), con số không được đọc ở đâu.
+OWNER_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns", "mentions", "busy_wait_s")
+# Trần có lựa chọn "Không giới hạn" (lưu `None`, không thay bằng số lớn). Bộ chạy đọc `None` là không chặn.
+UNLIMITED_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns")
+FIXED_CAPS = {"running_jobs": 1, "no_progress": 2}
 TEAM_STATUS = ("active", "paused", "archived")
 STEP_KINDS = ("plan", "work", "help", "synthesize", "reply")
 TURN_ROLES = ("leader_reply", "member_reply", "plan", "work", "help", "synthesize")
@@ -139,6 +149,10 @@ class TeamStore:
             if "committed_at" not in cols:
                 # Mốc ghi bài học của lượt vào bộ nhớ agent (chỉ một lần, chỉ khi đầu ra được chấp nhận).
                 c.execute("ALTER TABLE team_turns ADD COLUMN committed_at REAL")
+            if "authority_id" not in {r[1] for r in c.execute("PRAGMA table_info(team_turns)").fetchall()}:
+                # Dòng Toàn quyền đang hiệu lực LÚC GIỮ CHỖ lượt (GOAL T1 mục 9, "lượt cũ không hưởng quyền cấp lại"):
+                # lệnh quản trị của lượt chỉ áp dưới đúng dòng này. NULL: lượt bắt đầu ở Quyền giới hạn.
+                c.execute("ALTER TABLE team_turns ADD COLUMN authority_id INTEGER")
             if "identity_json" not in {r[1] for r in c.execute("PRAGMA table_info(team_members)").fetchall()}:
                 # Ảnh chụp nhân dạng (tên, ảnh) của thành viên lúc còn xác nhận được theo agent_key, để tin cũ giữ đúng
                 # người viết sau khi trợ lý bị xoá và slug được dùng lại cho trợ lý khác (review 4f6268bd #1).
@@ -186,6 +200,7 @@ class TeamStore:
     def _team(r) -> dict:
         caps = dict(DEFAULT_CAPS)
         caps.update(json.loads(r["caps_json"] or "{}"))
+        caps.update(FIXED_CAPS)   # dòng cũ từng lưu số khác vẫn hiện đúng giá trị đang áp
         return {"team_id": r["team_id"], "brain_id": r["brain_id"], "name": r["name"], "description": r["description"],
                 "session_id": r["session_id"], "leader_key": r["leader_key"], "leader_mode": r["leader_mode"],
                 "status": r["status"], "caps": caps, "created_at": r["created_at"], "updated_at": r["updated_at"],
@@ -300,12 +315,23 @@ class TeamStore:
         return self.get(team_id)
 
     def set_caps(self, team_id: str, caps: dict, by: str = "owner") -> dict:
-        """Chủ nhóm đổi trần (spec 12.3). Chỉ nhận khoá có trong DEFAULT_CAPS, giá trị số không âm."""
+        """Chủ nhóm đổi trần (spec 12.3). Chỉ nhận khoá trong OWNER_CAPS, giá trị số không âm; trần trong UNLIMITED_CAPS
+        nhận thêm `None` hay {"unlimited": true} là "Không giới hạn" (GOAL T1 mục 9). Trần máy chủ cố định bị từ chối."""
         bad = set(caps or {}) - set(DEFAULT_CAPS)
         if bad:
             raise TeamError(f"trần không có: {sorted(bad)}")
+        fixed = sorted(set(caps or {}) & set(FIXED_CAPS))
+        if fixed:
+            raise TeamError(f"trần do máy chủ cố định, không đổi được: {fixed}")
         clean = {}
         for k, v in (caps or {}).items():
+            if v is None or (isinstance(v, dict) and v.get("unlimited") is True):
+                if k not in UNLIMITED_CAPS:
+                    raise TeamError(f"trần {k} không có lựa chọn Không giới hạn")
+                clean[k] = None
+                continue
+            if isinstance(v, (bool, dict, list)):
+                raise TeamError(f"trần {k} phải là số")
             try:
                 num = float(v)
             except (TypeError, ValueError):
@@ -559,8 +585,14 @@ class TeamStore:
                     "SELECT COUNT(*) FROM team_turns WHERE task_id=? AND status != 'refunded'",
                     (task_id,)).fetchone()[0]) >= int(task_cap):
                 raise TurnCapReached("task_turns")
-            c.execute("INSERT INTO team_turns(turn_id,team_id,task_id,step_id,agent_key,role,created_at) "
-                      "VALUES(?,?,?,?,?,?,?)", (tid, team_id, task_id, step_id, agent_key, role, time.time()))
+            # Ghim quyền của lượt trong CÙNG giao dịch giữ chỗ (GOAL T1 mục 9): chỉ lượt của chính trưởng nhóm đang được
+            # cấp mới mang id dòng Toàn quyền. Cấp, cấp lại hay thu hồi sau mốc này không đổi được quyền của lượt.
+            auth = self._active_authority_row(c, team_id)
+            t = c.execute("SELECT leader_key FROM teams WHERE team_id=?", (team_id,)).fetchone()
+            pin = (int(auth["id"]) if auth is not None and t is not None and t["leader_key"] == auth["leader_key"]
+                   and auth["leader_key"] == agent_key else None)
+            c.execute("INSERT INTO team_turns(turn_id,team_id,task_id,step_id,agent_key,role,created_at,authority_id) "
+                      "VALUES(?,?,?,?,?,?,?,?)", (tid, team_id, task_id, step_id, agent_key, role, time.time(), pin))
         return tid
 
     def mark_engine(self, turn_id: str, engine: str, model: str) -> None:
@@ -821,6 +853,15 @@ class TeamStore:
                       "ON CONFLICT(agent_key) DO UPDATE SET team_id=excluded.team_id, turn_id=excluded.turn_id, "
                       "lease_until=excluded.lease_until", (agent_key, team_id, turn_id, t + float(lease_s)))
             return True
+
+    def renew_busy(self, agent_key: str, turn_id: str, lease_s: float, now: Optional[float] = None) -> bool:
+        """Gia hạn khoá bận của ĐÚNG lượt `turn_id` trong lúc lượt còn chạy (GOAL T1, lượt dài tới STEP_TIMEOUT_S). Chỉ
+        UPDATE: dòng đã nhả (lượt xong) hay đã thuộc lượt khác thì không làm gì, không bao giờ giành lại. Trả True khi đã
+        gia hạn."""
+        t = time.time() if now is None else float(now)
+        with self._Tx(self) as c:
+            return c.execute("UPDATE agent_busy SET lease_until=? WHERE agent_key=? AND turn_id=?",
+                             (t + float(lease_s), agent_key, turn_id)).rowcount == 1
 
     def release_busy(self, agent_key: str, turn_id: str) -> None:
         with self._Tx(self) as c:

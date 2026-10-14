@@ -2802,6 +2802,18 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .tm-unl { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
 .tm-unl[hidden] { display: none; }
 .tm-auth-fixed { margin: 0; padding-left: 18px; font-size: 12px; color: var(--text2); }
+/* GOAL T1: trần của chủ có ô Không giới hạn riêng; bảng giới hạn trong Nâng cao. Chữ trong Nâng cao tối thiểu 16px. */
+.tm-cap-num { display: grid; gap: 4px; }
+.tm-cap-num[hidden] { display: none; }
+.tm-adv .tm-field, .tm-adv .tm-unl, .tm-adv .tm-react-sub, .tm-adv .tm-auth-fixed, .tm-adv .tm-auth-status,
+.tm-adv .tm-auth-pair, .tm-adv .tm-sub, .tm-adv .tm-note-line { font-size: 16px; }
+.tm-limits { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 16px; }
+.tm-limits[hidden] { display: none; }
+.tm-limits-cat { margin-top: 10px; }
+.tm-limits-head { font-size: 16px; font-weight: 600; }
+.tm-limits-note { font-size: 16px; color: var(--text2); margin-top: 4px; }
+.tm-limits-list { margin: 6px 0 0; padding-left: 20px; font-size: 16px; line-height: 1.5; }
+.tm-limit-v { font-weight: 600; }
 .tm-back, .tm-close { display: none; }
 .tm-side-bar .tm-close { display: inline-flex; }
 @keyframes tm-in-right { from { transform: translateX(100%); } to { transform: none; } }
