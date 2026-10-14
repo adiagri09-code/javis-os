@@ -64,6 +64,60 @@ check("lý do lạ: Không rõ lý do", h.includes(vi["teams.reply.why.unknown"]
 check("tin của trợ lý không vẽ trạng thái lượt", !TM.messageHtml({ id: 8, author_kind: "agent", author_ref: "ag_lan",
   content: "x", meta: {}, replies: msg.replies }, ctx).includes("tm-replies"));
 
+// ───────────── hộp chọn thành viên kiểu Zalo ─────────────
+const TP = require(path.join(ROOT, "dashboard", "team-picker.js"));
+TP.setStrings(vi);
+const roster = [
+  { slug: "ban-hang", name: "Javis Vũ Zalo", role: "Trợ lý chăm khách", tags: ["Bán hàng"], tag_keys: ["bán hàng"] },
+  { slug: "coach", name: "Coach Mục Tiêu & Kỷ Luật", role: "Huấn luyện", tags: ["Cá nhân"], tag_keys: ["cá nhân"] },
+  { slug: "viet", name: "Người Viết <i>", role: "Viết bài", tags: ["Bán hàng", "Nội dung"], tag_keys: ["bán hàng", "nội dung"] },
+  { slug: "cu", name: "Đã nghỉ", status: "retired", tags: ["Bán hàng"] },
+];
+check("bỏ dấu: 'muc tieu' tìm ra 'Mục Tiêu', 'đ' thành 'd'", TP.fold("Mục Tiêu Đạt") === "muc tieu dat");
+let st = { mode: "create", query: "muc tieu", tag: "", selected: [], leader: "", leaderTouched: false };
+check("tìm không dấu theo tên", TP.visible(roster, st).map(function (a) { return a.slug; }).join() === "coach");
+st.query = "viet bai";
+check("tìm không dấu theo vai", TP.visible(roster, st).map(function (a) { return a.slug; }).join() === "viet");
+const tags = TP.tagsOf(roster);
+check("chip tag lấy từ tag của trợ lý (trợ lý đã nghỉ không tính), đếm đúng",
+  tags[0].label === "Bán hàng" && tags[0].count === 2 && tags.length === 3, JSON.stringify(tags));
+st = TP.toggle({ mode: "create", query: "", tag: "", selected: [], leader: "", leaderTouched: false }, "coach");
+st = TP.toggle(st, "viet");
+check("chọn người đầu tiên: tự thành Điều phối", st.leader === "coach" && st.selected.join() === "coach,viet");
+st = Object.assign({}, st, { tag: "bán hàng" });
+check("đổi bộ lọc tag không mất người đã chọn", st.selected.join() === "coach,viet"
+  && TP.visible(roster, st).map(function (a) { return a.slug; }).join() === "ban-hang,viet");
+let html = TP.html(st, roster);
+check("người đã chọn vẫn hiện thành chip dù bị lọc khỏi danh sách", html.includes("Coach Mục Tiêu &amp; Kỷ Luật")
+  && /tmp-sel[\s\S]*data-pick-toggle="coach"/.test(html), html);
+check("Điều phối chỉ có người đã chọn", /<select class="tmp-leader-pick">[\s\S]*value="coach" selected[\s\S]*value="viet"/.test(html)
+  && !/<option value="ban-hang"/.test(html), html);
+check("người tạo hiện 'Bạn · Người tạo nhóm/quản lý', tách khỏi Điều phối", html.includes("tmp-owner")
+  && html.includes(vi["teams.pick.you_role"]) && html.indexOf("tmp-owner") < html.indexOf("tmp-leader-pick"));
+check("tên, vai escape; trợ lý đã nghỉ không hiện", html.includes("Người Viết &lt;i&gt;") && !html.includes("Đã nghỉ"));
+check("footer cố định có số đã chọn, Huỷ, Tạo nhóm", /tmp-foot-box[\s\S]*Đã chọn 2[\s\S]*tmp-cancel[\s\S]*tmp-submit/.test(html), html);
+st = TP.toggle(st, "coach");
+check("bỏ người đang Điều phối: Điều phối chuyển cho người còn lại", st.leader === "viet" && st.selected.join() === "viet");
+st = TP.normalize(Object.assign({}, st, { leader: "", leaderTouched: true }));
+check("chủ chọn 'Chưa chọn' Điều phối: giữ trống", st.leader === "");
+check("tên trống: ghép tên thành viên như Zalo", TP.autoName({ selected: ["coach", "viet"] }, roster) === "Coach Mục Tiêu & Kỷ Luật, Người Viết <i>");
+check("chưa chọn ai: không bấm Tạo được", !TP.canSubmit({ selected: [] }) && TP.canSubmit({ selected: ["coach"] })
+  && !TP.canSubmit({ selected: ["coach"], saving: true }));
+html = TP.html({ mode: "add", query: "", tag: "", selected: [], exclude: ["coach"] }, roster);
+check("thêm thành viên: không có ô tên, không có 'Bạn', loại người đã trong nhóm", !html.includes("tmp-name-input")
+  && !html.includes("tmp-owner") && !html.includes('data-pick-slug="coach"') && html.includes('data-pick-slug="viet"'));
+html = TP.html({ mode: "create", query: "", tag: "", selected: ["coach"], leader: "coach", name: "Nhóm <x>", error: "Thiếu <b>" }, roster);
+check("lỗi khi tạo: form giữ nguyên tên và lựa chọn, lỗi hiện trong hộp", html.includes('value="Nhóm &lt;x&gt;"')
+  && html.includes("tmp-error") && html.includes("Thiếu &lt;b&gt;") && /data-pick-slug="coach" checked/.test(html));
+check("hộp là dialog có nhãn, đóng được bằng nút có nhãn", /role="dialog" aria-modal="true" aria-labelledby="tmp-title"/.test(html)
+  && html.includes('aria-label="' + vi["teams.pick.close"] + '"'));
+check("điện thoại: hộp thành màn đầy đủ, footer chừa vùng an toàn", /@media \(max-width: 640px\) \{[\s\S]*\.tmp-dialog \{[^}]*height: 100dvh/.test(css)
+  && /\.tmp-foot \{ padding-bottom: calc\(12px \+ env\(safe-area-inset-bottom/.test(css));
+check("chữ hộp chọn 16px, vùng chạm 44px", /\.tmp-dialog \{[^}]*font-size: 16px/.test(css) && /\.tmp-foot \.ws-btn \{ min-height: 44px/.test(css));
+const indexHtml = fs.readFileSync(path.join(ROOT, "dashboard", "index.html"), "utf8");
+check("team-picker.js nạp trước teams.js", indexHtml.indexOf("team-picker.js") > 0
+  && indexHtml.indexOf("team-picker.js") < indexHtml.indexOf("/static/teams.js"));
+
 // ───────────── nối dây ─────────────
 check("app.js chuyển gói team_replies cho trang Nhóm", /data\.type === "team_replies"/.test(appJs));
 check("chữ của dòng trạng thái tối thiểu 16px, nút Thử lại cao 44px", /\.tm-reply \{[^}]*font-size: 16px/.test(css)

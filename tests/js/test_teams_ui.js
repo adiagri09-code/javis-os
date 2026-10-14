@@ -119,7 +119,8 @@ h = TM.membersHtml(team, [{ slug: "hoa", name: "Hoa", agent_key: null, status: "
 check("thành viên: vai bằng chữ, trạng thái Cộng hưởng bằng chữ", h.includes(vi["teams.leader"]) && h.includes(vi["teams.member"])
       && h.includes(vi["resonance.t0_state_on"]) && h.includes(vi["resonance.t0_state_off"]), h);
 check("thành viên: nút Đặt làm trưởng nhóm, Bỏ khỏi nhóm", /data-leader="ag_minh"/.test(h) && /data-remove="ag_minh"/.test(h), h);
-check("thêm thành viên: chỉ agent chưa trong nhóm", h.includes('value="hoa"') && !h.includes('value="lan"'), h);
+check("thêm thành viên: một nút mở hộp chọn (0.142.0; hộp chọn loại người đã trong nhóm, test ở test_team_chat_0142.js)",
+      h.includes("tm-add-open") && !h.includes("tm-add-pick"), h);
 h = TM.settingsFormHtml(team);
 check("T5 tên, mô tả, trạng thái một cột, nút Lưu ở cuối, không có số giới hạn", h.lastIndexOf("tm-save") > h.lastIndexOf("tm-status")
       && !h.includes("tm-cap") && !h.includes("<table"), h);
@@ -131,9 +132,9 @@ h = TM.turnsHtml([{ agent_key: "ag_lan", role: "plan", status: "ok", created_at:
                   { agent_key: "ag_minh", role: "work", status: "refunded", created_at: Date.now() / 1000 }], team);
 check("lượt: lượt hoàn không tính, theo agent và vai", h.includes(vi["teams.turns_today"].replace("{n}", "1").replace("{cap}", "100"))
       && h.includes("Lan") && h.includes(vi["teams.role.plan"]), h);
-h = TM.createFormHtml([{ slug: "lan", name: "Lan" }, { slug: "minh", name: "M<x>" }]);
-check("tạo nhóm: tên, mô tả, chọn thành viên, trưởng nhóm, nút Tạo ở cuối", h.includes('name="tm-name"') && h.includes("M&lt;x&gt;")
-      && h.includes('name="tm-leader"') && h.lastIndexOf("tm-create-save") > h.lastIndexOf('name="tm-leader"'), h);
+// Tạo nhóm từ 0.142.0 là hộp chọn kiểu Zalo (team-picker.js, test riêng ở test_team_chat_0142.js).
+check("tạo nhóm và thêm người mở hộp chọn kiểu Zalo", teamsJs.includes('openPicker("create"') && teamsJs.includes('openPicker("add"')
+      && !teamsJs.includes("createFormHtml"));
 h = TM.bannersHtml(Object.assign({}, team, { leader_key: null }));
 check("T5 băng nhóm chưa có trưởng nhóm kèm nút Chọn", h.includes(vi["teams.no_leader"]) && /data-open-team="1"/.test(h), h);
 h = TM.bannersHtml(Object.assign({}, team, { status: "paused" }));
@@ -284,7 +285,9 @@ check("CSS: lớp flex mới của tìm có [hidden], vùng chạm 44px trên đ
 // Review T4
 check("review #1: tải lại trang tin mới nhất (gửi tin, lọc việc) thì thoát chế độ xem tin cũ",
       /function loadMsgs\(older\) \{[\s\S]{0,200}if \(!older\) S\.jumped = null;/.test(teamsJs));
-check("review #5: mở form tạo nhóm thì đóng ô tìm", /tm-new"\)\) \{[\s\S]{0,160}S\.searchOpen = false/.test(teamsJs));
+// review #5 cũ (form tạo nhóm thay khung chat nên phải đóng ô tìm) hết hiệu lực từ 0.142.0: hộp tạo nhóm là lớp phủ,
+// không đụng nhóm đang mở hay ô tìm.
+check("0.142.0: hộp tạo nhóm là lớp phủ, không đổi nhóm đang mở", /function openPicker\(mode, opener\) \{(?:(?!S\.activeId =)[\s\S]){0,700}\n  \}/.test(teamsJs));
 check("review #6: băng xem tin cũ dính ở đầu khung", /\.tm-jumped \{[^}]*position: sticky; top: 0;/.test(css));
 check("review #7: nút tìm đủ 44px bề ngang trên điện thoại", /\.tm-back, \.tm-close, \.tm-search-btn \{ min-width: 44px;/.test(css));
 check("review #8: kết quả tìm, nhảy tới về muộn sau khi đổi nhóm thì bỏ",

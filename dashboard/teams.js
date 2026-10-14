@@ -549,8 +549,6 @@
   // Mỗi thành viên một dòng (tên đủ, vai ở dòng dưới); chạm dòng mở các thao tác.
   function membersHtml(team, agents, openKey) {
     var mem = team.members || [];
-    var have = {};
-    mem.forEach(function (m) { have[m.slug] = true; });
     var rows = mem.map(function (m) {
       var lead = m.agent_key === team.leader_key;
       var open = openKey === m.agent_key;
@@ -571,12 +569,15 @@
           : '<button type="button" class="ws-btn" data-leader="' + esc(m.agent_key) + '">' + esc(tw("teams.make_leader")) + "</button>") +
         '<button type="button" class="ws-btn" data-remove="' + esc(m.agent_key) + '">' + esc(tw("teams.remove")) + "</button></span></div></div>";
     }).join("");
-    var free = (agents || []).filter(function (a) { return !have[a.slug] && a.status !== "retired"; });
-    var add = '<div class="tm-add"><select class="tm-add-pick" aria-label="' + esc(tw("teams.pick_agent")) + '"><option value="">' +
-      esc(tw("teams.pick_agent")) + "</option>" + free.map(function (a) {
-        return '<option value="' + esc(a.slug) + '">' + esc(a.name || a.slug) + "</option>";
-      }).join("") + '</select><button type="button" class="ws-btn tm-add-go">' + esc(tw("teams.add_member")) + "</button></div>";
-    return rows + add;
+    // Thêm người: mở hộp chọn kiểu Zalo (tìm không dấu, lọc tag, chọn nhiều người một lần), 0.142.0.
+    var add = '<div class="tm-add"><button type="button" class="ws-btn tm-add-open">' + ic("user-plus") +
+      esc(tw("teams.pick.add_open")) + "</button></div>";
+    // Chủ nhóm luôn đứng đầu, tách khỏi Điều phối (AI): người tạo và quản lý nhóm là bạn, không phải một trợ lý.
+    var you = '<div class="tm-mrow tm-mrow-you"><div class="tm-mhead tm-mhead-static">' +
+      '<span class="tmp-face tmp-initial tmp-you" aria-hidden="true">' + esc(tw("teams.pick.you").charAt(0)) + "</span>" +
+      '<span class="tm-mtext"><span class="tm-mname">' + esc(tw("teams.pick.you")) + '</span><span class="tm-mrole">' +
+      esc(tw("teams.pick.you_role")) + "</span></span></div></div>";
+    return you + rows + add;
   }
 
   // Mức tự quyết đang áp: 1 (hỏi trước, Quyền giới hạn), 2, 3, hay "custom" (đặt tay trong Nâng cao). Chỉ so trần tối
@@ -794,20 +795,6 @@
       turnsHtml(ui.turns || [], team) + "</details>";
   }
 
-  function createFormHtml(agents) {
-    var live = (agents || []).filter(function (a) { return a.status !== "retired" && a.status !== "missing"; });
-    return '<form class="tm-form tm-create" onsubmit="return false"><div class="tm-qhead">' + esc(tw("teams.create_title")) + "</div>" +
-      '<label class="tm-field"><span>' + esc(tw("teams.name")) + '</span><input name="tm-name" maxlength="120"></label>' +
-      '<label class="tm-field"><span>' + esc(tw("teams.description")) + '</span><textarea name="tm-desc" rows="2"></textarea></label>' +
-      '<div class="tm-field"><span>' + esc(tw("teams.members_pick")) + "</span>" + live.map(function (a) {
-        return '<label class="tm-check"><input type="checkbox" name="tm-member" value="' + esc(a.slug) + '"><span>' + esc(a.name || a.slug) + "</span></label>";
-      }).join("") + "</div>" +
-      '<label class="tm-field"><span>' + esc(tw("teams.leader_pick")) + '</span><select name="tm-leader"><option value="">' + esc(tw("teams.none")) +
-      "</option>" + live.map(function (a) { return '<option value="' + esc(a.slug) + '">' + esc(a.name || a.slug) + "</option>"; }).join("") +
-      "</select></label>" +
-      '<button type="button" class="ws-btn tm-primary tm-create-save">' + esc(tw("teams.create_save")) + "</button></form>";
-  }
-
   // Băng báo gọn, kèm nút giải quyết khi có: tạm dừng thì Bật lại, chưa có trưởng nhóm thì Chọn.
   function bannersHtml(team, teamNames) {
     var out = [];
@@ -877,10 +864,10 @@
   function fresh(el) {
     return { el: el, teams: [], next: null, activeId: "", team: null, queue: null, msgs: [], hasMore: false,
       agents: [], asJob: false, pending: null, tab: "jobs", side: false, view: "list", loaded: false,
-      filterTask: "", taskTitles: {}, teamNames: {}, note: "", creating: false, skipped: {}, picker: null, draft: null,
+      filterTask: "", taskTitles: {}, teamNames: {}, note: "", skipped: {}, picker: null, draft: null,
       focusPicker: false, focusBack: null, searchOpen: false, searchResults: null, searchQuery: "", jumped: null,
       openMember: null, advOpen: false, turns: [], sideOpener: null, rowMenu: null, focusRowMenu: false, swallowClick: false,
-      picked: [], retrying: {} };
+      picked: [], retrying: {}, pickSt: null, pickOpener: null, roster: [] };
   }
 
   function teamUrl(path) { return "/teams/" + q(S.activeId) + (path || ""); }
@@ -949,10 +936,7 @@
     if (!head) return;
     var back = '<button type="button" class="ws-btn tm-back" aria-label="' + esc(tw("teams.back")) + '" title="' +
       esc(tw("teams.back")) + '">' + ic("chevron-left") + "</button>";
-    if (S.creating) {
-      head.innerHTML = back + '<div class="tm-title"><strong>' + esc(tw("teams.create_title")) + "</strong></div>";
-      head.hidden = false;
-    } else if (!S.team) {
+    if (!S.team) {
       head.innerHTML = "";
       head.hidden = true;
     } else {
@@ -972,7 +956,7 @@
     }
     drawSearch();
     var b = S.el.querySelector(".tm-banners");
-    if (b) b.innerHTML = S.team && !S.creating ? bannersHtml(S.team, S.teamNames) : "";
+    if (b) b.innerHTML = S.team ? bannersHtml(S.team, S.teamNames) : "";
     drawFilterbar();
   }
 
@@ -980,7 +964,7 @@
   function drawSearch() {
     var bar = S.el.querySelector(".tm-search");
     if (!bar) return;
-    bar.hidden = !S.searchOpen || !S.team || S.creating;
+    bar.hidden = !S.searchOpen || !S.team;
     if (bar.hidden) { bar.innerHTML = ""; return; }
     if (!bar.querySelector(".tm-search-input")) {
       bar.innerHTML = '<div class="tm-search-row"><input type="search" class="tm-search-input" maxlength="100" placeholder="' +
@@ -996,7 +980,7 @@
   function drawFilterbar() {
     var bar = S.el.querySelector(".tm-filterbar");
     if (!bar) return;
-    bar.hidden = !S.filterTask || !S.team || S.creating;
+    bar.hidden = !S.filterTask || !S.team;
     bar.innerHTML = bar.hidden ? "" : "<span>" + esc(tw("teams.filter_on", { title: S.taskTitles[S.filterTask] || S.filterTask })) +
       '</span><button type="button" class="ws-btn tm-filter-clear">' + esc(tw("teams.filter_clear")) + "</button>";
   }
@@ -1063,10 +1047,6 @@
   function drawMsgs(stick) {
     var box = S.el.querySelector(".tm-msgs");
     if (!box) return;
-    if (S.creating) {
-      box.innerHTML = createFormHtml(S.agents);
-      return;
-    }
     if (!S.team) {
       box.innerHTML = S.teams.length ? '<div class="tm-empty tm-empty-chat">' + esc(tw("teams.pick_team")) + "</div>" : "";
       return;
@@ -1112,7 +1092,7 @@
   function drawJobs() {
     var bar = S.el.querySelector(".tm-jobs");
     if (!bar) return;
-    var h = S.team && !S.creating ? jobStripHtml(S.queue) : "";
+    var h = S.team ? jobStripHtml(S.queue) : "";
     bar.hidden = !h;
     bar.innerHTML = h;
   }
@@ -1120,7 +1100,7 @@
   function drawComposer() {
     var box = S.el.querySelector(".tm-composer");
     if (!box) return;
-    box.hidden = !S.team || S.creating;
+    box.hidden = !S.team;
     if (box.hidden) { box.innerHTML = ""; return; }
     var old = box.querySelector(".tm-input");
     var draft = S.pending ? S.pending.text : old ? old.value : "";
@@ -1177,7 +1157,7 @@
     var side = S.el.querySelector(".tm-side");
     if (!side) return;
     if (!force && S.side && !side.hidden && typingIn(side)) return;
-    side.hidden = !S.side || !S.team || S.creating;
+    side.hidden = !S.side || !S.team;
     var page = S.el.querySelector(".tm-page");
     if (page) page.setAttribute("data-side", side.hidden ? "0" : "1");
     var scrim = S.el.querySelector(".tm-scrim");
@@ -1240,7 +1220,7 @@
       S.loaded = true;
       S.teams.forEach(function (t) { S.teamNames[t.team_id] = t.name; });
       drawList();
-      if (!S.team && !S.creating) drawMsgs(false);
+      if (!S.team) drawMsgs(false);
       // Có nhóm cần mở từ ngoài trang (bấm thư trong hộp thư): mở khi danh sách đã về.
       if (pendingOpen) {
         var want = pendingOpen;
@@ -1321,7 +1301,7 @@
 
   function openTeam(id) {
     S.jumped = null; S.searchResults = null; S.searchQuery = ""; S.searchOpen = false;
-    S.activeId = id; S.creating = false; S.view = "chat"; S.asJob = false; S.pending = null; S.filterTask = "";
+    S.activeId = id; S.view = "chat"; S.asJob = false; S.pending = null; S.filterTask = "";
     S.team = null; S.queue = null; S.msgs = []; S.taskTitles = {}; S.side = false; S.openMember = null; S.turns = [];
     S.picker = null; S.draft = null; S.picked = []; S.retrying = {};
     var input = S.el.querySelector(".tm-input");
@@ -1467,8 +1447,119 @@
       reload: function () { loadTeams(false); if (id === S.activeId) loadTeam(); } });
   }
 
+  // ───────────── hộp chọn thành viên kiểu Zalo (0.142.0, team-picker.js) ─────────────
+
+  function TP() { return (typeof window !== "undefined" && window.JavisTeamPicker) || null; }
+
+  // Trợ lý của trang Cộng sự (tên, vai, tag, ảnh): cùng nguồn với cột trái trang Cộng sự để chip tag khớp.
+  function loadRoster() {
+    return call("GET", "/agents?prompt=0").then(function (r) {
+      if (r.code === 200) S.roster = r.j.agents || [];
+    });
+  }
+
+  function openPicker(mode, opener) {
+    if (!TP()) return;
+    var exclude = mode === "add" && S.team ? (S.team.members || []).filter(function (m) { return !m.status || m.status === "active"; })
+      .map(function (m) { return m.slug; }) : [];
+    S.pickSt = { mode: mode, query: "", tag: "", selected: [], leader: "", leaderTouched: false, name: "", desc: "",
+      exclude: exclude, saving: false, error: "" };
+    S.pickOpener = opener || null;
+    drawPicker("all");
+    loadRoster().then(function () { if (S.pickSt) drawPicker("all"); });
+  }
+
+  function closePicker() {
+    S.pickSt = null;
+    var host = S.el.querySelector(".tmp-host");
+    if (host) host.innerHTML = "";
+    var back = S.pickOpener;
+    S.pickOpener = null;
+    if (back && back.isConnected) { try { back.focus(); } catch (e) {} }
+  }
+
+  // Vẽ lại đúng phần cần: gõ tìm hay đổi tag chỉ thay danh sách (giữ con trỏ trong ô tìm); chọn người thay chip, danh
+  // sách, ô Điều phối và footer; "all" dựng lại cả hộp.
+  function drawPicker(part) {
+    var P = TP();
+    var st = S.pickSt;
+    if (!P || !st) return;
+    var host = S.el.querySelector(".tmp-host");
+    if (!host) {
+      host = document.createElement("div");
+      host.className = "tmp-host";
+      S.el.appendChild(host);
+    }
+    var roster = S.roster || [];
+    if (part === "all" || !host.firstChild) {
+      host.innerHTML = P.html(st, roster);
+      var first = host.querySelector(st.mode === "create" ? ".tmp-name-input" : ".tmp-search-input");
+      if (first && !(typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches)) first.focus();
+      return;
+    }
+    var put = function (sel, h) { var el = host.querySelector(sel); if (el) el.innerHTML = h; };
+    put(".tmp-tags-box", P.tagsHtml(roster, st));
+    put(".tmp-list", P.listHtml(roster, st));
+    if (part === "filter") return;
+    put(".tmp-selected-box", P.selectedHtml(roster, st));
+    put(".tmp-leader-box", P.leaderHtml(roster, st));
+    put(".tmp-foot-box", P.footerHtml(st));
+    var err = host.querySelector(".tmp-error");
+    if (err && !st.error) err.remove();
+  }
+
+  function pickToggle(slug) {
+    S.pickSt = TP().toggle(S.pickSt, slug);
+    S.pickSt.error = "";
+    drawPicker("pick");
+  }
+
+  function pickFail(msg) {
+    if (!S.pickSt) return;
+    S.pickSt.saving = false;
+    S.pickSt.error = msg;
+    drawPicker("all");
+  }
+
+  function submitPicker() {
+    var P = TP(), st = S.pickSt;
+    if (!P || !st || !P.canSubmit(st)) return;
+    st.saving = true; st.error = "";
+    drawPicker("pick");
+    if (st.mode === "create") {
+      var name = String(st.name || "").trim() || P.autoName(st, S.roster || []);
+      call("POST", "/teams", { name: name, description: st.desc || "", members: st.selected.slice(), leader_slug: st.leader || "" })
+        .then(function (r) {
+          if (r.code !== 200) return pickFail((r.j && r.j.error) || tw("teams.err", { e: r.code }));
+          // Tạo xong: vào thẳng khung chat của nhóm mới.
+          closePicker();
+          loadTeams(false).then(function () { openTeam(r.j.team.team_id); });
+        }, function () { pickFail(tw("teams.pick.err_network")); });
+      return;
+    }
+    // Thêm nhiều người: lần lượt từng người; ai lỗi thì GIỮ trong lựa chọn để bấm lại, ai xong thì khỏi danh sách.
+    var forTeam = S.activeId, done = [], failed = [], lastErr = "";
+    var nameOfSlug = function (slug) {
+      var a = (S.roster || []).filter(function (x) { return x.slug === slug; })[0];
+      return a ? (a.name || a.slug) : slug;
+    };
+    st.selected.slice().reduce(function (p, slug) {
+      return p.then(function () {
+        return call("POST", "/teams/" + q(forTeam) + "/members", { slug: slug }).then(function (r) {
+          if (r.code === 200) done.push(slug); else { failed.push(slug); lastErr = (r.j && r.j.error) || ""; }
+        }, function () { failed.push(slug); lastErr = tw("teams.err_network"); });
+      });
+    }, Promise.resolve()).then(function () {
+      if (S.activeId === forTeam) { loadTeam(); }
+      if (!failed.length) { closePicker(); return; }
+      S.pickSt = Object.assign({}, st, { selected: failed, exclude: (st.exclude || []).concat(done) });
+      pickFail(tw("teams.pick.add_partial", { done: done.map(nameOfSlug).join(", ") || "0",
+        failed: failed.map(nameOfSlug).join(", ") }) + (lastErr ? " (" + lastErr + ")" : ""));
+    });
+  }
+
   function onClick(e) {
-    var t = e.target.closest ? e.target.closest("button, [data-team], summary, .tm-scrim") : null;
+    var t = e.target.closest ? e.target.closest("button, [data-team], summary, .tm-scrim, .tmp-scrim") : null;
     // Bấm ở bất cứ đâu ngoài menu ghim thì đóng menu.
     if (S.rowMenu && !(e.target.closest && e.target.closest(".tm-row-menu")) && !(t && t.dataset && t.dataset.pinTeam)) {
       if (!(t && t.dataset && t.dataset.team && S.swallowClick)) closeRowMenu();
@@ -1497,16 +1588,15 @@
       if (S.advOpen) loadTurns();
       return;
     }
-    if (t.classList.contains("tm-new")) {
-      S.creating = true; S.view = "chat"; S.team = null; S.activeId = ""; S.side = false;
-      S.searchOpen = false; S.searchResults = null; S.searchQuery = ""; S.jumped = null;
-      drawSearch();
-      loadAgents().then(function () { drawAll(true); });
-      return;
-    }
+    if (t.classList.contains("tm-new")) return openPicker("create", t);
+    if (t.classList.contains("tm-add-open")) return openPicker("add", t);
+    if (d.pickTag !== undefined) { S.pickSt.tag = d.pickTag; drawPicker("filter"); return; }
+    if (d.pickToggle) { pickToggle(d.pickToggle); return; }
+    if (t.classList.contains("tmp-cancel")) return closePicker();
+    if (t.classList.contains("tmp-submit")) return submitPicker();
     if (t.classList.contains("tm-more-teams")) return loadTeams(true);
     if (t.classList.contains("tm-back")) {
-      S.view = "list"; S.creating = false; S.side = false;
+      S.view = "list"; S.side = false;
       if (!S.team) S.activeId = "";
       drawAll(false);
       return;
@@ -1527,7 +1617,6 @@
       return;
     }
     if (d.expand) { S.openMember = S.openMember === d.expand ? null : d.expand; drawSide(true); return; }
-    if (t.classList.contains("tm-create-save")) return createTeam();
     if (t.classList.contains("tm-asjob")) {
       S.asJob = !S.asJob;
       // Đổi loại tin là một tin KHÁC: mã client cũ thuộc tin trước, gửi lại bằng nó sẽ được trả tin cũ khác loại.
@@ -1638,11 +1727,6 @@
       if (typeof confirm === "function" && !confirm(tw("teams.remove_confirm", { name: nm }))) return;
       return call("DELETE", teamUrl("/members/" + q(d.remove))).then(function (r) { S.openMember = null; act(r, drawAll); });
     }
-    if (t.classList.contains("tm-add-go")) {
-      var pick = S.el.querySelector(".tm-add-pick");
-      if (!pick || !pick.value) return;
-      return call("POST", teamUrl("/members"), { slug: pick.value }).then(function (r) { act(r, drawAll); });
-    }
     if (t.classList.contains("tm-save")) return saveSettings();
     if (t.classList.contains("tm-caps-save")) return saveCaps();
     if (t.classList.contains("tm-auth-save")) {
@@ -1716,18 +1800,15 @@
     });
   }
 
-  function createTeam() {
-    var name = val("tm-name").trim();
-    if (!name) { setNote(tw("teams.err", { e: tw("teams.name") })); return; }
-    var members = Array.prototype.map.call(S.el.querySelectorAll('input[name="tm-member"]:checked'), function (x) { return x.value; });
-    call("POST", "/teams", { name: name, description: val("tm-desc"), members: members, leader_slug: val("tm-leader") }).then(function (r) {
-      if (r.code !== 200) return fail(r);
-      S.creating = false;
-      loadTeams(false).then(function () { openTeam(r.j.team.team_id); });
-    });
-  }
-
   function onChange(e) {
+    if (S.pickSt && e.target.classList && e.target.classList.contains("tmp-check")) {
+      pickToggle(e.target.getAttribute("data-pick-slug"));
+      return;
+    }
+    if (S.pickSt && e.target.classList && e.target.classList.contains("tmp-leader-pick")) {
+      S.pickSt = Object.assign({}, S.pickSt, { leader: e.target.value, leaderTouched: true });
+      return;
+    }
     if (e.target.name === "tm-reason" && S.picker !== null) {
       var pv = panelValues(S.picker, msgById(S.picker));
       S.draft = { mid: S.picker, reasons: pv.reasons, comment: pv.comment };
@@ -1781,6 +1862,13 @@
       runSearch();
       return;
     }
+    if (e.key === "Escape" && S.pickSt) { closePicker(); return; }
+    if (e.target.classList && e.target.classList.contains("tmp-name-input") && e.key === "Enter") {
+      e.preventDefault();
+      var srch = S.el.querySelector(".tmp-search-input");
+      if (srch) srch.focus();
+      return;
+    }
     if (e.key === "Escape" && S.rowMenu) { closeRowMenu(true); return; }
     if (e.key === "Escape" && S.picker !== null) { S.focusBack = S.picker; S.picker = null; S.draft = null; drawMsgs(false); return; }
     if (e.key === "Escape" && S.side) { closeSide(); return; }
@@ -1832,6 +1920,13 @@
     el.addEventListener("click", onClick);
     el.addEventListener("change", onChange);
     el.addEventListener("input", function (e) {
+      if (S.pickSt && e.target.classList.contains("tmp-search-input")) {
+        S.pickSt.query = e.target.value;
+        drawPicker("filter");
+        return;
+      }
+      if (S.pickSt && e.target.classList.contains("tmp-name-input")) { S.pickSt.name = e.target.value; return; }
+      if (S.pickSt && e.target.classList.contains("tmp-desc-input")) { S.pickSt.desc = e.target.value; return; }
       if (e.target.classList.contains("tm-react-comment") && S.picker !== null) {
         S.draft = { mid: S.picker, reasons: panelValues(S.picker, msgById(S.picker)).reasons, comment: e.target.value };
         return;
@@ -1895,7 +1990,7 @@
     jobStripHtml: jobStripHtml, blockedAction: blockedAction, jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
     mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, mentionScan: mentionScan, composerHint: composerHint, newClientId: newClientId,
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, teamTabHtml: teamTabHtml,
-    levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml, createFormHtml: createFormHtml,
+    levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml,
     bannersHtml: bannersHtml, reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
     searchResultsHtml: searchResultsHtml, replyStatusHtml: replyStatusHtml };
