@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.119.0] - 2026-10-14
+### Fixed
+- **Tools no longer land on the wrong brain when a session stores a short brain name.** Some chat sessions stored the brain as "brain" (the default brain) instead of a full path, so tools through the MCP Hub could not tell which brain to use, or could end up in a folder that is not a brain. They now resolve to the right brain. Thanks to @dev23072005 for the report.
+
 ## [0.118.0] - 2026-10-14
 ### Security
 - **Tighter checks on live connections to Javis.** Every real-time connection (chat, terminal, voice, graph) now passes the same origin checks as write actions, including on machines with no password set. Your dashboard, Telegram and command-line tools are not affected. Updating soon is recommended.

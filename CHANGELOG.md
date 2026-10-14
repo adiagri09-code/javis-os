@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.119.0] - 2026-10-14
+### Sửa lỗi
+- **Công cụ không còn chạy nhầm brain khi phiên ghi tên brain kiểu viết tắt.** Một số phiên chat lưu brain là "brain" (brain mặc định) thay vì đường dẫn đầy đủ, nên công cụ qua MCP Hub không xác định được brain, hoặc có lúc rơi vào một thư mục không phải brain. Giờ chúng về đúng brain. Cảm ơn @dev23072005 đã báo lỗi.
+
 ## [0.118.0] - 2026-10-14
 ### Bảo mật
 - **Siết kết nối trực tiếp tới Javis.** Mọi kết nối thời gian thực (khung chat, terminal, giọng nói, đồ thị) giờ qua cùng lớp kiểm nguồn gốc như các thao tác ghi, kể cả trên máy chưa đặt mật khẩu. Dashboard của bạn, Telegram và các công cụ dòng lệnh không bị ảnh hưởng. Nên cập nhật sớm.

@@ -1250,6 +1250,32 @@ def _brain_duy_nhat() -> str:
         return str(ds[0])
 
 
+def _brain_tu_phien(ung) -> str:
+    """Đường dẫn tuyệt đối của brain ghi trong cột `sessions.brain`, hoặc "" nếu không dám tin.
+
+    Cột đó KHÔNG luôn là đường dẫn: phiên tạo trước 0.43.1, hay phiên mà dashboard tạo sớm qua
+    /sessions/{id}/model|project, giữ nguyên tên gọi tắt "brain" của brain mặc định (app.js::
+    currentBrainPath). Kiểm nó như đường dẫn thô thì "brain" không resolve được (#610), còn một
+    giá trị TƯƠNG ĐỐI như "." resolve theo cwd của tiến trình thành /app hay gốc repo - một thư
+    mục có thật nhưng không phải brain nào cả, tức đúng kiểu chạy nhầm brain mà luật fail-closed
+    sinh ra để chặn. Nên: "brain" -> Brain Default (cùng quy ước `main._brain_root`), đường dẫn
+    TUYỆT ĐỐI có thật -> chính nó, mọi thứ khác -> "" để rơi về các nấc suy luận sau.
+    """
+    raw = str(ung or "").strip()
+    if not raw:
+        return ""
+    if raw == "brain":
+        p = _brains_dir() / "Brain Default"
+    else:
+        p = Path(raw).expanduser()
+        if not p.is_absolute():
+            return ""
+    try:
+        return str(p.resolve()) if p.is_dir() else ""
+    except OSError:
+        return ""
+
+
 def quen_brain_dang_mo() -> None:
     """Xoá cache brain đang mở. Gọi sau khi đổi brain nếu cần hiệu lực ngay (test dùng)."""
     _BRAIN_CACHE.update({"ts": 0.0, "root": "", "nguon": ""})
@@ -1263,11 +1289,9 @@ def _brain_dang_mo() -> tuple:
     root, nguon = "", ""
     try:
         import sessions
-        ung = sessions.get_store().brain_gan_nhat()
+        ung = _brain_tu_phien(sessions.get_store().brain_gan_nhat())
         if ung:
-            p = Path(ung).expanduser()
-            if p.is_dir():
-                root, nguon = str(p.resolve()), "phien"
+            root, nguon = ung, "phien"
     except Exception as e:
         print(f"[hub brain] {type(e).__name__}: {e}", file=sys.stderr)
     if not root:
