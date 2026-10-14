@@ -219,6 +219,30 @@ check("nhóm lưu trữ không gửi tin được", c.post(f"/teams/{TID}/messag
 check("không có nhóm: 404", c.get(f"/teams/tm_khong{Q}").status_code == 404)
 drain()
 
+# T2: reaction qua route (spec 14, TC28 tới TC29)
+page = c.get(f"/teams/{TID}/messages{Q}&limit=200").json()["messages"]
+am = [m for m in page if m["author_kind"] == "agent"][0]
+om = [m for m in page if m["author_kind"] == "owner"][0]
+turns0 = len(c.get(f"/teams/{TID}/turns{Q}").json()["turns"])
+r = c.post(f"/teams/{TID}/messages/{am['id']}/reaction{Q}", json={"value": "sad", "reasons": ["too_long"],
+                                                                     "comment": "Gọn hơn", "nonce": "rx1"})
+check("route reaction: 200, trả trạng thái", r.status_code == 200 and r.json()["reaction"]["value"] == "sad"
+      and r.json()["reaction"]["reasons"] == ["too_long"], r.text)
+page = c.get(f"/teams/{TID}/messages{Q}&limit=200").json()["messages"]
+check("trang tin kèm reaction của từng tin", [m.get("reaction") and m["reaction"]["value"] for m in page
+                                             if m["id"] == am["id"]] == ["sad"]
+      and all(m.get("reaction") is None for m in page if m["id"] != am["id"]))
+check("route reaction: giá trị lạ 400", c.post(f"/teams/{TID}/messages/{am['id']}/reaction{Q}", json={
+    "value": "thumbs", "nonce": "rx2"}).status_code == 400)
+check("route reaction: tin của chủ 400", c.post(f"/teams/{TID}/messages/{om['id']}/reaction{Q}", json={
+    "value": "like", "nonce": "rx3"}).status_code == 400)
+check("route reaction: brain khác 404", c.post(f"/teams/{TID}/messages/{am['id']}/reaction?brain={BR2}", json={
+    "value": "like", "nonce": "rx4"}).status_code == 404)
+kinds = [getattr(getattr(x, "cr_code", None), "co_name", "") for x in spawned]
+check("route reaction: không mở lượt nào, chỉ đẩy gói WS", len(c.get(f"/teams/{TID}/turns{Q}").json()["turns"])
+      == turns0 and not ({"run_replies", "dispatch_once"} & set(kinds)) and "fake_publish" in kinds, kinds)
+drain()
+
 # Vòng nền: cài mới (chưa có team.sqlite3 lúc khởi động) thì KHÔNG chạy phục hồi về sau, kẻo chặn nhầm việc đang chạy.
 import dataclasses  # noqa: E402
 import team_api  # noqa: E402

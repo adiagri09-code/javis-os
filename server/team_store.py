@@ -72,7 +72,24 @@ CREATE INDEX IF NOT EXISTS team_turns_team ON team_turns(team_id, created_at);
 CREATE INDEX IF NOT EXISTS team_turns_task ON team_turns(task_id);
 CREATE TABLE IF NOT EXISTS agent_busy(
   agent_key TEXT PRIMARY KEY, team_id TEXT NOT NULL, turn_id TEXT NOT NULL, lease_until REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS team_reactions(
+  session_id TEXT NOT NULL, message_id INTEGER NOT NULL, reactor TEXT NOT NULL, team_id TEXT NOT NULL,
+  agent_key TEXT NOT NULL, task_id TEXT, value TEXT, reasons_json TEXT NOT NULL DEFAULT '[]',
+  comment TEXT NOT NULL DEFAULT '', content_sha TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL,
+  updated_at REAL NOT NULL, PRIMARY KEY(session_id, message_id, reactor));
+CREATE INDEX IF NOT EXISTS team_reactions_agent ON team_reactions(team_id, agent_key, updated_at);
+CREATE TABLE IF NOT EXISTS team_reaction_log(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, message_id INTEGER NOT NULL, reactor TEXT NOT NULL,
+  team_id TEXT NOT NULL, value TEXT, reasons_json TEXT NOT NULL DEFAULT '[]', comment TEXT NOT NULL DEFAULT '',
+  content_sha TEXT NOT NULL DEFAULT '', nonce TEXT NOT NULL UNIQUE, created_at REAL NOT NULL);
 """
+
+# Sáu reaction (spec mục 14.1): lưu NGUYÊN giá trị, không gộp, không suy ra đánh giá. "none" là bỏ emoji.
+REACTIONS = ("like", "love", "haha", "wow", "sad", "angry")
+REACTION_EMOJI = {"like": "👍", "love": "❤️", "haha": "😂", "wow": "😮", "sad": "😢", "angry": "😡"}
+# Lý do chất lượng (chọn được nhiều): tín hiệu ĐÁNH GIÁ, khác emoji.
+REACTION_REASONS = ("on_point", "wrong_facts", "missing", "too_long", "unclear", "off_topic")
+COMMENT_MAX = 500
 
 
 class TeamError(Exception):
@@ -491,6 +508,91 @@ class TeamStore:
         with closing(self._conn()) as c:
             return [dict(r) for r in c.execute(
                 "SELECT * FROM team_turns WHERE status IN ('reserved','running')").fetchall()]
+
+    # ───────────── reaction (T2, spec mục 14) ─────────────
+
+    @staticmethod
+    def _reaction(r) -> dict:
+        return {"session_id": r["session_id"], "message_id": int(r["message_id"]), "reactor": r["reactor"],
+                "team_id": r["team_id"], "agent_key": r["agent_key"], "task_id": r["task_id"], "value": r["value"],
+                "reasons": json.loads(r["reasons_json"] or "[]"), "comment": r["comment"],
+                "content_sha": r["content_sha"], "created_at": r["created_at"], "updated_at": r["updated_at"]}
+
+    def set_reaction(self, *, team_id: str, session_id: str, message_id: int, agent_key: str, task_id: Optional[str],
+                     content_sha: str, value: Optional[str], reasons: Optional[list] = None, comment: str = "",
+                     nonce: str, reactor: str = "owner") -> Optional[dict]:
+        """Đặt trọn trạng thái phản hồi của `reactor` trên một tin: emoji (hay "none"), lý do, góp ý. Trả trạng thái
+        hiện tại (None khi đã bỏ hết). `nonce` trùng thì không đổi gì (gửi lại sau rớt mạng). Mọi lần đổi ghi nối tiếp
+        vào `team_reaction_log`."""
+        val = None if value in (None, "", "none") else str(value)
+        if val is not None and val not in REACTIONS:
+            raise TeamError("reaction không hợp lệ")
+        reasons = list(dict.fromkeys(str(x) for x in (reasons or [])))
+        if any(x not in REACTION_REASONS for x in reasons):
+            raise TeamError("lý do không hợp lệ")
+        comment = str(comment or "").strip()
+        if len(comment) > COMMENT_MAX:
+            raise TeamError(f"góp ý tối đa {COMMENT_MAX} ký tự")
+        nonce = str(nonce or "").strip()
+        if not nonce:
+            raise TeamError("thiếu nonce")
+        now = time.time()
+        with self._Tx(self) as c:
+            if c.execute("SELECT 1 FROM team_reaction_log WHERE nonce=?", (nonce,)).fetchone() is None:
+                c.execute("INSERT INTO team_reaction_log(session_id,message_id,reactor,team_id,value,reasons_json,"
+                          "comment,content_sha,nonce,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                          (session_id, int(message_id), reactor, team_id, val, _j(reasons), comment, content_sha,
+                           nonce, now))
+                if val is None and not reasons and not comment:
+                    c.execute("DELETE FROM team_reactions WHERE session_id=? AND message_id=? AND reactor=?",
+                              (session_id, int(message_id), reactor))
+                else:
+                    c.execute(
+                        "INSERT INTO team_reactions(session_id,message_id,reactor,team_id,agent_key,task_id,value,"
+                        "reasons_json,comment,content_sha,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) "
+                        "ON CONFLICT(session_id,message_id,reactor) DO UPDATE SET value=excluded.value, "
+                        "reasons_json=excluded.reasons_json, comment=excluded.comment, "
+                        "content_sha=excluded.content_sha, updated_at=excluded.updated_at",
+                        (session_id, int(message_id), reactor, team_id, agent_key, task_id, val, _j(reasons), comment,
+                         content_sha, now, now))
+            r = c.execute("SELECT * FROM team_reactions WHERE session_id=? AND message_id=? AND reactor=?",
+                          (session_id, int(message_id), reactor)).fetchone()
+            return self._reaction(r) if r else None
+
+    def reaction_of(self, session_id: str, message_id: int, reactor: str = "owner") -> Optional[dict]:
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT * FROM team_reactions WHERE session_id=? AND message_id=? AND reactor=?",
+                          (session_id, int(message_id), reactor)).fetchone()
+            return self._reaction(r) if r else None
+
+    def reactions_for(self, session_id: str, message_ids: list, reactor: str = "owner") -> dict:
+        """{message_id: trạng thái} cho một trang tin."""
+        ids = [int(x) for x in message_ids or []]
+        if not ids:
+            return {}
+        with closing(self._conn()) as c:
+            rows = c.execute(f"SELECT * FROM team_reactions WHERE session_id=? AND reactor=? AND message_id IN "
+                             f"({','.join('?' * len(ids))})", [session_id, reactor] + ids).fetchall()
+            return {int(r["message_id"]): self._reaction(r) for r in rows}
+
+    def reaction_log(self, session_id: str, message_id: int) -> list:
+        with closing(self._conn()) as c:
+            return [dict(r) for r in c.execute("SELECT * FROM team_reaction_log WHERE session_id=? AND message_id=? "
+                                               "ORDER BY id", (session_id, int(message_id))).fetchall()]
+
+    def recent_feedback(self, team_id: str, agent_key: str, since: float, limit: int = 5) -> list:
+        """Phản hồi còn hiệu lực trên tin của `agent_key` trong ĐÚNG nhóm `team_id`, mới nhất trước (spec 14.4 mục 3)."""
+        with closing(self._conn()) as c:
+            return [self._reaction(r) for r in c.execute(
+                "SELECT * FROM team_reactions WHERE team_id=? AND agent_key=? AND updated_at >= ? "
+                "ORDER BY updated_at DESC, message_id DESC LIMIT ?",
+                (team_id, agent_key, float(since), int(limit))).fetchall()]
+
+    def _set_reaction_time(self, session_id: str, message_id: int, ts: float) -> None:
+        """Chỉ cho test: đặt lùi mốc cập nhật của một phản hồi."""
+        with self._Tx(self) as c:
+            c.execute("UPDATE team_reactions SET updated_at=? WHERE session_id=? AND message_id=?",
+                      (float(ts), session_id, int(message_id)))
 
     # ───────────── khoá bận theo agent (D3) ─────────────
 

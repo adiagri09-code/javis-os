@@ -10,7 +10,10 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.119.0] - 2026-10-14
 ### Added
-- **React to assistant messages in a team:** 👍 ❤️ 😂 😮 😢 😡.
+- **React to assistant messages in a team:** 👍 ❤️ 😂 😮 😢 😡. Hover a message to see the smiley button; on a phone, press and hold the message.
+- **Add reasons and a comment** (Too long, Missing points, Wrong facts...). The assistant reads your feedback on its next turn in that same team.
+- A reaction only tells the assistant how you feel, it is not a score: to change how it works, pick a reason or write a comment.
+- Reacting costs no turns and never makes an assistant reply on its own.
 
 ## [0.111.0] - 2026-10-13
 ### Added

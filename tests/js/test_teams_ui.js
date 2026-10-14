@@ -156,4 +156,47 @@ check("khoá ghép động đều có trong vi.json", dynamic.every(function (k)
 check("mọi khoá teams.js dùng đều có trong vi.json", used.length > 20 && used.every(function (k) { return vi[k]; }),
       used.filter(function (k) { return !vi[k]; }).join(","));
 
+// ───────────── T2: sáu reaction, lý do, góp ý (spec mục 14) ─────────────
+check("đúng sáu reaction theo thứ tự, giữ nguyên giá trị", TM.REACTIONS.map(function (r) { return r.value; }).join(",") ===
+      "like,love,haha,wow,sad,angry");
+check("sáu emoji gốc 👍 ❤️ 😂 😮 😢 😡", TM.REACTIONS.map(function (r) { return r.emoji; }).join("") ===
+      "\u{1F44D}❤️\u{1F602}\u{1F62E}\u{1F622}\u{1F621}");
+const rkeys = TM.REACTIONS.map(function (r) { return r.key; }).concat(["on_point", "wrong_facts", "missing", "too_long",
+  "unclear", "off_topic"].map(function (k) { return "teams.reason." + k; }));
+check("nhãn sáu reaction và sáu lý do có ở cả vi và en", rkeys.every(function (k) { return vi[k] && en[k]; }),
+      rkeys.filter(function (k) { return !vi[k] || !en[k]; }).join(","));
+check("chọn lại cái đang chọn là bỏ; chọn cái khác là đổi", TM.nextReaction("sad", "sad") === "none"
+      && TM.nextReaction("sad", "wow") === "wow" && TM.nextReaction(undefined, "like") === "like");
+const am = { id: 7, author_kind: "agent", author_ref: "ag_lan", content: "Chuyện buồn", meta: { status: "done" } };
+let mh = TM.messageHtml(am, { members: members });
+check("tin của trợ lý có nút thả cảm xúc, chưa mở bộ chọn", mh.includes('class="tm-react-btn"') && mh.includes('data-react-open="7"')
+      && !mh.includes("tm-react-panel"), mh);
+check("tin của chủ không có nút thả cảm xúc", !TM.messageHtml({ id: 8, author_kind: "owner", content: "x", meta: {} },
+  { members: members }).includes("tm-react-btn"));
+mh = TM.messageHtml(am, { members: members, picker: 7 });
+check("mở bộ chọn ngay tại tin: sáu nút, lý do, ô góp ý tối đa 500", (mh.match(/class="tm-react-pick"/g) || []).length === 6
+      && (mh.match(/name="tm-reason"/g) || []).length === 6 && mh.includes('maxlength="500"') && mh.includes(vi["teams.react_note"]), mh);
+const withR = Object.assign({}, am, { reaction: { value: "sad", reasons: ["too_long"], comment: "Gọn <b>hơn</b>" } });
+mh = TM.messageHtml(withR, { members: members, picker: 7 });
+check("emoji đã chọn hiện dưới tin, bấm để đổi", /class="tm-react-chip" data-react-open="7"/.test(mh) && mh.includes("\u{1F622}")
+      && mh.includes(vi["teams.react.sad"]), mh);
+check("bộ chọn đánh dấu emoji đang chọn và lý do đã chọn", /data-react="sad"[^>]*aria-pressed="true"/.test(mh)
+      && /value="too_long" checked/.test(mh), mh);
+check("góp ý được escape", mh.includes("Gọn &lt;b&gt;hơn&lt;/b&gt;") && !mh.includes("<b>hơn"), mh);
+const draft = TM.reactionPickerHtml(am, { value: "like", reasons: [], comment: "" }, { reasons: ["missing"], comment: "đang gõ" });
+check("bản nháp đang soạn giữ qua lần vẽ lại", /value="missing" checked/.test(draft) && draft.includes("đang gõ")
+      && /data-react="like"[^>]*aria-pressed="true"/.test(draft), draft);
+check("chỉ có lý do/góp ý (bỏ emoji): chip vẫn hiện", TM.reactionChipHtml(am, { value: null, reasons: ["missing"], comment: "" })
+      .includes(vi["teams.react_reasons_n"].replace("{n}", "1")));
+check("không có phản hồi: không chip", TM.reactionChipHtml(am, null) === "");
+check("thả cảm xúc gửi nonce mới mỗi lần, không mở lượt", /\/reaction"\)[\s\S]{0,120}nonce: newClientId\(\)/.test(teamsJs));
+check("điện thoại: nhấn giữ tin mở bộ chọn, có ngưỡng rung tay", teamsJs.includes('"pointerdown"') && /> 10/.test(teamsJs));
+check("gói WS không mang phản hồi thì giữ phản hồi đang có", teamsJs.includes('!("reaction" in nm)'));
+check("CSS: nút mặt cười hiện khi rê chuột, luôn hiện trên máy chạm", /\.tm-msg-agent:hover \.tm-react-btn/.test(css)
+      && /@media \(hover: none\) \{ \.tm-react-btn \{ opacity: 1; \} \}/.test(css));
+check("CSS: điện thoại hàng ngang lớn, vùng chạm >= 44px", /\.tm-react-pick \{ flex: 1 1 0; min-width: 44px; min-height: 48px/.test(css));
+check("CSS 375px: sáu nút 44px lọt bề ngang (khe 4px, đệm 6px; smoke T2 thấy 😡 tràn mép)",
+      /\.tm-react-panel \{ padding: 8px 6px; \}/.test(css) && /\.tm-react-row \{ flex-wrap: nowrap; justify-content: space-between; gap: 4px; \}/.test(css));
+check("CSS: bảng chọn display:flex có luật [hidden] riêng", /\.tm-react-panel\[hidden\] \{ display: none; \}/.test(css));
+
 process.exit(fails ? 1 : 0);

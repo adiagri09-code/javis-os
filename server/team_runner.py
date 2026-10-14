@@ -25,7 +25,7 @@ import threading
 import time
 from typing import Any, Awaitable, Callable, Optional
 
-from team_store import TeamError, TurnCapReached
+from team_store import REACTION_EMOJI, TeamError, TurnCapReached
 
 DIRECTIVE_RE = re.compile(r"<!--\s*JAVIS_TEAM:\s*(.*?)-->", re.S)
 # Op được phép theo vai của lượt (spec 15.2, Quyền giới hạn). Lượt trò chuyện không mở việc, không nhờ ai.
@@ -54,6 +54,14 @@ INPUT_CHARS = 4000            # mỗi đầu vào của bước
 DECISION_LIMIT = 20           # sổ quyết định (spec 11.2)
 DECISION_CHARS = 500
 REMIND_AFTER_S = 24 * 3600    # nhắc việc bị chặn quá 24 giờ (spec 8.4)
+FEEDBACK_LIMIT = 5            # khối phản hồi ở lượt kế (spec 14.4)
+FEEDBACK_DAYS = 30
+FEEDBACK_EXCERPT = 160
+# Câu dặn cố định đi kèm khối phản hồi (spec 14.4 mục 3), nguyên văn.
+FEEDBACK_NOTE = ("Emoji là cảm xúc của chủ nhóm, có thể về sự việc được kể; đừng coi là chấm điểm. Chỉ điều chỉnh theo "
+                 "lý do chất lượng và góp ý chữ. Chưa rõ thì giữ cách làm.")
+REASON_LABEL = {"on_point": "Đúng ý", "wrong_facts": "Sai dữ kiện", "missing": "Thiếu ý", "too_long": "Quá dài",
+                "unclear": "Khó hiểu", "off_topic": "Lạc đề"}
 
 EngineFn = Callable[[dict], Awaitable[dict]]
 
@@ -437,6 +445,45 @@ class TeamRunner:
         self._state(team_id)
         return tid
 
+    # ───────────── phản hồi (T2, spec mục 14) ─────────────
+
+    def react(self, team_id: str, message_id: int, value: Optional[str], *, reasons: Optional[list] = None,
+              comment: str = "", nonce: str) -> Optional[dict]:
+        """Chủ nhóm thả cảm xúc, chọn lý do, viết góp ý trên một tin của agent. CHỈ ghi kho và đẩy gói WS: không đổi
+        việc, goal hay hàng đợi, không đánh thức agent, không mở lượt, không gọi model (spec 14.4 mục 2)."""
+        team = self._team(team_id)
+        sid = team["session_id"]
+        msg = self.sessions.team_message(sid, int(message_id))
+        if not msg or msg.get("author_kind") != "agent" or not msg.get("author_ref"):
+            raise TeamError("chỉ thả cảm xúc được trên tin của trợ lý trong nhóm này")
+        state = self.teams.set_reaction(team_id=team_id, session_id=sid, message_id=int(message_id),
+                                        agent_key=msg["author_ref"], task_id=msg.get("task_id"),
+                                        content_sha=_sha(msg.get("content") or ""), value=value, reasons=reasons,
+                                        comment=comment, nonce=nonce)
+        self._publish({"type": "team_message", "team_id": team_id, "message": dict(msg, reaction=state)})
+        return state
+
+    def _feedback_lines(self, team: dict, agent_key: str) -> list:
+        """Khối "Phản hồi gần đây của chủ nhóm" cho lượt kế của CHÍNH agent này trong CHÍNH nhóm này: tối đa 5 mục trong
+        30 ngày, emoji gốc kèm tên loại, lý do, góp ý, đoạn trích. Mục đã bỏ không còn trong kho nên tự rời khối."""
+        rows = self.teams.recent_feedback(team["team_id"], agent_key, self.clock() - FEEDBACK_DAYS * 86400,
+                                          FEEDBACK_LIMIT)
+        out = []
+        for fb in rows:
+            msg = self.sessions.team_message(team["session_id"], fb["message_id"]) or {}
+            excerpt = re.sub(r"\s+", " ", str(msg.get("content") or "")).strip()
+            if len(excerpt) > FEEDBACK_EXCERPT:
+                excerpt = excerpt[:FEEDBACK_EXCERPT] + "..."
+            parts = [f'- [#{fb["message_id"]}] "{excerpt}"']
+            if fb["value"]:
+                parts.append(f"cảm xúc: {REACTION_EMOJI.get(fb['value'], '')} ({fb['value']})")
+            if fb["reasons"]:
+                parts.append("lý do: " + ", ".join(REASON_LABEL.get(x, x) for x in fb["reasons"]))
+            if fb["comment"]:
+                parts.append(f'góp ý: "{fb["comment"]}"')
+            out.append(" · ".join(parts))
+        return out
+
     # ───────────── một lượt ─────────────
 
     def _context(self, team: dict, agent_key: str, role: str, task: Optional[dict], step: Optional[dict]) -> str:
@@ -476,6 +523,11 @@ class TeamRunner:
             lines.append(f"\n## Lịch sử gần đây của nhóm (tối đa {NEW_MSG_LIMIT} tin, cũ trước; "
                          "\"mới\" là tin sau lượt trước của bạn)")
             lines.extend(reversed(rendered))
+        feedback = self._feedback_lines(team, agent_key)
+        if feedback:
+            lines.append("\n## Phản hồi gần đây của chủ nhóm (về tin của bạn trong nhóm này)")
+            lines.extend(feedback)
+            lines.append(FEEDBACK_NOTE)
         if task:
             lines.append(f"\n## Việc hiện tại: {task['title']} (bản {task['team_rev']})")
             lines.append(f"Yêu cầu: {task['intent']}")

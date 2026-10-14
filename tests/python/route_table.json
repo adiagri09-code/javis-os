@@ -4312,6 +4312,16 @@
  {
   "order": 433,
   "type": "APIRoute",
+  "path": "/teams/{team_id}/messages/{message_id}/reaction",
+  "name": "teams_reaction",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 434,
+  "type": "APIRoute",
   "path": "/teams/{team_id}/messages",
   "name": "teams_send",
   "methods": [
@@ -4320,7 +4330,7 @@
   "trong": null
  },
  {
-  "order": 434,
+  "order": 435,
   "type": "APIRoute",
   "path": "/teams/{team_id}/messages/{message_id}/accept",
   "name": "teams_accept",
@@ -4330,7 +4340,7 @@
   "trong": null
  },
  {
-  "order": 435,
+  "order": 436,
   "type": "APIRoute",
   "path": "/teams/{team_id}/messages/{message_id}/decision",
   "name": "teams_decision",
@@ -4340,7 +4350,7 @@
   "trong": null
  },
  {
-  "order": 436,
+  "order": 437,
   "type": "APIRoute",
   "path": "/teams/{team_id}/turns",
   "name": "teams_turns",

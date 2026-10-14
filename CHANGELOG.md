@@ -8,7 +8,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.119.0] - 2026-10-14
 ### Thêm mới
-- **Thả cảm xúc cho tin của trợ lý trong nhóm:** 👍 ❤️ 😂 😮 😢 😡.
+- **Thả cảm xúc cho tin của trợ lý trong nhóm:** 👍 ❤️ 😂 😮 😢 😡. Rê chuột vào tin để thấy nút mặt cười; trên điện thoại nhấn giữ tin.
+- **Chọn thêm lý do và viết góp ý** (Quá dài, Thiếu ý, Sai dữ kiện...). Trợ lý đọc phản hồi ở lượt sau trong đúng nhóm đó.
+- Cảm xúc chỉ cho trợ lý biết bạn thấy thế nào, không phải chấm điểm: muốn trợ lý đổi cách làm thì chọn lý do hoặc viết góp ý.
+- Thả cảm xúc không tốn lượt và không làm trợ lý tự trả lời.
 
 ## [0.111.0] - 2026-10-13
 ### Thêm mới

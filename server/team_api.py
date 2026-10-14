@@ -499,7 +499,32 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             if err:
                 return err
             before = (before_ts, before_id) if before_ts is not None and before_id is not None else None
-            return dict(deps.session_store().get_team_messages_page(team["session_id"], limit, before), ok=True)
+            page = deps.session_store().get_team_messages_page(team["session_id"], limit, before)
+            # Phản hồi của chủ (T2) đi kèm từng tin, đọc một lần cho cả trang.
+            got = api.teams().reactions_for(team["session_id"], [m["id"] for m in page["messages"]])
+            for m in page["messages"]:
+                m["reaction"] = got.get(int(m["id"]))
+            return dict(page, ok=True)
+        return await api.io(_do)
+
+    @app.post("/teams/{team_id}/messages/{message_id}/reaction")
+    async def teams_reaction(team_id: str, message_id: int, request: Request, brain: str = "brain"):
+        """Thả cảm xúc, lý do, góp ý (spec 14). Không mở lượt, không gọi model."""
+        body = await _body(request)
+
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            reasons = body.get("reasons")
+            if reasons is not None and not isinstance(reasons, list):
+                return _err(400, "Lý do phải là danh sách", "Reasons must be a list")
+            try:
+                state = api.runner().react(team_id, message_id, body.get("value"), reasons=reasons,
+                                           comment=str(body.get("comment") or ""), nonce=str(body.get("nonce") or ""))
+            except TeamError as ex:
+                return _team_err(ex)
+            return {"ok": True, "reaction": state}
         return await api.io(_do)
 
     @app.post("/teams/{team_id}/messages")
