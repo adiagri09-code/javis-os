@@ -3952,6 +3952,7 @@
   "teams.limits.provider_quota": "Quota of your subscription or model provider",
   "teams.limits.account": "Permissions of the model account in use",
   "teams.save": "Save",
+  "teams.cap_need_number": "{name}: enter a number or tick Unlimited again.",
   "teams.saved": "Saved",
   "teams.turns_today": "Today {n}/{cap} replies",
   "teams.turns_by_agent": "By assistant",

@@ -2140,6 +2140,7 @@
 
   function saveCaps() {
     var caps = {};
+    var missing = null;
     CAP_FIELDS.forEach(function (k) {
       var cur = (S.team.caps || {})[k];
       var box = S.el.querySelector('[name="tm-cap-' + k + '-unl"]');
@@ -2148,8 +2149,16 @@
         return;
       }
       var v = val("tm-cap-" + k);
+      // Bỏ tích Không giới hạn mà chưa nhập số: không được báo "Đã lưu" khi không đổi gì (review T1 #1).
+      if (v === "" && cur === null && box && !missing) missing = k;
       if (v !== "" && (cur === null || Number(v) !== Number(cur))) caps[k] = Number(v);
     });
+    if (missing) {
+      setNote(tw("teams.cap_need_number", { name: tw(CAP_KEY[missing]) }));
+      var miss = S.el.querySelector('[name="tm-cap-' + missing + '"]');
+      if (miss && miss.focus) miss.focus();
+      return;
+    }
     if (!Object.keys(caps).length) { setNote(tw("teams.saved")); return; }
     call("POST", teamUrl("/caps"), { caps: caps }).then(function (r) {
       if (r.code === 200) setNote(tw("teams.saved"));

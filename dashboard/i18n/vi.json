@@ -3952,6 +3952,7 @@
   "teams.limits.provider_quota": "Hạn mức của gói thuê bao hay nhà cung cấp model",
   "teams.limits.account": "Quyền của tài khoản model đang dùng",
   "teams.save": "Lưu",
+  "teams.cap_need_number": "Mục {name}: nhập một số hoặc tích lại Không giới hạn.",
   "teams.saved": "Đã lưu",
   "teams.turns_today": "Hôm nay {n}/{cap} lần trả lời",
   "teams.turns_by_agent": "Theo trợ lý",
