@@ -79,6 +79,11 @@ FIXED_LIMITS = {
     "account": "Quyền của tài khoản model đang dùng",
     "technical": "Giới hạn kỹ thuật: lượt nhóm chỉ chữ, một lượt mỗi agent cùng lúc, hạn khoá bận",
 }
+# Đoạn cố định nối SAU lời nhắc của trợ lý trong MỌI lượt nhóm (review tích hợp 0.138.0): lời nhắc chung của trợ lý có
+# đoạn "bộ công cụ của hub", còn lượt nhóm chạy chỉ chữ (phán quyết R3) nên mọi lần gọi công cụ đều làm hỏng lượt.
+TEXT_ONLY_NOTE = ("# LƯỢT NHÓM CHỈ CHỮ\nLượt này trong nhóm chat không có công cụ nào: không đọc hay ghi file, không gọi kết "
+                  "nối (MCP), không chạy lệnh, dù phần trên có nhắc tới bộ công cụ. Chỉ trả lời bằng chữ; gọi công cụ sẽ làm "
+                  "hỏng lượt.")
 # Nhãn bằng lời thường cho tin hệ thống chủ đọc (T5); CAP_LABEL ở trên dùng trong lời nhắc của trưởng nhóm.
 CAP_PLAIN = {"task_turns": "số lần trả lời tối đa mỗi việc", "task_steps": "số bước tối đa mỗi việc",
              "help_depth": "số lần nhờ nhau lồng nhau", "daily_turns": "số lần trả lời tối đa mỗi ngày"}
@@ -954,7 +959,7 @@ class TeamRunner:
             return {"pre": pre}
         engine, model, fn = self.engine_for(team, agent_key, role)
         req = {"team_id": team_id, "brain": team["brain_id"], "agent_key": agent_key, "role": role,
-               "system": str(info.get("system") or ""),
+               "system": (str(info.get("system") or "").rstrip() + "\n\n" + TEXT_ONLY_NOTE).lstrip(),
                "prompt": self._context(team, agent_key, role, task, step) + "\n\n" + body,
                "thread": f"teammate:{team_id}:{agent_key}", "task_id": task["id"] if task else None,
                "step_id": step["step_id"] if step else None, "turn_id": turn_id, "tools": []}
@@ -1751,7 +1756,7 @@ class TeamRunner:
             if now - float(t["updated_at"]) < REMIND_AFTER_S:
                 continue
             mark = {"task_id": t["id"], "blocked_at": t["updated_at"]}
-            if any(e["kind"] == "blocked_reminder" and e["after"] == mark for e in self.teams.events(t["team_id"], 500)):
+            if self.teams.has_reminder(t["team_id"], t["id"], t["updated_at"]):
                 continue
             self.teams.log_event(t["team_id"], "blocked_reminder", "host", None, mark)
             self._notify(t["team_id"], f"Việc nhóm \"{t['title']}\" vẫn đang chờ bạn xử lý: {t['block_reason']}")

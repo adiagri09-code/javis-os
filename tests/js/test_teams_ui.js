@@ -539,6 +539,17 @@ check("thông báo kèm nút Thử lại và nút đóng, chữ được escape"
 check("4f6268bd #2 pinTeam của trang dùng pinTeamWith với setNote (vùng thông báo chung)",
       /function pinTeam\(id, on, btn\) \{\s*return pinTeamWith\(id, on, btn,/.test(teamsJs));
 
+// Review tích hợp 0.138.0: bấm thư về việc nhóm (kênh team:<id>) phải mở ĐÚNG nhóm ở trang Nhóm, không đổ vào khung chat
+// của bộ não chính (gõ ở đó sẽ ghi tin không tác giả vào phiên nhóm).
+const notiJs = fs.readFileSync(path.join(ROOT, "dashboard", "notifications.js"), "utf8");
+check("hộp thư nhận ra thư của nhóm (kênh team:) và mở nhóm đó ở trang Nhóm, trước nhánh mở khung chat chính",
+      /\/\^team:\(\.\+\)\$\/\.exec/.test(notiJs) && /window\.JavisTeams\.open\(nhom\)/.test(notiJs)
+      && notiJs.indexOf("JavisTeams.open(") < notiJs.indexOf("window.JavisSessions.open(item.session_id)"));
+check("JavisTeams.open: đang ở trang Nhóm thì mở ngay; chưa thì ghi nhớ, sang trang Nhóm, mở sau khi tải danh sách",
+      typeof TM.open === "function" && /function open\(teamId\) \{[\s\S]{0,600}pendingOpen = /.test(teamsJs)
+      && /JavisNav\.go\("teams"\)/.test(teamsJs) && /if \(pendingOpen\) \{[\s\S]{0,200}openTeam\(/.test(teamsJs));
+check("console.js không còn nhãn số giữ chỗ 0.111.0", !consoleJs.includes("0.111.0"));
+
 // Ghim ngay trên danh sách: máy tính rê chuột hiện nút ghim, chuột phải hay nhấn giữ (điện thoại) mở menu Ghim / Bỏ ghim
 const tPin = Object.assign({}, team, { pinned_at: 1791900000 }), tPlain = Object.assign({}, team, { team_id: "tm_2", pinned_at: null });
 h = TM.teamListHtml([tPin, tPlain], "tm_1", now);

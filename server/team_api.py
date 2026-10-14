@@ -74,6 +74,8 @@ class TeamApi:
         self._loop_task = None
         self._loop = None
         self._loop_thread = None
+        self._init_lock = threading.RLock()
+        self._bg: set = set()
 
     def path(self) -> Path:
         if self.deps.store_path:
@@ -85,19 +87,31 @@ class TeamApi:
         return self._teams is not None or self.path().is_file()
 
     def teams(self) -> team_store.TeamStore:
-        if self._teams is None:
-            self._teams = team_store.TeamStore(self.path())
+        # Tạo lười từ nhiều luồng phụ (route chạy qua run_io): khoá để không ra hai kho, hai bộ chạy, hai accept_lock.
+        with self._init_lock:
+            if self._teams is None:
+                self._teams = team_store.TeamStore(self.path())
         return self._teams
 
     def _spawn(self, value: Any) -> None:
         if asyncio.iscoroutine(value):
             try:
-                self.deps.spawn(value)
+                task = self.deps.spawn(value)
             except Exception as ex:  # noqa: BLE001
                 value.close()
                 print(f"[team] không tạo được việc nền: {type(ex).__name__}: {ex}", file=sys.stderr)
+                return
+            # Giữ tham chiếu tới khi xong: event loop chỉ giữ tham chiếu yếu, việc nền không ai giữ có thể bị dọn rác
+            # giữa chừng (lượt trả lời, gói WS, tin hộp thư).
+            if isinstance(task, asyncio.Future):
+                self._bg.add(task)
+                task.add_done_callback(self._bg.discard)
 
     def runner(self) -> TeamRunner:
+        with self._init_lock:
+            return self._make_runner()
+
+    def _make_runner(self) -> TeamRunner:
         if self._runner is None:
             def publish(ev: dict) -> None:
                 if self.deps.broadcast is not None:

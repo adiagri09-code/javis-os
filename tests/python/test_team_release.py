@@ -99,5 +99,25 @@ check("bản ghi chặn tra theo việc chạy được trên kho cũ (chưa có
 ts2 = team_store.TeamStore(path)
 check("mở lại lần hai: không lỗi, dữ liệu mới còn", ts2.get("tm_old")["pinned_at"] is not None)
 
+# Review tích hợp 0.138.0: snapshot và bản giữ lại của MỌI kho bị nâng (chứa toàn bộ chat, việc) không được lên git khi
+# Javis chạy với thư mục state mặc định server/ (bản fork phải sạch).
+import subprocess  # noqa: E402
+names = [f"server/{base}{tag}" for base in ("conversations.db", "kanban.sqlite3", "team.sqlite3")
+         for tag in (".pre-0.138.0", ".post-0.138.0-20261014-120000")]
+not_ignored = [n for n in names if subprocess.run(["git", "check-ignore", "-q", n], cwd=str(ROOT)).returncode != 0]
+check("snapshot .pre-0.138.0 và bản giữ lại .post-0.138.0-* của ba kho đều bị gitignore", not not_ignored, not_ignored)
+
+# Review tích hợp 0.138.0: bí danh "nhom" trơn của trang Nhóm khớp cụm con nên cướp các câu nói về NHÓM thanh bên ("nhóm
+# việc", "nhóm code"...). Kết quả của những câu đó phải giữ như 0.137.0; chỉ câu gọi đúng trang Nhóm mới ra trang Nhóm.
+import ui_targets  # noqa: E402
+same_as_0137 = {"nhóm việc": "kanban", "nhóm code": "terminal", "mở nhóm trợ lý": "workspace", "nhóm hệ thống": "",
+                "nhóm kết nối": "mcp", "nhóm bộ não": "models", "mở cộng sự": "workspace", "trang việc": "kanban"}
+got = {s: ui_targets.resolve_page(s) for s in same_as_0137}
+check("giọng nói: câu nói về nhóm thanh bên giữ đúng trang như 0.137.0", got == same_as_0137,
+      {s: (got[s], same_as_0137[s]) for s in got if got[s] != same_as_0137[s]})
+to_teams = ["nhóm", "mở trang nhóm", "trang nhóm", "nhóm chat", "mở nhóm chat", "team", "teams", "mở trang teams"]
+got = {s: ui_targets.resolve_page(s) for s in to_teams}
+check("giọng nói: gọi đúng trang Nhóm thì ra trang Nhóm", all(v == "teams" for v in got.values()), got)
+
 print(f"\n{'FAIL' if fails else 'PASS'} - test_team_release: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)

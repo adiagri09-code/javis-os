@@ -27,7 +27,7 @@
     chat: "message-circle",
     settings: "settings",
     workspace: "bot",
-    // Nhóm chat team (0.111.0): nhiều trợ lý cùng một khung chat, cạnh trang Cộng sự.
+    // Nhóm chat team (0.138.0): nhiều trợ lý cùng một khung chat, cạnh trang Cộng sự.
     teams: "users",
     chatbots: "headset",
     conversations: "messages-square",

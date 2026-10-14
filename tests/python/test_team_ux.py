@@ -224,6 +224,58 @@ st = [(s["kind"], s["status"]) for s in tm.steps(job)]
 check("#3 thêm lại đủ hai bước, việc chạy tới xong", ts.get_task(job)["status"] == "done"
       and st.count(("work", "done")) == 2, (ts.get_task(job)["status"], ts.get_task(job)["block_reason"], st))
 
+# ═════ Review tích hợp 0.138.0: lời nhắc của MỌI lượt nhóm nói rõ lượt chỉ chữ, không có công cụ ═════
+r, tm, ts, ss, fake, T = world("textonly")
+r.agent_info = lambda root, key: {"slug": key, "name": key.title(),
+                                  "system": "Bạn có toàn bộ bộ công cụ của hub, làm việc trong vault."}
+run(r.run_replies(r.submit(T["team_id"], "Chào", client_msg_id="x1")))
+job = r.submit(T["team_id"], "Viết", mentions=["minh"], as_job=True, client_msg_id="x2")["task_id"]
+run(r.dispatch_once())
+roles = {c["role"]: c["system"] for c in fake.calls}
+check("lượt trả lời và lượt làm việc đều có đoạn chỉ chữ, đặt SAU lời nhắc của trợ lý (đè lời hứa bộ công cụ)",
+      set(roles) >= {"leader_reply", "work"} and all(s.startswith("Bạn có toàn bộ bộ công cụ") and TR.TEXT_ONLY_NOTE in s
+                                                    and s.index(TR.TEXT_ONLY_NOTE) > 0 for s in roles.values()),
+      {k: v[-200:] for k, v in roles.items()})
+check("đoạn chỉ chữ nói rõ không có công cụ và gọi công cụ làm hỏng lượt", "không có công cụ" in TR.TEXT_ONLY_NOTE
+      and "hỏng" in TR.TEXT_ONLY_NOTE)
+
+# ═════ Review tích hợp 0.138.0: nhắc việc chặn quá 24 giờ chỉ một lần, kể cả khi nhóm có hơn 500 sự kiện sau đó ═════
+r, tm, ts, ss, fake, T = world("remind")
+notes_sent = []
+r._notify = lambda team_id, text: notes_sent.append(text)
+tm.set_caps(T["team_id"], {"daily_turns": 0})
+job = r.submit(T["team_id"], "Việc chờ", mentions=["minh"], as_job=True, client_msg_id="r1")["task_id"]
+run(r.dispatch_once())
+check("việc chặn để thử nhắc", ts.get_task(job)["status"] == "team_blocked")
+notes_sent.clear()   # bỏ tin báo lúc chặn, chỉ đếm tin nhắc
+later = time.time() + 2 * 86400
+check("nhắc lần đầu sau 24 giờ", r.remind_blocked(later) == 1 and len(notes_sent) == 1)
+for i in range(300):
+    tm.set_pinned(T["team_id"], True)
+    tm.set_pinned(T["team_id"], False)
+check("hơn 600 sự kiện sau đó: KHÔNG nhắc lại cùng lần chặn", r.remind_blocked(later + 3600) == 0 and len(notes_sent) == 1,
+      notes_sent)
+
+# ═════ Review tích hợp 0.138.0: việc nền của API nhóm được giữ tham chiếu tới khi xong (không bị dọn rác giữa chừng) ═════
+import team_api  # noqa: E402
+
+
+async def _spawn_probe():
+    api = team_api.TeamApi(team_api.TeamApiDeps(
+        brain_key=str, session_store=lambda: None, task_store=lambda: None, resonance_store=lambda: None,
+        agents_meta=lambda root: [], agent_info=lambda root, key: None, engine_for=lambda *a: None))
+    gate = asyncio.Event()
+
+    async def job():
+        await gate.wait()
+    api._spawn(job())
+    held = len(getattr(api, "_bg", ()))
+    gate.set()
+    await asyncio.sleep(0.01)
+    return held, len(getattr(api, "_bg", ()))
+held, after = run(_spawn_probe())
+check("việc nền đang chạy nằm trong tập giữ tham chiếu, xong thì bỏ ra", held == 1 and after == 0, (held, after))
+
 # ═════ Ghim nhóm lên đầu danh sách ═════
 d = TEMP / "pin"
 d.mkdir()

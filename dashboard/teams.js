@@ -1182,7 +1182,28 @@
       S.teams.forEach(function (t) { S.teamNames[t.team_id] = t.name; });
       drawList();
       if (!S.team && !S.creating) drawMsgs(false);
+      // Có nhóm cần mở từ ngoài trang (bấm thư trong hộp thư): mở khi danh sách đã về.
+      if (pendingOpen) {
+        var want = pendingOpen;
+        pendingOpen = null;
+        openTeam(want);
+      }
     });
+  }
+
+  var pendingOpen = null;
+  // Mở một nhóm từ ngoài trang (hộp thư, thông báo đẩy về việc nhóm): đang ở trang Nhóm và danh sách đã về thì mở ngay;
+  // chưa thì nhớ id, sang trang Nhóm, loadTeams() mở nó khi danh sách về.
+  function open(teamId) {
+    teamId = String(teamId || "");
+    if (!teamId) return;
+    pendingOpen = teamId;
+    if (S && S.el && S.el.isConnected && S.loaded) {
+      pendingOpen = null;
+      openTeam(teamId);
+      return;
+    }
+    if (typeof window !== "undefined" && window.JavisNav && window.JavisNav.go) window.JavisNav.go("teams");
   }
 
   function loadAgents() {
@@ -1780,7 +1801,7 @@
     window.addEventListener("javis:team-event", onTeamEvent);
   }
 
-  var api = { render: render, leave: leave, teamListHtml: teamListHtml, messageHtml: messageHtml, queueHtml: queueHtml,
+  var api = { render: render, leave: leave, open: open, teamListHtml: teamListHtml, messageHtml: messageHtml, queueHtml: queueHtml,
     jobStripHtml: jobStripHtml, blockedAction: blockedAction, jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
     mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, composerHint: composerHint, newClientId: newClientId,
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, teamTabHtml: teamTabHtml,

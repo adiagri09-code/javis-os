@@ -69,9 +69,13 @@ ALIASES = {
     # Id trang số nhiều cũ (trước 0.59.0) - prompt/bookmark cũ gọi thẳng "agents"/"workflows"
     # vẫn phải ra đúng trang, không chỉ id chuẩn "workspace".
     "agents": "workspace", "workflows": "workspace",
-    # Trang Nhóm (nhóm chat team, 0.138.0): thanh bên gọi là "Nhóm".
-    "nhom": "teams", "nhom chat": "teams", "team": "teams", "teams": "teams", "nhom tro ly": "teams",
+    # Trang Nhóm (nhóm chat team, 0.138.0): thanh bên gọi là "Nhóm". "nhom" trơn KHÔNG nằm ở đây (xem _EXACT_PAGE).
+    "nhom chat": "teams", "team": "teams", "teams": "teams",
 }
+
+# Bí danh chỉ khớp khi CẢ CÂU (sau khi bỏ "mở", "trang"...) đúng bằng nó, không khớp cụm con. "nhom" khớp cụm con thì cướp
+# mọi câu nói về nhóm thanh bên ("nhóm việc" -> Việc, "nhóm code" -> Code), làm hỏng lệnh nói quen tay (review 0.138.0).
+_EXACT_PAGE = {"nhom": "teams"}
 
 # Nhóm trên thanh bên = RAIL_GROUPS trong dashboard/console.js (khoá `id`) và GROUPS trong
 # dashboard/ui-actions.js. Mở NHÓM khác mở TRANG: người dùng hay muốn bung phần đang gập để
@@ -134,7 +138,10 @@ def _tra(t: str, bang: dict, hop_le) -> str:
 
 def resolve_page(target: str) -> str:
     """Trả id trang hợp lệ hoặc chuỗi rỗng."""
-    return _tra(_lot_tien_to(khong_dau(target), _TIEN_TO_TRANG), ALIASES, PAGES)
+    t = _lot_tien_to(khong_dau(target), _TIEN_TO_TRANG)
+    if t in _EXACT_PAGE:
+        return _EXACT_PAGE[t]
+    return _tra(t, ALIASES, PAGES)
 
 
 def resolve_group(target: str) -> str:
