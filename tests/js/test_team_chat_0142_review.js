@@ -178,6 +178,20 @@ check("review #6: đếm việc chỉ khi danh sách trợ lý đang hiện và 
 check("lọc theo việc đã xong: thanh lọc và nhãn hiện tên việc (không hiện mã)",
   /S\.filterTask && r\.j\.task && r\.j\.task\.id\)[\s\S]{0,200}S\.taskTitles\[r\.j\.task\.id\]/.test(teamsJs));
 
+// ───────────── rà soát trước khi phát hành (giao diện) ─────────────
+h = TM.replyStatusHtml({ id: 3, replies: [{ agent_key: "ag_7f3a", status: "error", reason: "member_left" }] },
+  { members: [], authors: { ag_7f3a: { name: "Lan" } }, retrying: {} });
+check("người đã rời nhóm: dòng trạng thái hiện TÊN (sổ tác giả), không hiện mã", h.includes("<b>Lan</b>") && !h.includes("ag_7f3a</b>"), h);
+check("Thử lại: phản hồi 200 có trạng thái mới thì mở khoá nút, không chỉ trông vào gói WS",
+  /x\.agent_key === d\.retryKey && x\.status !== "error"\) delete S\.retrying\[rk\]/.test(teamsJs));
+check("hộp chọn: chọn xong focus lại đúng ô, Escape đóng được cả khi focus ở ngoài",
+  /function pickToggle\(slug\)[\s\S]{0,900}back\.focus\(\)/.test(teamsJs) &&
+  /document\.addEventListener\("keydown", pickEsc, true\)/.test(teamsJs) && /document\.removeEventListener\("keydown", pickEsc, true\)/.test(teamsJs));
+check("ghi chú cho chủ đọc không bị lọc (chỉ lọc mã như daily_cap)", teamsJs.includes("return !/^[a-z_]+$/.test(n);"));
+const consoleJs = fs.readFileSync(path.join(ROOT, "dashboard", "console.js"), "utf8");
+check("Vị trí file ở trang Cộng sự: mở trang Tệp tin (không còn tab Thư mục)",
+  /if \(workspace\) \{[\s\S]{0,300}window\.JavisNav\.go\("files"\)/.test(consoleJs) && !/\[data-rtab="files"\]'\)\?\.click\(\)/.test(consoleJs));
+
 // ───────────── i18n đủ hai thứ tiếng ─────────────
 const need = ["teams.calls", "teams.uncall", "teams.head_people", "teams.head_leader", "teams.reply.why.timeout",
   "teams.reply.why.auth", "teams.reply.why.no_leader", "teams.reply.act.models", "teams.reply.act.agent",

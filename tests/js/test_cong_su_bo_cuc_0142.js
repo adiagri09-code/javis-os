@@ -112,6 +112,20 @@ check("CSS: cột trái rộng hơn mặc định và theo biến kéo được;
   /cursor: col-resize; touch-action: none;/.test(css));
 check("CSS: cột phải ẩn thì chữ trong khung chat giãn ra",
   /\.wspage\.right-open \.ws-slot \.msg-javis \.bubble \{ max-width: min\(120ch, 100%\); \}/.test(css));
+// Rà soát trước khi phát hành.
+check("đổi khổ màn: đặt lại right-open theo nghĩa mới (màn hẹp đóng ngăn, màn rộng theo lựa chọn)",
+  /function theoKhoMan\(\)[\s\S]{0,600}page\.classList\.toggle\("right-open", manRong\(\) \? !nhoPhaiHien\(\) : false\)/.test(src) &&
+  /mq\.addEventListener\("change", doi\)/.test(src));
+check("lưu cài đặt không thu cột phải khi chủ đã chọn hiện", /function thuGonCaiDat\(\) \{[\s\S]{0,200}if \(manRong\(\) && nhoPhaiHien\(\)\) return;/.test(src));
+check("rời tab Công việc thì gỡ tab đó", /if \(S\.tabPhai === "viec"\) ganCongViec\(dangChon\(\)\);[\s\S]{0,300}else if \(_congViec\) \{ _congViec\.destroy\(\); _congViec = null; \}/.test(src));
+{
+  const page3 = { clientWidth: 1200, querySelector: () => ({ getBoundingClientRect: () => ({ width: 500 }) }) };
+  const k3 = vm.createContext({ getComputedStyle: () => ({ display: "block", position: "relative" }) });
+  vm.runInContext(keoSrc + "\nglobalThis.chan = chanBeRong;", k3);
+  check("kéo hai cột: khung chat giữa luôn còn ít nhất 360px", k3.chan("left", 900, page3) === 340, k3.chan("left", 900, page3));
+}
+check("laptop hẹp 1061-1240px: cột phải giữ bề rộng mặc định cũ",
+  /@media \(min-width: 1061px\) and \(max-width: 1240px\) \{\s*\.wspage > \.ws-right \{ width: var\(--ws-right-w, 272px\); \}/.test(css));
 check("tay kéo là separator có nhãn, focus được", /role="separator" aria-orientation="vertical" tabindex="0"/.test(src));
 check("i18n đủ vi/en", ["ws.yesterday", "ws.last_chat", "ws.resize_list", "ws.resize_panel", "ws.resize_hint"].every((x) => vi[x] && en[x]));
 

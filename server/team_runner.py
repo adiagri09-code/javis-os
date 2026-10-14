@@ -436,7 +436,8 @@ class TeamRunner:
             if self.teams.is_active_member(team_id, key) and self.agent_info(team["brain_id"], key):
                 valid.append(key)
             else:
-                out["notes"].append(f"{self._name(team, key)} ({key}) không còn trong nhóm")
+                # Câu cho chủ đọc, không kèm mã (mã có "_" bị khung soạn coi là mã ghi chú nội bộ và ẩn đi, 0.142.0).
+                out["notes"].append(f"{self._name(team, key)} không còn trong nhóm nên không trả lời tin này")
         mid, created = self.sessions.append_team_message(
             sid, "user", text, author_kind="owner", client_msg_id=cmid,
             meta={"mentions": valid, "as_job": bool(as_job), "notes": list(out["notes"])})

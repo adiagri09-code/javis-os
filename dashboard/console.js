@@ -8470,8 +8470,13 @@
     const chat = document.getElementById("chatPage");
     const files = document.getElementById("fmEdit");
     if (workspace) {
-      workspace.querySelector('[data-rtab="files"]')?.click();
-      workspace.classList.toggle("right-open", window.matchMedia("(max-width: 1060px)").matches);
+      // Từ 0.142.0 trang Cộng sự không còn tab Thư mục (thay bằng Công việc): "Vị trí file" mở trang Tệp tin, nơi có
+      // cây thư mục thật, rồi soi file trong cây đó.
+      if (window.JavisNav && window.JavisNav.go) {
+        window.JavisNav.go("files");
+        await new Promise((r) => setTimeout(r, 350));
+      }
+      document.body.classList.remove("vault-thu");
     } else if (chat) {
       window.JavisChatSide?.tab("files");
       chat.classList.remove("side-thu");

@@ -3024,7 +3024,7 @@ span.tmp-lead { cursor: default; }
    dưới đáy thẻ thì khó biết công tắc thuộc trợ lý nào). Nhãn ngắn + công tắc nhỏ; bật màu cam Javis, tắt xám. Hàng tag
    chừa chỗ bên phải cho công tắc; trợ lý chưa có tag thì công tắc đứng ở chính hàng đó (thẻ chừa một hàng đáy). Vùng chạm
    đủ 44px trên màn cảm ứng, căn giữa theo hàng tag. */
-.ws-item-wrap:has(> .ws-auto) .ws-tags { padding-right: 68px; }
+.ws-item-wrap:has(> .ws-auto) .ws-tags { padding-right: 76px; }
 /* Nút ba chấm lên ngang hàng tên (góc trên phải) để công tắc Auto dùng được góc dưới phải mà tag vẫn đủ chỗ ở cột hẹp. */
 .ws-item-wrap:has(> .ws-auto) > .ws-item-more { top: 8px; transform: none; }
 .ws-item-wrap:has(> .ws-auto):not(:has(.ws-tags)) > .ws-item { padding-bottom: 30px; }
@@ -3086,6 +3086,12 @@ span.tmp-lead { cursor: default; }
 }
 @media (min-width: 1061px) {
   .wspage > .ws-right { width: var(--ws-right-w, 350px); position: relative; }
+}
+/* Laptop hẹp (1061-1240px): giữ bề rộng mặc định cũ của cột phải khi chưa kéo (review 0.142.0). */
+@media (min-width: 1061px) and (max-width: 1240px) {
+  .wspage > .ws-right { width: var(--ws-right-w, 272px); }
+}
+@media (min-width: 1061px) {
   /* Cột phải đang ẩn: chữ trong khung chat giãn theo khoang giữa thay vì dừng ở 72 ký tự để lại khoảng trống bên phải. */
   .wspage.right-open .ws-slot .msg-javis .bubble { max-width: min(120ch, 100%); }
 }

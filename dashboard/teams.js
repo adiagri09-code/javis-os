@@ -329,8 +329,9 @@
     var retrying = (ctx && ctx.retrying) || {};
     return '<div class="tm-replies">' + rows.map(function (x) {
       var slot = x.agent_key === LEADER_SLOT;
-      var who = slot ? tw("teams.reply.leader_slot") :
-        nameOf(ctx.members, x.agent_key) || ((ctx.authors || {})[x.agent_key] || {}).name || x.agent_key;
+      // Người đã rời nhóm không còn trong `members`: tra sổ tác giả (giữ tên theo agent_key) trước khi rơi về mã.
+      var mm = memberOf(ctx.members, x.agent_key) || (ctx.authors || {})[x.agent_key];
+      var who = slot ? tw("teams.reply.leader_slot") : (mm && (mm.name || mm.slug)) || x.agent_key;
       var face = slot ? "" : agentAva(memberOf(ctx.members, x.agent_key) || (ctx.authors || {})[x.agent_key] || { name: who }, 20);
       var busy = retrying[m.id + "|" + x.agent_key];
       var retryBtn = '<button type="button" class="ws-btn tm-reply-retry" data-retry="' + esc(m.id) + '" data-retry-key="' +
@@ -1514,7 +1515,7 @@
       if (S.activeId !== forTeam) return;
       if (r.code !== 200) { fail(r); drawHint(); return; }
       S.pending = null; S.asJob = false; S.picked = []; input.value = "";
-      setNote(r.j.notes && r.j.notes.length ? r.j.notes.filter(function (n) { return n.indexOf("_") < 0; }).join(" · ") : "");
+      setNote(r.j.notes && r.j.notes.length ? r.j.notes.filter(function (n) { return !/^[a-z_]+$/.test(n); }).join(" · ") : "");
       if ((r.j.notes || []).indexOf("daily_cap") >= 0) setNote(tw("teams.daily_cap"));
       drawComposer();
       var again = S.el.querySelector(".tm-input");
@@ -1732,11 +1733,17 @@
       desc: "", descOpen: false, exclude: exclude, saving: false, error: "", rosterState: (S.roster || []).length ? "ok" : "loading",
       reqId: newClientId() };
     S.pickOpener = opener || null;
+    document.removeEventListener("keydown", pickEsc, true);
+    document.addEventListener("keydown", pickEsc, true);
     drawPicker("all");
     loadRoster().then(function () { if (S.pickSt) drawPicker("all"); });
   }
 
+  // Escape đóng hộp chọn cả khi focus đã rơi ra ngoài lớp phủ (review 0.142.0).
+  function pickEsc(e) { if (e.key === "Escape" && S && S.pickSt) { e.preventDefault(); closePicker(); } }
+
   function closePicker() {
+    document.removeEventListener("keydown", pickEsc, true);
     S.pickSt = null;
     if (S.pickHost) { S.pickHost.remove(); S.pickHost = null; }
     var back = S.pickOpener;
@@ -1782,9 +1789,17 @@
   }
 
   function pickToggle(slug) {
+    var was = document.activeElement;
+    var fromChip = was && was.classList && was.classList.contains("tmp-sel-x");
     S.pickSt = TP().toggle(S.pickSt, slug);
     S.pickSt.error = "";
     drawPicker("pick");
+    // Vẽ lại thay node đang có focus: đặt focus lại đúng ô vừa bấm (hay ô tìm khi bấm x trên chip), để bàn phím đi tiếp
+    // và Escape vẫn đóng được hộp (review 0.142.0).
+    var host = S.pickHost;
+    var back = host && (fromChip ? host.querySelector(".tmp-search-input")
+      : host.querySelector('.tmp-check[data-pick-slug="' + (window.CSS && CSS.escape ? CSS.escape(slug) : slug) + '"]'));
+    if (back) { try { back.focus(); } catch (e) {} }
   }
 
   function pickFail(msg) {
@@ -1957,6 +1972,9 @@
       return call("POST", teamUrl("/messages/" + q(d.retry) + "/replies/" + q(d.retryKey) + "/retry")).then(function (r) {
         if (r.code !== 200) { delete S.retrying[rk]; fail(r); drawMsgs(false); return; }
         if (!r.j.retried) { delete S.retrying[rk]; setNote(tw("teams.reply.retry_none")); }
+        // Server đã nhận Thử lại: trạng thái mới của đúng người này (chờ, đang trả lời, xong) mở khoá nút, không chỉ trông
+        // vào gói WS (lỡ gói đó thì nút kẹt "Đang thử lại").
+        (r.j.replies || []).forEach(function (x) { if (x.agent_key === d.retryKey && x.status !== "error") delete S.retrying[rk]; });
         var k = S.msgs.findIndex(function (m) { return Number(m.id) === Number(d.retry); });
         if (k >= 0) S.msgs[k] = Object.assign({}, S.msgs[k], { replies: r.j.replies || [] });
         drawMsgs(false);

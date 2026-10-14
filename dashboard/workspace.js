@@ -502,6 +502,7 @@
     // Cột phải (Lịch sử, Công việc, Cài đặt) MẶC ĐỊNH ẨN ở màn rộng (0.142.0, chủ repo chốt 14/10/2026): khung chat rộng
     // ra, bấm nút ở góc phải là hiện; lựa chọn được nhớ. Màn hẹp thì cột phải vốn là ngăn kéo đóng sẵn, không đổi.
     if (manRong() && !nhoPhaiHien()) page.classList.add("right-open");
+    theoKhoMan();
     // Bề rộng hai cột kéo được ở đường biên (0.142.0), nhớ qua localStorage.
     apBeRong(page);
     noiKeoBien(page);
@@ -605,6 +606,9 @@
     // Bản cũ mượn cây thư mục ở đây; trả lại phòng khi một phiên trước còn giữ nó.
     traCayThuMuc();
     if (S.tabPhai === "viec") ganCongViec(dangChon());
+    // Rời tab Công việc (sang Lịch sử, Cài đặt hay Quy trình): gỡ tab đó, kẻo nó vẫn hỏi server mỗi 20 giây và tải lại theo
+    // mọi sự kiện nhóm cho tới khi rời trang (review 0.142.0).
+    else if (_congViec) { _congViec.destroy(); _congViec = null; }
   }
 
   // Tab Công việc (agent-jobs.js): gắn lại mỗi khi đổi trợ lý hay mở tab, tải tươi từ server.
@@ -1451,6 +1455,20 @@
   // Lớp `right-open` nghĩa là "ngược với mặc định CSS của khổ màn" (xem console.css): màn rộng là ĐANG ẨN, màn hẹp là
   // ngăn kéo ĐANG MỞ. Hai hàm dưới đây nói bằng nghĩa "hiện/ẩn" để chỗ gọi khỏi phải nhớ chuyện đảo đó.
   function manRong() { return !window.matchMedia("(max-width: 1060px)").matches; }
+  // Đổi khổ màn (thu cửa sổ còn nửa màn hình, xoay máy tính bảng): lớp `right-open` đổi nghĩa theo khổ, nên phải đặt lại
+  // cho đúng nghĩa mới (review 0.142.0). Màn hẹp: ngăn kéo đóng. Màn rộng: theo lựa chọn đã nhớ. Gắn một lần cho cả trang.
+  var _khoManGan = false;
+  function theoKhoMan() {
+    if (_khoManGan || !window.matchMedia) return;
+    var mq = window.matchMedia("(max-width: 1060px)");
+    var doi = function () {
+      var page = active && S.el && S.el.querySelector("#wsPage");
+      if (!page) return;
+      page.classList.toggle("right-open", manRong() ? !nhoPhaiHien() : false);
+    };
+    if (mq.addEventListener) mq.addEventListener("change", doi); else if (mq.addListener) mq.addListener(doi);
+    _khoManGan = true;
+  }
   function nhoPhaiHien() { try { return localStorage.getItem("javis_ws_right") === "1"; } catch (e) { return false; } }
   function phaiDangHien() {
     var page = S.el && S.el.querySelector("#wsPage");
@@ -1468,10 +1486,18 @@
   // ---------- kéo đường biên để đổi bề rộng cột ----------
   var BE_RONG = { left: { bien: "--ws-left-w", khoa: "javis_ws_left_w", min: 220, max: 560 },
     right: { bien: "--ws-right-w", khoa: "javis_ws_right_w", min: 280, max: 640 } };
+  var CHAT_TOI_THIEU = 360;   // khung chat giữa không bao giờ hẹp hơn mức này vì kéo hai cột bên
   function chanBeRong(ben, w, page) {
     var c = BE_RONG[ben], tran = c.max;
     var tong = page && page.clientWidth;
-    if (tong) tran = Math.min(tran, Math.round(tong * (ben === "left" ? 0.45 : 0.5)));
+    if (tong) {
+      tran = Math.min(tran, Math.round(tong * (ben === "left" ? 0.45 : 0.5)));
+      // Trừ cả bề rộng cột bên kia đang hiện (review 0.142.0): kéo cả hai cột tới trần thì khung chat còn chừng 100px.
+      var khac = page.querySelector && page.querySelector(ben === "left" ? "#wsRight" : "#wsLeft");
+      var wk = 0;
+      try { wk = khac && getComputedStyle(khac).display !== "none" && getComputedStyle(khac).position !== "absolute" ? khac.getBoundingClientRect().width : 0; } catch (e) { wk = 0; }
+      tran = Math.min(tran, tong - wk - CHAT_TOI_THIEU);
+    }
     return Math.max(c.min, Math.min(tran, Math.round(w)));
   }
   function apBeRong(page) {
@@ -1525,6 +1551,8 @@
   }
 
   function thuGonCaiDat() {
+    // Chủ đã chọn hiện cột phải ở màn rộng (0.142.0): lưu xong không tự thu cột về, giữ đúng lựa chọn đã nhớ.
+    if (manRong() && nhoPhaiHien()) return;
     var page = S.el && S.el.querySelector("#wsPage");
     if (page) page.classList.toggle("right-open", !window.matchMedia("(max-width: 1060px)").matches);
   }
