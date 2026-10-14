@@ -2319,7 +2319,8 @@ def _resonance_agents_meta(root):
     out = []
     for a in agents_index(root, kem_prompt=False):
         prov = _agent_model_provider(a.get("model") or "", a.get("model_provider") or "") if a.get("model") else main_prov
-        out.append({"slug": a["slug"], "name": a.get("name") or a["slug"], "provider": prov})
+        # avatar: trang Nhóm vẽ đúng ảnh trợ lý đang dùng (cùng nhân dạng với trang Cộng sự).
+        out.append({"slug": a["slug"], "name": a.get("name") or a["slug"], "provider": prov, "avatar": a.get("avatar")})
     return out
 
 

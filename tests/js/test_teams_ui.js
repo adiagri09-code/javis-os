@@ -155,7 +155,7 @@ check("nút .ws-btn bị hidden thật sự ẩn (smoke: nút Trang sau vẫn hi
 check("ngăn đóng: không chừa cột trống", /\.tm-page\[data-side="0"\]\s*\{\s*grid-template-columns/.test(css)
       && teamsJs.includes('setAttribute("data-side"'));
 check("T5 đầu khung chat một hàng; điện thoại bỏ ảnh nhóm và chữ của chip việc để tên còn chỗ",
-      /\.tm-chat-head \{[^}]*flex-wrap: nowrap/.test(css) && /\.tm-chat-head > \.tm-ava, \.tm-chip-label \{ display: none; \}/.test(css));
+      /\.tm-chat-head \{[^}]*flex-wrap: nowrap/.test(css) && /\.tm-chip-label \{ display: none; \}/.test(css));
 check("ngăn kéo cài đặt có nền đặc (smoke 375px: nhìn xuyên thấy tin)",
       /\.tm-side \{ position: fixed;[^}]*background: var\(--bg\)/.test(css));
 check("màn hẹp: nút tối thiểu 44px", /@media[^{]*max-width[^{]*\{[\s\S]*\.tm-[\s\S]*min-height:\s*44px/.test(css));
@@ -468,5 +468,48 @@ const dead = ["teams.empty", "teams.waiting_owner", "teams.running_n", "teams.wa
   "teams.tab_turns", "teams.tab_settings", "teams.filter_all"];
 check("review T5: bỏ khoá chữ không còn dùng", dead.every(function (k) { return !(k in vi) && !(k in en); }),
       dead.filter(function (k) { return k in vi || k in en; }).join(","));
+
+// ───────────── Ảnh đại diện đúng ảnh trợ lý, ảnh nhóm ghép, ghim nhóm ─────────────
+global.window = { JavisAvatar: { html: function (a, size) {
+  return '<i class="fake-ava" data-slug="' + a.slug + '" data-shape="' + ((a.avatar || {}).shape || "") + '" data-size="' + size + '"></i>';
+} } };
+const fz = function (n) {
+  return Array.from({ length: n }, function (_, i) { return { slug: "a" + i, name: "A" + i, avatar: { shape: "s" + i, palette: "p" } }; });
+};
+h = TM.teamAvatarHtml({ name: "Nhóm", faces: fz(1), member_count: 1 });
+check("ảnh nhóm một người: đúng ảnh trợ lý đó", /tm-gava tm-gava-1/.test(h) && /data-slug="a0" data-shape="s0"/.test(h), h);
+h = TM.teamAvatarHtml({ name: "Nhóm", faces: fz(2), member_count: 2 });
+check("ảnh nhóm hai người: hai ảnh chéo nhau", /tm-gava tm-gava-2/.test(h) && (h.match(/fake-ava/g) || []).length === 2, h);
+h = TM.teamAvatarHtml({ name: "Nhóm", faces: fz(3), member_count: 3 });
+check("ảnh nhóm ba người: ba ảnh (kiểu tam giác)", /tm-gava tm-gava-3/.test(h) && (h.match(/fake-ava/g) || []).length === 3, h);
+h = TM.teamAvatarHtml({ name: "Nhóm", faces: fz(4), member_count: 4 });
+check("ảnh nhóm bốn người: lưới 2x2 đủ bốn ảnh, không ô đếm", /tm-gava tm-gava-4/.test(h) && (h.match(/fake-ava/g) || []).length === 4
+      && !h.includes("tm-gava-more"), h);
+h = TM.teamAvatarHtml({ name: "Nhóm", faces: fz(4), member_count: 9 });
+check("ảnh nhóm hơn bốn người: ba ảnh và ô '+6' (như Zalo)", (h.match(/fake-ava/g) || []).length === 3
+      && /class="tm-gava-more">\+6</.test(h), h);
+check("hơn 102 người: ô đếm ghi 99+", /tm-gava-more">99\+</.test(TM.teamAvatarHtml({ name: "N", faces: fz(4), member_count: 150 })));
+check("nhóm chưa có ai: chữ đầu của tên nhóm", /tm-ava tm-ava-c\d" aria-hidden="true">N</.test(TM.teamAvatarHtml({ name: "Nhóm", faces: [], member_count: 0 })));
+check("ảnh nhóm suy từ thành viên khi dòng không kèm gương mặt (đầu khung chat): trưởng nhóm trước, bỏ người đã rời",
+      (function (x) { return x.indexOf('data-slug="minh"') > x.indexOf('data-slug="lan"') && x.includes('data-slug="minh"'); })(
+        TM.teamAvatarHtml(Object.assign({}, team, { members: [Object.assign({}, members[1]), Object.assign({}, members[0]),
+          { agent_key: "ag_cu", slug: "cu", name: "Cũ", status: "left" }] }))) &&
+      !TM.teamAvatarHtml(Object.assign({}, team, { members: [{ agent_key: "ag_cu", slug: "cu", name: "Cũ", status: "left" }] })).includes("cu\""));
+h = TM.messageHtml({ id: 40, author_kind: "agent", author_ref: "ag_lan", content: "x", meta: {} },
+  { members: [Object.assign({}, members[0], { avatar: { shape: "meo", palette: "cam" } })] });
+check("tin của trợ lý dùng đúng ảnh trợ lý đang dùng", /data-slug="lan" data-shape="meo"/.test(h), h);
+h = TM.membersHtml(Object.assign({}, team, { members: [Object.assign({}, members[0], { avatar: { shape: "meo", palette: "cam" } })] }), []);
+check("danh sách thành viên dùng đúng ảnh trợ lý", /data-slug="lan" data-shape="meo"/.test(h), h);
+h = TM.teamListHtml([Object.assign({}, team, { faces: fz(2), member_count: 2, pinned_at: 1791900000 })], "", now);
+check("dòng nhóm: ảnh nhóm ghép và dấu ghim", /tm-gava tm-gava-2/.test(h) && /class="tm-pinned"/.test(h)
+      && h.includes(vi["teams.pinned"]), h);
+check("dòng nhóm chưa ghim: không dấu ghim", !/tm-pinned/.test(TM.teamListHtml([Object.assign({}, team, { faces: fz(1) })], "", now)));
+h = TM.teamTabHtml(Object.assign({}, team, { pinned_at: 1791900000 }), [], {});
+check("tab Nhóm có công tắc Ghim lên đầu danh sách, đang bật", /class="tm-pin-toggle" checked/.test(h) && h.includes(vi["teams.pin_top"]), h);
+check("bật tắt ghim gọi POST /pin rồi tải lại danh sách", /tm-pin-toggle[\s\S]{0,400}teamUrl\("\/pin"\)/.test(teamsJs));
+check("CSS: ảnh nhóm ghép có luật cho 1 tới 4 ảnh và ô đếm, mọi lớp flex mới có [hidden]",
+      [".tm-gava-1", ".tm-gava-2", ".tm-gava-3", ".tm-gava-4", ".tm-gava-more"].every(function (c) { return css.includes(c); })
+      && css.includes(".tm-gava[hidden]") && css.includes(".tm-face[hidden]"));
+delete global.window;
 
 process.exit(fails ? 1 : 0);

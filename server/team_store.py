@@ -127,6 +127,9 @@ class TeamStore:
             if "committed_at" not in cols:
                 # Mốc ghi bài học của lượt vào bộ nhớ agent (chỉ một lần, chỉ khi đầu ra được chấp nhận).
                 c.execute("ALTER TABLE team_turns ADD COLUMN committed_at REAL")
+            if "pinned_at" not in {r[1] for r in c.execute("PRAGMA table_info(teams)").fetchall()}:
+                # Ghim nhóm lên đầu danh sách (T5); NULL là không ghim.
+                c.execute("ALTER TABLE teams ADD COLUMN pinned_at REAL")
 
     def _conn(self) -> sqlite3.Connection:
         c = sqlite3.connect(str(self.path), timeout=10, isolation_level=None)
@@ -159,7 +162,8 @@ class TeamStore:
         caps.update(json.loads(r["caps_json"] or "{}"))
         return {"team_id": r["team_id"], "brain_id": r["brain_id"], "name": r["name"], "description": r["description"],
                 "session_id": r["session_id"], "leader_key": r["leader_key"], "leader_mode": r["leader_mode"],
-                "status": r["status"], "caps": caps, "created_at": r["created_at"], "updated_at": r["updated_at"]}
+                "status": r["status"], "caps": caps, "created_at": r["created_at"], "updated_at": r["updated_at"],
+                "pinned_at": r["pinned_at"]}
 
     def _event(self, c, team_id: str, kind: str, by: str, before: Any = None, after: Any = None) -> None:
         c.execute("INSERT INTO team_events(team_id,kind,by,before_json,after_json,created_at) VALUES(?,?,?,?,?,?)",
@@ -192,17 +196,31 @@ class TeamStore:
 
     def list_teams(self, brain_id: str, limit: int = 50, before: Optional[float] = None,
                    include_archived: bool = False) -> list:
-        q = "SELECT * FROM teams WHERE brain_id=?"
+        """Nhóm của brain, mới cập nhật trước. Trang đầu (`before` trống) mở bằng các nhóm đã ghim (ghim sau đứng trước);
+        phần còn lại (và mọi trang sau, theo con trỏ `updated_at`) chỉ gồm nhóm không ghim, nên không nhóm nào lặp."""
+        base = "SELECT * FROM teams WHERE brain_id=?" + ("" if include_archived else " AND status != 'archived'")
+        q = base + " AND pinned_at IS NULL"
         args: list = [brain_id]
-        if not include_archived:
-            q += " AND status != 'archived'"
         if before is not None:
             q += " AND updated_at < ?"
             args.append(float(before))
         q += " ORDER BY updated_at DESC LIMIT ?"
         args.append(max(1, min(int(limit), 200)))
         with closing(self._conn()) as c:
-            return [self._team(r) for r in c.execute(q, args).fetchall()]
+            pinned = [] if before is not None else [self._team(r) for r in c.execute(
+                base + " AND pinned_at IS NOT NULL ORDER BY pinned_at DESC", (brain_id,)).fetchall()]
+            return pinned + [self._team(r) for r in c.execute(q, args).fetchall()]
+
+    def set_pinned(self, team_id: str, on: bool, by: str = "owner") -> Optional[dict]:
+        """Ghim (hay bỏ ghim) nhóm lên đầu danh sách. Không đổi `updated_at`."""
+        with self._Tx(self) as c:
+            r = c.execute("SELECT pinned_at FROM teams WHERE team_id=?", (team_id,)).fetchone()
+            if r is None:
+                raise TeamError("không có nhóm này")
+            after = time.time() if on else None
+            c.execute("UPDATE teams SET pinned_at=? WHERE team_id=?", (after, team_id))
+            self._event(c, team_id, "pinned" if on else "unpinned", by, {"pinned_at": r["pinned_at"]}, {"pinned_at": after})
+        return self.get(team_id)
 
     def update(self, team_id: str, by: str = "owner", **fields) -> dict:
         allowed = {"name", "description", "status"}

@@ -199,5 +199,28 @@ sys_msgs = [m["content"] for m in ss.get_team_messages_page(T["session_id"], lim
 check("bật rồi thu quyền tự quyết: hai tin hệ thống nói rõ", any("tự quyết" in s for s in sys_msgs)
       and any("thu lại" in s for s in sys_msgs), sys_msgs)
 
+# ═════ Ghim nhóm lên đầu danh sách ═════
+d = TEMP / "pin"
+d.mkdir()
+tm = team_store.TeamStore(d / "team.sqlite3")
+ids = []
+for i, nm in enumerate(["Cũ", "Giữa", "Mới"]):
+    tid = team_store.new_team_id()
+    tm.create_team("B", nm, "", f"s{i}", team_id=tid)
+    ids.append(tid)
+    time.sleep(0.01)
+tm.touch(ids[2])
+check("chưa ghim: mới cập nhật đứng đầu", [t["name"] for t in tm.list_teams("B")] == ["Mới", "Giữa", "Cũ"]
+      and tm.get(ids[0])["pinned_at"] is None)
+tm.set_pinned(ids[0], True)
+rows = tm.list_teams("B")
+check("ghim nhóm cũ: lên đầu trang đầu, có mốc ghim", [t["name"] for t in rows] == ["Cũ", "Mới", "Giữa"]
+      and rows[0]["pinned_at"] is not None, [t["name"] for t in rows])
+check("trang sau (con trỏ updated_at) không lặp nhóm đã ghim",
+      [t["name"] for t in tm.list_teams("B", before=tm.get(ids[2])["updated_at"])] == ["Giữa"])
+check("ghim ghi sự kiện", any(e["kind"] == "pinned" for e in tm.events(ids[0])))
+tm.set_pinned(ids[0], False)
+check("bỏ ghim: về đúng thứ tự cập nhật", [t["name"] for t in tm.list_teams("B")] == ["Mới", "Giữa", "Cũ"])
+
 print(f"\n{'FAIL' if fails else 'PASS'} - test_team_ux: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)

@@ -3941,6 +3941,8 @@
   "teams.next_page": "Trang sau",
   "teams.doing": "Đang làm: {title}",
   "teams.needs_you": "Cần bạn",
+  "teams.pinned": "Đã ghim",
+  "teams.pin_top": "Ghim nhóm lên đầu danh sách",
   "teams.badge_running": "Đang làm",
   "teams.you": "Bạn",
   "teams.no_messages": "Chưa có tin nào",

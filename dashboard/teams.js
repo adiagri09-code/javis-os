@@ -163,6 +163,45 @@
     return '<span class="' + avaClass(name) + '" aria-hidden="true">' + esc(initial(name)) + "</span>";
   }
 
+  // Ảnh trợ lý: ĐÚNG ảnh trợ lý đang dùng (bộ vẽ JavisAvatar của trang Cộng sự, theo slug và `avatar` trong file trợ
+  // lý; trợ lý chưa chọn ảnh thì bộ vẽ tự suy từ slug, giống mọi trang khác). Chưa có bộ vẽ (test dưới node) thì về chữ
+  // đầu trên nền màu.
+  function agentAva(m, size) {
+    m = m || {};
+    var A = typeof window !== "undefined" && window.JavisAvatar;
+    if (A && A.html && m.slug) {
+      return '<span class="tm-face" aria-hidden="true">' + A.html({ slug: m.slug, avatar: m.avatar || undefined }, size || 28) +
+        "</span>";
+    }
+    return avaHtml(m.name || m.slug);
+  }
+
+  // Gương mặt cho ảnh nhóm: dòng danh sách đã kèm `faces` và `member_count` từ server; đầu khung chat thì suy từ thành
+  // viên (đang hoạt động, trưởng nhóm trước).
+  function facesOf(t) {
+    if (t.faces) return { faces: t.faces, count: t.member_count != null ? Number(t.member_count) : t.faces.length };
+    var act = (t.members || []).filter(function (m) { return !m.status || m.status === "active"; });
+    var lead = act.filter(function (m) { return m.agent_key === t.leader_key; });
+    act = lead.concat(act.filter(function (m) { return m.agent_key !== t.leader_key; }));
+    return { faces: act.slice(0, 4), count: act.length };
+  }
+
+  // Ảnh nhóm ghép từ ảnh thành viên: 1 người một ảnh, 2 người hai ảnh chéo, 3 người ba ảnh tam giác, từ 4 người lưới 2x2;
+  // hơn 4 người thì ba ảnh và ô đếm "+N" (quá 99 ghi "99+"), như nhóm Zalo. Chưa có ai thì chữ đầu của tên nhóm.
+  function teamAvatarHtml(t, box) {
+    t = t || {};
+    box = box || 44;
+    var f = facesOf(t);
+    if (!f.faces.length) return avaHtml(t.name);
+    var more = f.count > 4 ? f.count - 3 : 0;
+    var shown = more ? f.faces.slice(0, 3) : f.faces.slice(0, 4);
+    var n = more ? 4 : shown.length;
+    var size = Math.round(box * [1, 1, 0.64, 0.56, 0.5][n]);
+    return '<span class="tm-gava tm-gava-' + n + '" style="--gava:' + box + 'px;--face:' + size + 'px" aria-hidden="true">' +
+      shown.map(function (x) { return agentAva(x, size); }).join("") +
+      (more ? '<span class="tm-gava-more">' + (more > 99 ? "99+" : "+" + more) + "</span>" : "") + "</span>";
+  }
+
   function memberOf(members, key) {
     for (var i = 0; i < (members || []).length; i++) if (members[i].agent_key === key) return members[i];
     return null;
@@ -215,10 +254,12 @@
     return teams.map(function (t) {
       var on = t.team_id === activeId;
       var last = t.last || {};
+      var pin = t.pinned_at ? '<span class="tm-pinned" title="' + esc(tw("teams.pinned")) + '" aria-label="' +
+        esc(tw("teams.pinned")) + '">' + ic("pin") + "</span>" : "";
       return '<button type="button" class="tm-team" data-team="' + esc(t.team_id) + '"' + (on ? ' aria-current="true"' : "") + ">" +
-        avaHtml(t.name) + '<span class="tm-team-main"><span class="tm-team-top"><span class="tm-team-name">' + esc(t.name) +
+        teamAvatarHtml(t, 44) + '<span class="tm-team-main"><span class="tm-team-top"><span class="tm-team-name">' + esc(t.name) +
         '</span><span class="tm-team-time">' + esc(timeShort(last.ts || t.updated_at, now)) + "</span></span>" +
-        '<span class="tm-team-bottom"><span class="tm-team-sub">' + esc(previewText(t)) + "</span>" + teamBadge(t) +
+        '<span class="tm-team-bottom"><span class="tm-team-sub">' + esc(previewText(t)) + "</span>" + teamBadge(t) + pin +
         "</span></span></button>";
     }).join("");
   }
@@ -279,8 +320,9 @@
       (meta.job_result ? " tm-msg-result" : "") + (hit ? " tm-msg-hit" : "");
     var bubble = '<div class="tm-bubble">' + (head.length ? '<div class="tm-head">' + head.join("") + "</div>" : "") +
       body + lateLine + notes + prop + (foot ? '<div class="tm-foot">' + foot + "</div>" : "") + "</div>";
+    var face = mine ? "" : agentAva(memberOf(ctx.members, m.author_ref) || { name: who }, 28);
     return '<div class="' + cls + '" data-mid="' + esc(m.id) + '">' +
-      (mine ? side + bubble : avaHtml(who) + bubble + side) + panel + "</div>";
+      (mine ? side + bubble : face + bubble + side) + panel + "</div>";
   }
 
   // ───────────── việc ─────────────
@@ -445,7 +487,7 @@
       var sub = [tw(lead ? "teams.leader" : "teams.member")];
       if (m.resonance_enabled) sub.push(rsText(true));
       return '<div class="tm-mrow"><button type="button" class="tm-mhead" data-expand="' + esc(m.agent_key) + '" aria-expanded="' +
-        (open ? "true" : "false") + '">' + avaHtml(m.name || m.slug) + '<span class="tm-mtext"><span class="tm-mname">' +
+        (open ? "true" : "false") + '">' + agentAva(m, 34) + '<span class="tm-mtext"><span class="tm-mname">' +
         esc(m.name || m.slug) + '</span><span class="tm-mrole">' + esc(sub.join(" · ")) + "</span></span>" +
         '<span class="tm-chev" aria-hidden="true">' + ic("chevron-down") + "</span></button>" +
         '<div class="tm-mact"' + (open ? "" : " hidden") + ">" +
@@ -674,7 +716,9 @@
     return '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.tab_members")) + "</div>" +
       membersHtml(team, agents, ui.openMember) + "</section>" +
       '<section class="tm-sec">' + levelsHtml(team) + usageHtml(team) + "</section>" +
-      '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.tab_team")) + "</div>" + settingsFormHtml(team) + "</section>" +
+      '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.tab_team")) + "</div>" +
+      '<label class="tm-rs tm-pin-row"><input type="checkbox" class="tm-pin-toggle"' + (team.pinned_at ? " checked" : "") +
+      "><span>" + esc(tw("teams.pin_top")) + "</span></label>" + settingsFormHtml(team) + "</section>" +
       '<details class="tm-adv"' + (ui.advOpen ? " open" : "") + '><summary class="tm-adv-sum">' + esc(tw("teams.advanced")) +
       '</summary><div class="tm-sub">' + esc(tw("teams.advanced_note")) + "</div>" + capsFormHtml(team) + authorityHtml(team) +
       turnsHtml(ui.turns || [], team) + "</details>";
@@ -823,7 +867,7 @@
       var lead = t.leader_key ? tw("teams.leader_line", { name: nameOf(t.members, t.leader_key), n: (t.members || []).length })
         : tw("teams.no_leader_short");
       head.hidden = false;
-      head.innerHTML = back + avaHtml(t.name) +
+      head.innerHTML = back + teamAvatarHtml(t, 36) +
         '<div class="tm-title"><strong>' + esc(t.name) + '</strong><span class="tm-sub">' + esc(lead) + "</span></div>" +
         jobsChipHtml(S.queue, S.side && S.tab === "jobs") +
         '<button type="button" class="ws-btn tm-icon tm-search-btn" aria-label="' + esc(tw("teams.search")) + '" title="' +
@@ -1185,7 +1229,7 @@
     var list = mentionMatches(S.team.members, m[1], mentionsFromText(input.value, S.team.members));
     box.hidden = !list.length;
     box.innerHTML = list.map(function (a) {
-      return '<button type="button" class="tm-sug-item" data-mention="' + esc(a.agent_key) + '">' + avaHtml(a.name || a.slug) +
+      return '<button type="button" class="tm-sug-item" data-mention="' + esc(a.agent_key) + '">' + agentAva(a, 24) +
         esc(a.name || a.slug) + "</button>";
     }).join("");
   }
@@ -1472,6 +1516,13 @@
       return;
     }
     if (e.target.name === "tm-level") { setLevel(Number(e.target.value), e.target); return; }
+    if (e.target.classList.contains("tm-pin-toggle")) {
+      // Ghim nhóm lên đầu danh sách: act() tải lại nhóm và danh sách.
+      var pb = e.target;
+      pb.disabled = true;
+      call("POST", teamUrl("/pin"), { on: pb.checked }).then(function (r) { act(r, drawSide); });
+      return;
+    }
     if (e.target.name && /^tm-auth-(cap|ceil)-[a-z_]+-unl$/.test(e.target.name)) {
       // Tích Không giới hạn thì ô số tắt (giá trị là null + cờ, không phải một số lớn).
       var num = S.el.querySelector('[name="' + e.target.name.slice(0, -4) + '"]');
@@ -1598,7 +1649,7 @@
     jobStripHtml: jobStripHtml, blockedAction: blockedAction, jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
     mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, composerHint: composerHint, newClientId: newClientId,
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, teamTabHtml: teamTabHtml,
-    levelOf: levelOf, grantFor: grantFor, levelsHtml: levelsHtml, turnsHtml: turnsHtml, createFormHtml: createFormHtml,
+    levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml, createFormHtml: createFormHtml,
     bannersHtml: bannersHtml, reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
     searchResultsHtml: searchResultsHtml };

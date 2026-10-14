@@ -210,6 +210,22 @@ check("T5 Cho thêm lượt: 200, nâng trần ngày, việc về hàng", r.stat
 check("T5 Cho thêm lượt việc nhóm khác: 404", c.post(f"/teams/{TID}/tasks/t_khong_co/extend{Q}").status_code == 404)
 c.post(f"/teams/{TID}/tasks/{jw}/cancel{Q}")
 c.post(f"/teams/{TID}/caps{Q}", json={"caps": {"daily_turns": 50}})
+
+# Ảnh đại diện đúng ảnh trợ lý đang dùng; ảnh nhóm ghép từ ảnh thành viên; ghim nhóm
+v = c.get(f"/teams/{TID}{Q}").json()["team"]
+check("thành viên kèm ảnh đại diện của trợ lý (hình, bảng màu)", all(
+    isinstance(m.get("avatar"), dict) and m["avatar"].get("shape") and m["avatar"].get("palette") for m in v["members"]), v["members"])
+row = c.get(f"/teams{Q}").json()["teams"][0]
+check("dòng nhóm kèm tối đa 4 gương mặt (trưởng nhóm trước) và tổng số người",
+      1 <= len(row.get("faces") or []) <= 4 and row["member_count"] == len([m for m in v["members"] if m["status"] == "active"])
+      and row["faces"][0]["slug"] == next(m["slug"] for m in v["members"] if m["agent_key"] == v["leader_key"])
+      and all(f.get("avatar", {}).get("shape") for f in row["faces"]), row.get("faces"))
+r = c.post(f"/teams/{TID}/pin{Q}", json={"on": True})
+check("ghim nhóm: 200, dòng nhóm có mốc ghim", r.status_code == 200
+      and c.get(f"/teams{Q}").json()["teams"][0]["pinned_at"], r.text)
+check("ghim nhóm của brain khác: 404", c.post(f"/teams/{TID}/pin?brain={BR2}", json={"on": True}).status_code == 404)
+c.post(f"/teams/{TID}/pin{Q}", json={"on": False})
+check("bỏ ghim", c.get(f"/teams{Q}").json()["teams"][0]["pinned_at"] is None)
 r = c.delete(f"/teams/{TID}/members/{keys['minh']}{Q}")
 check("bỏ thành viên", r.status_code == 200 and keys["minh"] not in {m["agent_key"] for m in r.json()["team"]["members"]})
 c.post(f"/teams/{TID}/members{Q}", json={"slug": "minh"})
