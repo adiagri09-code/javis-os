@@ -12,7 +12,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
   - khung chat chiếm trọn màn hình, khung soạn một hàng luôn ở đáy;
   - tin dạng bong bóng (của bạn bên phải, của trợ lý bên trái);
   - danh sách nhóm có dòng xem trước tin cuối và nhãn Cần bạn.
-- **Ảnh trợ lý trong nhóm là đúng ảnh trợ lý đang dùng**, và ảnh nhóm ghép từ ảnh các thành viên (nhóm đông thì hiện thêm "+N"). **Ghim nhóm lên đầu danh sách** bằng công tắc trong tab Nhóm.
+- **Ảnh trợ lý trong nhóm là đúng ảnh trợ lý đang dùng**, và ảnh nhóm ghép từ ảnh các thành viên (nhóm đông thì hiện thêm "+N"). **Ghim nhóm lên đầu danh sách** bằng công tắc trong tab Nhóm; lưu không được thì công tắc tự về như cũ và báo lỗi để bạn bấm lại.
+- **Tin cũ giữ đúng ảnh và tên** của trợ lý đã rời nhóm. **Cho thêm lượt** luôn thêm lại đủ các bước đã bị từ chối, kể cả khi nhóm đã có rất nhiều hoạt động sau đó.
 - **Việc bị chặn có một nút giải quyết** ngay đầu khung chat. Hết lượt thì bấm **Cho thêm lượt**: Javis nâng đúng giới hạn vừa chạm rồi cho việc chạy tiếp.
 - **Trưởng nhóm tự quyết đến đâu?** Chọn một trong ba mức: Hỏi tôi trước, Tự làm báo tôi, Tự quản cả nhóm. Các con số chi tiết nằm trong mục Nâng cao.
 - **Chữ dễ hiểu hơn:** bỏ các từ nội bộ như "trần", "lượt model"; gọi @ theo tên còn trong chữ, không còn hiện trùng.

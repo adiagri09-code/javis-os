@@ -510,6 +510,42 @@ check("bật tắt ghim gọi POST /pin rồi tải lại danh sách", /tm-pin-t
 check("CSS: ảnh nhóm ghép có luật cho 1 tới 4 ảnh và ô đếm, mọi lớp flex mới có [hidden]",
       [".tm-gava-1", ".tm-gava-2", ".tm-gava-3", ".tm-gava-4", ".tm-gava-more"].every(function (c) { return css.includes(c); })
       && css.includes(".tm-gava[hidden]") && css.includes(".tm-face[hidden]"));
+// Review b93c46bd #2: tin cũ của trợ lý đã rời nhóm giữ đúng ảnh và tên (sổ tác giả theo agent_key)
+const ctxLeft = { members: [members[0]], authors: { ag_old: { slug: "old", name: "Người <cũ>", avatar: { shape: "sao", palette: "cam" } } } };
+h = TM.messageHtml({ id: 50, author_kind: "agent", author_ref: "ag_old", content: "Tin cũ", meta: {} }, ctxLeft);
+check("#2 tác giả đã rời nhóm: tin cũ vẫn đúng ảnh trợ lý và tên (escape)", /data-slug="old" data-shape="sao"/.test(h)
+      && h.includes("Người &lt;cũ&gt;") && !/tm-ava tm-ava-c/.test(h), h);
+check("#2 ảnh nhóm và gợi ý @ vẫn chỉ lấy thành viên đang hoạt động (không đọc sổ tác giả)",
+      !TM.teamAvatarHtml(Object.assign({}, team, { members: [members[0]], authors: ctxLeft.authors })).includes('data-slug="old"')
+      && TM.mentionMatches([members[0]], "", []).every(function (m) { return m.agent_key !== "ag_old"; })
+      && /authors: S\.team \? S\.team\.authors/.test(teamsJs));
 delete global.window;
 
-process.exit(fails ? 1 : 0);
+// Review b93c46bd #1: công tắc ghim lưu lỗi (HTTP khác 200, lỗi mạng) thì về trạng thái đã lưu, bật lại, báo lỗi
+(async function () {
+  const box = function (checked) { return { checked: checked, disabled: false }; };
+  let b = box(true), done = 0, failed = [];
+  await TM.savePin(b, function () { return Promise.resolve({ code: 500, j: { error: "hỏng" } }); },
+    function () { done++; }, function (r) { failed.push(r); });
+  check("#1 HTTP 500: công tắc về chưa ghim, bật lại, báo lỗi", b.checked === false && b.disabled === false && done === 0
+        && failed.length === 1 && failed[0].code === 500, JSON.stringify([b, failed]));
+  b = box(false); failed = [];
+  let unhandled = null;
+  const onUnh = function (e) { unhandled = e; };
+  process.on("unhandledRejection", onUnh);
+  await TM.savePin(b, function () { return Promise.reject(new Error("offline")); }, function () { done++; },
+    function (r) { failed.push(r); });
+  await new Promise(function (res) { setTimeout(res, 20); });
+  process.removeListener("unhandledRejection", onUnh);
+  check("#1 lỗi mạng: công tắc về đã ghim, bật lại, báo lỗi mạng, không có lỗi bỏ sót", b.checked === true && b.disabled === false
+        && failed.length === 1 && failed[0].network === true && unhandled === null && done === 0, JSON.stringify([b, failed, String(unhandled)]));
+  b = box(true); failed = [];
+  let seen = null;
+  const p = TM.savePin(b, function (want) { seen = { want: want, disabled: b.disabled }; return Promise.resolve({ code: 200, j: {} }); },
+    function () { done++; }, function (r) { failed.push(r); });
+  await p;
+  check("#1 lưu được: gửi đúng giá trị, khoá trong lúc lưu, xong thì bật lại", seen && seen.want === true && seen.disabled === true
+        && b.checked === true && b.disabled === false && done === 1 && failed.length === 0, JSON.stringify([seen, b]));
+  check("#1 trình xử lý công tắc dùng savePin và báo lỗi qua fail/setNote", /tm-pin-toggle[\s\S]{0,600}savePin\(/.test(teamsJs));
+  process.exit(fails ? 1 : 0);
+})();

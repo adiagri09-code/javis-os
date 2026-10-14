@@ -162,6 +162,22 @@ class TeamApi:
                         "managed": bool(m.get("managed_by_team"))})
         return out
 
+    def authors(self, team: dict, meta: Optional[list] = None) -> dict:
+        """Sổ tác giả {agent_key: {slug, name, avatar}} của MỌI trợ lý từng ở nhóm, kể cả đã rời: tin cũ giữ đúng tên và
+        ảnh của người viết (review b93c46bd #2). Ảnh nhóm và gợi ý @ không dùng sổ này, chỉ dùng thành viên đang hoạt
+        động."""
+        root = team["brain_id"]
+        meta = self.deps.agents_meta(root) if meta is None else meta
+        by_slug = {m["slug"]: m for m in (meta or [])}
+        rs = self.deps.resonance_store()
+        out = {}
+        for m in self.teams().members(team["team_id"], include_removed=True):
+            reg = rs.agent_by_key(root, m["agent_key"]) or {}
+            slug = reg.get("slug") or m["slug_at_join"]
+            info = by_slug.get(slug) or {}
+            out[m["agent_key"]] = {"slug": slug, "name": info.get("name") or slug, "avatar": info.get("avatar")}
+        return out
+
     def faces(self, team: dict, meta: list) -> dict:
         """Ảnh nhóm ở danh sách: tối đa 4 gương mặt thành viên đang hoạt động (trưởng nhóm trước) và tổng số người."""
         active = [m for m in self.member_views(team, meta) if m["status"] == "active"]
@@ -186,7 +202,8 @@ class TeamApi:
 
     def view(self, team: dict) -> dict:
         q = self.deps.task_store().team_queue(team["team_id"])
-        return dict(team, members=self.member_views(team),
+        meta = self.deps.agents_meta(team["brain_id"]) or []
+        return dict(team, members=self.member_views(team, meta), authors=self.authors(team, meta),
                     counts={"running": len(q["running"]), "waiting": len(q["waiting"]), "blocked": len(q["blocked"])},
                     running=[{"id": t["id"], "title": t["title"]} for t in q["running"]],
                     busy=self.runner().busy_view(team["team_id"]),

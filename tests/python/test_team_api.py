@@ -238,6 +238,14 @@ check("xoá agent: không còn là thành viên", keys["minh"] not in {m["agent_
 r = c.post(f"/teams/{TID}/members{Q}", json={"slug": "minh"})
 new_key = next(m["agent_key"] for m in r.json()["team"]["members"] if m["slug"] == "minh")
 check("tạo lại cùng slug: mã mới, phải thêm lại mới là thành viên", new_key != keys["minh"])
+# Review b93c46bd #2: tác giả tin cũ đã rời nhóm vẫn có tên và ảnh, tra theo agent_key độc lập với thành viên hiện tại
+v = c.get(f"/teams/{TID}{Q}").json()["team"]
+au = v.get("authors") or {}
+check("#2 sổ tác giả gồm cả người đã rời (mã cũ của Minh), kèm slug, tên, ảnh",
+      keys["minh"] in au and au[keys["minh"]]["slug"] == "minh" and au[keys["minh"]].get("name")
+      and isinstance(au[keys["minh"]].get("avatar"), dict) and au[keys["minh"]]["avatar"].get("shape")
+      and keys["minh"] not in {m["agent_key"] for m in v["members"]}, au.get(keys["minh"]))
+check("#2 sổ tác giả gồm cả thành viên đang hoạt động", all(m["agent_key"] in au for m in v["members"]))
 
 # Việc đang chạy nhưng không còn ai chạy (đã dừng ở điểm điều phối lúc tạm dừng) phải bị huỷ khi lưu trữ.
 jr = c.post(f"/teams/{TID}/messages{Q}", json={"text": "Việc treo", "client_msg_id": "j6", "as_job": True,

@@ -199,6 +199,31 @@ sys_msgs = [m["content"] for m in ss.get_team_messages_page(T["session_id"], lim
 check("bật rồi thu quyền tự quyết: hai tin hệ thống nói rõ", any("tự quyết" in s for s in sys_msgs)
       and any("thu lại" in s for s in sys_msgs), sys_msgs)
 
+# ═════ Review b93c46bd #3: bản ghi chặn bị đẩy khỏi 500 sự kiện cuối của nhóm vẫn được tìm thấy theo việc ═════
+r, tm, ts, ss, fake, T = world("cap500")
+tm.set_caps(T["team_id"], {"task_steps": 2})
+r.engine_for = lambda team, key, role: ("fake", "fake", two_assign)
+job = r.submit(T["team_id"], "Việc hai người", as_job=True, client_msg_id="e1")["task_id"]
+run(r.dispatch_once())
+check("#3 chặn vì trần bước, giữ hai bước bị từ chối", ts.get_task(job)["block_kind"] == "cap_reached")
+other = r.submit(T["team_id"], "Việc khác", as_job=True, client_msg_id="e2")["task_id"]
+tm.log_event(T["team_id"], "cap_blocked", "host", None, {"task_id": other, "cap": "daily_turns", "specs": [], "continues": None})
+for i in range(300):
+    tm.set_pinned(T["team_id"], True)
+    tm.set_pinned(T["team_id"], False)
+check("#3 hơn 600 sự kiện khác sau lần chặn (đuôi 500 sự kiện không còn bản ghi)",
+      not any(e["kind"] == "cap_blocked" and e["after"].get("task_id") == job for e in tm.events(T["team_id"], 500)))
+rec = tm.cap_record(T["team_id"], job)
+check("#3 kho tìm bản ghi chặn mới nhất của ĐÚNG việc đó, đủ hai bước bị từ chối",
+      rec is not None and rec["cap"] == "task_steps" and len(rec["specs"]) == 2, rec)
+check("#3 bản ghi của việc khác không lẫn sang", (tm.cap_record(T["team_id"], other) or {}).get("cap") == "daily_turns")
+out = r.extend_job(job)
+check("#3 Cho thêm lượt nâng trần bước", out and out["cap"] == "task_steps", out)
+run(r.dispatch_once())
+st = [(s["kind"], s["status"]) for s in tm.steps(job)]
+check("#3 thêm lại đủ hai bước, việc chạy tới xong", ts.get_task(job)["status"] == "done"
+      and st.count(("work", "done")) == 2, (ts.get_task(job)["status"], ts.get_task(job)["block_reason"], st))
+
 # ═════ Ghim nhóm lên đầu danh sách ═════
 d = TEMP / "pin"
 d.mkdir()

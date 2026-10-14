@@ -1664,12 +1664,9 @@ class TeamRunner:
 
     def _cap_record(self, task: dict) -> Optional[dict]:
         """Bản ghi `cap_blocked` mới nhất của việc (trần đã chạm, các bước bị từ chối). Mỗi lần chặn ghi bản ghi TRƯỚC khi
-        chặn, nên bản mới nhất là của lần chặn hiện tại. Việc chặn từ trước T5 không có bản ghi: None."""
-        for e in self.teams.events(task["team_id"], 500):
-            a = e.get("after") or {}
-            if e["kind"] == "cap_blocked" and a.get("task_id") == task["id"]:
-                return a
-        return None
+        chặn, nên bản mới nhất là của lần chặn hiện tại. Tra theo đúng việc trong kho, không giới hạn số sự kiện của nhóm
+        (review b93c46bd #3). Việc chặn từ trước T5 không có bản ghi: None."""
+        return self.teams.cap_record(task["team_id"], task["id"])
 
     def _cap_usage(self, team: dict, task: dict, pending: int) -> dict:
         return {"daily_turns": self.teams.count_team_turns(team["team_id"], self._day_start()),

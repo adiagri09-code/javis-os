@@ -14,7 +14,8 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
   - the chat fills the screen, with a one-row message box always at the bottom;
   - messages are bubbles (yours on the right, assistants on the left);
   - the team list shows the last message and a Needs you badge.
-- **Assistants in a team show the avatar they actually use**, and a team's picture is built from its members' avatars (large teams add a "+N"). **Pin a team to the top** of the list with a switch in the Team tab.
+- **Assistants in a team show the avatar they actually use**, and a team's picture is built from its members' avatars (large teams add a "+N"). **Pin a team to the top** of the list with a switch in the Team tab; if saving fails, the switch returns to its saved state and shows an error so you can try again.
+- **Old messages keep the right avatar and name** of an assistant that left the team. **Allow more turns** always adds back every refused step, even after a lot of later team activity.
 - **A blocked job has one button that resolves it**, right at the top of the chat. Out of turns? Tap **Allow more turns**: Javis raises exactly the limit that was hit and lets the job continue.
 - **How much can the lead decide alone?** Pick one of three levels: Ask me first, Act then tell me, Run the whole team. The detailed numbers live under Advanced.
 - **Plainer wording:** internal terms are gone; @ follows the names left in your text, with no duplicate chips.

@@ -159,6 +159,31 @@ Ca đỏ trước rồi xanh:
 
 Hai ca CSS (I3, 44px) em sửa trước khi viết test nên không thấy đỏ.
 
+## Review head `b93c46bd` (biên bản `exports/reviews/PR-645-b93c46bd-review.md`)
+
+Ba lỗi P2, sửa hết. Mỗi lỗi có test tái hiện chạy đỏ trước rồi xanh.
+
+1. **Công tắc ghim kẹt khi lưu lỗi.** HTTP khác 200 hay lỗi mạng để công tắc ở trạng thái chưa lưu và bị tắt, lỗi mạng còn bị bỏ sót.
+   - Nay `savePin` khoá công tắc trong lúc lưu. Lỗi thì trả về trạng thái đã lưu, bật lại để thử lại, báo lỗi (lỗi mạng có câu riêng).
+   - Test hành vi với công tắc giả: HTTP 500, fetch bị từ chối (không có unhandled rejection), lưu được.
+2. **Tin cũ mất ảnh và tên khi trợ lý rời nhóm.** Ảnh tin tra theo thành viên đang hoạt động.
+   - Nay `GET /teams/{id}` trả thêm `authors` {agent_key: {slug, name, avatar}} của mọi trợ lý từng ở nhóm (`members(include_removed=True)`, tra danh tính theo agent_key).
+   - Tin tra tác giả theo thành viên rồi tới sổ này; kết quả tìm cũng vậy.
+   - Ảnh nhóm và gợi ý @ vẫn chỉ lấy thành viên đang hoạt động.
+   - Test: route sau khi bỏ, xoá rồi tạo lại trợ lý; tin của tác giả không còn trong nhóm.
+3. **Cho thêm lượt mất các bước bị từ chối khi bản ghi chặn trôi khỏi 500 sự kiện cuối của nhóm.**
+   - Nay `TeamStore.cap_record(team_id, task_id)` tra thẳng bản ghi `cap_blocked` mới nhất của đúng việc trong SQLite (`json_extract`), không giới hạn số sự kiện.
+   - Test: chặn vì trần bước, thêm một bản ghi của việc khác, rồi 600 sự kiện ghim / bỏ ghim. Sau đó cho thêm lượt thì thêm lại đủ hai bước, việc chạy tới xong.
+
+Kiểm:
+- `tests/run.py --js` 186/186.
+- `test_teams_ui.js` 184 mục.
+- `tests/run.py team agent_avatar agents_danh_sach_nhe resonance_mvp_main route_table icons` 24/24.
+
+SQLite tạm, engine giả, không gọi model.
+
+Sửa số liệu: biên bản và báo cáo trước ghi test giao diện "190 mục". Thật ra lúc đó là 178 mục.
+
 ## Còn để lại (Minor, chưa làm)
 
 - Hai thành viên trùng tên hiển thị: @ luôn trỏ người đầu.

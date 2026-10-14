@@ -387,6 +387,16 @@ class TeamStore:
                     for r in c.execute("SELECT * FROM team_events WHERE team_id=? ORDER BY id DESC LIMIT ?",
                                        (team_id, int(limit))).fetchall()]
 
+    def cap_record(self, team_id: str, task_id: str) -> Optional[dict]:
+        """Bản ghi `cap_blocked` mới nhất của ĐÚNG việc `task_id` (trần đã chạm, các bước bị từ chối), tra thẳng trong kho
+        chứ không trong đuôi sự kiện của cả nhóm: nhóm bận có thể sinh hàng trăm sự kiện khác sau lần chặn (review
+        b93c46bd #3). Không có thì None."""
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT after_json FROM team_events WHERE team_id=? AND kind='cap_blocked' "
+                          "AND json_extract(after_json, '$.task_id')=? ORDER BY id DESC LIMIT 1",
+                          (team_id, str(task_id))).fetchone()
+        return json.loads(r["after_json"]) if r else None
+
     # ───────────── bước nội bộ của việc nhóm ─────────────
 
     @staticmethod

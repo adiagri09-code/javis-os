@@ -276,7 +276,9 @@
         esc(m.content).replace(/\n/g, "<br>") + "</div>";
     }
     var mine = m.author_kind === "owner";
-    var who = mine ? tw("teams.owner") : nameOf(ctx.members, m.author_ref);
+    // Tác giả tra theo thành viên đang hoạt động rồi tới sổ tác giả (cả người đã rời): tin cũ giữ đúng tên và ảnh.
+    var author = mine ? null : (memberOf(ctx.members, m.author_ref) || (ctx.authors || {})[m.author_ref] || null);
+    var who = mine ? tw("teams.owner") : author ? (author.name || author.slug || m.author_ref) : m.author_ref;
     var head = [];
     if (!mine) head.push('<span class="tm-who">' + esc(who) + "</span>");
     if (!mine && meta.role && ROLE_KEY[meta.role]) head.push('<span class="tm-role">' + esc(tw(ROLE_KEY[meta.role])) + "</span>");
@@ -320,7 +322,7 @@
       (meta.job_result ? " tm-msg-result" : "") + (hit ? " tm-msg-hit" : "");
     var bubble = '<div class="tm-bubble">' + (head.length ? '<div class="tm-head">' + head.join("") + "</div>" : "") +
       body + lateLine + notes + prop + (foot ? '<div class="tm-foot">' + foot + "</div>" : "") + "</div>";
-    var face = mine ? "" : agentAva(memberOf(ctx.members, m.author_ref) || { name: who }, 28);
+    var face = mine ? "" : agentAva(author || { name: who }, 28);
     return '<div class="' + cls + '" data-mid="' + esc(m.id) + '">' +
       (mine ? side + bubble : face + bubble + side) + panel + "</div>";
   }
@@ -896,7 +898,7 @@
         '<div class="tm-search-list" role="list"></div>';
     }
     var list = bar.querySelector(".tm-search-list");
-    if (list) list.innerHTML = searchResultsHtml(S.searchResults, S.team ? S.team.members : [], S.searchQuery);
+    if (list) list.innerHTML = searchResultsHtml(S.searchResults, S.team ? knownAuthors(S.team) : [], S.searchQuery);
   }
 
   // Đang lọc tin theo một việc: một băng nói rõ, kèm nút Xem tất cả (thay ô chọn lọc cũ).
@@ -939,9 +941,32 @@
     });
   }
 
+  // Thành viên đang hoạt động cộng mọi tác giả trong sổ (cả người đã rời), cho chỗ chỉ cần tên người viết (kết quả tìm).
+  function knownAuthors(team) {
+    var out = (team.members || []).slice();
+    Object.keys(team.authors || {}).forEach(function (k) {
+      if (!memberOf(out, k)) out.push(Object.assign({ agent_key: k }, team.authors[k]));
+    });
+    return out;
+  }
+
   function ctx() {
-    return { members: S.team ? S.team.members : [], leaderKey: S.team && S.team.leader_key, taskTitles: S.taskTitles,
+    return { members: S.team ? S.team.members : [], authors: S.team ? S.team.authors : null,
+      leaderKey: S.team && S.team.leader_key, taskTitles: S.taskTitles,
       picker: S.picker, draft: S.draft, jumped: S.jumped };
+  }
+
+  // Lưu công tắc ghim: khoá trong lúc lưu; lưu được thì gọi `done`; HTTP khác 200 hay lỗi mạng thì trả công tắc về trạng
+  // thái đã lưu, bật lại để người dùng thử lại, và gọi `failed` (lỗi mạng mang cờ `network`). Không để lỗi bị bỏ sót.
+  function savePin(box, post, done, failed) {
+    var want = !!box.checked;
+    box.disabled = true;
+    var undo = function (r) { box.checked = !want; box.disabled = false; failed(r); };
+    return Promise.resolve().then(function () { return post(want); }).then(function (r) {
+      if (!r || r.code !== 200) return undo(r || { code: 0, j: {} });
+      box.disabled = false;
+      done(r);
+    }, function (err) { undo({ code: 0, j: {}, network: true, error: String(err && err.message || err) }); });
   }
 
   function drawMsgs(stick) {
@@ -1517,10 +1542,11 @@
     }
     if (e.target.name === "tm-level") { setLevel(Number(e.target.value), e.target); return; }
     if (e.target.classList.contains("tm-pin-toggle")) {
-      // Ghim nhóm lên đầu danh sách: act() tải lại nhóm và danh sách.
-      var pb = e.target;
-      pb.disabled = true;
-      call("POST", teamUrl("/pin"), { on: pb.checked }).then(function (r) { act(r, drawSide); });
+      // Ghim nhóm lên đầu danh sách: lưu được thì act() tải lại nhóm và danh sách; lỗi thì công tắc về trạng thái đã lưu,
+      // bật lại để thử lại, và báo lỗi (review b93c46bd #1).
+      savePin(e.target, function (on) { return call("POST", teamUrl("/pin"), { on: on }); },
+        function (r) { act(r, drawSide); },
+        function (r) { if (r && r.network) setNote(tw("teams.err", { e: "network" })); else fail(r); });
       return;
     }
     if (e.target.name && /^tm-auth-(cap|ceil)-[a-z_]+-unl$/.test(e.target.name)) {
@@ -1649,7 +1675,7 @@
     jobStripHtml: jobStripHtml, blockedAction: blockedAction, jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
     mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, composerHint: composerHint, newClientId: newClientId,
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, teamTabHtml: teamTabHtml,
-    levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml, createFormHtml: createFormHtml,
+    levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, levelsHtml: levelsHtml, turnsHtml: turnsHtml, createFormHtml: createFormHtml,
     bannersHtml: bannersHtml, reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
     searchResultsHtml: searchResultsHtml };
