@@ -732,6 +732,21 @@ class GoalStore:
             return {"session_id": r["session_id"], "brain_id": r["brain_id"], "agent_key": r["agent_key"],
                     "created_at": r["created_at"]} if r else None
 
+    def session_pins(self, session_ids) -> dict:
+        """{session_id: agent_key} cho nhiều phiên trong MỘT lần đọc (0.142.0). Tab Công việc và huy hiệu việc đọc ghim
+        của hàng trăm phiên; mở một kết nối cho mỗi phiên tốn ~4 ms trên Windows, 20 trợ lý x 150 phiên là 15 giây."""
+        ids = [str(x) for x in (session_ids or []) if x]
+        out: dict = {}
+        if not ids:
+            return out
+        with closing(self._conn()) as c:
+            for i in range(0, len(ids), 500):
+                part = ids[i:i + 500]
+                q = ",".join("?" * len(part))
+                for r in c.execute(f"SELECT session_id, agent_key FROM session_agents WHERE session_id IN ({q})", part):
+                    out[r["session_id"]] = r["agent_key"]
+        return out
+
     # ───────────── bản ghi ý định ─────────────
 
     def add_intent(self, p: Principal, session_id: str, message_id, text: str, constraints=(),

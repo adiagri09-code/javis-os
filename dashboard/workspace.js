@@ -325,10 +325,17 @@
   }
   // Huy hiệu việc trên thẻ trợ lý (0.142.0): GET /agents/jobs/counts, một request cho cả brain. Đọc hỏng thì giữ bản cũ;
   // bỏ kết quả của brain cũ hay của lần dựng trang cũ (cùng luật với loadResonance).
+  // Một lượt đếm mỗi lúc (review trước phát hành 0.142.0): sự kiện nhóm dồn dập không được mở nhiều request chồng nhau
+  // làm nghẽn luồng phụ của server. Có sự kiện trong lúc đang đếm thì đếm lại đúng một lần sau khi xong.
+  var _demDang = false, _demLai = false;
   async function loadJobCounts() {
     var round = lanDung, b0 = brain(), AJ = window.JavisAgentJobs;
     if (!AJ || !AJ.loadCounts) return false;
-    var c = await AJ.loadCounts(b0);
+    if (_demDang) { _demLai = true; return false; }
+    _demDang = true;
+    var c;
+    try { c = await AJ.loadCounts(b0); } finally { _demDang = false; }
+    if (_demLai) { _demLai = false; setTimeout(henDemViec, 0); }
     if (round !== lanDung || b0 !== brain() || !c) return false;
     S.jc = c;
     return true;

@@ -108,6 +108,12 @@ try:
     TURN_TIMEOUT_S = max(30.0, float(os.environ.get("JAVIS_TEAM_TURN_TIMEOUT", "600")))
 except ValueError:
     TURN_TIMEOUT_S = 600.0
+# Bước của việc nhóm (lập kế hoạch, làm, hỗ trợ, tổng hợp) có thể dài hơn một câu trả lời chat nhiều; trước 0.142.0 bước
+# không có trần nào, nên trần ở đây rộng (60 phút) chỉ để chặn engine treo hẳn (review trước phát hành).
+try:
+    STEP_TIMEOUT_S = max(60.0, float(os.environ.get("JAVIS_TEAM_STEP_TIMEOUT", "3600")))
+except ValueError:
+    STEP_TIMEOUT_S = 3600.0
 EXTEND_TEXT = {"daily_turns": "Chủ nhóm cho nhóm thêm {n} lần trả lời hôm nay để làm tiếp \"{title}\".",
                "task_turns": "Chủ nhóm cho việc \"{title}\" thêm {n} lần trả lời.",
                "task_steps": "Chủ nhóm cho việc \"{title}\" thêm {n} bước."}
@@ -278,6 +284,7 @@ class TeamRunner:
         # Mốc khởi động của bộ chạy: phục hồi chỉ coi là "dở" các lượt trả lời ghi trước mốc này (của tiến trình trước).
         self.started_at = time.time()
         self.turn_timeout = TURN_TIMEOUT_S
+        self.step_timeout = STEP_TIMEOUT_S
         # Thao tác của host mà lệnh quản trị Toàn quyền cần (tạo agent, sửa lời nhắc, Cộng hưởng, cấp mã). None: lệnh
         # cần host bị từ chối kèm ghi chú.
         self.admin = admin
@@ -1188,13 +1195,14 @@ class TeamRunner:
             if not getattr(fn, "marks_engine", False):
                 await engine_started()
             try:
-                res = await asyncio.wait_for(fn(req), timeout=self.turn_timeout)
+                limit = self.turn_timeout if role in REPLY_ROLES else self.step_timeout
+                res = await asyncio.wait_for(fn(req), timeout=limit)
             except asyncio.TimeoutError:
                 if marked:
                     await self._io(self.teams.settle_turn, turn_id, "error")
                 else:
                     await self._io(self._refund_if_unmarked, turn_id)
-                mins = max(1, int(round(self.turn_timeout / 60)))
+                mins = max(1, int(round(limit / 60)))
                 return {"status": "error", "error": f"quá {mins} phút chưa có câu trả lời", "reason": "timeout",
                         "detail": f"{mins}", "turn_id": turn_id, "before_engine": not marked}
             except asyncio.CancelledError:

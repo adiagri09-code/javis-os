@@ -277,3 +277,25 @@ Chủ repo yêu cầu (14/10/2026, kèm ảnh danh sách chat có giờ):
 bong bóng 846/850px của khoang giữa khi cột phải ẩn (1366), 1298px ở 1920 (trần 120 ký tự); 375 không có tay kéo, không tràn
 ngang, giờ cùng hàng tên. Chữ giờ 14px để bằng tên trợ lý ở cột hẹp (ngoại lệ có chủ ý so với sàn 16px của phần mới).
 Test: `tests/js/test_cong_su_bo_cuc_0142.js`, thêm một kiểm ở `test_sessions_kenh_cong_su.py`.
+
+### Rà soát trước khi phát hành
+
+Chủ repo yêu cầu rà lại toàn bộ trước khi merge. Hai agent đọc độc lập `origin/main...HEAD` (server và giao diện), tự chạy
+mã và test; không có lỗi chặn. Kiểm thật: nâng cấp `team.sqlite3` dựng bằng mã `origin/main` (mở hai lần, mã cũ vẫn mở được
+kho đã nâng cấp), migration Cộng hưởng, phục hồi lúc khởi động, khoá một việc mỗi trợ lý của Kanban, tag giết tiến trình theo
+lượt. Khởi động lại server sandbox thật (tắt theo cổng): server lên lại, dòng trạng thái lượt trả lời còn nguyên.
+
+Đã sửa, mỗi mục có test (`test_prerelease_0142.py`, `test_team_chat_0142_review.js`, `test_cong_su_bo_cuc_0142.js`):
+
+| Mức | Phát hiện | Sửa |
+|---|---|---|
+| Important | Huy hiệu việc và danh sách kiểm chứng mở một kết nối kho Cộng hưởng cho MỖI phiên: 15 giây với 20 trợ lý x 150 phiên trên Windows, request chồng nhau làm nghẽn luồng phụ | `session_pins` đọc một lần; trang chỉ chạy một lượt đếm mỗi lúc |
+| Important | Thu cửa sổ còn nửa màn hình thì cột phải bật ra đè khung chat (lớp `right-open` đổi nghĩa theo khổ) | Nghe đổi khổ màn, đặt lại theo nghĩa mới |
+| Important | Nút "Vị trí file" ở trang Cộng sự bấm không ra gì (tab Thư mục đã bỏ) | Mở trang Tệp tin và soi file trong cây |
+| Important | Dòng trạng thái của người đã rời nhóm hiện mã thay vì tên | Tra sổ tác giả |
+| Minor | @ người đã rời nhóm: tin không ai trả lời và câu báo bị lọc mất (chứa mã có `_`) | Câu báo bằng tên; khung soạn chỉ lọc mã |
+| Minor | Trần 10 phút áp cả bước của việc nhóm (trước không có trần) | Trả lời chat 10 phút, bước việc nhóm 60 phút (`JAVIS_TEAM_STEP_TIMEOUT`) |
+| Minor | Việc giao báo về phiên đã lưu trữ hay phiên trống | Ưu tiên phiên chưa lưu trữ đã có tin |
+| Minor | Chạy tay việc Kanban khi trợ lý đang bận trả `ok:false` không lý do | Câu lý do vi/en |
+| Minor | Hộp chọn mất focus sau khi chọn, Escape không đóng; tab Công việc vẫn hỏi server sau khi rời tab; Thử lại có thể kẹt; lưu Cài đặt thu cột phải dù chủ chọn hiện; laptop 1061-1240px mất bề rộng cũ của cột phải; kéo hai cột có thể bóp khung chat còn ~100px | Sửa từng mục; khung chat luôn còn ít nhất 360px |
+| Minor | Lỗi `nonce` trả mã thô | Câu vi/en |

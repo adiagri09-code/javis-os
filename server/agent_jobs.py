@@ -218,17 +218,41 @@ def _chat_sessions(agent_key: str, slug: str, brain_keys: Any, sessions, goals) 
     out = {}
     if sessions is None or not slug:
         return out
-    for s in sessions.list_sessions(limit=200, brain=brain_keys, include_archived=True, channel=f"agent:{slug}"):
-        pin = None
-        if goals is not None:
-            try:
-                pin = goals.session_pin(s["id"])
-            except Exception:  # noqa: BLE001
-                pin = None
-        if pin and pin.get("agent_key") != agent_key:
+    rows = sessions.list_sessions(limit=200, brain=brain_keys, include_archived=True, channel=f"agent:{slug}")
+    pins: dict = {}
+    if goals is not None and rows:
+        # Một lần đọc cho mọi phiên (review trước phát hành 0.142.0): đọc từng phiên mở hàng trăm kết nối.
+        try:
+            if hasattr(goals, "session_pins"):
+                pins = goals.session_pins([s["id"] for s in rows])
+            else:
+                pins = {s["id"]: (goals.session_pin(s["id"]) or {}).get("agent_key") for s in rows}
+        except Exception:  # noqa: BLE001
+            pins = {}
+    for s in rows:
+        pin = pins.get(s["id"])
+        if pin and pin != agent_key:
             continue
         out[s["id"]] = s.get("title") or ""
     return out
+
+
+def report_session(agent_key: str, slug: str, brain_keys: Any, sessions, goals) -> Optional[str]:
+    """Phiên chat riêng nhận báo cáo của việc giao bằng nút Giao việc: phiên CHƯA lưu trữ của đúng mã này, ưu tiên phiên đã
+    có tin (phiên trống là phiên trang tạo sẵn khi bấm vào trợ lý). Không có thì None, người gọi mở phiên mới."""
+    if sessions is None or not slug:
+        return None
+    rows = sessions.list_sessions(limit=50, brain=brain_keys, channel=f"agent:{slug}")
+    pins: dict = {}
+    if goals is not None and rows and hasattr(goals, "session_pins"):
+        try:
+            pins = goals.session_pins([r["id"] for r in rows])
+        except Exception:  # noqa: BLE001
+            pins = {}
+    mine = [r for r in rows if not pins.get(r["id"]) or pins.get(r["id"]) == agent_key]
+    with_msgs = [r for r in mine if int(r.get("msg_count") or 0) > 0]
+    pick = (with_msgs or mine or [None])[0]
+    return pick["id"] if pick else None
 
 
 def _kanban_jobs(agent_key: str, slug: str, root: str, brain_keys: Any, tasks, sessions, goals,

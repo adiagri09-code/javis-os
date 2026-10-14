@@ -35,7 +35,7 @@ import localefmt          # giờ hiển thị theo múi giờ người dùng, k
 import limit_learner      # nhận diện "gói thuê bao hết lượt" - CÙNG bộ mẫu với khung chat
 import limit_resume       # mượn hằng trừ hao / trần chờ của khung chat, không đẻ bộ số thứ hai
 import plugins_host
-from task_store import TaskStore, VALID_STATUS
+from task_store import TaskStore, VALID_STATUS, agent_prefix as _agent_prefix
 
 
 LEASE_SECONDS = 90
@@ -1569,6 +1569,14 @@ Trả DUY NHẤT một dòng JSON, không markdown:
                 if not self.store.move(id, "ready", "operator run"):
                     return {"ok": False, "error": localefmt.chu("task đang chạy", "task is running")}
             started = await self._claim_and_spawn(id)
+            if not started:
+                # 0.142.0: mỗi trợ lý chạy một việc giao trực tiếp một lúc; nói rõ vì sao chưa chạy thay vì ok:false trơn.
+                busy = bool(_agent_prefix(task.get("idempotency_key")))
+                return {"ok": False, "started": False, "id": id, "error": localefmt.chu(
+                    "Chưa chạy ngay được: trợ lý này đang làm một việc khác, việc sẽ tự chạy khi xong" if busy
+                    else "Chưa chạy ngay được: hàng việc đang đầy, việc sẽ tự chạy khi có chỗ",
+                    "Could not start now: this assistant is already running a job; it will start when that one ends" if busy
+                    else "Could not start now: the job queue is full; it will start when a slot frees up")}
             return {"ok": started, "started": started, "id": id}
 
         @router.post("/kanban/task/retry")

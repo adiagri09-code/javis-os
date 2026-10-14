@@ -22563,7 +22563,7 @@ async def agent_jobs_assign(slug: str, request: Request, brain: str = "brain"):
         return _agent_jobs_err(400, "Chưa nhập việc cần làm", "Describe the job first")
     if not agent_jobs.clean_nonce(nonce):
         # Kiểm SAU khi lọc ký tự: nonce chỉ toàn ký tự lạ thành rỗng thì mọi lần giao dùng chung một khoá (review #8).
-        return JSONResponse({"ok": False, "error": "nonce"}, status_code=400)
+        return _agent_jobs_err(400, "Thiếu mã chống gửi trùng, tải lại trang rồi giao lại", "Missing the duplicate-guard code; reload the page and assign again")
     if kind == "verify" and not criteria:
         return _agent_jobs_err(400, "Việc kiểm chứng cần tiêu chí xong", "A verification job needs done criteria")
     link = agent_jobs.clean_link(link_in) if (link_in and kind == "verify") else ""
@@ -22631,7 +22631,8 @@ async def agent_jobs_assign(slug: str, request: Request, brain: str = "brain"):
         ss = get_store()
         # Phiên chat riêng của ĐÚNG mã này: phiên đã ghim mã của trợ lý cũ cùng slug (xoá rồi tạo lại) không nhận báo cáo
         # của trợ lý mới (review 0.142.0, #7); chưa có phiên hợp lệ thì mở mới.
-        sid = next(iter(agent_jobs._chat_sessions(key, slug, _brain_keys(brain), ss, _resonance_store())), None)
+        # Ưu tiên phiên chưa lưu trữ và đã có tin (review trước phát hành 0.142.0).
+        sid = agent_jobs.report_session(key, slug, _brain_keys(brain), ss, _resonance_store())
         if not sid:
             sid = ss.create_session(brain=brain, channel=f"agent:{slug}", title=name[:120])
         tid = tasks_feature.enqueue(brain, agent_jobs.assign_title(name, text), prep["content"], chat_id=f"web:{sid}",
