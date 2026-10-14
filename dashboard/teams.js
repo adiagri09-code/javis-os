@@ -303,7 +303,7 @@
         return '<div class="tm-reply tm-reply-error" role="status">' + face + '<span class="tm-reply-main"><b>' + esc(who) +
           "</b> " + esc(tw("teams.reply.error")) + ": " + esc(tw(why)) + detail + "</span>" +
           (canRetry ? '<button type="button" class="ws-btn tm-reply-retry" data-retry="' + esc(m.id) + '" data-retry-key="' +
-            esc(x.agent_key) + '"' + (busy ? " disabled" : "") + ">" + ic("rotate-ccw") +
+            esc(x.agent_key) + '"' + (busy ? " disabled" : "") + ">" + ic("rotate-cw") +
             esc(tw(busy ? "teams.reply.retrying" : "teams.reply.retry")) + "</button>" : "") + "</div>";
       }
       var answering = x.status === "running" && x.reason === "answering";
@@ -570,7 +570,7 @@
         '<button type="button" class="ws-btn" data-remove="' + esc(m.agent_key) + '">' + esc(tw("teams.remove")) + "</button></span></div></div>";
     }).join("");
     // Thêm người: mở hộp chọn kiểu Zalo (tìm không dấu, lọc tag, chọn nhiều người một lần), 0.142.0.
-    var add = '<div class="tm-add"><button type="button" class="ws-btn tm-add-open">' + ic("user-plus") +
+    var add = '<div class="tm-add"><button type="button" class="ws-btn tm-add-open">' + ic("users") +
       esc(tw("teams.pick.add_open")) + "</button></div>";
     // Chủ nhóm luôn đứng đầu, tách khỏi Điều phối (AI): người tạo và quản lý nhóm là bạn, không phải một trợ lý.
     var you = '<div class="tm-mrow tm-mrow-you"><div class="tm-mhead tm-mhead-static">' +

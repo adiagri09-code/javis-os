@@ -162,6 +162,29 @@ check("mở việc nhóm đi đúng nhóm và lọc đúng việc", /JavisTeams\
   && /function open\(teamId, taskId\)/.test(fs.readFileSync(path.join(ROOT, "dashboard", "teams.js"), "utf8")));
 check("chữ tab Công việc 16px, nút 44px", /\.aj \{[^}]*font-size: 16px/.test(css) && /\.aj \.aj-acts \.ws-btn \{ min-height: 44px/.test(css));
 
+// ───────────── Auto (trước là Cộng hưởng) ─────────────
+const RAX = require(path.join(ROOT, "dashboard", "resonance-agent.js"));
+check("tên hiển thị là Auto ở cả hai thứ tiếng, mô tả đúng câu chủ chốt",
+  vi["resonance.a1_title"] === "Auto" && en["resonance.a1_title"] === "Auto" && vi["resonance.t0_state_on"] === "Auto: Bật"
+  && vi["resonance.auto_desc"] === "Tự làm tiếp mục tiêu được giao và báo kết quả.");
+check("không còn chữ 'Cộng hưởng' ở nhãn hiển thị resonance.* / teams.*",
+  Object.keys(vi).filter(function (k) { return /^(resonance|teams|ws|ajobs)\./.test(k) && /Cộng hưởng/.test(vi[k]); }).length === 0);
+const wsJs = fs.readFileSync(path.join(ROOT, "dashboard", "workspace.js"), "utf8");
+check("menu ba chấm có mục Auto dùng chung hàm bật tắt với công tắc trên thẻ",
+  /nutMenu\("zap", t\(autoOn \? "resonance\.auto_menu_on" : "resonance\.auto_menu_off"\)/.test(wsJs)
+  && /ma\.onclick = function \(\) \{ dongMenu\(\); doiAuto\(item\.slug, !autoOn\); \}/.test(wsJs)
+  && /box\.checked = !wantOn;[\s\S]{0,160}doiAuto\(box\.dataset\.rs, wantOn\)/.test(wsJs));
+check("công tắc nằm trong thẻ (góc dưới phải), bật cam, tắt xám, chạm 44px trên điện thoại",
+  /\.ws-item-wrap > \.ws-auto \{ position: absolute; right: 30px; bottom: 4px;/.test(css)
+  && /\.ws-auto \.toggle-sm input:checked \+ span \{ background: var\(--accent\)/.test(css)
+  && /\.ws-auto \.toggle-sm span \{ background: var\(--bg3\)/.test(css)
+  && /\.ws-item-wrap > \.ws-auto, \.ws-item-wrap > \.ws-rs-confirm \{ min-height: 44px;/.test(css));
+const ph = RAX.panelHtml({ slug: "a", status: "active", enabled: true }, "ready", [], []);
+check("bảng trợ lý: mô tả Auto và câu Auto không phải Toàn quyền", ph.includes(vi["resonance.auto_desc"])
+  && ph.includes(vi["resonance.auto_not_full"]));
+check("hỏi lại khi tắt: nói rõ không huỷ việc, vẫn chat và nhận việc trực tiếp",
+  /không bị huỷ/.test(vi["resonance.t0_off_confirm"]) && /nhận việc trực tiếp/.test(vi["resonance.t0_off_confirm"]));
+
 // ───────────── nối dây ─────────────
 check("app.js chuyển gói team_replies cho trang Nhóm", /data\.type === "team_replies"/.test(appJs));
 check("chữ của dòng trạng thái tối thiểu 16px, nút Thử lại cao 44px", /\.tm-reply \{[^}]*font-size: 16px/.test(css)

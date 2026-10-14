@@ -549,7 +549,7 @@ check("hộp thư nhận ra thư của nhóm (kênh team:) và mở nhóm đó �
       /\/\^team:\(\.\+\)\$\/\.exec/.test(notiJs) && /window\.JavisTeams\.open\(nhom\)/.test(notiJs)
       && notiJs.indexOf("JavisTeams.open(") < notiJs.indexOf("window.JavisSessions.open(item.session_id)"));
 check("JavisTeams.open: đang ở trang Nhóm thì mở ngay; chưa thì ghi nhớ, sang trang Nhóm, mở sau khi tải danh sách",
-      typeof TM.open === "function" && /function open\(teamId\) \{[\s\S]{0,600}pendingOpen = /.test(teamsJs)
+      typeof TM.open === "function" && /function open\(teamId, taskId\) \{[\s\S]{0,600}pendingOpen = /.test(teamsJs)
       && /JavisNav\.go\("teams"\)/.test(teamsJs) && /if \(pendingOpen\) \{[\s\S]{0,200}openTeam\(/.test(teamsJs));
 check("console.js không còn nhãn số giữ chỗ 0.111.0", !consoleJs.includes("0.111.0"));
 

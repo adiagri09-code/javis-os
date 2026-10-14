@@ -105,7 +105,7 @@ def register(app, deps: ResonanceApiDeps):
         return root, RS.Principal("owner", "owner", root)
 
     def _off(why: str) -> JSONResponse:
-        return _err(403, f"Trợ lý chưa bật Cộng hưởng ({why})", f"The assistant has Resonance turned off ({why})",
+        return _err(403, f"Trợ lý chưa bật Auto ({why})", f"The assistant has Auto turned off ({why})",
                     reason=why)
 
     @app.get("/resonance/settings")

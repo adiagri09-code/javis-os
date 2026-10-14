@@ -321,6 +321,21 @@
     S.rs = resonanceMap(j, S.rs);
     return true;
   }
+  // Bật, tắt Auto của MỘT trợ lý (0.142.0): một hàm cho công tắc trên thẻ và mục Auto trong menu ba chấm, nên hai chỗ
+  // dùng chung trạng thái `S.rs`. Khoá trong lúc chờ server (bấm hai lần không gửi hai lệnh); chỉ server xác nhận mới
+  // đổi; lỗi thì về đúng trạng thái thật và nói lý do (toggleAgent luôn phát sự kiện tải lại).
+  function doiAuto(slug, wantOn) {
+    var row = S.rs[slug], RA = window.JavisResonanceAgent;
+    if (!RA || !row || S.rsSaving[slug]) return false;
+    var question = wantOn ? "" : RA.offConfirmText(row);
+    if (question && !window.confirm(question)) { veDanhSach(); return false; }
+    S.rsSaving[slug] = true; veDanhSach();
+    RA.toggleAgent(slug, wantOn).then(function (result) {
+      afterToggle(slug, result);
+      if (active) veTrai();
+    });
+    return true;
+  }
   // Một lượt bật, tắt vừa có kết quả: gỡ cờ "đang lưu" của ĐÚNG trợ lý đó (lượt khác đang chờ vẫn khoá), kể cả khi
   // người dùng đã rời trang; lỗi thì giữ lý do dưới thanh lọc, thành công thì gỡ câu báo lỗi cũ (review cuối T0).
   function afterToggle(slug, result) {
@@ -893,7 +908,8 @@
       // Dấu ghim đứng NGOÀI khối chữ: trong đó nó bị ellipsis của cái tên cắt mất.
       (x.pinned ? '<span class="ws-item-pin" title="' + esc(t("ws.pinned")) + '">' + ic("pin") + '</span>' : "") +
       '</button>' +
-      // T0 nhóm chat team: công tắc Cộng hưởng của trợ lý, ngang hàng với hai nút (không lồng trong nút chọn mục).
+      // Công tắc Auto của trợ lý (0.142.0, trước là Cộng hưởng): ngang hàng với hai nút (không lồng trong nút chọn mục),
+      // CSS đặt nó vào góc dưới phải BÊN TRONG thẻ.
       (S.loai === "agent" && window.JavisResonanceAgent
         ? window.JavisResonanceAgent.rowToggleHtml(S.rs[x.slug], { saving: !!S.rsSaving[x.slug] }) : "") +
       '<button type="button" class="ws-item-more" data-more="' + esc(x.slug) + '" title="' +
@@ -933,18 +949,9 @@
     host.querySelectorAll(".ws-rs-toggle").forEach(function (box) {
       box.onclick = function (e) { e.stopPropagation(); };
       box.onchange = function () {
-        var slug = box.dataset.rs, row = S.rs[slug];
-        var RA = window.JavisResonanceAgent;
-        if (!RA || !row || S.rsSaving[slug]) { box.checked = !box.checked; return; }
         var wantOn = box.checked;
-        var question = wantOn ? "" : RA.offConfirmText(row);
-        if (question && !window.confirm(question)) { box.checked = !wantOn; return; }
-        S.rsSaving[slug] = true; veDanhSach();
-        // toggleAgent luôn phát sự kiện tải lại trạng thái thật; ở đây chỉ gỡ cờ và cập nhật câu báo.
-        RA.toggleAgent(slug, wantOn).then(function (result) {
-          afterToggle(slug, result);
-          if (active) veTrai();
-        });
+        box.checked = !wantOn;   // chỉ server xác nhận mới đổi; vẽ lại theo trạng thái thật
+        doiAuto(box.dataset.rs, wantOn);
       };
     });
     // Trợ lý `missing` hay `retired`: mở bảng bên phải của trợ lý đó, nơi có hai nút xác nhận của A1.
@@ -1059,8 +1066,14 @@
   }
   function veMenuGoc(item, m) {
     var ghim = !!item.pinned, laTag = S.loai === "agent";
+    // Mục Auto (0.142.0): cùng trạng thái với công tắc trên thẻ. Chỉ trợ lý đang hoạt động mới bật, tắt được ở đây.
+    var rsRow = laTag ? S.rs[item.slug] : null;
+    var coAuto = !!(rsRow && rsRow.status !== "missing" && rsRow.status !== "retired");
+    var autoOn = !!(rsRow && rsRow.enabled && rsRow.status === "active");
     m.innerHTML =
       '<div class="ws-menu-head">' + esc(item.name) + '</div>' +
+      (coAuto ? nutMenu("zap", t(autoOn ? "resonance.auto_menu_on" : "resonance.auto_menu_off") +
+        (S.rsSaving[item.slug] ? " · " + t("resonance.t0_saving") : ""), "auto") : "") +
       nutMenu("pin", ghim ? t("ws.unpin") : t("ws.pin"), "ghim") +
       (laTag ? nutMenu("tag", t("ws.tag_menu"), "nhom") : nutMenu("folder", t("ws.move_group"), "nhom")) +
       nutMenu("pencil", t("ws.edit"), "sua") +
@@ -1068,6 +1081,13 @@
     m.querySelector('[data-act="ghim"]').onclick = function () {
       dongMenu(); datMeta(item, { pinned: ghim ? "0" : "1" });
     };
+    var ma = m.querySelector('[data-act="auto"]');
+    if (ma) {
+      ma.setAttribute("role", "menuitemcheckbox");
+      ma.setAttribute("aria-checked", autoOn ? "true" : "false");
+      ma.title = t("resonance.auto_desc");
+      ma.onclick = function () { dongMenu(); doiAuto(item.slug, !autoOn); };
+    }
     m.querySelector('[data-act="nhom"]').onclick = function () { if (laTag) veMenuTag(item, m); else veMenuNhom(item, m); };
     m.querySelector('[data-act="sua"]').onclick = function () { dongMenu(); suaMuc(item); };
     m.querySelector('[data-act="xoa"]').onclick = function () { dongMenu(); xoaMuc(item); };

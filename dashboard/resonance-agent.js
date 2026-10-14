@@ -79,11 +79,16 @@
         '<span class="ws-rs-text">' + esc(label) + "</span></button>";
     }
     var on = !!row.enabled && row.status === "active";
-    var aria = tw("resonance.t0_toggle_aria", { name: row.name || row.slug });
-    return '<label class="ws-rs" title="' + esc(aria) + '"><span class="ws-rs-text">' + esc(label) + "</span>" +
-      '<span class="toggle"><input type="checkbox" class="ws-rs-toggle" data-rs="' + esc(row.slug) + '"' +
-      ' aria-label="' + esc(aria) + '"' + (on ? " checked" : "") + (o.saving ? " disabled" : "") +
-      "><span></span></span></label>";
+    // Trạng thái bằng chữ ("Auto: Bật") nằm đầu nhãn cho trình đọc màn hình và tooltip; mắt thấy nhãn ngắn "Auto" và
+    // màu của công tắc.
+    var aria = tw(stateKey(row)) + " · " + tw("resonance.t0_toggle_aria", { name: row.name || row.slug });
+    // 0.142.0: nhãn ngắn "Auto" và công tắc nhỏ nằm TRONG thẻ trợ lý (góc dưới phải). Bật màu cam Javis, tắt xám; trạng
+    // thái đọc được bằng chữ qua aria và tooltip, không chỉ bằng màu. Đang lưu thì khoá và nói "Đang lưu".
+    return '<label class="ws-rs ws-auto' + (on ? " is-on" : "") + (o.saving ? " is-saving" : "") + '" title="' + esc(aria) + '">' +
+      '<span class="ws-rs-text">' + esc(o.saving ? label : tw("resonance.auto_label")) + "</span>" +
+      '<span class="toggle toggle-sm"><input type="checkbox" class="ws-rs-toggle" data-rs="' + esc(row.slug) + '"' +
+      ' role="switch" aria-checked="' + (on ? "true" : "false") + '" aria-label="' + esc(aria) + '"' + (on ? " checked" : "") +
+      (o.saving ? " disabled" : "") + "><span></span></span></label>";
   }
 
   /* Hỏi lại trước khi TẮT khi trợ lý còn mục tiêu mở (hợp đồng A1: dừng ở bước kế tiếp). Không có thì không hỏi. */
@@ -107,7 +112,9 @@
     // T0: công tắc nằm trên dòng trợ lý ở cột trái (một nơi duy nhất). Ở đây chỉ còn trạng thái bằng chữ.
     var html = '<div class="rsa-head"><span class="rsa-title">' + esc(tw("resonance.a1_title")) + "</span>" +
       '<span class="rsa-state">' + esc(tw(stateKey(r))) + "</span></div>" +
-      '<div class="rsa-sub">' + esc(tw("resonance.t0_where")) + "</div>";
+      '<div class="rsa-sub rsa-desc">' + esc(tw("resonance.auto_desc")) + "</div>" +
+      '<div class="rsa-sub">' + esc(tw("resonance.t0_where")) + "</div>" +
+      '<div class="rsa-sub rsa-note">' + esc(tw("resonance.auto_not_full")) + "</div>";
     html += '<div class="rsa-sub rsa-note">' + esc(toggleNote(r.status === "unregistered" ? { status: "active",
       enabled: false } : r, session)) + "</div>";
     if (on && session === "needs_new_session") {

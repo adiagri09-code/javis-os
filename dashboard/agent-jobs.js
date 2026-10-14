@@ -58,7 +58,7 @@
     var result = j.result ? '<div class="aj-result">' + esc(j.result) + "</div>" : "";
     var openable = j.open && (j.open.team_id || j.open.session_id || j.open.task_id);
     var busy = ui.cancelling && ui.cancelling[j.id];
-    var acts = (openable ? '<button type="button" class="ws-btn aj-open" data-aj-open="' + esc(j.id) + '">' + ic("arrow-up-right") +
+    var acts = (openable ? '<button type="button" class="ws-btn aj-open" data-aj-open="' + esc(j.id) + '">' + ic("external-link") +
       esc(tw("ajobs.open")) + "</button>" : "") +
       (j.cancel ? '<button type="button" class="ws-btn aj-cancel" data-aj-cancel="' + esc(j.id) + '"' + (busy ? " disabled" : "") + ">" +
         esc(tw(busy ? "ajobs.cancelling" : "ajobs.cancel")) + "</button>" : "");
