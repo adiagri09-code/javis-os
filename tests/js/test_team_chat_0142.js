@@ -118,6 +118,50 @@ const indexHtml = fs.readFileSync(path.join(ROOT, "dashboard", "index.html"), "u
 check("team-picker.js nạp trước teams.js", indexHtml.indexOf("team-picker.js") > 0
   && indexHtml.indexOf("team-picker.js") < indexHtml.indexOf("/static/teams.js"));
 
+// ───────────── tab Công việc ở trang Cộng sự ─────────────
+const AJ = require(path.join(ROOT, "dashboard", "agent-jobs.js"));
+AJ.setStrings(vi);
+const data = { ok: true, board: "off", max_workers: 2, errors: [],
+  counts: { running: 1, waiting: 2, needs_you: 1, done: 1 },
+  jobs: [
+    { id: "team:t1", source: "team", source_label: "Ra mắt <x>", title: "Viết thông cáo", bucket: "needs_you", roles: ["helper"],
+      progress: { done: 1, total: 3 }, reason: "Trợ lý gặp lỗi <b>", open: { kind: "team", team_id: "tm_1", task_id: "t1" },
+      cancel: { kind: "team", team_id: "tm_1", task_id: "t1" } },
+    { id: "team:t2", source: "team", source_label: "Ra mắt", title: "Việc chung", bucket: "running", roles: ["coordinator"],
+      progress: { done: 0, total: 2 }, open: { kind: "team", team_id: "tm_1", task_id: "t2" }, cancel: null },
+    { id: "team:t3", source: "team", source_label: "Ra mắt", title: "Chờ", bucket: "waiting", roles: ["assignee"], queue_pos: 2,
+      open: { kind: "team", team_id: "tm_1", task_id: "t3" }, cancel: { kind: "team", team_id: "tm_1", task_id: "t3" } },
+    { id: "kanban:k1", source: "chat", title: "Email", bucket: "waiting", roles: ["assignee"], board_off: true,
+      open: { kind: "chat", session_id: "s1" }, cancel: { kind: "kanban", task_id: "k1" } },
+    { id: "goal:g1", source: "auto", title: "Bản tóm tắt", bucket: "done", roles: ["owner"], result: "", failed: true,
+      open: { kind: "chat", session_id: "s2", goal_id: "g1" }, cancel: null }] };
+let jh = AJ.html(data, { name: "Minh" });
+check("bốn trạng thái có chip đếm: Đang làm, Đang chờ, Cần bạn, Đã xong", ["ajobs.b.running", "ajobs.b.waiting",
+  "ajobs.b.needs_you", "ajobs.b.done"].every(function (k) { return jh.includes(vi[k]); }) && /data-aj-filter="waiting"[^>]*>[^<]*<span class="aj-n">2/.test(jh), jh);
+check("có nút Giao việc", jh.includes("aj-assign-open") && jh.includes(vi["ajobs.assign"]));
+check("Cần bạn đứng đầu, lý do hiện và đã escape", jh.indexOf('aj-sec-h">' + vi["ajobs.b.needs_you"]) < jh.indexOf('aj-sec-h">' + vi["ajobs.b.running"])
+  && jh.includes("Trợ lý gặp lỗi &lt;b&gt;"), jh);
+check("nguồn nhóm có tên nhóm, vai trợ lý trong việc", jh.includes("Nhóm Ra mắt &lt;x&gt;") && jh.includes(vi["ajobs.role.helper"])
+  && jh.includes(vi["ajobs.role.coordinator"]));
+check("tiến độ là số bước thật, vị trí trong hàng nhóm, hàng chờ trung thực khi AI tự vận hành tắt",
+  jh.includes("1/3") && jh.includes(vi["ajobs.queue_pos"].replace("{n}", "2")) && jh.includes(vi["ajobs.board_off"]));
+check("mỗi việc có Mở; chỉ việc huỷ được mới có Huỷ", /data-aj-open="team:t2"/.test(jh) && !/data-aj-cancel="team:t2"/.test(jh)
+  && /data-aj-cancel="kanban:k1"/.test(jh));
+check("chân trang nói rõ trần chạy và AI tự vận hành tắt", jh.includes(vi["ajobs.foot_off"]));
+jh = AJ.html(data, { filter: "waiting" });
+check("lọc theo trạng thái chỉ còn đúng ngăn", jh.includes("Chờ") && jh.includes("Email") && !jh.includes("Viết thông cáo"));
+jh = AJ.html(data, { assignOpen: true, name: "Minh <i>", draft: "Soạn <b>", assignError: "Lỗi" });
+check("form Giao việc giữ chữ đang gõ, tên trợ lý escape, lỗi hiện rõ", jh.includes("Soạn &lt;b&gt;") && jh.includes("Minh &lt;i&gt;")
+  && jh.includes("aj-err") && jh.includes("aj-assign-send"));
+check("chưa có việc: lời gợi ý", AJ.html({ jobs: [], counts: {}, errors: [] }, {}).includes(vi["ajobs.empty"]));
+check("lỗi tải: có Thử lại", AJ.html(null, { error: true }).includes("aj-reload"));
+const ws = fs.readFileSync(path.join(ROOT, "dashboard", "workspace.js"), "utf8");
+check("trang Cộng sự: Lịch sử, Công việc, Cài đặt; tài liệu vẫn có nút riêng", /var TAB_PHAI = \["lichsu", "viec", "cai"\]/.test(ws)
+  && ws.includes('id="wsFiles"') && ws.includes("JavisAgentJobs.mount"));
+check("mở việc nhóm đi đúng nhóm và lọc đúng việc", /JavisTeams\.open\(teamId, taskId\)/.test(ws)
+  && /function open\(teamId, taskId\)/.test(fs.readFileSync(path.join(ROOT, "dashboard", "teams.js"), "utf8")));
+check("chữ tab Công việc 16px, nút 44px", /\.aj \{[^}]*font-size: 16px/.test(css) && /\.aj \.aj-acts \.ws-btn \{ min-height: 44px/.test(css));
+
 // ───────────── nối dây ─────────────
 check("app.js chuyển gói team_replies cho trang Nhóm", /data\.type === "team_replies"/.test(appJs));
 check("chữ của dòng trạng thái tối thiểu 16px, nút Thử lại cao 44px", /\.tm-reply \{[^}]*font-size: 16px/.test(css)

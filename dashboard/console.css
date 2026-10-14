@@ -2934,3 +2934,42 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   .tmp-foot { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   .tmp-count { font-size: 16px; }
 }
+
+/* 0.142.0: tab Công việc của trợ lý (agent-jobs.js). Chữ 16px, vùng chạm 44px. */
+.aj { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 16px; font-size: 16px; }
+.aj-head { display: flex; flex-direction: column; gap: 8px; }
+.aj-head > .ws-btn, .aj .aj-acts .ws-btn { min-height: 44px; font-size: 16px; display: inline-flex; align-items: center; gap: 6px;
+  justify-content: center; }
+.aj-head > .aj-assign-open { align-self: flex-start; padding: 0 16px; }
+.aj-assign { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--accent-line); border-radius: 12px; background: var(--accent-wash); }
+.aj-assign-label { font-weight: 600; }
+.aj-text { font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--field-bg); color: var(--text); resize: vertical; min-height: 88px; width: 100%; box-sizing: border-box; }
+.aj-text:focus { outline: none; border-color: var(--accent); }
+.aj-help, .aj-foot { color: var(--text3); font-size: 16px; line-height: 1.45; }
+.aj-err { color: var(--warn-ink); background: var(--warn-wash); border: 1px solid var(--warn-line); border-radius: 10px; padding: 8px 10px; }
+.aj-note { color: var(--text2); background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
+.aj-filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.aj-chip { flex: 0 0 auto; min-height: 40px; padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font: inherit; font-size: 16px; cursor: pointer; white-space: nowrap; }
+.aj-chip.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.aj-chip-needs_you:not(.is-on) .aj-n { color: var(--warn-ink); }
+.aj-n { font-size: 14px; opacity: .8; }
+.aj-sec { display: flex; flex-direction: column; gap: 8px; }
+.aj-sec-h { margin: 4px 0 0; font-size: 16px; font-weight: 700; color: var(--text2); }
+.aj-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.aj-job { padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-1); display: flex;
+  flex-direction: column; gap: 6px; border-left-width: 4px; }
+.aj-running { border-left-color: var(--accent); }
+.aj-waiting { border-left-color: var(--text3); }
+.aj-needs_you { border-left-color: var(--warn-ink); }
+.aj-done { border-left-color: var(--green); opacity: .92; }
+.aj-title { font-weight: 600; overflow-wrap: anywhere; }
+.aj-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--text2); }
+.aj-src { display: inline-flex; align-items: center; gap: 4px; }
+.aj-role { font-size: 14px; padding: 2px 8px; border-radius: 10px; background: var(--surface-3); color: var(--text2); }
+.aj-line { color: var(--text3); }
+.aj-reason { color: var(--warn-ink); overflow-wrap: anywhere; }
+.aj-result { color: var(--text2); overflow-wrap: anywhere; }
+.aj-acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.aj-empty { color: var(--text3); padding: 16px 4px; text-align: center; line-height: 1.5; }

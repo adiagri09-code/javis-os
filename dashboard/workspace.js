@@ -248,7 +248,10 @@
   // thôi - để nó ở tab đầu là bắt người dùng bấm thêm một cú mỗi lần vào trang.
   // Thứ tự nút là chung, còn tab MỞ SẴN thì khác nhau theo loại: quy trình mở ở Cài đặt vì
   // nút Chạy quy trình nằm ở đó (chủ dự án chốt 17/09) - xem S.tabCua.
-  var TAB_PHAI = ["lichsu", "files", "cai"];   // ba tab cột phải, thứ tự đúng như lúc vẽ
+  // 0.142.0: tab Thư mục nhường chỗ cho Công việc ("viec", agent-jobs.js): việc của trợ lý từ nhóm, chat riêng và Auto.
+  // Cây thư mục vẫn ở màn chính và trang Trò chuyện; tài liệu riêng của trợ lý vẫn mở bằng nút Tài liệu đầu khung chat.
+  // Quy trình không có tab Công việc (nó không nhận việc theo agent_key), mở tab đó thì về Cài đặt.
+  var TAB_PHAI = ["lichsu", "viec", "cai"];   // ba tab cột phải, thứ tự đúng như lúc vẽ
   // Danh sách trái chỉ vẽ TRANG mục đầu, bấm "Xem thêm" mở thêm TRANG nữa - đúng cỡ trang của
   // cột lịch sử (sessions-ui.js: PAGE = 20) để cả app cùng một nhịp. Brain của chủ dự án có
   // vài chục trợ lý, vẽ hết một lượt là một cột cuộn dài dằng dặc mà chín phần mười số hàng
@@ -419,12 +422,12 @@
           // của cột trái trang Trò chuyện - cùng một kiểu tab, không đẻ bộ lớp thứ hai.
           '<div class="cside-tabs ws-rtabs">' +
             '<button type="button" class="cside-tab" data-rtab="lichsu">' + ic("history") + ' ' + esc(t("ws.tab_history")) + '</button>' +
-            '<button type="button" class="cside-tab" data-rtab="files">' + ic("folder-tree") + ' ' + esc(t("sess.tab_files")) + '</button>' +
+            '<button type="button" class="cside-tab" data-rtab="viec">' + ic("list-todo") + ' ' + esc(t("ws.tab_jobs")) + '</button>' +
             '<button type="button" class="cside-tab" data-rtab="cai">' + ic("settings") + ' ' + esc(t("ws.tab_settings")) + '</button>' +
           '</div>' +
           '<div class="cside-pane ws-rpane" data-rpane="cai" id="wsRightSet"></div>' +
           '<div class="cside-pane ws-rpane" data-rpane="lichsu" id="wsRightHistory"></div>' +
-          '<div class="cside-pane ws-rpane" data-rpane="files" id="wsRightFiles"></div>' +
+          '<div class="cside-pane ws-rpane" data-rpane="viec" id="wsRightJobs"></div>' +
         '</aside>' +
       '</div>';
     if (opts && opts.borrow) opts.borrow(el.querySelector("#wsSlot"));
@@ -541,14 +544,32 @@
   function chonTabPhai(tab) {
     var el = S.el; if (!el) return;
     S.tabPhai = TAB_PHAI.indexOf(tab) >= 0 ? tab : "cai";
+    if (S.tabPhai === "viec" && S.loai !== "agent") S.tabPhai = "cai";
     if (S.tabCua) S.tabCua[S.loai] = S.tabPhai;
     // Tab của quy trình chỉ sống trong lần mở trang này (xem S.tabCua), không ghi xuống.
     if (S.loai !== "workflow") { try { localStorage.setItem("javis_ws_rtab", S.tabPhai); } catch (e) {} }
     el.querySelectorAll("[data-rtab]").forEach(function (b) { b.classList.toggle("active", b.dataset.rtab === S.tabPhai); });
     el.querySelectorAll("[data-rpane]").forEach(function (p) { p.classList.toggle("on", p.dataset.rpane === S.tabPhai); });
-    var host = el.querySelector("#wsRightFiles");
-    if (S.tabPhai === "files" && host && window.JavisVaultPanel) window.JavisVaultPanel.borrow(host);
-    else traCayThuMuc();
+    var jb = el.querySelector('[data-rtab="viec"]');
+    if (jb) jb.hidden = S.loai !== "agent";
+    // Bản cũ mượn cây thư mục ở đây; trả lại phòng khi một phiên trước còn giữ nó.
+    traCayThuMuc();
+    if (S.tabPhai === "viec") ganCongViec(dangChon());
+  }
+
+  // Tab Công việc (agent-jobs.js): gắn lại mỗi khi đổi trợ lý hay mở tab, tải tươi từ server.
+  var _congViec = null;
+  function ganCongViec(item) {
+    var host = S.el && S.el.querySelector("#wsRightJobs");
+    if (_congViec) { _congViec.destroy(); _congViec = null; }
+    if (!host) return;
+    if (!item || S.loai !== "agent" || !window.JavisAgentJobs) { host.innerHTML = ""; return; }
+    _congViec = window.JavisAgentJobs.mount(host, { slug: item.slug, name: item.name || item.slug, brain: brain,
+      openChat: function (sid) { var x = dangChon(); if (x) moPhien(x, false, sid); },
+      openTeam: function (teamId, taskId) {
+        if (window.JavisTeams && window.JavisTeams.open) window.JavisTeams.open(teamId, taskId);
+      },
+      openWork: function () { if (window.JavisNav && window.JavisNav.go) window.JavisNav.go("kanban"); } });
   }
 
   // (0.62.0 đã bỏ hàm dongBoNhomForm ở đây. Nó tồn tại chỉ để vá một xung đột tự gây ra:

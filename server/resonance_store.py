@@ -861,6 +861,27 @@ class GoalStore:
             q += " ORDER BY updated_at DESC"
             return [self._record(c, r) for r in c.execute(q, args).fetchall()]
 
+    def agent_goal_rows(self, p: Principal, agent_key: str, limit: int = 40) -> list:
+        """Mục tiêu của một trợ lý cho tab Công việc (0.142.0): mục tiêu nó làm (`goal_agents`) và mục tiêu cũ nó đang là
+        người review (đội A5 còn `active`). Đang mở trước, rồi mới nhất. Bản đọc nhẹ, không dựng cả thẻ mục tiêu."""
+        key = str(agent_key or "")
+        with closing(self._conn()) as c:
+            rows = c.execute(
+                "SELECT g.*, 'owner' AS role FROM goals g JOIN goal_agents a ON a.goal_id=g.id "
+                "WHERE g.brain_id=? AND a.agent_key=? "
+                "UNION ALL SELECT g.*, 'reviewer' AS role FROM goals g JOIN goal_team t ON t.goal_id=g.id "
+                "WHERE g.brain_id=? AND t.reviewer_agent_key=? AND t.status='active' AND g.status='active' "
+                "ORDER BY (status='active') DESC, updated_at DESC LIMIT ?",
+                (p.brain_id, key, p.brain_id, key, max(1, int(limit)))).fetchall()
+            out = []
+            for r in rows:
+                rec = self._record(c, r)
+                out.append({"id": r["id"], "status": r["status"], "run_state": r["run_state"],
+                            "block_reason": r["block_reason"], "paused": bool(r["paused"]), "role": r["role"],
+                            "session_id": r["session_id"], "request_ref": r["request_ref"],
+                            "understanding": rec.understanding, "updated_at": r["updated_at"]})
+            return out
+
     def revise(self, p: Principal, goal_id: str, expected_revision: int, frame: dict, reason: str,
                intent_id: Optional[str] = None, message_ref: str = "", relation: str = "",
                intent: Optional[dict] = None, work_due_at: Optional[float] = None,

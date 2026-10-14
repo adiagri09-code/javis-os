@@ -22389,6 +22389,91 @@ _TEAM_API = team_api.register(app, team_api.TeamApiDeps(
     broadcast=lambda ev: _CHAT_RUNTIME.publish(ev), notify=_team_notify, admin=_TeamAdmin()))
 
 
+
+# ── Tab Công việc của trợ lý (0.142.0): gom việc theo agent_key từ nhóm, chat riêng và Auto ──
+import agent_jobs  # noqa: E402
+
+
+def _agent_persona(root, slug):
+    """Vai của trợ lý cho việc Kanban giao bằng nút Giao việc: đúng lời nhắc trợ lý dùng ở quy trình (vai, thân file, kỹ
+    năng, bộ nhớ riêng). Engine, quyền và trần của Kanban giữ nguyên."""
+    if not _agent_md_path(root, slug):
+        return ""
+    name, sysprompt, _model, _prov = _workflow_agent_helpers(root, None)[1](slug)
+    return (f"# VAI CỦA VIỆC NÀY\nViệc này được giao cho trợ lý \"{name}\". Làm đúng vai dưới đây, báo kết quả bằng "
+            f"giọng của trợ lý đó.\n\n{sysprompt}")
+
+
+tasks_feature.deps.agent_persona = _agent_persona
+
+
+def _agent_jobs_key(root, slug, register=False):
+    """Mã bền của trợ lý (theo slug hiện tại). `register`: chưa có thì cấp (không bật Auto)."""
+    if register:
+        return _TEAM_API.register_agent(root, slug)["agent_key"]
+    if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+        return None
+    row = _resonance_store().agent(root, slug)
+    return row["agent_key"] if row and row.get("status") == "active" else None
+
+
+@app.get("/agents/{slug}/jobs")
+async def agent_jobs_list(slug: str, brain: str = "brain"):
+    """Việc của một trợ lý, đọc thẳng bản ghi gốc (không sao chép): việc nhóm (kể cả bước con, hỗ trợ), việc từ chat
+    riêng, mục tiêu Auto. Chỉ đọc, không tạo gì."""
+    root = _brain_key(brain)
+    if not _agent_md_path(root, slug):
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy trợ lý", "Assistant not found")},
+                            status_code=404)
+
+    def _do():
+        key = _agent_jobs_key(root, slug)
+        goals = _resonance_store() if key else None
+        teams = _TEAM_API.teams() if (key and _TEAM_API.exists()) else None
+        out = agent_jobs.collect(key or "", slug, root, brain_keys=_brain_keys(brain), teams=teams,
+                                 tasks=tasks_feature.store, sessions=get_store(), goals=goals,
+                                 principal=resonance_store.Principal("owner", "owner", root))
+        out["board"] = tasks_feature.store.board_mode(root)
+        out["max_workers"] = tasks_feature.max_workers
+        return dict(out, ok=True, agent_key=key)
+    return await asyncio.to_thread(_do)
+
+
+@app.post("/agents/{slug}/jobs")
+async def agent_jobs_assign(slug: str, request: Request, brain: str = "brain"):
+    """Nút Giao việc: một việc Kanban gắn mã trợ lý, chạy với vai của trợ lý, báo kết quả về cuộc chat riêng với trợ lý
+    (mở mới nếu chưa có). `nonce` chống gửi trùng. Hàng chờ trung thực: brain tắt "AI tự vận hành" thì việc chỉ nằm
+    chờ, và câu trả lời nói rõ điều đó."""
+    root = _brain_key(brain)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    text = str((body or {}).get("text") or "").strip()
+    nonce = str((body or {}).get("nonce") or "").strip()
+    if not text:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Chưa nhập việc cần làm", "Describe the job first")},
+                            status_code=400)
+    if not nonce:
+        return JSONResponse({"ok": False, "error": "nonce"}, status_code=400)
+    path = _agent_md_path(root, slug)
+    if not path:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy trợ lý", "Assistant not found")},
+                            status_code=404)
+
+    def _do():
+        key = _agent_jobs_key(root, slug, register=True)
+        meta, _body = _read_md(path)
+        name = str((meta or {}).get("name") or slug)
+        ss = get_store()
+        chats = ss.list_sessions(limit=1, brain=_brain_keys(brain), channel=f"agent:{slug}")
+        sid = chats[0]["id"] if chats else ss.create_session(brain=brain, channel=f"agent:{slug}", title=name[:120])
+        tid = tasks_feature.enqueue(brain, agent_jobs.assign_title(name, text), text, chat_id=f"web:{sid}",
+                                    idempotency_key=agent_jobs.assign_key(key, slug, nonce), dedupe_title=False)
+        return {"ok": True, "task_id": tid, "session_id": sid, "board": tasks_feature.store.board_mode(root)}
+    return await asyncio.to_thread(_do)
+
+
 if __name__ == "__main__":
     import uvicorn
     # 127.0.0.1: chỉ máy này truy cập được (an toàn - tránh người khác trong mạng LAN

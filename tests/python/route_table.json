@@ -4458,5 +4458,25 @@
    "GET"
   ],
   "trong": null
+ },
+ {
+  "order": 448,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/jobs",
+  "name": "agent_jobs_list",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 449,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/jobs",
+  "name": "agent_jobs_assign",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
  }
 ]

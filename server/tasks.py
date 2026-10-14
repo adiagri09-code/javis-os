@@ -128,6 +128,9 @@ class TasksDeps:
     # Nối Kanban → tự học: việc nền chạy xong/vướng thì xếp vào hàng đợi học (learn.enqueue_job).
     # Tiêm sau khi learn_feature sẵn sàng (main gán). None = chưa nối → bỏ qua, worker chạy như cũ.
     learn_hook: Optional[Callable] = None
+    # 0.142.0: việc giao cho một trợ lý (nút Giao việc ở tab Công việc) chạy với vai của trợ lý đó. (root, slug) -> đoạn
+    # lời nhắc vai trò, rỗng khi không có. Engine, quyền và trần của Kanban giữ nguyên.
+    agent_persona: Optional[Callable[[str, str], str]] = None
 
 
 class TasksFeature:
@@ -248,6 +251,7 @@ class TasksFeature:
         capability: str = "auto",
         execution_mode: str = "auto",
         idempotency_key: str = "",
+        dedupe_title: bool = True,
     ) -> str:
         root = self._ensure(brain)
         status = "todo" if deps else "triage"
@@ -265,6 +269,7 @@ class TasksFeature:
             execution_mode if execution_mode in EXECUTION_MODES else "auto",
             idempotency_key,
             status,
+            dedupe_title=dedupe_title,
         )
         self.store.promote_dependencies(root)
         self._snapshot(root)
@@ -561,6 +566,21 @@ class TasksFeature:
     # ------------------------------------------------------------------
     # AI specification and execution lanes
     # ------------------------------------------------------------------
+    def _persona(self, task: dict, root: str) -> str:
+        """Vai của trợ lý được giao việc (khoá `agent:<mã>:<slug>:...`). Lỗi hay không có thì rỗng: việc vẫn chạy."""
+        if not self.deps.agent_persona:
+            return ""
+        key = str(task.get("idempotency_key") or "")
+        if not key.startswith("agent:"):
+            return ""
+        parts = key[len("agent:"):].split(":")
+        if len(parts) < 3:
+            return ""
+        try:
+            return str(self.deps.agent_persona(root, parts[1]) or "")
+        except Exception:
+            return ""
+
     def _base_cli(
         self,
         task: dict,
@@ -569,8 +589,12 @@ class TasksFeature:
         tag_suffix: str,
     ):
         root = str(task["brain_root"])
+        system_prompt = self.deps.build_system_prompt(root)
+        persona = self._persona(task, root)
+        if persona:
+            system_prompt = system_prompt + "\n\n" + persona
         cli = claude_engine(
-            system_prompt=self.deps.build_system_prompt(root),
+            system_prompt=system_prompt,
             cwd=root,
             tag=f"dispatch:{task['id']}:{tag_suffix}",
             allowed_tools=allowed_tools,

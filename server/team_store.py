@@ -866,3 +866,12 @@ class TeamStore:
                       "WHERE status IN ('queued','running')", (time.time(),))
         return rows
 
+    def teams_of_agent(self, agent_key: str) -> list:
+        """Mọi nhóm (chưa lưu trữ) mà `agent_key` từng là thành viên, kể cả đã rời: việc cũ của họ vẫn hiện ở tab Công
+        việc (0.142.0)."""
+        with closing(self._conn()) as c:
+            rows = c.execute("SELECT t.* FROM teams t JOIN team_members m ON m.team_id=t.team_id "
+                             "WHERE m.agent_key=? AND t.status != 'archived' ORDER BY t.updated_at DESC",
+                             (str(agent_key or ""),)).fetchall()
+        return [self._team(r) for r in rows]
+

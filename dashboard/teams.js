@@ -1223,23 +1223,24 @@
       if (!S.team) drawMsgs(false);
       // Có nhóm cần mở từ ngoài trang (bấm thư trong hộp thư): mở khi danh sách đã về.
       if (pendingOpen) {
-        var want = pendingOpen;
-        pendingOpen = null;
-        openTeam(want);
+        var want = pendingOpen, wantTask = pendingTask;
+        pendingOpen = null; pendingTask = "";
+        openTeam(want, wantTask);
       }
     });
   }
 
-  var pendingOpen = null;
+  var pendingOpen = null, pendingTask = "";
   // Mở một nhóm từ ngoài trang (hộp thư, thông báo đẩy về việc nhóm): đang ở trang Nhóm và danh sách đã về thì mở ngay;
   // chưa thì nhớ id, sang trang Nhóm, loadTeams() mở nó khi danh sách về.
-  function open(teamId) {
+  // `taskId` (0.142.0, tab Công việc ở trang Cộng sự): mở nhóm và lọc khung chat theo đúng việc đó.
+  function open(teamId, taskId) {
     teamId = String(teamId || "");
     if (!teamId) return;
-    pendingOpen = teamId;
+    pendingOpen = teamId; pendingTask = String(taskId || "");
     if (S && S.el && S.el.isConnected && S.loaded) {
-      pendingOpen = null;
-      openTeam(teamId);
+      pendingOpen = null; pendingTask = "";
+      openTeam(teamId, taskId);
       return;
     }
     if (typeof window !== "undefined" && window.JavisNav && window.JavisNav.go) window.JavisNav.go("teams");
@@ -1299,9 +1300,9 @@
     });
   }
 
-  function openTeam(id) {
+  function openTeam(id, taskId) {
     S.jumped = null; S.searchResults = null; S.searchQuery = ""; S.searchOpen = false;
-    S.activeId = id; S.view = "chat"; S.asJob = false; S.pending = null; S.filterTask = "";
+    S.activeId = id; S.view = "chat"; S.asJob = false; S.pending = null; S.filterTask = String(taskId || "");
     S.team = null; S.queue = null; S.msgs = []; S.taskTitles = {}; S.side = false; S.openMember = null; S.turns = [];
     S.picker = null; S.draft = null; S.picked = []; S.retrying = {};
     var input = S.el.querySelector(".tm-input");
