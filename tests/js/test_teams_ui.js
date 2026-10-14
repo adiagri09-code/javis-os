@@ -521,6 +521,32 @@ check("#2 ảnh nhóm và gợi ý @ vẫn chỉ lấy thành viên đang hoạt
       && /authors: S\.team \? S\.team\.authors/.test(teamsJs));
 delete global.window;
 
+// Ghim ngay trên danh sách: máy tính rê chuột hiện nút ghim, chuột phải hay nhấn giữ (điện thoại) mở menu Ghim / Bỏ ghim
+const tPin = Object.assign({}, team, { pinned_at: 1791900000 }), tPlain = Object.assign({}, team, { team_id: "tm_2", pinned_at: null });
+h = TM.teamListHtml([tPin, tPlain], "tm_1", now);
+check("dòng nhóm vẫn là nút mở nhóm (đánh dấu nhóm đang mở) và có nút ghim riêng bên cạnh, không lồng nút",
+      /data-team="tm_1"[^>]*aria-current="true"/.test(h) && /<div class="tm-team-wrap">/.test(h)
+      && /<\/button><button type="button" class="tm-row-pin" data-pin-team="tm_1" data-on="0" aria-label="[^"]+"/.test(h)
+      && /class="tm-row-pin" data-pin-team="tm_2" data-on="1"/.test(h), h);
+check("nút ghim ghi đúng việc sẽ làm: Bỏ ghim cho nhóm đã ghim, Ghim nhóm cho nhóm chưa ghim",
+      h.includes('data-on="0" aria-label="' + vi["teams.unpin_team"]) && h.includes('data-on="1" aria-label="' + vi["teams.pin_team"]), h);
+check("chưa mở menu: không có menu", !h.includes("tm-row-menu"));
+h = TM.teamListHtml([tPin, tPlain], "", now, "tm_2");
+check("mở menu của một nhóm: đúng một menu, một mục Ghim nhóm", (h.match(/class="tm-row-menu"/g) || []).length === 1
+      && /role="menu"[\s\S]*role="menuitem" data-pin-team="tm_2" data-on="1"/.test(h) && h.includes(vi["teams.pin_team"]), h);
+check("nhấn giữ dòng nhóm mở menu, chặn cú bấm mở nhóm ngay sau đó; chuột phải mở menu; Escape đóng menu",
+      /var row = e\.target\.closest && e\.target\.closest\("\.tm-team"\);[\s\S]{0,400}S\.swallowClick = true;\s*openRowMenu\(row\.getAttribute\("data-team"\)\)/.test(teamsJs)
+      && /if \(d\.team && S\.swallowClick\) \{ S\.swallowClick = false; return; \}/.test(teamsJs)
+      && /"contextmenu"[\s\S]{0,500}\.tm-team"\);\s*if \(row\) \{ e\.preventDefault\(\); openRowMenu/.test(teamsJs)
+      && /e\.key === "Escape" && S\.rowMenu/.test(teamsJs) && /function openRowMenu\(id\) \{\s*S\.rowMenu = id;/.test(teamsJs));
+check("ghim từ danh sách dùng cùng cách lưu (lỗi thì báo, không kẹt)", /function pinTeam\(id, on, btn\)[\s\S]{0,500}savePin\(/.test(teamsJs)
+      && /\/teams\/" \+ q\(id\) \+ "\/pin"/.test(teamsJs));
+check("CSS: nút ghim hiện khi rê chuột hay focus, máy chạm ẩn (dùng nhấn giữ); menu có [hidden], mục menu 44px",
+      /\.tm-team-wrap:hover \.tm-row-pin, \.tm-row-pin:focus-visible \{ opacity: 1; \}/.test(css)
+      && /@media \(hover: none\) \{ \.tm-row-pin \{ display: none; \}/.test(css) && css.includes(".tm-row-menu[hidden]")
+      && css.includes(".tm-team-wrap[hidden]") && /\.tm-row-menu button \{[^}]*min-height: 44px/.test(css));
+check("khoá chữ ghim có ở vi và en", ["teams.pin_team", "teams.unpin_team", "teams.row_menu"].every(function (k) { return vi[k] && en[k]; }));
+
 // Review b93c46bd #1: công tắc ghim lưu lỗi (HTTP khác 200, lỗi mạng) thì về trạng thái đã lưu, bật lại, báo lỗi
 (async function () {
   const box = function (checked) { return { checked: checked, disabled: false }; };

@@ -2532,6 +2532,24 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .tm-pinned { display: inline-flex; flex: none; color: var(--text3); }
 .tm-pinned[hidden] { display: none; }
 .tm-pin-row { margin-bottom: 8px; }
+/* Ghim ngay trên danh sách: nút ghim nằm cạnh dòng nhóm (không lồng trong nút mở nhóm), hiện khi rê chuột hay focus;
+   máy chạm không có hover nên ẩn nút, ghim bằng nhấn giữ dòng nhóm (menu Ghim / Bỏ ghim). */
+.tm-team-wrap { position: relative; }
+.tm-team-wrap[hidden] { display: none; }
+.tm-team-wrap .tm-team { padding-right: 40px; }
+.tm-row-pin { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border: none; border-radius: 8px; background: var(--surface-2); color: var(--text2); cursor: pointer;
+  opacity: 0; transition: opacity .12s; }
+.tm-row-pin[hidden] { display: none; }
+.tm-row-pin[data-on="0"] { color: var(--accent); }
+.tm-team-wrap:hover .tm-row-pin, .tm-row-pin:focus-visible { opacity: 1; }
+@media (hover: none) { .tm-row-pin { display: none; } .tm-team { -webkit-touch-callout: none; } }
+.tm-row-menu { position: absolute; top: 100%; right: 8px; z-index: 6; display: flex; flex-direction: column; min-width: 180px;
+  padding: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); box-shadow: 0 8px 24px rgba(0, 0, 0, .18); }
+.tm-row-menu[hidden] { display: none; }
+.tm-row-menu button { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border: none; border-radius: 8px;
+  background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.tm-row-menu button:hover, .tm-row-menu button:focus-visible { background: var(--surface-2); }
 
 /* Danh sách nhóm kiểu app chat: ảnh, tên, giờ, dòng xem trước, nhãn trạng thái. */
 .tm-team { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; min-height: 60px;

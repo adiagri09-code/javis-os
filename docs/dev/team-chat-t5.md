@@ -63,6 +63,15 @@ Chồng trên T4 (PR #643). Nguồn: buổi soi giao diện ngày 14/10/2026 (�
    - Ảnh nhóm ghép từ ảnh thành viên đang hoạt động (trưởng nhóm trước): 1 người một ảnh, 2 người chéo, 3 người tam giác, 4 người lưới 2x2. Hơn 4 người thì ba ảnh và ô "+N" (quá 99 ghi "99+"). `GET /teams` kèm `faces` (tối đa 4) và `member_count`; đầu khung chat suy từ thành viên.
    - Ghim: cột `pinned_at` trong `teams` (tự thêm cho kho cũ), `TeamStore.set_pinned` (sự kiện `pinned` / `unpinned`), route `POST /teams/{id}/pin {on}`. Trang đầu của danh sách mở bằng các nhóm đã ghim (ghim sau đứng trước), trang sau chỉ gồm nhóm không ghim nên không lặp. Dòng nhóm có dấu ghim; công tắc "Ghim nhóm lên đầu danh sách" nằm trong tab Nhóm.
 
+10. **Ghim ngay trên danh sách** (chủ duyệt sau khi hỏi "có cần ghim bằng nhấn giữ không").
+    - Công tắc trong tab Nhóm vẫn là lối dễ thấy; đây là lối tắt quen tay của người dùng Zalo, Messenger.
+    - Máy tính: rê chuột lên dòng nhóm thì hiện nút ghim ở góc dòng. Nút này là anh em của nút mở nhóm, không lồng nút.
+    - Chuột phải lên dòng mở menu "Ghim nhóm" hay "Bỏ ghim".
+    - Điện thoại: nhấn giữ dòng nhóm 0,5 giây mở cùng menu đó. Cú bấm sinh ra lúc nhấc tay bị chặn (`swallowClick`, xoá ở lần chạm sau) nên không mở nhầm nhóm. Máy chạm không có nút ghim nổi.
+    - Menu đóng bằng Escape (focus về dòng nhóm), bấm ra ngoài, hay sau khi chọn.
+    - Ghim từ danh sách dùng chung `savePin`: lỗi thì báo, không kẹt.
+    - Smoke trên sandbox: rê chuột rồi bấm nút ghim; chuột phải rồi Bỏ ghim; Escape; nhấn giữ bằng sự kiện chạm giả lập (menu mở, không mở nhầm nhóm); chạm ngắn vẫn mở nhóm.
+
 ## Nút giải quyết việc bị chặn
 
 | Lý do chặn | Nút |

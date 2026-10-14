@@ -249,18 +249,28 @@
     return (who ? who + ": " : "") + last.text;
   }
 
-  function teamListHtml(teams, activeId, now) {
+  // `menuId`: nhóm đang mở menu Ghim / Bỏ ghim (nhấn giữ trên điện thoại, chuột phải trên máy tính). Mỗi dòng còn có nút
+  // ghim riêng (anh em của nút mở nhóm, không lồng nút), hiện khi rê chuột hay focus.
+  function teamListHtml(teams, activeId, now, menuId) {
     if (!teams || !teams.length) return guideHtml();
     return teams.map(function (t) {
       var on = t.team_id === activeId;
       var last = t.last || {};
-      var pin = t.pinned_at ? '<span class="tm-pinned" title="' + esc(tw("teams.pinned")) + '" aria-label="' +
+      var pinned = !!t.pinned_at;
+      var pin = pinned ? '<span class="tm-pinned" title="' + esc(tw("teams.pinned")) + '" aria-label="' +
         esc(tw("teams.pinned")) + '">' + ic("pin") + "</span>" : "";
-      return '<button type="button" class="tm-team" data-team="' + esc(t.team_id) + '"' + (on ? ' aria-current="true"' : "") + ">" +
+      var label = esc(tw(pinned ? "teams.unpin_team" : "teams.pin_team"));
+      var data = 'data-pin-team="' + esc(t.team_id) + '" data-on="' + (pinned ? "0" : "1") + '"';
+      var menu = menuId === t.team_id ? '<div class="tm-row-menu" role="menu" aria-label="' + esc(tw("teams.row_menu")) + '">' +
+        '<button type="button" role="menuitem" ' + data + ">" + ic("pin") + label + "</button></div>" : "";
+      return '<div class="tm-team-wrap"><button type="button" class="tm-team" data-team="' + esc(t.team_id) + '"' +
+        (on ? ' aria-current="true"' : "") + ">" +
         teamAvatarHtml(t, 44) + '<span class="tm-team-main"><span class="tm-team-top"><span class="tm-team-name">' + esc(t.name) +
         '</span><span class="tm-team-time">' + esc(timeShort(last.ts || t.updated_at, now)) + "</span></span>" +
         '<span class="tm-team-bottom"><span class="tm-team-sub">' + esc(previewText(t)) + "</span>" + teamBadge(t) + pin +
-        "</span></span></button>";
+        "</span></span></button>" +
+        '<button type="button" class="tm-row-pin" ' + data + ' aria-label="' + label + '" title="' + label + '">' + ic("pin") +
+        "</button>" + menu + "</div>";
     }).join("");
   }
 
@@ -811,7 +821,7 @@
       agents: [], asJob: false, pending: null, tab: "jobs", side: false, view: "list", loaded: false,
       filterTask: "", taskTitles: {}, teamNames: {}, note: "", creating: false, skipped: {}, picker: null, draft: null,
       focusPicker: false, focusBack: null, searchOpen: false, searchResults: null, searchQuery: "", jumped: null,
-      openMember: null, advOpen: false, turns: [], sideOpener: null };
+      openMember: null, advOpen: false, turns: [], sideOpener: null, rowMenu: null, focusRowMenu: false, swallowClick: false };
   }
 
   function teamUrl(path) { return "/teams/" + q(S.activeId) + (path || ""); }
@@ -840,7 +850,12 @@
 
   function drawList() {
     var box = S.el.querySelector(".tm-teams");
-    if (box) box.innerHTML = S.loaded || S.teams.length ? teamListHtml(S.teams, S.activeId) : "";
+    if (box) box.innerHTML = S.loaded || S.teams.length ? teamListHtml(S.teams, S.activeId, undefined, S.rowMenu) : "";
+    if (box && S.rowMenu && S.focusRowMenu) {
+      S.focusRowMenu = false;
+      var item = box.querySelector(".tm-row-menu [role=\"menuitem\"]");
+      if (item) item.focus();
+    }
     var more = S.el.querySelector(".tm-more-teams");
     if (more) more.hidden = !S.next;
     var bar = S.el.querySelector(".tm-list-bar");
@@ -1304,10 +1319,54 @@
     });
   }
 
+  // Menu Ghim / Bỏ ghim trên dòng nhóm (nhấn giữ hay chuột phải). Đóng bằng Escape (focus về dòng nhóm), bấm ra ngoài,
+  // hay sau khi chọn.
+  function openRowMenu(id) {
+    S.rowMenu = id;
+    S.focusRowMenu = true;
+    drawList();
+  }
+
+  function closeRowMenu(focusRow) {
+    var id = S.rowMenu;
+    S.rowMenu = null;
+    drawList();
+    if (focusRow && id) {
+      var row = S.el.querySelector('.tm-team[data-team="' + id + '"]');
+      if (row) row.focus();
+    }
+  }
+
+  // Ghim từ danh sách: cùng cách lưu với công tắc trong tab Nhóm (khoá nút trong lúc lưu, lỗi thì báo để thử lại).
+  function pinTeam(id, on, btn) {
+    var box = { checked: on, disabled: false };
+    if (btn) btn.disabled = true;
+    return savePin(box, function (want) { return call("POST", "/teams/" + q(id) + "/pin", { on: want }); },
+      function () {
+        if (btn) btn.disabled = false;
+        loadTeams(false);
+        if (id === S.activeId) loadTeam();
+      },
+      function (r) {
+        if (btn) btn.disabled = false;
+        if (r && r.network) setNote(tw("teams.err", { e: "network" })); else fail(r);
+      });
+  }
+
   function onClick(e) {
     var t = e.target.closest ? e.target.closest("button, [data-team], summary, .tm-scrim") : null;
+    // Bấm ở bất cứ đâu ngoài menu ghim thì đóng menu.
+    if (S.rowMenu && !(e.target.closest && e.target.closest(".tm-row-menu")) && !(t && t.dataset && t.dataset.pinTeam)) {
+      if (!(t && t.dataset && t.dataset.team && S.swallowClick)) closeRowMenu();
+    }
     if (!t || !S.el.contains(t)) return;
     var d = t.dataset || {};
+    // Nhấn giữ vừa mở menu ghim: cú bấm sinh ra lúc nhấc tay không được mở nhóm.
+    if (d.team && S.swallowClick) { S.swallowClick = false; return; }
+    if (d.pinTeam) {
+      if (S.rowMenu) closeRowMenu();
+      return pinTeam(d.pinTeam, d.on === "1", S.el.contains(t) ? t : null);
+    }
     if (d.team) return openTeam(d.team);
     if (t.classList.contains("tm-scrim")) return closeSide();
     if (t.classList.contains("tm-adv-sum")) {
@@ -1588,6 +1647,7 @@
       runSearch();
       return;
     }
+    if (e.key === "Escape" && S.rowMenu) { closeRowMenu(true); return; }
     if (e.key === "Escape" && S.picker !== null) { S.focusBack = S.picker; S.picker = null; S.draft = null; drawMsgs(false); return; }
     if (e.key === "Escape" && S.side) { closeSide(); return; }
     if (e.target.classList && e.target.classList.contains("tm-input") && e.key === "Enter" && !e.shiftKey && !e.isComposing) {
@@ -1643,7 +1703,19 @@
     var hold = null, hx = 0, hy = 0, held = false;
     var stopHold = function () { clearTimeout(hold); hold = null; };
     el.addEventListener("pointerdown", function (e) {
+      S.swallowClick = false;
       if (e.pointerType === "mouse") return;   // chuột đã có nút khi rê; giữ chuột để bôi chữ như thường
+      // Nhấn giữ một dòng nhóm: mở menu Ghim / Bỏ ghim của nhóm đó, và chặn cú bấm mở nhóm sinh ra lúc nhấc tay.
+      var row = e.target.closest && e.target.closest(".tm-team");
+      if (row) {
+        stopHold();
+        hx = e.clientX; hy = e.clientY;
+        hold = setTimeout(function () {
+          hold = null; held = true; S.swallowClick = true;
+          openRowMenu(row.getAttribute("data-team"));
+        }, 500);
+        return;
+      }
       var msg = e.target.closest && e.target.closest(".tm-msg");
       if (!msg || e.target.closest("button, a, input, textarea, select")) return;
       // Tin của chủ đã ghim: bảng của nó trống (bỏ ghim bằng nhãn Quyết định), khỏi mở.
@@ -1657,7 +1729,10 @@
     });
     // Nhấn giữ đã mở bộ chọn: chặn menu ngữ cảnh mặc định của máy chạm (chọn chữ, sao chép) cho lần giữ đó.
     el.addEventListener("contextmenu", function (e) {
-      if (held) { e.preventDefault(); held = false; }
+      if (held) { e.preventDefault(); held = false; return; }
+      // Chuột phải lên một dòng nhóm (máy tính): menu Ghim / Bỏ ghim thay cho menu của trình duyệt.
+      var row = e.target.closest && e.target.closest(".tm-team");
+      if (row) { e.preventDefault(); openRowMenu(row.getAttribute("data-team")); }
     });
     el.addEventListener("pointermove", function (e) {
       if (hold && (Math.abs(e.clientX - hx) > 10 || Math.abs(e.clientY - hy) > 10)) stopHold();
