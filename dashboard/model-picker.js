@@ -14,7 +14,20 @@
                   ["high", "models.r_high"], ["xhigh", "models.r_xhigh"], ["ultra", "models.r_ultra"]];
   // Nhãn chip mức suy nghĩ (0.148.0, tiếng Anh theo ý chủ repo): khoá đầy đủ để test i18n đọc được.
   const EFF_KEY = { off: "eff.off", low: "eff.low", medium: "eff.medium", high: "eff.high", xhigh: "eff.xhigh", ultra: "eff.ultra" };
-  let state = { providers: [], main: { provider: "", model: "" }, reasoning: "off" };
+  // FAST_NOTE_BEGIN
+  // Fast mode theo bộ não (nghiên cứu 15/10/2026, xem docs/superpowers/specs/2026-10-15-composer-plus-fast-mode-design.md).
+  // Claude chỉ Opus 5.5, Opus 5, Opus 4.8; model rỗng = mặc định của Claude Code (Opus) nên coi là có.
+  function fastNote(provider, model) {
+    const m = String(model || "").toLowerCase();
+    const opusOk = !m || /opus-(5-5|5|4-8)(?![0-9])/.test(m);
+    if (provider === "anthropic-cli") return opusOk ? { supported: true, note: "fast.claude" } : { supported: false, note: "fast.model_none" };
+    if (provider === "anthropic-api") return opusOk ? { supported: true, note: "fast.api" } : { supported: false, note: "fast.model_none" };
+    if (provider === "openai-oauth") return { supported: true, note: "fast.codex" };
+    if (provider === "openai" || provider === "openrouter" || provider === "gemini") return { supported: true, note: "fast.api" };
+    return { supported: false, note: "fast.none" };
+  }
+  // FAST_NOTE_END
+  let state = { providers: [], main: { provider: "", model: "" }, reasoning: "off", fast: false };
   let sessionPin = null;   // {provider, model} phiên đang mở đã ghim; null = theo mặc định chung
   let pinBroken = false;   // phiên có ghim nhưng ghim HỎNG (provider mất key) - server đang chạy mặc định chung
   let pinSid = null;       // phiên mà sessionPin đang nói về (chống vẽ nhầm khi đổi phiên nhanh)
@@ -52,6 +65,7 @@
       state.providers = m.providers || [];
       state.main = m.main || { provider: "anthropic-cli", model: "" };
       state.reasoning = m.reasoning || "off";
+      state.fast = m.fast === true;
     } catch (e) {}
   }
 
@@ -89,6 +103,17 @@
     }
     const eb = $("effTxt");
     if (eb) eb.textContent = window.t(EFF_KEY[(EFFORT.find((e) => e[0] === state.reasoning) || EFFORT[0])[0]]);
+    renderFast();
+  }
+
+  function renderFast() {
+    const fb = $("fastBtn");
+    if (!fb) return;
+    const eff = effective();
+    const n = fastNote(eff.provider, eff.model);
+    fb.setAttribute("aria-pressed", n.supported && state.fast ? "true" : "false");
+    fb.setAttribute("aria-disabled", n.supported ? "false" : "true");
+    fb.title = "Fast mode\n" + window.t(n.note);
   }
 
   // Màn cảm ứng (điện thoại, máy tính bảng): focus một ô nhập là bật bàn phím ảo.
@@ -220,6 +245,14 @@
   document.addEventListener("click", async (e) => {
     if (e.target.closest("#mbOpen")) { isOpen() ? close() : open(); return; }
     if (e.target.closest("#effBtn")) { effIsOpen() ? effClose() : effOpen(); return; }
+    if (e.target.closest("#fastBtn")) {
+      const eff = effective();
+      if (!fastNote(eff.provider, eff.model).supported) return;
+      state.fast = !state.fast;
+      renderFast();
+      await saveModel({ fast: state.fast });
+      return;
+    }
     if (!e.target.closest("#effPop") && effIsOpen()) effClose();
     if (!e.target.closest("#mbPop") && !e.target.closest("#mbOpen")) { if (isOpen()) close(); return; }
 
@@ -274,6 +307,7 @@
       if (r.kind === "one") { await chonModel(r.prov, r.model); return { kind: "one", label: provShort(r.label), model: r.model }; }
       return r;
     },
+    fastNote: fastNote,
     effortLabel: function () { return window.t(EFF_KEY[state.reasoning] || "eff.off"); },
     hienTai: function () {
       const eff = effective();
