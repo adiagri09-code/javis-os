@@ -8,6 +8,12 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.147.0] - 2026-10-14
+### Improved
+- **Background jobs now take one tidy line above the chat box.** The old "running in the background" block took three lines with a button and a row of chips, and cut job names off mid-word. Now it is one small pill: a green dot, the most relevant job (the one you just assigned in this chat first) and "+2" when more are running.
+- **Click the pill for the details:** each job with its status, how long it has been running, which ones came from this chat, and a button to open the Tasks page. Click outside or press Esc to close it.
+- Jobs that were assigned but will not run on their own (orchestration off) still show in amber and say so on the pill, with how to turn it on in the details.
+
 ## [0.146.0] - 2026-10-14
 ### Fixed
 - **Team chat is no longer silent.** Assistants answer with their own model, or the main model when they have none, ChatGPT (Codex) included. Each message shows who is waiting, answering or could not answer, with the reason and a fix (**Try again**, change the model, pick a coordinator); it survives a dropped connection or a reload.

@@ -6,6 +6,12 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.147.0] - 2026-10-14
+### Cải thiện
+- **Việc chạy ngầm chỉ còn một dòng gọn trên khung chat.** Trước đây khối "việc đang chạy ngầm" chiếm ba dòng, kèm nút và hàng chip, tên việc còn bị cắt giữa chừng. Giờ chỉ còn một viên nhỏ: chấm xanh, tên việc quan trọng nhất (ưu tiên việc bạn vừa giao ở hội thoại này) và "+2" nếu còn việc khác.
+- **Bấm vào viên đó để xem chi tiết:** từng việc với trạng thái, đã chạy bao lâu, việc nào giao từ hội thoại này, và nút mở trang Việc. Bấm ra ngoài hoặc nhấn Esc là đóng.
+- Việc đã giao mà chưa tự chạy (điều phối đang tắt) vẫn hiện màu vàng và nói rõ ngay trên viên, kèm cách bật ở khung chi tiết.
+
 ## [0.146.0] - 2026-10-14
 ### Sửa lỗi
 - **Chat nhóm hết im lặng.** Trợ lý trả lời bằng model riêng của nó, chưa đặt thì bằng model chính, kể cả ChatGPT (Codex). Mỗi tin hiện rõ ai đang chờ, đang trả lời hay chưa trả lời được, kèm lý do và nút xử lý (**Thử lại**, đổi model, chọn điều phối); mất mạng hay tải lại trang vẫn còn.
