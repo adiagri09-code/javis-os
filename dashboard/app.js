@@ -3551,6 +3551,19 @@ fileInput.addEventListener("change", () => {
   fileInput.value = "";
 });
 
+// Menu "+" của khung gõ (composer-plus.js, 0.148.0) dùng chung đường tải lên và danh sách đính kèm.
+window.JavisAttach = {
+  pick: () => fileInput.click(),
+  upload: (f) => uploadFile(f),
+  addBrainFile: (it) => {
+    if (!it || !it.path || pendingAttachments.some(a => a.path === it.path)) return;
+    pendingAttachments.push({ name: it.name, kind: it.kind || "file", preview: null, path: it.path,
+      size: it.size || 0, sources: null, attachments: null, uploading: false, loi: false, xong: Promise.resolve() });
+    renderChips();
+  },
+  note: (s) => { attachNote = String(s || ""); renderChips(); },
+};
+
 // Dán ảnh (Ctrl+V) + dán VĂN BẢN SIÊU DÀI thành file .txt đính kèm (kiểu Claude):
 // bài dài nhồi thẳng vào ô chat vừa khó đọc vừa nặng khung hội thoại - biến thành
 // file thì Javis đọc trọn vẹn còn màn hình chỉ hiện một chip gọn.
