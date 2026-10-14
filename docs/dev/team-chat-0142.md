@@ -228,7 +228,10 @@ Năm lần gọi model, dừng ở đó:
 3. Giao việc ngắn cho Coach: chạy bằng model chính Codex, kết quả về nhóm, hiện ở tab Công việc ngăn Đã xong sau tải lại;
    Mở đưa về đúng nhóm.
 4. One bản B đặt model không tồn tại: dòng "Chưa trả lời được: Model báo lỗi..." kèm câu lỗi thật, nút Đổi model và Thử
-   lại; khởi động lại server rồi tải lại trang vẫn còn.
+   lại; tải lại trang vẫn còn. (Đính chính: biên bản ban đầu ghi "khởi động lại server rồi tải lại vẫn còn". Sai: lệnh tắt
+   chỉ giết tiến trình vỏ của `.venv`, tiến trình Python con giữ cổng 7788, nên các lần "khởi động lại" sau đó không bind
+   được và trình duyệt vẫn nói chuyện với server khởi động đầu tiên (mã `81eb61c8`). Phần server sửa sau đó, cùng việc lượt
+   dở thành `restart` sau khởi động lại, chỉ được kiểm bằng test tự động, không bằng smoke.)
 5. Sửa model rồi bấm đúp Thử lại: đúng một lượt mới, bản B trả lời.
 
 Không gọi model: tạo nhóm bấm đúp (một nhóm), bỏ điều phối có cảnh báo, Thêm thành viên ("Đã tham gia", "0 người mới"),
