@@ -260,6 +260,15 @@ check("đang xem tin cũ: tin mới tới không chèn vào giữa khúc cũ",
 check("CSS: lớp flex mới của tìm có [hidden], vùng chạm 44px trên điện thoại",
       /\.tm-search\[hidden\]/.test(css) && /\.tm-search-row\[hidden\]/.test(css) && /\.tm-jumped\[hidden\]/.test(css)
       && /\.tm-search-btn, \.tm-search-go, \.tm-search-input, \.tm-search-hit, \.tm-jump-back \{ min-height: 44px; \}/.test(css));
+// Review T4
+check("review #1: tải lại trang tin mới nhất (gửi tin, lọc việc) thì thoát chế độ xem tin cũ",
+      /function loadMsgs\(older\) \{[\s\S]{0,200}if \(!older\) S\.jumped = null;/.test(teamsJs));
+check("review #5: mở form tạo nhóm thì đóng ô tìm", /tm-new"\)\) \{[\s\S]{0,160}S\.searchOpen = false/.test(teamsJs));
+check("review #6: băng xem tin cũ dính ở đầu khung", /\.tm-jumped \{[^}]*position: sticky; top: 0;/.test(css));
+check("review #7: nút tìm đủ 44px bề ngang trên điện thoại", /\.tm-back, \.tm-close, \.tm-search-btn \{ min-width: 44px;/.test(css));
+check("review #8: kết quả tìm, nhảy tới về muộn sau khi đổi nhóm thì bỏ",
+      /var forTeam = S\.activeId;[\s\S]{0,200}if \(S\.activeId !== forTeam\) return;/.test(teamsJs)
+      && (teamsJs.match(/if \(S\.activeId !== forTeam\) return;/g) || []).length >= 2);
 const authKeys = ["teams.cap.help_depth", "teams.auth.provider_aux", "teams.auth.provider_claude", "teams.auth.billing_sub",
   "teams.auth.billing_api", "teams.auth.fixed_server", "teams.auth.fixed_provider", "teams.auth.fixed_account",
   "teams.auth.fixed_technical"];

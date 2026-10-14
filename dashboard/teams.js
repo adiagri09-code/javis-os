@@ -608,7 +608,9 @@
     var qq = inp ? inp.value.trim() : "";
     if (qq.length < 2) { setNote(tw("teams.search_short")); return; }
     S.searchQuery = qq;
+    var forTeam = S.activeId;
     call("GET", teamUrl("/search?q=" + q(qq))).then(function (r) {
+      if (S.activeId !== forTeam) return;
       if (r.code !== 200) return fail(r);
       S.searchResults = r.j.results || [];
       drawSearch();
@@ -618,7 +620,9 @@
   // Nhảy tới một tin cũ: tải trang kết thúc ở đúng tin đó (tin đó và các tin trước), tô sáng, có nút về tin mới nhất.
   function jumpTo(mid, ts) {
     S.filterTask = "";
+    var forTeam = S.activeId;
     return call("GET", teamUrl("/messages?before_ts=" + q(ts) + "&before_id=" + q(Number(mid) + 1))).then(function (r) {
+      if (S.activeId !== forTeam) return;
       if (r.code !== 200) return fail(r);
       S.msgs = r.j.messages || [];
       S.hasMore = !!r.j.has_more;
@@ -784,6 +788,8 @@
 
   function loadMsgs(older) {
     if (!S.activeId) return Promise.resolve();
+    // Tải khúc mới nhất (gửi tin, lọc việc, về tin mới nhất): thoát chế độ xem tin cũ, tin mới tới lại được nối vào.
+    if (!older) S.jumped = null;
     var url = S.filterTask ? teamUrl("/tasks/" + q(S.filterTask)) : teamUrl("/messages");
     if (older && S.msgs.length && !S.filterTask) url += "?before_ts=" + q(S.msgs[0].ts) + "&before_id=" + q(S.msgs[0].id);
     return call("GET", url).then(function (r) {
@@ -880,6 +886,8 @@
     if (d.team) return openTeam(d.team);
     if (t.classList.contains("tm-new")) {
       S.creating = true; S.view = "chat"; S.team = null; S.activeId = "";
+      S.searchOpen = false; S.searchResults = null; S.searchQuery = ""; S.jumped = null;
+      drawSearch();
       loadAgents().then(function () { drawAll(true); });
       return;
     }

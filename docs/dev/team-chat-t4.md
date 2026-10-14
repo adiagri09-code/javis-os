@@ -55,6 +55,17 @@ Mở một nhóm chỉ tải trang đầu: 30 tin, `has_more=true`.
 - Tìm lọc ở Python (đọc theo chỉ mục phiên) thay cho FTS5: đủ nhanh ở 5.000 tin mỗi nhóm (trung vị 32 ms), không thêm bảng ảo vào kho phiên dùng chung. Giá nếu sai: nhóm có hàng chục nghìn tin sẽ chậm hơn, khi đó thêm FTS5.
 - Nhảy tới tin dùng lại con trỏ trang tin có sẵn (khúc kết thúc ở tin đó); chưa có "tải tin mới hơn" từ khúc cũ, thay bằng nút Về tin mới nhất.
 
+## Review cuối (người review mới, model mạnh nhất)
+
+Kết luận "Ready with fixes": 0 Critical, 1 Important, 7 Minor. Sửa cả tám:
+- **Important:** đã nhảy tới tin cũ rồi gửi tin, lọc việc thì băng "Đang xem tin cũ" vẫn còn và tin mới (câu trả lời của trợ lý) không được nối vào. Nay mọi lần tải khúc mới nhất đều thoát chế độ xem tin cũ.
+- Đoạn trích lệch khi tin gõ tổ hợp (NFD) hay có ký tự đổi độ dài khi casefold: chuẩn hoá NFC rồi gấp từng ký tự có bản đồ vị trí.
+- Tìm đọc tới 50.000 dòng đầy đủ trong khoá chung của kho phiên: nay đọc theo lô 2.000 dòng chỉ gồm id và nội dung, dừng khi đủ kết quả, tối đa 20.000 tin; tin đầy đủ chỉ đọc cho tin khớp.
+- Câu tóm tắt nói "ở trên" trong khi lịch sử ở dưới; có câu riêng khi tin gần nhất quá dài nên không hiện lịch sử.
+- Ô tìm còn lại trên form tạo nhóm; băng "Về tin mới nhất" bị cuộn khuất (nay dính đầu khung); nút tìm hẹp dưới 44px trên điện thoại; kết quả tìm, nhảy tới về muộn sau khi đổi nhóm (nay bỏ).
+
+Ca #2 tới #4 trong `test_team_history.py`, #1, #5 tới #8 trong `test_teams_ui.js` đỏ trước rồi xanh (ca giao diện là kiểm nguồn, chưa soi lại trên trình duyệt).
+
 ## Kiểm
 
 | Lệnh | Kết quả |

@@ -108,6 +108,21 @@ for i in range(80):
 many = r.search(A["team_id"], "lap lai", limit=30)
 check("giới hạn số kết quả, mới nhất trước", len(many) == 30 and "79" in many[0]["snippet"])
 
+# ═════ Review T4 ═════
+import unicodedata  # noqa: E402
+
+nfd = unicodedata.normalize("NFD", "Đầu tin " + "chữ có dấu " * 60 + "hôm qua cửa hàng MẤT ĐIỆN cả buổi " + "đuôi " * 60)
+ss.append_team_message(A["session_id"], "user", nfd, author_kind="owner", client_msg_id="nfd")
+sn = r.search(A["team_id"], "mat dien")[0]["snippet"]
+check("review #2: tin gõ tổ hợp (NFD): đoạn trích vẫn chứa chỗ khớp", "MẤT ĐIỆN" in unicodedata.normalize("NFC", sn), sn)
+found = ss.team_search(A["session_id"], "lap lai so 3", limit=5, batch=7)
+check("review #3: tìm đọc theo lô nhỏ vẫn ra đủ, mới trước", [m["content"] for m in found] == [
+    "lặp lại số 73", "lặp lại số 63", "lặp lại số 53", "lặp lại số 43", "lặp lại số 39"], [m["content"] for m in found])
+asyncio.run(r.run_replies(r.submit(A["team_id"], "Hỏi tiếp", client_msg_id="c9")))
+p = rec.reqs[-1]["prompt"]
+check("review #4: tóm tắt chỉ đúng hướng (lịch sử ở dưới)", "phần lịch sử ở dưới" in p and "ở trên" not in p.split(
+    "## Tóm tắt phần cũ")[1].split("\n## ")[0], p[-2000:])
+
 # ═════ Mở nhóm chỉ tải trang đầu ═════
 page = ss.get_team_messages_page(A["session_id"])
 check("mở nhóm: trang đầu 30 tin, có còn tin cũ hơn", len(page["messages"]) == 30 and page["has_more"])

@@ -23,6 +23,7 @@ import json
 import re
 import threading
 import time
+import unicodedata
 from typing import Any, Awaitable, Callable, Optional
 
 from team_store import REACTION_EMOJI, TeamError, TurnCapReached
@@ -720,7 +721,8 @@ class TeamRunner:
         if older <= 0:
             return []
         lines = [f"\n## Tóm tắt phần cũ của nhóm (máy tự tóm, không phải model)",
-                 f"Có {older} tin cũ hơn phần lịch sử ở trên. Quyết định đã ghim vẫn ở Sổ quyết định."]
+                 (f"Có {older} tin cũ hơn phần lịch sử ở dưới." if shown else f"Có {older} tin cũ; tin gần nhất quá dài nên không hiện.")
+                 + " Quyết định đã ghim vẫn ở Sổ quyết định."]
         done = [t for t in self.tasks.team_history(team["team_id"], SUMMARY_JOBS * 2) if t.get("status") == "done"]
         size = sum(len(x) for x in lines)
         rows = []
@@ -748,9 +750,17 @@ class TeamRunner:
         words = [w for w in self.sessions.fold_text(query).split() if w]
         out = []
         for m in found:
-            text = re.sub(r"\s+", " ", str(m.get("content") or "")).strip()
-            folded = self.sessions.fold_text(text)
-            at = min((folded.find(w) for w in words if folded.find(w) >= 0), default=0)
+            # NFC trước (gõ tổ hợp, chép từ macOS ra NFD), rồi gấp TỪNG ký tự và nhớ vị trí gốc: chỗ khớp trong chuỗi đã
+            # gấp quy đúng về chuỗi gốc dù bỏ dấu hay casefold làm đổi độ dài (review T4).
+            text = unicodedata.normalize("NFC", re.sub(r"\s+", " ", str(m.get("content") or "")).strip())
+            folded, where = [], []
+            for i, ch in enumerate(text):
+                f = self.sessions.fold_text(ch)
+                folded.append(f)
+                where.extend([i] * len(f))
+            flat = "".join(folded)
+            pos = [flat.find(w) for w in words if flat.find(w) >= 0]
+            at = where[min(pos)] if pos and where else 0
             start = max(0, at - 60)
             snippet = ("..." if start else "") + text[start:start + 200] + ("..." if start + 200 < len(text) else "")
             out.append({"id": m["id"], "ts": m["ts"], "author_kind": m["author_kind"], "author_ref": m["author_ref"],
