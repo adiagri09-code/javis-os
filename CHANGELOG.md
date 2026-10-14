@@ -6,7 +6,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.142.0] - 2026-10-14
+## [0.146.0] - 2026-10-14
 ### Sửa lỗi
 - **Chat nhóm hết im lặng.** Trợ lý trả lời bằng model riêng của nó, chưa đặt thì bằng model chính, kể cả ChatGPT (Codex). Mỗi tin hiện rõ ai đang chờ, đang trả lời hay chưa trả lời được, kèm lý do và nút xử lý (**Thử lại**, đổi model, chọn điều phối); mất mạng hay tải lại trang vẫn còn.
 ### Thêm mới
@@ -14,6 +14,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - **Tab Công việc ở trang Cộng sự** (thay tab Thư mục): mọi việc của một trợ lý từ nhóm, chat riêng và Auto, lọc theo nguồn, có bước tiếp theo. **Giao việc** có tiêu chí xong, chọn nơi nhận kết quả và xem lại trước khi tạo; giao được cả việc **kiểm chứng** cho trợ lý khác.
 ### Cải thiện
 - **Trang Cộng sự gọn hơn:** Cộng hưởng đổi tên thành **Auto**, công tắc nằm cùng hàng với tag và trong menu ba chấm; thẻ có giờ nhắn gần nhất; cột phải mặc định ẩn để chữ rộng ra, hai cột kéo được bề rộng ở đường biên. Bỏ người review cố định: mục tiêu cũ đang chờ review được tạm dừng để bạn xem, không tự coi là đạt.
+
+## [0.145.0] - 2026-10-14
+### Sửa lỗi
+- **Việc nền làm xong không còn bị chặn oan vì nhắc tới [[NEEDS_INPUT]].** Trước đây chỉ cần dấu này xuất hiện ở đâu đó trong kết quả, kể cả trong câu "không cần ghi [[NEEDS_INPUT]]", là việc bị chuyển sang chờ bạn dù đã đạt điều kiện hoàn thành. Giờ việc chỉ dừng chờ khi worker mở đầu một dòng bằng dấu đó, đúng như nó được dặn. Lý do chặn hiện trên chuông cũng chỉ lấy từ dòng như vậy.
 
 ## [0.141.0] - 2026-10-14
 ### Cải thiện

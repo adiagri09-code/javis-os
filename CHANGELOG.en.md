@@ -8,7 +8,7 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
-## [0.142.0] - 2026-10-14
+## [0.146.0] - 2026-10-14
 ### Fixed
 - **Team chat is no longer silent.** Assistants answer with their own model, or the main model when they have none, ChatGPT (Codex) included. Each message shows who is waiting, answering or could not answer, with the reason and a fix (**Try again**, change the model, pick a coordinator); it survives a dropped connection or a reload.
 ### Added
@@ -16,6 +16,10 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 - **Jobs tab on the Partners page** (replacing the Folder tab): every job of one assistant from teams, private chat and Auto, filtered by source, with the next step. **Assign a job** takes done criteria, lets you choose where the result goes and shows a review before creating; you can also assign a **verification** job to another assistant.
 ### Improved
 - **Tidier Partners page:** Resonance is now called **Auto**, with its switch on the tag row and in the three-dot menu; cards show the time of the last message; the right panel starts hidden so text gets wider, and both columns can be resized by dragging their edge. Fixed reviewers are gone: old goals waiting for review are paused for you to check, never counted as passed.
+
+## [0.145.0] - 2026-10-14
+### Fixed
+- **A finished background job is no longer blocked just for mentioning [[NEEDS_INPUT]].** Any mention anywhere in the result used to count, even in a sentence like "no need to write [[NEEDS_INPUT]]", so a job that met its completion criteria still waited for you. Now a job only waits when the worker starts a line with the marker, as it is told to. The block reason on the bell is taken from such a line too.
 
 ## [0.141.0] - 2026-10-14
 ### Improved

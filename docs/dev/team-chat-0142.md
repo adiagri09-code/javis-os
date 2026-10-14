@@ -3,6 +3,10 @@
 Ngày 14/10/2026. Nhánh `claude/compassionate-wozniak-z5umfl`, PR [#651](https://github.com/blogminhquy/javis-os/pull/651).
 Nền: `main` `063750a` (0.141.0). Số phiên bản giữ chỗ ngay đầu nhánh (commit đầu, PR nháp mang số 0.142.0).
 
+**Đánh số lại khi phát hành:** trong lúc làm, `main` lên 0.145.0 (#652, #653 đang mở giữ 0.143.0, 0.144.0), nên bản này
+phát hành là **0.146.0**. Tên file biên bản, tên test và các ghi chú "0.142.0" trong mã giữ nguyên như dấu mốc của tính
+năng (hậu tố sao lưu `.pre-0.142.0` cũng giữ để khớp marker migration đã chạy ở các máy thử).
+
 Goal gốc nằm ở máy của chủ repo (`exports/reviews/team-chat-zalo-ux-2026-10-14/goal-claude-v2.txt`, `audit.md`, ảnh
 01 tới 08). Phiên này chạy trong container đám mây nên không đọc được thư mục đó; làm theo đúng nội dung goal được dán
 trong lệnh `/goal` cùng năm ảnh chụp đính kèm. PR #645 (đã đóng) không bị đụng tới.
