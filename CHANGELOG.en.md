@@ -18,6 +18,7 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 - Team turns answer in text only for now, without files or connections. Each turn sees the team's 20 latest messages, so follow-up questions keep their context.
 - **When the model fails, the job waits for you** with a Retry button; an error or an empty answer never counts as done. A turn whose model could not even start is not counted.
 - Assistants only keep lessons from a team turn whose result is still valid: a cancelled job, a changed request or a member who left means nothing is written.
+- **Changing a request midway reruns the job on the new version**; a result for the old version is kept only for reference. A finished job can no longer be changed.
 - Going back to 0.109.0 still works and never runs team jobs by mistake. For a clean rollback, stop Javis and run `tools/team_chat_restore_pre.py`. Jobs, chat messages and teams from after the upgrade leave the live stores; a copy of all three stores is kept next to the store files.
 
 ## [0.110.0] - 2026-10-13

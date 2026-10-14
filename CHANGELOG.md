@@ -16,6 +16,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - Lượt trong nhóm hiện chỉ trả lời bằng chữ, chưa đọc, ghi file hay dùng kết nối. Mỗi lượt thấy 20 tin gần nhất của nhóm, nên hỏi nối tiếp vẫn hiểu.
 - **Model lỗi thì việc dừng chờ bạn**, có nút Chạy lại, không bao giờ báo xong bằng một câu lỗi hay câu rỗng. Chưa dựng được model thì lượt không bị tính.
 - Trợ lý chỉ ghi bài học từ lượt nhóm khi kết quả còn dùng được: việc đã huỷ, đã sửa yêu cầu hay người đã rời nhóm thì không ghi.
+- **Sửa yêu cầu giữa chừng thì việc làm lại theo bản mới**, kết quả của bản cũ chỉ còn để đối chiếu. Việc đã xong thì không sửa được nữa.
 - Quay về 0.109.0 vẫn chạy được, việc nhóm không bị chạy nhầm. Muốn dọn sạch: tắt Javis, chạy `tools/team_chat_restore_pre.py`. Việc, tin chat và nhóm sau lúc nâng rời kho đang chạy; bản sao của cả ba kho được giữ cạnh file kho.
 
 ## [0.110.0] - 2026-10-13

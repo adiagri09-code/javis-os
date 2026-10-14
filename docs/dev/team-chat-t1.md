@@ -55,7 +55,7 @@ Một dòng mỗi lời gọi model. Giữ chỗ và kiểm trần (ngày, việ
 
 **Kết cục engine (R1):** adapter đọc sự kiện theo `team_runner.TextOnlyOutcome`, cùng luật với `_engine_outcome_pop` của lượt chat: final `is_error`, cờ `auth_refresh_race`, sự kiện `error` (kể cả sau final), gọi công cụ (`tool_call`, `tool_use`, `tool_result`), thiếu final, final rỗng đều là lượt `error` (đã tính), bước lỗi, việc chặn `failed`. Lỗi mất mạch đã được engine mồi lại trong lượt (`resume_failed`) không tính là lỗi.
 
-**Bài học bền (R3):** adapter chỉ BÓC `JAVIS_LESSON` / `JAVIS_RULE` (rule hạ thành bài học vì trong nhóm chủ không nói trực tiếp với agent), trả `commit`. Pha chấp nhận (`_accept`) kiểm đầu ra còn hợp lệ rồi gọi `commit` trong cùng `accept_lock`; các thao tác làm đầu ra hết hợp lệ (bỏ thành viên, đổi trưởng nhóm, huỷ, sửa yêu cầu, lưu trữ, xoá agent ở `delete_agent`) giữ cùng khoá. `commit` kiểm lại danh tính (mã bền còn trỏ đúng slug) ngay trước khi ghi, và `claim_commit(turn_id)` cho ghi đúng một lần mỗi lượt. Đầu ra không hợp lệ chỉ là bằng chứng: tin có `applied=false` và `held_lessons`, bộ nhớ agent không đổi.
+**Bài học bền (R3):** adapter chỉ BÓC `JAVIS_LESSON` / `JAVIS_RULE` (rule hạ thành bài học vì trong nhóm chủ không nói trực tiếp với agent), trả `commit`. Pha chấp nhận (`_accept`) kiểm đầu ra còn hợp lệ rồi gọi `commit` trong cùng `accept_lock` (lượt trò chuyện); bước của việc nhóm thì `commit` chạy ở pha áp dụng (`_apply_step`) sau lần kiểm cuối (vòng 2, R7); các thao tác làm đầu ra hết hợp lệ (bỏ thành viên, đổi trưởng nhóm, huỷ, sửa yêu cầu, lưu trữ, xoá agent ở `delete_agent`) giữ cùng khoá. `commit` kiểm lại danh tính (mã bền còn trỏ đúng slug) ngay trước khi ghi, và `claim_commit(turn_id)` cho ghi đúng một lần mỗi lượt. Đầu ra không hợp lệ chỉ là bằng chứng: tin có `applied=false` và `held_lessons`, bộ nhớ agent không đổi.
 
 ## Giới hạn đã biết của T1
 
@@ -92,6 +92,16 @@ Reviewer tái hiện 2 P1 và 4 P2 bằng `exports/reviews/PR-628-T1-review-chec
 
 Quyết định đổi so với bản trước: khối ngữ cảnh có lịch sử, không chỉ tin mới (R2); `JAVIS_RULE` trong lượt nhóm vẫn hạ thành bài học nhưng chỉ ghi khi đầu ra được chấp nhận (R3); `team.sqlite3` không còn "để nguyên" khi khôi phục (R6). Ngoài phạm vi: Toàn quyền, công cụ, stream, reaction (T2, T3).
 
+## Review mã vòng 2 (14/10/2026, head `280959a7`)
+
+Sáu ca vòng 1 giữ đạt. Reviewer tái hiện thêm 1 P1 và 2 P2 bằng `exports/reviews/PR-628-T1-r2-race-checks.py` (engine giả, barrier có hạn). Đã sửa:
+
+| Lỗi | Sửa | Hồi quy (`test_team_t1_review.py`) |
+|---|---|---|
+| R7 [P1] kết quả bản cũ chốt Xong cho yêu cầu đã sửa | `_apply_step` và `_job_tick` chạy trong `accept_lock`, kiểm lại hiệu lực ngay trước khi áp tác động; hết hiệu lực thì tin thành bằng chứng (`superseded`, applied=false) và đi đúng nhánh đến muộn. `team_finish(expected_rev=...)` là CAS ở kho. Bài học của bước việc ghi ở pha áp dụng, không ở pha chấp nhận | mục R7: kế hoạch trả lời trực tiếp, bước làm, tổng hợp (mỗi ca sửa yêu cầu ở cửa áp dụng rồi làm lại theo bản mới), hoàn tất thắng trước thì sửa bị từ chối, huỷ, bỏ thành viên, đổi trưởng nhóm ở cửa áp dụng, CAS kho, đối chứng không sửa |
+| R8 [P2] hai lần đánh thức vượt trần pool | Tính chỗ, nhận việc, giữ chỗ (`_pool`) là một đoạn găng trong `_claim_batch` (`_pool_lock`, luồng phụ); chỗ trả khi task xong; model chạy ngoài khoá; lỗi giữa chừng trả cả việc đang tạo bước đầu về hàng | mục R8: bốn nhóm, trần 2, hai dispatch qua barrier; đối chứng tuần tự; khoá không bị giữ khi model chạy; lỗi giữa lúc nhận; huỷ lặp khi đang nhận |
+| R9 [P2] khôi phục hỏng sau ghi để lẫn kho | Kho tính là "có thể đã đụng" TRƯỚC khi ghi; trả về từ bản sao rồi kiểm lại (số dòng từng bảng); đích vốn không có thì gỡ; không trả được thì báo `unrecoverable` kèm bản sao | mục R9: lỗi trước và sau ghi từng kho, lỗi khi gỡ kho nhóm, đích vốn không có, không trả về được, đối chứng |
+
 ## Nâng, hạ phiên bản
 
 - Lần đầu 0.111.0 mở `kanban.sqlite3` và `conversations.db` có từ trước, mỗi kho được chụp một bản `<tên>.pre-0.111.0` bằng SQLite backup, trước khi thêm cột. Kho mới tinh thì không chụp.
@@ -116,7 +126,7 @@ Quyết định đổi so với bản trước: khối ngữ cảnh có lịch s
 | `tests/python/test_team_api.py` | 40 ca trên app thật với engine giả: route, 409, đề xuất, sổ quyết định, xoá agent rồi tạo lại (TC5), lưu trữ |
 | `tests/js/test_teams_ui.js` | 53 ca: danh sách, tin, hàng đợi, khung soạn, cài đặt, chỗ nối, CSS, i18n |
 | `tests/python/test_team_rollback.py` | 31 ca với mã 0.109.0 thật (`bfb1c29f`): snapshot, hạ có và không khôi phục, nâng lại; R6 với nhóm thật, nhóm mồ côi, thiếu snapshot, hỏng giữa chừng |
-| `tests/python/test_team_t1_review.py` | 71 ca review vòng 1 (R1 tới R5), qua factory thật `main._team_engine_for` với engine giả, có đối chứng hợp lệ |
+| `tests/python/test_team_t1_review.py` | 101 ca: review vòng 1 (R1 tới R5, qua factory thật `main._team_engine_for` với engine giả) và vòng 2 (R7 tới R9), có đối chứng hợp lệ |
 | `python tests/run.py --js` | 186/186 |
 
 **Smoke giao diện** (sandbox cổng 7788, state trong worktree). Trần lượt ngày của nhóm đặt 0 trước khi gửi gì, nên không lượt nào tới engine thật; sổ lượt cuối buổi 0 dòng. Ảnh ở `exports/reviews/team-t1-smoke/`, ngoài repo.
