@@ -193,7 +193,7 @@
   "qs.recheck": "Check again",
   "qs.domain_docs": "Domain setup guide ↗",
   "qs.deploy_docs": "Deploy/SSL guide ↗",
-  "mb.open": "Change model / provider / effort",
+  "mb.open": "Change model / provider",
   "bar.mic": "Click to call Javis",
   "call.connecting": "Connecting",
   "call.listening": "Listening",

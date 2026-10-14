@@ -193,7 +193,7 @@
   "qs.recheck": "Kiểm tra lại",
   "qs.domain_docs": "Hướng dẫn cài tên miền ↗",
   "qs.deploy_docs": "Hướng dẫn deploy/SSL ↗",
-  "mb.open": "Đổi model / nhà cung cấp / effort",
+  "mb.open": "Đổi model / nhà cung cấp",
   "bar.mic": "Bấm để gọi Javis",
   "call.connecting": "Đang kết nối",
   "call.listening": "Đang nghe",
