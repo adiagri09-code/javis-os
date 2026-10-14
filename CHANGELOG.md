@@ -13,7 +13,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - **Tạo và thêm thành viên như Zalo:** tìm không cần gõ dấu, lọc tag, ảnh nhóm ghép sẵn, người đã ở nhóm hiện "Đã tham gia", chọn điều phối ngay trên người đã chọn; nhóm ghi "Bạn + N trợ lý". Gõ @ chọn bằng phím, người được gọi hiện thành thẻ riêng, trùng tên vẫn đúng người.
 - **Tab Công việc ở trang Cộng sự** (thay tab Thư mục): mọi việc của một trợ lý từ nhóm, chat riêng và Auto, lọc theo nguồn, có bước tiếp theo. **Giao việc** có tiêu chí xong, chọn nơi nhận kết quả và xem lại trước khi tạo; giao được cả việc **kiểm chứng** cho trợ lý khác.
 ### Cải thiện
-- **Cộng hưởng đổi tên thành Auto**, công tắc nằm ngay trong thẻ trợ lý và menu ba chấm, tách khỏi huy hiệu việc. Bỏ người review cố định: mục tiêu cũ đang chờ review được tạm dừng để bạn xem, không tự coi là đạt.
+- **Cộng hưởng đổi tên thành Auto**, công tắc nằm ngay trong thẻ trợ lý, cùng hàng với tag, và trong menu ba chấm, tách khỏi huy hiệu việc. Bỏ người review cố định: mục tiêu cũ đang chờ review được tạm dừng để bạn xem, không tự coi là đạt.
 
 ## [0.141.0] - 2026-10-14
 ### Cải thiện

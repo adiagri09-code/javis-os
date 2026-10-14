@@ -942,7 +942,7 @@
       (x.pinned ? '<span class="ws-item-pin" title="' + esc(t("ws.pinned")) + '">' + ic("pin") + '</span>' : "") +
       '</button>' +
       // Công tắc Auto của trợ lý (0.142.0, trước là Cộng hưởng): ngang hàng với hai nút (không lồng trong nút chọn mục),
-      // CSS đặt nó vào góc dưới phải BÊN TRONG thẻ.
+      // CSS đặt nó BÊN TRONG thẻ, cùng hàng với tag, bên phải (nhìn là biết thuộc trợ lý nào).
       (S.loai === "agent" && window.JavisResonanceAgent
         ? window.JavisResonanceAgent.rowToggleHtml(S.rs[x.slug], { saving: !!S.rsSaving[x.slug] }) : "") +
       '<button type="button" class="ws-item-more" data-more="' + esc(x.slug) + '" title="' +

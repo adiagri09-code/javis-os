@@ -177,8 +177,14 @@ check("menu ba chấm có mục Auto dùng chung hàm bật tắt với công t�
   /nutMenu\("zap", t\(autoOn \? "resonance\.auto_menu_on" : "resonance\.auto_menu_off"\)/.test(wsJs)
   && /ma\.onclick = function \(\) \{ dongMenu\(\); doiAuto\(item\.slug, !autoOn\); \}/.test(wsJs)
   && /box\.checked = !wantOn;[\s\S]{0,160}doiAuto\(box\.dataset\.rs, wantOn\)/.test(wsJs));
-check("công tắc nằm trong thẻ (góc dưới phải), bật cam, tắt xám, chạm 44px trên điện thoại",
-  /\.ws-item-wrap > \.ws-auto \{ position: absolute; right: 30px; bottom: 4px;/.test(css)
+// Chủ repo chốt 14/10/2026 (sau ảnh 375): công tắc lên CÙNG HÀNG với tag, bên phải trong thẻ; hàng tag chừa chỗ, nút ba
+// chấm lên ngang hàng tên; chỉ trợ lý chưa có tag mới chừa hàng đáy riêng.
+check("công tắc nằm trong thẻ, cùng hàng tag bên phải, bật cam, tắt xám, chạm 44px trên điện thoại",
+  /\.ws-item-wrap > \.ws-auto \{ position: absolute; right: 4px; bottom: 6px;/.test(css)
+  && /\.ws-item-wrap:has\(> \.ws-auto\) \.ws-tags \{ padding-right: 68px; \}/.test(css)
+  && /\.ws-item-wrap:has\(> \.ws-auto\) > \.ws-item-more \{ top: 8px; transform: none; \}/.test(css)
+  && /\.ws-item-wrap:has\(> \.ws-auto\):not\(:has\(\.ws-tags\)\) > \.ws-item \{ padding-bottom: 30px; \}/.test(css)
+  && !/\.ws-item-wrap:has\(> \.ws-auto\) > \.ws-item \{ padding-bottom/.test(css)
   && /\.ws-auto \.toggle-sm input:checked \+ span \{ background: var\(--accent\)/.test(css)
   && /\.ws-auto \.toggle-sm span \{ background: var\(--bg3\)/.test(css)
   && /\.ws-item-wrap > \.ws-auto, \.ws-item-wrap > \.ws-rs-confirm \{ min-height: 44px;/.test(css));

@@ -248,3 +248,10 @@ có nền gần trong suốt (`--surface-1`, lỗi có sẵn); thanh lọc theo 
   định danh trợ lý nên chưa vào tab.
 - Ảnh nhóm chưa đổi được (ghép từ ảnh trợ lý), nên không có nút đổi ảnh. Link mời, bình chọn, nhiều tài khoản ngoài phạm vi.
 - Chưa merge, chưa triển khai VPS.
+
+### Sau báo cáo: công tắc Auto lên hàng tag
+
+Chủ repo xem ảnh 375 và yêu cầu (14/10/2026): công tắc Auto ở hàng riêng dưới đáy thẻ khó biết thuộc trợ lý nào. Nay công
+tắc nằm trong thẻ, CÙNG HÀNG với tag, bên phải; nút ba chấm lên ngang hàng tên để tag còn đủ chỗ ở cột hẹp; trợ lý chưa có
+tag thì công tắc giữ một hàng đáy riêng. Đo trên trình duyệt: tâm công tắc lệch tâm tag tối đa 1px, tag không bị cắt chữ ở
+1366 và 375, không chồng nút ba chấm, vùng chạm 44px trên màn cảm ứng. Thẻ cũng gọn hơn một hàng.
