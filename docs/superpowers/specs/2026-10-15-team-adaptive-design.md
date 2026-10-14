@@ -16,6 +16,7 @@ phiên bản**, không phải kết luận nghiên cứu; chúng được kiểm
 | A3 làn P | Đề xuất bài học trình bày, chủ duyệt mới áp | Khi Cộng hưởng bật, điều chỉnh trong **phạm vi tự học đã cấp** (nói/im, nhịp, bài học phạm vi nhóm) tự áp có trước/sau, quan sát và tự quay lại; thay đổi quyền, luật của chủ, phạm vi ngoài cấp vẫn chờ chủ | GOAL 8.2 |
 | Team chat T1 (spec 13/10 :252, TC8) | Tin của agent không đánh thức ai | Tin của đồng đội/trưởng nhóm mở **lượt xem xét liên quan** chỉ qua sự kiện có cấu trúc (quan hệ việc, input_refs, lệnh `ask_peer`), có trần độ sâu và chống vòng; chữ `@` trong văn bản, trích dẫn và tag giả vẫn không mở gì | GOAL 8.1 |
 | Team chat T1 | Bài học `JAVIS_LESSON` ghi vào bộ nhớ chung của agent | Bài học trong nhóm ghi vào kho bài học có **phạm vi nhóm**, có nguồn, lịch sử, thu hồi; chỉ đưa lên phạm vi chung qua tự rà soát có bằng chứng từ nhiều ngữ cảnh hoặc chủ duyệt | GOAL 7.5, 8.2 |
+| Chat riêng hiện nay | `JAVIS_LESSON` model đề xuất ghi `MEMORY.md` (đi mọi ngữ cảnh) | Ghi bài học phạm vi `dm:<session>`; chỉ luật chủ và bài học được nâng mới đi mọi ngữ cảnh | GOAL 7.5 |
 | Phán xử Zalo | Hai kết luận nói/im; không có sổ lượt | Ba kết luận nói/chờ/im (chờ có điều kiện gỡ); mọi lượt phán xử và tự rà soát vào sổ lượt chung | GOAL 8.1, 8.3 |
 | Test emoji (`tests/python/test_icons.py`) | Sáu emoji chỉ được nằm trong `teams.js` | Sáu emoji chỉ được nằm trong **một** bảng dùng chung `dashboard/reactions.js`; mọi chỗ khác vẫn cấm | GOAL 6.1 |
 
@@ -81,17 +82,21 @@ do chỉ có tối đa một lượt đang hoặc đã chạy thành công; lư�
 - Lượt nhóm (trả lời, bước việc) ghi `team_turns` như hiện nay (trần ngày nhóm giữ nguyên) và ghi **bản phản chiếu** sau khi chốt
   (`mirror_ref = team_turn:<id>`). Ghi phản chiếu lỗi **không** làm hỏng lượt nhóm; lúc khởi động có bước đối soát dựng lại phản
   chiếu thiếu từ `team_turns`. Lượt goal A2 phản chiếu `mirror_ref = goal_call:<id>` theo cùng cách.
-- Trần chung server `_under_ceiling` hiện cộng `goals.calls_used` và `call_ledger`; nay cộng thêm `agent_calls WHERE mirror_ref =
-  ''` (lượt chỉ có ở sổ mới: phán xử, xem xét, chủ động, quét), để không đếm hai lần lượt goal.
+- Trần chung server `_under_ceiling` hiện cộng `goals.calls_used` và `call_ledger`; nay cộng thêm `agent_calls WHERE mirror_ref = ''
+  AND status IN ('reserved','running','ok')` (lượt chỉ có ở sổ mới: phán xử, xem xét, chủ động, quét), để không đếm hai lần lượt goal và
+  không đếm lượt đã hoàn.
 
 ### 3.2 Vòng đời lý do thức theo agent (`agent_wake_reasons`)
 
 `id, agent_key, context_ref, code (reaction_review|related_review|proactive_due|scan_due|wait_unblocked), status (pending|claimed|
 served|superseded|failed), attempt, ledger_ref, created_at, updated_at`; nguồn ở `agent_wake_sources(reason_id, source_ref UNIQUE,
-added_at, removed_at)`. Chỉ mục duy nhất `(agent_key, context_ref, code) WHERE status IN ('pending','claimed')`: một lý do đang mở
-mỗi loại mỗi ngữ cảnh, gom mọi nguồn mới vào.
+added_at, removed_at, consumed_at)`. Chỉ mục duy nhất `(agent_key, context_ref, code) WHERE status = 'pending'`: tối đa một lý do
+**chờ** mỗi loại mỗi ngữ cảnh, gom nguồn mới vào; một lý do `pending` mới được phép cùng tồn tại với một lý do đang `claimed`. Nguồn đến
+trong lúc lượt xem xét đang chạy vào lý do `pending` mới, không vào lý do đang chạy.
 
-`pending → claimed` (CAS, giữ chỗ `agent_calls`) `→ served` chỉ khi lượt chốt `ok`; `interrupted/refunded/error → pending`
+`pending → claimed` (CAS, giữ chỗ `agent_calls`; danh sách nguồn được chốt lúc nhận) `→ served` chỉ khi lượt chốt `ok`. Lúc `served`,
+nguồn nào **không** nằm trong `consumed` của lượt được chuyển sang lý do `pending` cùng loại (tạo mới nếu chưa có); test: reaction đến
+khi lượt xem xét đang chạy được xem xét đúng một lần ở lượt sau; `interrupted/refunded/error → pending`
 (attempt + 1), quá 3 lần → `failed` (hiển thị, chủ bấm thử lại). Nguồn bị bỏ (reaction gỡ) khi lý do còn `pending`: đánh
 `removed_at`; lý do không còn nguồn nào → `superseded`.
 
@@ -106,14 +111,18 @@ mỗi loại mỗi ngữ cảnh, gom mọi nguồn mới vào.
 
 Khoá `agent_busy` hiện có (team_store, có gia hạn từ T1) trở thành khoá của **mọi** lượt mang persona agent: lượt nhóm, chủ động,
 xem xét reaction, quét việc, và lượt goal A2. Lượt A2 gặp khoá bận thì dời 30 giây (không tính là lỗi). Lượt phán xử theo lô không
-mang persona nên không lấy khoá.
+mang persona nên không lấy khoá. Lượt chủ động/quét/xem xét lấy khoá **không chờ** và bỏ qua lần này nếu agent đang có việc nhóm hoặc
+goal xếp hàng; thời gian tối đa một lượt (10 phút) nằm trong một kỳ lease (15 phút). Test: việc nhóm xếp hàng trong lúc quét bắt đầu
+sau tối đa một lượt quét.
 
 ### 3.5 Outbox: ghi reaction rồi chiếu tác động (không giao dịch xuyên kho)
 
 Ghi reaction (kho của reaction) kèm `effect_state = 'pending'` trên dòng nhật ký. Bộ chiếu `feedback_projector.project(log_row)`
 idempotent theo `source_ref` (UNIQUE ở `agent_wake_sources` và `pulse_signals`): tạo/gom lý do, ghi tín hiệu, rồi đặt `effect_state =
 'done'` và `effect_refs_json`. Bộ chiếu chạy ngay sau khi ghi (cùng request, nếu lỗi thì bỏ qua) và chạy lại mỗi nhịp pulse và lúc
-khởi động cho mọi dòng còn `pending`. Trạng thái hiển thị trên reaction cũng do bộ chiếu ghi ngược sau khi lý do đổi trạng thái.
+khởi động cho mọi dòng còn `pending`. Thứ tự: mỗi cặp (tin, người phản hồi) được chiếu **theo đúng thứ tự mã nhật ký**; dòng `pending`
+mà đã có dòng mới hơn của cùng cặp thì chỉ áp **trạng thái ròng** của dòng mới nhất và đánh các dòng cũ `superseded`. Trạng thái hiển
+thị trên reaction cũng do bộ chiếu ghi ngược sau khi lý do đổi trạng thái.
 
 ## 4. T2: sáu reaction ở chat riêng và chat nhóm
 
@@ -168,7 +177,9 @@ và yêu cầu đầu ra có cấu trúc:
   sửa đè tin cũ), chỉ trong phạm vi được phép của ngữ cảnh (chat riêng; nhóm thì qua phán xử như mọi tin tự phát). `lesson`: ghi bài
   học có phạm vi ngữ cảnh (mục 8), có thể kèm `keep`.
 - Host kiểm `consumed ⊆ nguồn của lý do`; sai cấu trúc hay `consumed` lệch: lượt `error`, lý do về `pending` (3.2).
-- Trạng thái: `keep` → "Không cần đổi"; `ask_back`/`revise`/`lesson` → "Đã điều chỉnh". Ghi trên mọi reaction trong `consumed`.
+- Trạng thái theo **kết quả host thật**: `keep` → "Không cần đổi"; `lesson` → "Đã điều chỉnh"; `ask_back`/`revise` → "Đã điều chỉnh"
+  chỉ khi tin mới thật sự được gửi; nếu phán xử (trong nhóm) chọn im thì "Không cần đổi (phán xử chọn im)". Ghi trên mọi reaction trong
+  `consumed`.
 - Bằng chứng tác động: quyết định ghi vào `agent_pulse_events`; bài học mới xuất hiện trong lời nhắc lượt sau của đúng ngữ cảnh (test
   kiểm prompt kế tiếp chứa bài học và mã nguồn).
 
@@ -195,7 +206,7 @@ lịch chủ động). Bậc khởi tạo B3.
 | `hibernating` | sau B7 | ở B7 qua hai kỳ liền không tín hiệu, không cơ hội | sự kiện thức |
 | `waiting_owner` | chờ chủ | phán xử/việc cần chủ quyết | chủ trả lời/huỷ; nhắc một lần sau 24 giờ rồi giữ nguyên |
 | `paused` | chủ tạm dừng | chủ bấm Tạm dừng | chủ bấm Tiếp |
-| `off` | Cộng hưởng tắt | tắt | bật (về bậc B3, `resumed_at`) |
+| `off` | Cộng hưởng tắt | tắt (và mọi agent đang tắt lúc nâng cấp) | bật: về bậc B3, giữ ước lượng cũ, ghi `resumed_at` |
 
 `paused`, `waiting_owner`, `off`, `hibernating` chỉ dừng phần **chủ động**; việc đã nhận, hạn chót, goal, lời gọi trực tiếp vẫn chạy.
 **Thức lại:** bậc mới = `min(bậc hiện tại, B3)` (đang nhanh hơn B3 thì giữ), giữ nguyên ước lượng, ký ức và lịch sử; kích hoạt bởi
@@ -222,11 +233,12 @@ Bằng chứng cũ không thể tự đẩy bậc mãi: bước 2-3 cần bằng
 
 | Kịch bản | Kỳ vọng |
 |---|---|
-| 1 ❤️ (`u ≈ 0.05`) hay 2 ❤️ (`u ≈ 0.13`) | giữ B3 |
-| 5 ❤️ trong 2 tuần (`u ≈ 0.32`) | lên đúng một bậc (B2) sau dwell; không lên tiếp nếu không có tín hiệu mới |
-| thêm 10 ❤️ trong 2 tuần kế | lên B1 (= `max_tier`), không bao giờ B0 |
-| 10 ❤️ trong 1 phút (`u ≈ 0.48`) | tối đa một bậc ở kỳ đó; kỳ sau không lên nữa vì không có bằng chứng mới |
-| im hoàn toàn từ B3 | khoảng ngày 2 xuống B4, ngày 8 B5, ngày 22 B6, ngày 50 B7, khoảng ngày 110 ngủ đông; tức 30 ngày ở B6, 90 ngày ở B7, 180 ngày ngủ đông |
+| Chủ chỉ dùng ❤️, 1 ❤️ (`k ≈ 1.00`, `u ≈ 0.05`) hay 2 ❤️ (`k ≈ 0.99`, `u ≈ 0.13`) | giữ B3 |
+| Chủ chỉ dùng ❤️, 5 ❤️ trong vài ngày (`k ≈ 0.94`, `u ≈ 0.26-0.30` tuỳ suy giảm) | lên đúng một bậc (B2) sau dwell; không lên tiếp nếu không có tín hiệu mới |
+| Chủ chỉ dùng ❤️, 10 ❤️ trong 1 phút (`k ≈ 0.82`, `u ≈ 0.39`) | tối đa một bậc ở kỳ đó; kỳ sau không lên nữa vì không có bằng chứng mới |
+| Sau đó thêm 10 ❤️ rải trong 2 tuần | lên B1 (= `max_tier`), không bao giờ B0 |
+| Chủ dùng lẫn (3 👍, 1 ❤️, 1 😮 trong vài ngày) | `k` của ❤️ và 😮 hơi trên 1, của 👍 hơi dưới 1; kết quả cụ thể lấy từ test, phải nằm trong 0.75-1.25 |
+| Im hoàn toàn từ B3 | khoảng ngày 2 xuống B4, ngày 8 B5, ngày 22 B6, ngày 50 B7, ngày 110 ngủ đông; tức tới ngày 30 đang ở B6, ngày 90 ở B7, ngày 180 đang ngủ đông |
 | 3 tin chủ động đã xem bị bỏ qua | ước lượng âm nhẹ (`u ≈ -0.02`), không tự xuống bậc vì `unhelpful`; chỉ `low_demand` nếu cũng không có gì khác |
 | 5 reaction có lý do "sai dữ kiện" (`u ≈ -0.24`) | giữ (chưa đủ); reaction thứ 6 (`u ≈ -0.27`) thì xuống một bậc (`unhelpful`) sau dwell |
 | im lặng đúng (không tín hiệu, có cơ hội nhưng phán xử chọn im) | không phạt; không coi là `low_demand` khi có cơ hội |
@@ -242,7 +254,9 @@ chết giữa chừng thì lịch tự tới hạn lại. Lệch đồng hồ: t
 
 `Thức không đồng nghĩa gọi model. Gọi model không đồng nghĩa gửi tin.` Mỗi lần thức chạy bước code: cập nhật ước lượng, tính bậc,
 lập **danh sách cơ hội** trong phạm vi đã giao bằng code: việc nhóm agent là thành viên có cập nhật cũ hơn khoảng hiện tại, việc bị
-chặn có dữ kiện mới, goal của agent chờ chủ quá 24 giờ, đề xuất chưa ai xử lý, lý do đang chờ. Không có gì: ghi `no_action`, ngủ.
+chặn có dữ kiện mới, goal của agent chờ chủ quá 24 giờ, đề xuất chưa ai xử lý, lý do đang chờ. Mỗi cơ hội có khoá `(source_ref,
+version)` và chỉ được tiêu thụ **một lần** (kể cả khi lượt quét trả `none`) cho tới khi nguồn có phiên bản mới; cơ hội đã tiêu thụ không
+mở lượt quét nữa và **không** được tính là "có cơ hội" ở luật `low_demand` (5.3). Không có gì: ghi `no_action`, ngủ.
 
 - Có lý do `reaction_review`/`related_review`/`wait_unblocked`: chạy lượt tương ứng (4.4, 7.5, 7.4).
 - Có cơ hội: chạy lượt **quét** (purpose `scan`) với danh sách đó làm đầu vào, đầu ra có cấu trúc `{"action": "none"|"propose"|
@@ -278,12 +292,17 @@ và chat riêng). Host ghi lần đầu. Chỉ tin của agent trong Javis; khô
 ### 6.3 Công thức (`pulse.v1`)
 
 - Suy giảm theo thời gian, nửa đời 21 ngày (`decay`).
-- **Cá nhân hoá theo người phản hồi và loại ngữ cảnh** (nhóm hay chat riêng): với người r, loại ngữ cảnh c, emoji e: `n` = số reaction
-  của r trong c, `p(e)` = tỷ lệ e trong số đó, `p̄ = 1/6`. `k = clamp(1 + 0.5 × (p̄ − p(e))/p̄ × n/(n + 20), 0.6, 1.4)`, `v = v0(e) × k`.
-  Ít mẫu (`n` nhỏ) thì `k ≈ 1`; không bao giờ ngoài 0.6-1.4; độ hiếm không đứng một mình làm kết luận.
+- **Cá nhân hoá theo người phản hồi và loại ngữ cảnh** (nhóm hay chat riêng), **chỉ cho reaction không kèm lý do** (reaction có lý do
+  chất lượng dùng giá trị của lý do, `k = 1`): với người r, loại ngữ cảnh c, emoji e: `n` = số reaction của r trong c, tỷ lệ làm trơn
+  `p_s(e) = (số lần e + 3)/(n + 18)`, `p̄ = 1/6`, `k = clamp(1 + 0.3 × (p̄ − p_s(e))/p̄ × n/(n + 20), 0.75, 1.25)`, `v = v0(e) × k`. `k`
+  **tính lại ở mỗi kỳ đánh giá** từ lịch sử hiện tại (không đóng băng lúc ghi). Ít mẫu thì `k ≈ 1`; làm trơn và trần 0.75-1.25 giữ
+  người dùng nhất quán khỏi trôi về âm (lời khen quen dùng của họ vẫn ≥ 0.75, emoji hiếm tối đa 1.25); độ hiếm không đứng một mình làm
+  kết luận.
 - Prior về 0: `estimate = Σ w·v·decay / (Σ w·decay + 2)`; `n_eff = Σ w·decay`; `confidence = n_eff / (n_eff + 4)`; `u = estimate ×
   confidence`. Im lâu thì `estimate` và `confidence` cùng về 0.
-- Mỗi sự kiện nguồn đóng góp `|w·v| ≤ 1`.
+- Mỗi sự kiện nguồn đóng góp `|w·v| ≤ 1`. `pulse_signals` có chỉ mục duy nhất `(source_ref, agent_key)`: phản hồi phân bổ cho nhiều
+  agent (6.5) ghi một dòng mỗi agent với `share`; agent đó dùng `w·share` ở cả tử số lẫn `n_eff`. Tổng `share` của một nguồn bằng 1
+  (test).
 - Thay/bỏ reaction: dòng cũ `superseded_by`; xoá nguồn (xoá tin/agent): `void`. Không cộng dồn.
 - Theo ngữ cảnh: tính riêng từng `context_ref`; bản `*` chỉ hiển thị và là giá trị khởi tạo cho ngữ cảnh mới (nhân 0.5).
 - Không tối ưu số tim/tin/lượt: tin không có tín hiệu không có điểm.
@@ -298,9 +317,10 @@ chưa qua cửa sổ.
 ### 6.5 Ghi nhận đóng góp (`pulse_contrib`)
 
 - Chuỗi do host ghi: bước làm/hỗ trợ (`team_steps`) với `input_refs`; tin tổng hợp trỏ các bước đã dùng.
-- Phản hồi của chủ trên **bản tổng hợp** (một sự kiện nguồn, tổng 1.0): 0.8 chia cho các bước có bằng chứng được dùng, theo số lần được
-  tham chiếu, trần 0.6 mỗi agent; phần còn lại (kể cả phần vượt trần) về tác giả tổng hợp. Không có bước nào được dùng: tác giả tổng hợp
-  nhận 1.0 (là tác giả trực tiếp). Một agent vừa làm bước vừa tổng hợp: gộp phần, không đếm hai lần. Tác giả tổng hợp **không** nhận
+- Phản hồi của chủ trên **bản tổng hợp** (một sự kiện nguồn, tổng 1.0): "được dùng" là **tập đầu vào host đã đưa cho bước tổng hợp**
+  (`input_refs` của bước đó, do host ghi), không phải trích dẫn agent tự khai; agent tổng hợp không thể thu hẹp tập này. 0.8 chia cho các
+  bước trong tập theo số lần được tham chiếu, trần 0.6 mỗi agent; phần còn lại (kể cả phần vượt trần) về tác giả tổng hợp. Tập rỗng (câu
+  trả lời trực tiếp không qua bước nào): tác giả nhận 1.0. Một agent vừa làm bước vừa tổng hợp: gộp phần, không đếm hai lần. Tác giả tổng hợp **không** nhận
   thêm tín hiệu trực tiếp riêng ở 6.1 cho cùng nguồn.
 - Thay bản kết quả: phân bổ cũ `superseded`, tính lại theo bản mới. Trích dẫn/chuyển tiếp/tổng hợp nhiều tầng không nhân điểm (một
   nguồn phân bổ một lần).
@@ -368,8 +388,10 @@ review), source_refs_json, status (active|revoked|superseded), created_at, revok
 
 - `JAVIS_LESSON` trong lượt nhóm: scope `team:<id>`, nguồn `self`, gắn lượt/tin/revision; chỉ khi đầu ra còn hợp lệ (R3). Lượt nhóm nạp
   scope của nhóm đó và `*`.
-- Chat riêng giữ hành vi hiện có: `JAVIS_RULE` của chủ vào "Luật chủ dặn", `JAVIS_LESSON` vào `MEMORY.md` (bài học chung do chủ dạy
-  trực tiếp). Đây là phạm vi `*` theo định nghĩa; lượt nhóm đọc chúng như hôm nay.
+- Chat riêng: `JAVIS_RULE` (luật chủ nói thẳng) vẫn vào "Luật chủ dặn", phạm vi `*` như hiện nay. **Đổi:** `JAVIS_LESSON` do model đề
+  xuất trong chat riêng nay ghi `agent_lessons` scope `dm:<session_id>` thay vì `MEMORY.md`, để bài học riêng không rò vào lượt nhóm;
+  chỉ luật của chủ và bài học được tự rà soát/chủ nâng lên mới thành `*`. Lượt chat riêng nạp scope `dm:<session>` của chính phiên và
+  `*`.
 - Bài học cũ trong `MEMORY.md` (đã trộn nhiều nhóm): giữ nguyên, đánh dấu "bài học cũ chưa có phạm vi" trên giao diện; không tự di trú,
   chủ có thể xoá tay như trước.
 - Lên phạm vi `*` từ bài học nhóm chỉ qua tự rà soát (bằng chứng ≥ 2 ngữ cảnh) hoặc chủ.
@@ -404,6 +426,10 @@ chứng.
 | `max_tier` (nhịp nhanh nhất) | B1 | chủ (tới B0) | trưởng nhóm không nâng được, kể cả Toàn quyền |
 | Dự trữ nghĩa vụ trong trần chung server | 20% | server | lượt chủ động/xem xét/quét không dùng phần dự trữ; goal A2, việc giao, lời gọi trực tiếp dùng được |
 | Trần chung `JAVIS_RESONANCE_CALL_CEILING` | env | server | cố định với Toàn quyền |
+
+`agent_daily_calls` tiêu theo thứ tự ưu tiên `reaction_review` > `related_review` > `wait_unblocked` > tin chủ động/quét, và luôn
+giữ 2 lượt/ngày cho hai loại xem xét đầu (quét/chủ động không dùng phần giữ). Lượt phán xử cho tin chủ động trong chat riêng tính vào
+`agent_daily_calls`; phán xử theo lô trong nhóm tính vào `judge_daily` của nhóm.
 
 Hết trần: lần thức chỉ chạy code, lý do giữ `pending`, trạng thái "Chờ hạn mức"; qua ngày mỗi lý do tối đa một lượt (không bù hàng loạt).
 Các trần mới vào **bảng giới hạn** của T1 (loại: chủ chỉnh, Toàn quyền chỉnh, server cố định, nhà cung cấp).
@@ -442,6 +468,8 @@ hẹp, chữ ≥ 16px.
 - Quay về bản cũ: bản cũ bỏ qua bảng/kho mới; công cụ khôi phục (R9) mở rộng chép thêm `agent_judge.sqlite3` và các bảng mới trong
   `resonance.sqlite3`, `conversations.db`, `team.sqlite3` vào bộ sao lưu trước nâng.
 - Lỗi kho khi ghi tác động: outbox giữ `pending`, chiếu lại sau; không mất reaction, không tác động kép.
+- Quay về bản cũ khi đã có reaction của trưởng nhóm/thành viên trong `team_reactions` (reactor `agent:...`): bản cũ hiển thị
+  chúng như reaction thường; đây là ảnh hưởng đã biết của việc quay về (không mất dữ liệu), ghi trong hướng dẫn khôi phục.
 
 ## 13. Ma trận nghiệm thu (GOAL mục 12) → nơi kiểm
 
@@ -483,7 +511,7 @@ hẹp, chữ ≥ 16px.
 2. **Sự kiện "đã xem":** cần dashboard báo tin của agent đã nằm trong khung nhìn.
 3. **Pilot chất lượng trên model thật** và **đo VPS:** chỉ chuẩn bị gói, chờ lệnh.
 
-## 15. Sổ sửa theo review thiết kế vòng 1
+## 15. Sổ sửa theo review thiết kế
 
 Review độc lập vòng 1 (FAIL, 6 chặn, 10 quan trọng, 6 nhỏ). Mỗi mục đã xử lý tại: (1) kho và outbox: 2, 3.1, 3.5, 12; (2) chỉ mục từng
 phần, vòng đời lý do, định tuyến, khoá bận: 3.1-3.4; (3) nhịp chỉ theo bằng chứng mới, prior về 0, dwell, vectơ test: 5.3, 6.3; (4) lượt
@@ -495,3 +523,11 @@ xử theo lô, timeout, engine: 7.2; (13) di trú, quay về, lệch đồng h�
 `resumed_at`: 8.3, 7.6; (17) thức lại `min`, nghĩa vụ khi tạm dừng, nhắc chờ chủ: 5.2; (18) xét lại sau gỡ chờ một lần: 7.4; (19) "sao em
 không trả lời" chỉ gợi ý: 7.6; (20) trang Trò chuyện chính, `mobile-chat.js`, nonce dùng lại, API theo `agent_key`: 2, 4.1, 4.2, 10;
 (21) "Chờ hạn mức", chờ chủ, nhật ký quản trị: 5.2, 10; (22) ma trận thêm ca 14, lỗi kho, lỗi phán xử chat riêng: 13.
+
+Review vòng 2 (PASS WITH CHANGES, 2 chặn, 8 quan trọng, 4 nhỏ), đã xử lý: (B1) `k` chỉ cho reaction không lý do, làm trơn, trần
+0.75-1.25, tính lại mỗi kỳ, vectơ tính lại kèm `k` và thêm người dùng nhất quán/dùng lẫn: 5.3, 6.3; (B2) chỉ mục `pending` riêng, nguồn
+chưa tiêu thụ chuyển sang lý do chờ mới: 3.2; (3) chiếu theo thứ tự nhật ký, trạng thái ròng: 3.5; (4) cơ hội tiêu thụ một lần, không
+tính cho `low_demand`: 5.5; (5) khoá không chờ cho lượt chủ động: 3.4; (6) bài học chat riêng phạm vi `dm`: 8.1, 0; (7) tập "được dùng"
+do host ghi: 6.5; (8) dòng tín hiệu theo agent với `share`: 6.3; (9) trạng thái theo kết quả gửi thật: 4.4; (10) thứ tự tiêu trần và phần
+giữ cho xem xét: 9; (11) câu chữ vectơ im lặng: 5.3; (12) trần chung chỉ đếm lượt còn hiệu lực: 3.1; (13) bật lại giữ ước lượng, agent tắt
+lúc nâng cấp ở `off`: 5.2; (14) ảnh hưởng quay về bản cũ: 12.
