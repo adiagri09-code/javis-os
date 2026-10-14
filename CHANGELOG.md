@@ -6,6 +6,11 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.137.0] - 2026-10-14
+### Sửa lỗi
+- **Antigravity CLI tự lên bản mới mỗi ngày, nên model mới (như Gemini 4 Argon) tự hiện trong Javis.** Danh sách model của Antigravity lấy thẳng từ `agy`, mà trước đây `agy` không bao giờ được cập nhật: bản Docker cài nó một lần rồi đứng yên ở đó. Giờ Javis tự chạy `agy update` mỗi ngày, cả trong Docker. `agy` đã mới nhất mà vẫn không thấy model thì tài khoản Google của bạn chưa được cấp model đó.
+- **Bot không còn nói "Em đang gặp trục trặc kỹ thuật, anh chị nhắn lại giúp em sau ít phút ạ"** khi lượt trả lời bị lỗi. Câu đó khai với khách là máy và bắt khách nhắn lại. Giờ bot nói "Anh chị đợi em chút xíu để em kiểm tra lại ạ." Người trực vẫn được báo lỗi thật như trước.
+
 ## [0.136.0] - 2026-10-14
 ### Cải thiện
 - **Bot Zalo cá nhân trả lời thay khi bạn chưa trả lời sau 10 phút.** Trước đây bạn vừa tự nhắn vào một cuộc chat thì tin khách tới sau đó bị bỏ hẳn, không ai trả lời. Giờ Javis giữ lại; bạn không trả lời trong 10 phút thì bot trả lời một lần cho tất cả, chỉ ở chat riêng.

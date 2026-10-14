@@ -61,6 +61,7 @@ import borrowed_eyes   # mắt mượn: bộ não khác xem hộ ảnh khi model
 import image_vision
 import openai_oauth
 import claude_update   # tự chạy `claude update` hằng ngày để model mới hiện ra
+import agy_update      # cùng việc đó cho Antigravity CLI: `agy update` hằng ngày (0.137.0)
 import claude_models   # model Claude LIVE cho provider anthropic-cli (hỏi bằng API key, nếu có)
 import winproc         # chạy lệnh con câm lặng trên Windows (không nháy console đen)
 import md_repair       # chữa file .md bị vòng lưu WYSIWYG của bản <= 0.33.3 làm hỏng
@@ -4199,7 +4200,42 @@ def antigravity_status():
     d["cai_lenh"] = antigravity_cli.lenh_cai()
     d["tu_cai"] = cli_autoinstall.state("agy")
     d["huong_dan"] = antigravity_cli.login_huong_dan()
+    d["cap_nhat"] = agy_update.doc_trang_thai()
     return d
+
+
+async def _cap_nhat_agy(ly_do: str) -> dict:
+    """Chạy `agy update` ở worker; bản đổi thì bỏ danh sách model đang nhớ để model mới hiện ngay."""
+    kq = await asyncio.to_thread(agy_update.cap_nhat, ly_do)
+    if kq.get("doi"):
+        _PROV_MODELS_CACHE.pop("antigravity-cli", None)
+        print(f"[agy update] {kq.get('truoc')} -> {kq.get('sau')} ({ly_do})", file=sys.stderr)
+    elif not kq.get("ok"):
+        print(f"[agy update] không cập nhật được ({ly_do}): {kq.get('error')}", file=sys.stderr)
+    return kq
+
+
+@app.on_event("startup")
+async def _tu_cap_nhat_agy():
+    """Mỗi giờ xem đã tới hạn chưa; tới hạn (24 giờ) thì chạy `agy update` một lần (0.137.0).
+
+    Chạy cả trong Docker: container cài `agy` một lần vào thư mục người dùng trên ổ dữ liệu, nên
+    không có vòng này thì nó đứng ở bản lúc cài mãi mãi, và model mới (Gemini 4 Argon, 14/10/2026)
+    không bao giờ hiện trong trình chọn. Chờ 3 phút sau khi khởi động, lệch với vòng của Claude.
+    """
+    if not agy_update.bat():
+        return
+
+    async def _vong():
+        await asyncio.sleep(180)
+        while True:
+            try:
+                if agy_update.den_han() and antigravity_cli.find_antigravity_cli():
+                    await _cap_nhat_agy("tu_dong")
+            except Exception as e:
+                print(f"[agy update] vòng tự cập nhật lỗi: {type(e).__name__}: {e}", file=sys.stderr)
+            await asyncio.sleep(3600)
+    asyncio.create_task(_vong())
 
 
 @app.post("/antigravity/check")

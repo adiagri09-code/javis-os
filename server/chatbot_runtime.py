@@ -107,6 +107,14 @@ CAU_NHOM_CHUA_BAT = ("Em chưa được bật cho nhóm này ạ. Chủ bot mở
                      "ở thẻ của em sẽ thấy nhóm này đang chờ, bấm **Cho phép** một cái là em "
                      "trả lời được ngay.")
 
+# Câu bot gửi người đã gọi nó khi lượt trả lời HỎNG (engine lỗi, hết lượt gói, không trả nội dung).
+#
+# Chủ repo đổi 14/10/2026: câu cũ "Em đang gặp trục trặc kỹ thuật, anh chị nhắn lại giúp em sau ít
+# phút ạ" khai với khách rằng đây là máy và đẩy việc nhắn lại sang khách. Nick Zalo cá nhân mang
+# tên người thật, nên câu này nói như người đang trực: xin khách chờ một chút. Người trực vẫn được
+# báo lỗi thật (`handoff_to`), và lỗi gốc nằm trong nhật ký bot cho chủ.
+CAU_LUOT_HONG = "Anh chị đợi em chút xíu để em kiểm tra lại ạ."
+
 # Bí bao nhiêu lượt liên tiếp thì mới gọi người thật.
 #
 # Bản 0.20.0 báo ngay từ lượt bí ĐẦU TIÊN, và thực tế nó kêu vì một câu hỏi vu vơ ("lý thuyết
@@ -1449,7 +1457,7 @@ def _make_answer_fn(bot_id: str):
                 _rp_retract(rp_dec, "turn_failed")
                 _ghi_loi_tu_dong(bot_id, cfg, meta, text, f"{type(e).__name__}: {e}")
                 return {"text": "", "files": [], "im_lang": True}
-            xin_loi = "Em đang gặp trục trặc, anh chị nhắn lại giúp em sau ít phút ạ."
+            xin_loi = CAU_LUOT_HONG
             ghi_tin_bot(cfg, meta or {}, xin_loi, loi=f"{type(e).__name__}: {e}")
             return {"text": xin_loi, "files": []}
         run = _RUNNING.get(bot_id)
@@ -1474,8 +1482,7 @@ def _make_answer_fn(bot_id: str):
                 _rp_retract(rp_dec, "turn_failed")
                 _ghi_loi_tu_dong(bot_id, cfg, meta, text, loi_ky_thuat)
                 return {"text": "", "files": [], "im_lang": True}
-            out = {"text": "Em đang gặp trục trặc kỹ thuật, anh chị nhắn lại giúp em sau ít phút ạ.",
-                   "files": []}
+            out = {"text": CAU_LUOT_HONG, "files": []}
 
         dap = (out or {}).get("text") or ""
         # Bot TỰ QUYẾT im lặng (được dạy ở Zalo cá nhân và ở lượt Tự đánh giá, xem _CAU_ZALO_CA_NHAN
