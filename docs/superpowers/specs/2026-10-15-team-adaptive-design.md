@@ -16,7 +16,7 @@ phiên bản**, không phải kết luận nghiên cứu; chúng được kiểm
 | A3 làn P | Đề xuất bài học trình bày, chủ duyệt mới áp | Khi Cộng hưởng bật, điều chỉnh trong **phạm vi tự học đã cấp** (nói/im, nhịp, bài học phạm vi nhóm) tự áp có trước/sau, quan sát và tự quay lại; thay đổi quyền, luật của chủ, phạm vi ngoài cấp vẫn chờ chủ | GOAL 8.2 |
 | Team chat T1 (spec 13/10 :252, TC8) | Tin của agent không đánh thức ai | Tin của đồng đội/trưởng nhóm mở **lượt xem xét liên quan** chỉ qua sự kiện có cấu trúc (quan hệ việc, input_refs, lệnh `ask_peer`), có trần độ sâu và chống vòng; chữ `@` trong văn bản, trích dẫn và tag giả vẫn không mở gì | GOAL 8.1 |
 | Team chat T1 | Bài học `JAVIS_LESSON` ghi vào bộ nhớ chung của agent | Bài học trong nhóm ghi vào kho bài học có **phạm vi nhóm**, có nguồn, lịch sử, thu hồi; chỉ đưa lên phạm vi chung qua tự rà soát có bằng chứng từ nhiều ngữ cảnh hoặc chủ duyệt | GOAL 7.5, 8.2 |
-| Chat riêng hiện nay | `JAVIS_LESSON` model đề xuất ghi `MEMORY.md` (đi mọi ngữ cảnh) | Ghi bài học phạm vi `dm:<session>`; chỉ luật chủ và bài học được nâng mới đi mọi ngữ cảnh | GOAL 7.5 |
+| Chat riêng hiện nay | `JAVIS_LESSON` model đề xuất ghi `MEMORY.md` (đi mọi ngữ cảnh) | Ghi bài học phạm vi `dm:<agent_key>`; chỉ luật chủ và bài học được nâng mới đi mọi ngữ cảnh | GOAL 7.5 |
 | Phán xử Zalo | Hai kết luận nói/im; không có sổ lượt | Ba kết luận nói/chờ/im (chờ có điều kiện gỡ); mọi lượt phán xử và tự rà soát vào sổ lượt chung | GOAL 8.1, 8.3 |
 | Test emoji (`tests/python/test_icons.py`) | Sáu emoji chỉ được nằm trong `teams.js` | Sáu emoji chỉ được nằm trong **một** bảng dùng chung `dashboard/reactions.js`; mọi chỗ khác vẫn cấm | GOAL 6.1 |
 
@@ -39,7 +39,8 @@ phiên bản**, không phải kết luận nghiên cứu; chúng được kiểm
 
 - **Agent:** định danh bền `agent_key` do host cấp (`resonance_agents`). Mọi bảng mới khoá theo `agent_key`, không theo slug; API
   của giao diện nhận slug nhưng host đổi sang `agent_key` đang hoạt động trước khi đọc/ghi (slug có thể bị dùng lại).
-- **Ngữ cảnh (`context_ref`):** `team:<team_id>` hoặc `dm:<session_id>` (chat riêng với agent, kênh `agent:<slug>`). Phần tổng hợp
+- **Ngữ cảnh (`context_ref`):** `team:<team_id>` hoặc `dm:<agent_key>` (toàn bộ chat riêng của chủ với agent đó, mọi phiên kênh
+  `agent:<slug>` gộp chung; ranh giới riêng tư là chat riêng khác nhóm, mã phiên chỉ dùng ở tham chiếu tin). Phần tổng hợp
   theo agent dùng `context_ref = "*"` (chỉ để hiển thị và khởi tạo). Không đưa nội dung của ngữ cảnh này vào prompt ngữ cảnh khác.
 - **Câu trả lời ở trang Trò chuyện chính** (không có agent, tác giả là Javis): có sáu reaction để lưu và hiển thị (`agent_key`
   rỗng); không vào ước lượng hữu ích hay phán xử của agent nào.
@@ -51,7 +52,7 @@ phiên bản**, không phải kết luận nghiên cứu; chúng được kiểm
 |---|---|
 | `conversations.db` (tin chat riêng) | `dm_reactions`, `dm_reaction_log` |
 | `team.sqlite3` | cột mới của `team_reactions`, `team_reaction_log` (mục 4.1) |
-| `resonance.sqlite3` | `agent_calls`, `agent_wake_reasons`, `agent_wake_sources`, `agent_pulse`, `agent_pulse_events`, `pulse_signals`, `pulse_contrib`, `message_seen`, `agent_lessons`, `agent_lesson_events`, `agent_peer_feedback` |
+| `resonance.sqlite3` | `agent_calls`, `agent_wake_reasons`, `agent_wake_sources`, `agent_pulse`, `agent_pulse_events`, `pulse_signals`, `pulse_contrib`, `message_seen`, `pulse_opportunities` (khoá `(agent_key, context_ref, source_ref, version)` cơ hội đã tiêu thụ), `agent_lessons`, `agent_lesson_events`, `agent_peer_feedback` |
 | `agent_judge.sqlite3` (mới, dữ liệu nội bộ, tách khỏi kho phán xử khách Zalo) | `profiles`, `decisions`, `offsets`, `cases`, `waits`, `changes`, `review_state` |
 
 - **Cộng hưởng (công tắc theo agent) và phạm vi:**
@@ -96,7 +97,9 @@ trong lúc lượt xem xét đang chạy vào lý do `pending` mới, không và
 
 `pending → claimed` (CAS, giữ chỗ `agent_calls`; danh sách nguồn được chốt lúc nhận) `→ served` chỉ khi lượt chốt `ok`. Lúc `served`,
 nguồn nào **không** nằm trong `consumed` của lượt được chuyển sang lý do `pending` cùng loại (tạo mới nếu chưa có); test: reaction đến
-khi lượt xem xét đang chạy được xem xét đúng một lần ở lượt sau; `interrupted/refunded/error → pending`
+khi lượt xem xét đang chạy được xem xét đúng một lần ở lượt sau. Lượt kết thúc `interrupted/refunded/error`: nếu đã có lý do
+`pending` cùng loại (tạo trong lúc chạy) thì chuyển nguồn của lý do đang chạy sang lý do chờ đó, giữ `attempt` lớn hơn, đánh lý do đang
+chạy `superseded` (test "lỗi khi đã có lý do chờ mới hơn"); nếu chưa có thì `→ pending`
 (attempt + 1), quá 3 lần → `failed` (hiển thị, chủ bấm thử lại). Nguồn bị bỏ (reaction gỡ) khi lý do còn `pending`: đánh
 `removed_at`; lý do không còn nguồn nào → `superseded`.
 
@@ -111,14 +114,15 @@ khi lượt xem xét đang chạy được xem xét đúng một lần ở lư�
 
 Khoá `agent_busy` hiện có (team_store, có gia hạn từ T1) trở thành khoá của **mọi** lượt mang persona agent: lượt nhóm, chủ động,
 xem xét reaction, quét việc, và lượt goal A2. Lượt A2 gặp khoá bận thì dời 30 giây (không tính là lỗi). Lượt phán xử theo lô không
-mang persona nên không lấy khoá. Lượt chủ động/quét/xem xét lấy khoá **không chờ** và bỏ qua lần này nếu agent đang có việc nhóm hoặc
+mang persona nên không lấy khoá. Lượt chủ động/quét/xem xét thử khoá **không chờ trước khi** nhận lý do (CAS) và giữ chỗ sổ lượt;
+bận thì không nhận, lý do giữ `pending`, `attempt` không tăng. Lượt chủ động/quét/xem xét cũng bỏ qua lần này nếu agent đang có việc nhóm hoặc
 goal xếp hàng; thời gian tối đa một lượt (10 phút) nằm trong một kỳ lease (15 phút). Test: việc nhóm xếp hàng trong lúc quét bắt đầu
 sau tối đa một lượt quét.
 
 ### 3.5 Outbox: ghi reaction rồi chiếu tác động (không giao dịch xuyên kho)
 
 Ghi reaction (kho của reaction) kèm `effect_state = 'pending'` trên dòng nhật ký. Bộ chiếu `feedback_projector.project(log_row)`
-idempotent theo `source_ref` (UNIQUE ở `agent_wake_sources` và `pulse_signals`): tạo/gom lý do, ghi tín hiệu, rồi đặt `effect_state =
+idempotent theo `source_ref` (UNIQUE ở `agent_wake_sources`, UNIQUE `(source_ref, agent_key)` ở `pulse_signals`): tạo/gom lý do, ghi tín hiệu, rồi đặt `effect_state =
 'done'` và `effect_refs_json`. Bộ chiếu chạy ngay sau khi ghi (cùng request, nếu lỗi thì bỏ qua) và chạy lại mỗi nhịp pulse và lúc
 khởi động cho mọi dòng còn `pending`. Thứ tự: mỗi cặp (tin, người phản hồi) được chiếu **theo đúng thứ tự mã nhật ký**; dòng `pending`
 mà đã có dòng mới hơn của cùng cặp thì chỉ áp **trạng thái ròng** của dòng mới nhất và đánh các dòng cũ `superseded`. Trạng thái hiển
@@ -234,10 +238,11 @@ Bằng chứng cũ không thể tự đẩy bậc mãi: bước 2-3 cần bằng
 | Kịch bản | Kỳ vọng |
 |---|---|
 | Chủ chỉ dùng ❤️, 1 ❤️ (`k ≈ 1.00`, `u ≈ 0.05`) hay 2 ❤️ (`k ≈ 0.99`, `u ≈ 0.13`) | giữ B3 |
-| Chủ chỉ dùng ❤️, 5 ❤️ trong vài ngày (`k ≈ 0.94`, `u ≈ 0.26-0.30` tuỳ suy giảm) | lên đúng một bậc (B2) sau dwell; không lên tiếp nếu không có tín hiệu mới |
+| Chủ chỉ dùng ❤️, 5 ❤️ trong 3 ngày (tuổi trung bình 1,5 ngày, `k ≈ 0.935`, `u ≈ 0.28`) | lên đúng một bậc (B2) sau dwell; không lên tiếp nếu không có tín hiệu mới |
+| Chủ chỉ dùng ❤️, 5 ❤️ rải đều 2 tuần (`u ≈ 0.248`) | giữ B3 (sát ngưỡng; test ghim mốc thời gian chính xác) |
 | Chủ chỉ dùng ❤️, 10 ❤️ trong 1 phút (`k ≈ 0.82`, `u ≈ 0.39`) | tối đa một bậc ở kỳ đó; kỳ sau không lên nữa vì không có bằng chứng mới |
 | Sau đó thêm 10 ❤️ rải trong 2 tuần | lên B1 (= `max_tier`), không bao giờ B0 |
-| Chủ dùng lẫn (3 👍, 1 ❤️, 1 😮 trong vài ngày) | `k` của ❤️ và 😮 hơi trên 1, của 👍 hơi dưới 1; kết quả cụ thể lấy từ test, phải nằm trong 0.75-1.25 |
+| Chủ dùng lẫn (3 👍, 1 ❤️, 1 😮 trong vài ngày, `n = 5`) | `k(❤️) = k(😮) ≈ 0.997`, `k(👍) ≈ 0.966`; emoji chưa dùng lần nào `k ≈ 1.013`; mọi `k` trong 0.75-1.25 |
 | Im hoàn toàn từ B3 | khoảng ngày 2 xuống B4, ngày 8 B5, ngày 22 B6, ngày 50 B7, ngày 110 ngủ đông; tức tới ngày 30 đang ở B6, ngày 90 ở B7, ngày 180 đang ngủ đông |
 | 3 tin chủ động đã xem bị bỏ qua | ước lượng âm nhẹ (`u ≈ -0.02`), không tự xuống bậc vì `unhelpful`; chỉ `low_demand` nếu cũng không có gì khác |
 | 5 reaction có lý do "sai dữ kiện" (`u ≈ -0.24`) | giữ (chưa đủ); reaction thứ 6 (`u ≈ -0.27`) thì xuống một bậc (`unhelpful`) sau dwell |
@@ -255,7 +260,7 @@ chết giữa chừng thì lịch tự tới hạn lại. Lệch đồng hồ: t
 `Thức không đồng nghĩa gọi model. Gọi model không đồng nghĩa gửi tin.` Mỗi lần thức chạy bước code: cập nhật ước lượng, tính bậc,
 lập **danh sách cơ hội** trong phạm vi đã giao bằng code: việc nhóm agent là thành viên có cập nhật cũ hơn khoảng hiện tại, việc bị
 chặn có dữ kiện mới, goal của agent chờ chủ quá 24 giờ, đề xuất chưa ai xử lý, lý do đang chờ. Mỗi cơ hội có khoá `(source_ref,
-version)` và chỉ được tiêu thụ **một lần** (kể cả khi lượt quét trả `none`) cho tới khi nguồn có phiên bản mới; cơ hội đã tiêu thụ không
+version)` (bảng `pulse_opportunities`, bền qua restart) và chỉ được tiêu thụ **một lần** (kể cả khi lượt quét trả `none`) cho tới khi nguồn có phiên bản mới; cơ hội đã tiêu thụ không
 mở lượt quét nữa và **không** được tính là "có cơ hội" ở luật `low_demand` (5.3). Không có gì: ghi `no_action`, ngủ.
 
 - Có lý do `reaction_review`/`related_review`/`wait_unblocked`: chạy lượt tương ứng (4.4, 7.5, 7.4).
@@ -268,7 +273,7 @@ mở lượt quét nữa và **không** được tính là "có cơ hội" ở l
 
 ## 6. T3: ước lượng hữu ích
 
-### 6.1 Tín hiệu (`pulse_signals`, một dòng một sự kiện nguồn, `source_ref` UNIQUE)
+### 6.1 Tín hiệu (`pulse_signals`, một dòng mỗi sự kiện nguồn mỗi agent, UNIQUE `(source_ref, agent_key)`)
 
 | Nguồn | Giá trị khởi tạo (giả thuyết `pulse.v1`) | Độ tin nguồn `w` |
 |---|---|---|
@@ -319,7 +324,9 @@ chưa qua cửa sổ.
 - Chuỗi do host ghi: bước làm/hỗ trợ (`team_steps`) với `input_refs`; tin tổng hợp trỏ các bước đã dùng.
 - Phản hồi của chủ trên **bản tổng hợp** (một sự kiện nguồn, tổng 1.0): "được dùng" là **tập đầu vào host đã đưa cho bước tổng hợp**
   (`input_refs` của bước đó, do host ghi), không phải trích dẫn agent tự khai; agent tổng hợp không thể thu hẹp tập này. 0.8 chia cho các
-  bước trong tập theo số lần được tham chiếu, trần 0.6 mỗi agent; phần còn lại (kể cả phần vượt trần) về tác giả tổng hợp. Tập rỗng (câu
+  bước trong tập **chia đều theo tập đầu vào của host** (không theo số lần trích dẫn trong văn bản tổng hợp), trần 0.6 mỗi agent;
+  phần vượt trần chia tiếp cho các người đóng góp khác còn dưới trần, chỉ khi mọi người đã chạm trần mới về tác giả tổng hợp; 0.2 còn lại
+  về tác giả tổng hợp. Tập rỗng (câu
   trả lời trực tiếp không qua bước nào): tác giả nhận 1.0. Một agent vừa làm bước vừa tổng hợp: gộp phần, không đếm hai lần. Tác giả tổng hợp **không** nhận
   thêm tín hiệu trực tiếp riêng ở 6.1 cho cùng nguồn.
 - Thay bản kết quả: phân bổ cũ `superseded`, tính lại theo bản mới. Trích dẫn/chuyển tiếp/tổng hợp nhiều tầng không nhân điểm (một
@@ -383,14 +390,14 @@ của nhóm. Đi qua phán xử của agent nhận (7.2 bước 2-5).
 
 ### 8.1 Kho bài học có phạm vi (`agent_lessons`, resonance.sqlite3)
 
-`id, agent_key, scope (team:<id>|dm:<session_id>|*), kind (speak|method|presentation|collab), text, source (owner|teammate|leader|self|
+`id, agent_key, scope (team:<id>|dm:<agent_key>|*), kind (speak|method|presentation|collab), text, source (owner|teammate|leader|self|
 review), source_refs_json, status (active|revoked|superseded), created_at, revoked_at, revoked_by`; nhật ký `agent_lesson_events`.
 
 - `JAVIS_LESSON` trong lượt nhóm: scope `team:<id>`, nguồn `self`, gắn lượt/tin/revision; chỉ khi đầu ra còn hợp lệ (R3). Lượt nhóm nạp
   scope của nhóm đó và `*`.
 - Chat riêng: `JAVIS_RULE` (luật chủ nói thẳng) vẫn vào "Luật chủ dặn", phạm vi `*` như hiện nay. **Đổi:** `JAVIS_LESSON` do model đề
-  xuất trong chat riêng nay ghi `agent_lessons` scope `dm:<session_id>` thay vì `MEMORY.md`, để bài học riêng không rò vào lượt nhóm;
-  chỉ luật của chủ và bài học được tự rà soát/chủ nâng lên mới thành `*`. Lượt chat riêng nạp scope `dm:<session>` của chính phiên và
+  xuất trong chat riêng nay ghi `agent_lessons` scope `dm:<agent_key>` thay vì `MEMORY.md`, để bài học riêng không rò vào lượt nhóm;
+  chỉ luật của chủ và bài học được tự rà soát/chủ nâng lên mới thành `*`. Lượt chat riêng (mọi phiên) nạp scope `dm:<agent_key>` và
   `*`.
 - Bài học cũ trong `MEMORY.md` (đã trộn nhiều nhóm): giữ nguyên, đánh dấu "bài học cũ chưa có phạm vi" trên giao diện; không tự di trú,
   chủ có thể xoá tay như trước.
@@ -519,7 +526,7 @@ xem xét reaction: 4.4; (5) trần phán xử riêng, dự trữ nghĩa vụ, `_
 chứng, trần mỗi agent, không tín hiệu trùng: 6.5; (8) cá nhân hoá theo người và ngữ cảnh, 😂 độ tin thấp, `p̄`, một luật xuống bậc: 6.1,
 6.3, 5.3; (9) quay lại chỉ cho chính sách: 6.4; (10) quét việc giới hạn: 5.5; (11) nhịp pulse ngoài tick goal: 5.1; (12) sổ lượt phán
 xử theo lô, timeout, engine: 7.2; (13) di trú, quay về, lệch đồng hồ: 12, 5.4; (14) trần mới vào bảng giới hạn, Toàn quyền không nâng
-`max_tier`, `resumed_at` ở đường trưởng nhóm: 2, 9; (15) scope `dm:<session>`, `MEMORY.md`, không hai vòng học: 8.1, 8.3; (16) đếm sau
+`max_tier`, `resumed_at` ở đường trưởng nhóm: 2, 9; (15) scope `dm:<agent_key>`, `MEMORY.md`, không hai vòng học: 8.1, 8.3; (16) đếm sau
 `resumed_at`: 8.3, 7.6; (17) thức lại `min`, nghĩa vụ khi tạm dừng, nhắc chờ chủ: 5.2; (18) xét lại sau gỡ chờ một lần: 7.4; (19) "sao em
 không trả lời" chỉ gợi ý: 7.6; (20) trang Trò chuyện chính, `mobile-chat.js`, nonce dùng lại, API theo `agent_key`: 2, 4.1, 4.2, 10;
 (21) "Chờ hạn mức", chờ chủ, nhật ký quản trị: 5.2, 10; (22) ma trận thêm ca 14, lỗi kho, lỗi phán xử chat riêng: 13.
@@ -531,3 +538,8 @@ tính cho `low_demand`: 5.5; (5) khoá không chờ cho lượt chủ động: 3
 do host ghi: 6.5; (8) dòng tín hiệu theo agent với `share`: 6.3; (9) trạng thái theo kết quả gửi thật: 4.4; (10) thứ tự tiêu trần và phần
 giữ cho xem xét: 9; (11) câu chữ vectơ im lặng: 5.3; (12) trần chung chỉ đếm lượt còn hiệu lực: 3.1; (13) bật lại giữ ước lượng, agent tắt
 lúc nâng cấp ở `off`: 5.2; (14) ảnh hưởng quay về bản cũ: 12.
+
+Review vòng 3 (PASS WITH CHANGES, không còn chặn; người review xác nhận các mục quan trọng sửa xong không cần vòng nữa), đã xử lý: (1)
+vectơ người dùng lẫn và vectơ 5 ❤️ rải 2 tuần sát ngưỡng: 5.3; (2) lỗi lượt khi đã có lý do chờ mới hơn: 3.2; (3) thử khoá trước khi
+nhận lý do, bận không tốn lần thử: 3.4; (4) chia đều theo tập đầu vào của host, phần vượt trần cho người khác trước: 6.5; (5) phạm vi
+chat riêng theo agent (`dm:<agent_key>`), không theo phiên: 2, 8.1; (nhỏ) ghi chú UNIQUE, bảng `pulse_opportunities`: 2, 3.5, 5.5, 6.1.
