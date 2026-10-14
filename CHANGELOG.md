@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.122.0] - 2026-10-14
+### Thêm mới
+- **Tìm trong nhóm** và tóm tắt phần lịch sử cũ cho trợ lý.
+
 ## [0.121.0] - 2026-10-14
 ### Thêm mới
 - **Trưởng nhóm Toàn quyền.** Ở tab Cài đặt của nhóm, bạn có thể cho trưởng nhóm tự mở việc, đổi thứ tự việc chờ, thêm hay bỏ thành viên và tạo trợ lý mới cho nhóm.
