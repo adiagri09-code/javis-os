@@ -244,7 +244,7 @@ check("hộp cấp quyền đủ dòng của 13.1: phạm vi, agent do nhóm qu�
 const fullTeam = Object.assign({}, team, { members: [Object.assign({}, members[0]), Object.assign({}, members[1], { managed: true })],
   authority: { authority: { leader_key: "ag_lan", granted_at: 1791900000,
     grant: { caps: { task_turns: { unlimited: true } }, ceilings: { task_turns: { unlimited: true }, daily_turns: 150 },
-      providers_unlimited: ["aux"], can_interrupt: true, billing: "api" } },
+      providers_unlimited: ["openai-oauth"], can_interrupt: true, billing: "api" } },
     effective_caps: { task_turns: null, task_steps: 8, help_depth: 2, daily_turns: 100 } } });
 ah = TM.authorityHtml(fullTeam);
 check("Toàn quyền bật: trạng thái nêu trưởng nhóm, có Lưu và Thu hồi", ah.includes("tm-auth-on") && ah.includes("Lan")
@@ -253,7 +253,7 @@ check("Không giới hạn hiện bằng chữ, ô số tắt, ô tích bật (n
       ah.includes(vi["teams.cap.task_turns"] + ": " + vi["teams.auth.unlimited"])
       && /name="tm-auth-cap-task_turns" value="" disabled/.test(ah) && /name="tm-auth-cap-task_turns-unl" checked/.test(ah), ah);
 check("trần trần số hiện đúng, provider và quyền ngắt việc đã chọn được đánh dấu",
-      /name="tm-auth-ceil-daily_turns" value="150"/.test(ah) && /value="aux" checked/.test(ah)
+      /name="tm-auth-ceil-daily_turns" value="150"/.test(ah) && /value="openai-oauth" checked/.test(ah)
       && /name="tm-auth-interrupt" checked/.test(ah) && /value="api" checked/.test(ah), ah);
 check("agent do nhóm quản lý được liệt kê", ah.includes(vi["teams.auth.managed"].replace("{names}", "Minh &lt;b&gt;")), ah);
 check("chưa có trưởng nhóm: chỉ nhắc chọn trưởng nhóm", TM.authorityHtml(Object.assign({}, limitedTeam, { leader_key: null }))
@@ -323,7 +323,7 @@ check("T5 @ phải hết tên ('@Lanx' không gọi Lan); người đã rời kh
       TM.mentionsFromText("@Lanx", mem3).length === 0 && TM.mentionsFromText("@Cũ", mem3).length === 0
       && TM.mentionsFromText("không gọi ai", mem3).length === 0);
 check("T5 gửi tin lấy người được gọi từ chữ, không còn hàng chip @ trùng chữ",
-      /var mentions = mentionsFromText\(text, S\.team\.members\);/.test(teamsJs) && !teamsJs.includes("tm-chips")
+      /var scan = mentionScan\(text, S\.team\.members, S\.picked\);/.test(teamsJs) && !teamsJs.includes("tm-chips")
       && !teamsJs.includes("data-unmention"));
 
 // Một nút giải quyết cho việc bị chặn.

@@ -54,7 +54,10 @@
   var AUTH_CAPS = ["task_turns", "task_steps", "help_depth", "daily_turns"];
   var AUTH_CAP_KEY = { task_turns: "teams.cap.task_turns", task_steps: "teams.cap.task_steps",
     help_depth: "teams.cap.help_depth", daily_turns: "teams.cap.daily_turns" };
-  var PROVIDERS = [{ id: "aux", key: "teams.auth.provider_aux" }, { id: "anthropic-cli", key: "teams.auth.provider_claude" }];
+  // Provider được "Không giới hạn" lượt (D6). Từ 0.142.0 lượt nhóm chạy model của trợ lý hay model chính, không còn model
+  // việc nền, nên nhãn là provider thật của lượt (gói đăng ký). Quyền cũ ghi "aux" không còn khớp lượt nào: trần về mức
+  // của nhóm, tức chặt hơn, không bao giờ rộng hơn.
+  var PROVIDERS = [{ id: "anthropic-cli", key: "teams.auth.provider_claude" }, { id: "openai-oauth", key: "teams.auth.provider_codex" }];
   var FIXED_KEYS = ["teams.auth.fixed_server", "teams.auth.fixed_provider", "teams.auth.fixed_account",
     "teams.auth.fixed_technical"];
   // Ba mức tự quyết của trưởng nhóm (T5), đặt lên Toàn quyền của T3. Mức 2: trần tối đa vừa phải, không ngắt việc.
@@ -279,6 +282,37 @@
 
   // ───────────── tin ─────────────
 
+  // Kết cục từng lượt trả lời của một tin chủ nhóm (0.142.0): chờ, đang trả lời, lỗi kèm lý do và Thử lại. "Đã trả lời"
+  // không hiện (câu trả lời đã nằm ngay dưới); chỉ báo khi còn chờ hay khi hỏng, để không có tin nào im lặng.
+  var REPLY_WHY = { engine_unavailable: "teams.reply.why.engine_unavailable", engine: "teams.reply.why.engine",
+    cap: "teams.reply.why.cap", busy: "teams.reply.why.busy", team_paused: "teams.reply.why.team_paused",
+    member_left: "teams.reply.why.member_left", restart: "teams.reply.why.restart",
+    interrupted: "teams.reply.why.interrupted", internal: "teams.reply.why.internal" };
+  function replyStatusHtml(m, ctx) {
+    var rows = (m.replies || []).filter(function (x) { return x.status !== "done"; });
+    if (!rows.length) return "";
+    var retrying = (ctx && ctx.retrying) || {};
+    return '<div class="tm-replies">' + rows.map(function (x) {
+      var who = nameOf(ctx.members, x.agent_key) || ((ctx.authors || {})[x.agent_key] || {}).name || x.agent_key;
+      var face = agentAva(memberOf(ctx.members, x.agent_key) || (ctx.authors || {})[x.agent_key] || { name: who }, 20);
+      var busy = retrying[m.id + "|" + x.agent_key];
+      if (x.status === "error") {
+        var why = REPLY_WHY[x.reason] || "teams.reply.why.unknown";
+        var detail = x.detail ? '<span class="tm-reply-detail">' + esc(String(x.detail).slice(0, 200)) + "</span>" : "";
+        var canRetry = x.reason !== "member_left";
+        return '<div class="tm-reply tm-reply-error" role="status">' + face + '<span class="tm-reply-main"><b>' + esc(who) +
+          "</b> " + esc(tw("teams.reply.error")) + ": " + esc(tw(why)) + detail + "</span>" +
+          (canRetry ? '<button type="button" class="ws-btn tm-reply-retry" data-retry="' + esc(m.id) + '" data-retry-key="' +
+            esc(x.agent_key) + '"' + (busy ? " disabled" : "") + ">" + ic("rotate-ccw") +
+            esc(tw(busy ? "teams.reply.retrying" : "teams.reply.retry")) + "</button>" : "") + "</div>";
+      }
+      var answering = x.status === "running" && x.reason === "answering";
+      return '<div class="tm-reply tm-reply-' + (answering ? "answering" : "queued") + '" role="status">' + face +
+        '<span class="tm-reply-main"><b>' + esc(who) + "</b> " + esc(tw(answering ? "teams.reply.answering" :
+          "teams.reply.queued")) + '<span class="tm-dots" aria-hidden="true"><i></i><i></i><i></i></span></span></div>';
+    }).join("") + "</div>";
+  }
+
   function messageHtml(m, ctx) {
     ctx = ctx || {};
     var meta = m.meta || {};
@@ -337,7 +371,7 @@
       body + lateLine + notes + prop + (foot ? '<div class="tm-foot">' + foot + "</div>" : "") + "</div>";
     var face = mine ? "" : agentAva(author || { name: who }, 28);
     return '<div class="' + cls + '" data-mid="' + esc(m.id) + '">' +
-      (mine ? side + bubble : face + bubble + side) + panel + "</div>";
+      (mine ? side + bubble : face + bubble + side) + panel + "</div>" + (mine ? replyStatusHtml(m, ctx) : "");
   }
 
   // ───────────── việc ─────────────
@@ -437,39 +471,60 @@
   // tự không phải chữ/số (địa chỉ email "ho@lan.vn" không gọi ai); sau tên phải là hết chữ hay ký tự không phải chữ/số/dấu.
   // So trên chữ đã chuẩn hoá NFC (gõ tổ hợp vẫn khớp). Hai tên cùng bắt đầu ở một chỗ ("@Lan Anh" và "@Lan") thì lấy tên
   // dài hơn.
-  function mentionsFromText(text, members) {
+  // Hai trợ lý TRÙNG TÊN (0.142.0): chữ "@One" không nói được là ai. Người đã chọn trong danh sách gợi ý (`picked`, mã bền
+  // theo thứ tự chọn) quyết định; gõ tay một tên trùng mà không chọn thì không gọi ai và báo `ambiguous` để chủ chọn lại.
+  function mentionScan(text, members, picked) {
     var norm = function (s) { s = String(s || ""); return (s.normalize ? s.normalize("NFC") : s).toLowerCase(); };
     var low = norm(text);
     var word = /[\p{L}\p{M}\p{N}_]/u;
-    var cands = [];
+    var byPos = {};
     (members || []).forEach(function (m) {
       if (m.status && m.status !== "active") return;
       [m.name, m.slug].forEach(function (n) {
+        var label = String(n || "").trim();
         n = norm(n).trim();
         if (!n) return;
         var at = 0, i;
         while ((i = low.indexOf("@" + n, at)) >= 0) {
           var prev = i ? low.charAt(i - 1) : "";
           var next = low.charAt(i + 1 + n.length);
-          if ((!prev || !word.test(prev)) && (!next || !word.test(next))) cands.push({ i: i, len: n.length, key: m.agent_key });
+          if ((!prev || !word.test(prev)) && (!next || !word.test(next))) {
+            var g = byPos[i];
+            if (!g || n.length > g.len) byPos[i] = { i: i, len: n.length, keys: [m.agent_key], label: label };
+            else if (n.length === g.len && g.keys.indexOf(m.agent_key) < 0) g.keys.push(m.agent_key);
+          }
           at = i + 1;
         }
       });
     });
-    cands.sort(function (a, b) { return a.i - b.i || b.len - a.len; });
-    var taken = {}, out = [];
-    cands.forEach(function (c) {
-      if (taken[c.i]) return;
-      taken[c.i] = true;
-      if (out.indexOf(c.key) < 0) out.push(c.key);
+    var used = {}, out = [], ambiguous = [];
+    Object.keys(byPos).map(Number).sort(function (a, b) { return a - b; }).forEach(function (i) {
+      var g = byPos[i], key = null;
+      if (g.keys.length === 1) key = g.keys[0];
+      else {
+        (picked || []).some(function (k) {
+          if (!used[k] && g.keys.indexOf(k) >= 0) { key = k; return true; }
+          return false;
+        });
+        if (!key && ambiguous.indexOf(g.label) < 0) ambiguous.push(g.label);
+      }
+      if (key) {
+        used[key] = true;
+        if (out.indexOf(key) < 0) out.push(key);
+      }
     });
-    return out;
+    return { keys: out, ambiguous: ambiguous };
+  }
+
+  function mentionsFromText(text, members, picked) {
+    return mentionScan(text, members, picked).keys;
   }
 
   // Một dòng gợi ý dưới khung soạn: chỉ khi Giao việc bật (sẽ tạo việc cho ai) hay khi gọi quá số người cho phép.
   function composerHint(st) {
     var cap = Number(st.cap || 3);
     var ments = st.mentions || [];
+    if ((st.ambiguous || []).length) return { ok: false, text: tw("teams.mention_ambiguous", { name: st.ambiguous[0] }) };
     if (ments.length > cap) return { ok: false, text: tw("teams.hint_cap", { cap: cap }) };
     if (!st.asJob) return { ok: true, text: "" };
     if (ments.length) {
@@ -824,7 +879,8 @@
       agents: [], asJob: false, pending: null, tab: "jobs", side: false, view: "list", loaded: false,
       filterTask: "", taskTitles: {}, teamNames: {}, note: "", creating: false, skipped: {}, picker: null, draft: null,
       focusPicker: false, focusBack: null, searchOpen: false, searchResults: null, searchQuery: "", jumped: null,
-      openMember: null, advOpen: false, turns: [], sideOpener: null, rowMenu: null, focusRowMenu: false, swallowClick: false };
+      openMember: null, advOpen: false, turns: [], sideOpener: null, rowMenu: null, focusRowMenu: false, swallowClick: false,
+      picked: [], retrying: {} };
   }
 
   function teamUrl(path) { return "/teams/" + q(S.activeId) + (path || ""); }
@@ -988,7 +1044,7 @@
   function ctx() {
     return { members: S.team ? S.team.members : [], authors: S.team ? S.team.authors : null,
       leaderKey: S.team && S.team.leader_key, taskTitles: S.taskTitles,
-      picker: S.picker, draft: S.draft, jumped: S.jumped };
+      picker: S.picker, draft: S.draft, jumped: S.jumped, retrying: S.retrying };
   }
 
   // Lưu công tắc ghim: khoá trong lúc lưu; lưu được thì gọi `done`; HTTP khác 200 hay lỗi mạng thì trả công tắc về trạng
@@ -1088,15 +1144,18 @@
     input.style.height = Math.min(input.scrollHeight || 0, INPUT_MAX_PX) + "px";
   }
 
-  function currentMentions() {
+  function currentScan() {
     var input = S.el.querySelector(".tm-input");
-    return S.team ? mentionsFromText(input ? input.value : "", S.team.members) : [];
+    return S.team ? mentionScan(input ? input.value : "", S.team.members, S.picked) : { keys: [], ambiguous: [] };
   }
+
+  function currentMentions() { return currentScan().keys; }
 
   function drawHint() {
     var hintEl = S.el.querySelector(".tm-hint");
     if (!hintEl || !S.team) return;
-    var h = composerHint({ mentions: currentMentions(), asJob: S.asJob, cap: (S.team.caps || {}).mentions,
+    var sc = currentScan();
+    var h = composerHint({ mentions: sc.keys, ambiguous: sc.ambiguous, asJob: S.asJob, cap: (S.team.caps || {}).mentions,
       members: S.team.members, leaderKey: S.team.leader_key });
     hintEl.textContent = h.text;
     hintEl.hidden = !h.text;
@@ -1264,7 +1323,7 @@
     S.jumped = null; S.searchResults = null; S.searchQuery = ""; S.searchOpen = false;
     S.activeId = id; S.creating = false; S.view = "chat"; S.asJob = false; S.pending = null; S.filterTask = "";
     S.team = null; S.queue = null; S.msgs = []; S.taskTitles = {}; S.side = false; S.openMember = null; S.turns = [];
-    S.picker = null; S.draft = null;
+    S.picker = null; S.draft = null; S.picked = []; S.retrying = {};
     var input = S.el.querySelector(".tm-input");
     if (input) input.value = "";
     setNote("");
@@ -1277,7 +1336,9 @@
     if (!input || !S.team) return;
     var text = input.value.trim();
     if (!text) return;
-    var mentions = mentionsFromText(text, S.team.members);
+    var scan = mentionScan(text, S.team.members, S.picked);
+    if (scan.ambiguous.length) { drawHint(); return; }
+    var mentions = scan.keys;
     // Gửi lại sau rớt mạng: cùng chữ thì giữ ĐÚNG mã cũ để server trả tin cũ, không thêm lượt.
     if (!S.pending || S.pending.text !== text) S.pending = { text: text, id: newClientId() };
     var body = { text: text, mentions: mentions, as_job: S.asJob, client_msg_id: S.pending.id };
@@ -1287,7 +1348,7 @@
     call("POST", teamUrl("/messages"), body).then(function (r) {
       if (S.activeId !== forTeam) return;
       if (r.code !== 200) { fail(r); drawHint(); return; }
-      S.pending = null; S.asJob = false; input.value = "";
+      S.pending = null; S.asJob = false; S.picked = []; input.value = "";
       setNote(r.j.notes && r.j.notes.length ? r.j.notes.filter(function (n) { return n.indexOf("_") < 0; }).join(" · ") : "");
       if ((r.j.notes || []).indexOf("daily_cap") >= 0) setNote(tw("teams.daily_cap"));
       drawComposer();
@@ -1307,11 +1368,15 @@
     var before = input.value.slice(0, input.selectionStart || 0);
     var m = before.match(/@([^\s@]*)$/);
     if (!m) { box.hidden = true; return; }
-    var list = mentionMatches(S.team.members, m[1], mentionsFromText(input.value, S.team.members));
+    var list = mentionMatches(S.team.members, m[1], mentionsFromText(input.value, S.team.members, S.picked));
+    var seen = {};
+    (S.team.members || []).forEach(function (a) { var n = String(a.name || a.slug).toLowerCase(); seen[n] = (seen[n] || 0) + 1; });
     box.hidden = !list.length;
     box.innerHTML = list.map(function (a) {
+      // Trùng tên: thêm mã ngắn (slug) để chọn đúng người.
+      var dup = seen[String(a.name || a.slug).toLowerCase()] > 1;
       return '<button type="button" class="tm-sug-item" data-mention="' + esc(a.agent_key) + '">' + agentAva(a, 24) +
-        esc(a.name || a.slug) + "</button>";
+        esc(a.name || a.slug) + (dup ? ' <span class="tm-sug-slug">' + esc(a.slug) + "</span>" : "") + "</button>";
     }).join("");
   }
 
@@ -1324,6 +1389,7 @@
       try { input.setSelectionRange(before.length, before.length); } catch (e) {}
       input.focus();
       grow(input);
+      S.picked = (S.picked || []).concat([key]);
     }
     S.pending = null;
     var box = S.el.querySelector(".tm-sug");
@@ -1513,6 +1579,19 @@
       if (d.viewTask && window.matchMedia && window.matchMedia("(max-width: 1060px)").matches) S.side = false;
       drawSide(); drawFilterbar(); loadMsgs(false);
       return;
+    }
+    if (d.retry && d.retryKey) {
+      var rk = d.retry + "|" + d.retryKey;
+      if (S.retrying[rk]) return;
+      S.retrying[rk] = true;
+      drawMsgs(false);
+      return call("POST", teamUrl("/messages/" + q(d.retry) + "/replies/" + q(d.retryKey) + "/retry")).then(function (r) {
+        if (r.code !== 200) { delete S.retrying[rk]; fail(r); drawMsgs(false); return; }
+        if (!r.j.retried) { delete S.retrying[rk]; setNote(tw("teams.reply.retry_none")); }
+        var k = S.msgs.findIndex(function (m) { return Number(m.id) === Number(d.retry); });
+        if (k >= 0) S.msgs[k] = Object.assign({}, S.msgs[k], { replies: r.j.replies || [] });
+        drawMsgs(false);
+      }).catch(function () { delete S.retrying[rk]; setNote(tw("teams.err_network")); drawMsgs(false); });
     }
     if (d.accept) return call("POST", teamUrl("/messages/" + q(d.accept) + "/accept")).then(function (r) { act(r); });
     if (d.skip) { S.skipped["p" + d.skip] = true; drawMsgs(false); return; }
@@ -1715,11 +1794,22 @@
   function onTeamEvent(ev) {
     if (!S || !S.el || !S.el.isConnected) return;
     var d = (ev && ev.detail) || {};
+    if (d.type === "team_replies" && d.team_id === S.activeId) {
+      // Kết cục lượt trả lời đổi (0.142.0): chỉ vẽ lại khung tin, không cần hỏi lại danh sách.
+      var k = S.msgs.findIndex(function (m) { return Number(m.id) === Number(d.message_id); });
+      if (k >= 0) {
+        S.msgs[k] = Object.assign({}, S.msgs[k], { replies: d.replies || [] });
+        (d.replies || []).forEach(function (x) { if (x.status !== "error") delete S.retrying[d.message_id + "|" + x.agent_key]; });
+        drawMsgs(false);
+      }
+      return;
+    }
     if (d.type === "team_message" && d.team_id === S.activeId && d.message && !S.filterTask) {
       var i = S.msgs.findIndex(function (m) { return m.id === d.message.id; });
       // Gói không mang phản hồi (tin đổi nhãn, kết quả việc): giữ phản hồi đang có của tin.
       var nm = d.message;
       if (i >= 0 && !("reaction" in nm)) nm = Object.assign({}, nm, { reaction: S.msgs[i].reaction });
+      if (i >= 0 && !("replies" in nm) && S.msgs[i].replies) nm = Object.assign({}, nm, { replies: S.msgs[i].replies });
       if (i >= 0) S.msgs[i] = nm; else if (S.jumped === null || S.jumped === undefined) S.msgs.push(nm);
       drawMsgs(false);
     }
@@ -1803,12 +1893,12 @@
 
   var api = { render: render, leave: leave, open: open, teamListHtml: teamListHtml, messageHtml: messageHtml, queueHtml: queueHtml,
     jobStripHtml: jobStripHtml, blockedAction: blockedAction, jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
-    mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, composerHint: composerHint, newClientId: newClientId,
+    mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, mentionScan: mentionScan, composerHint: composerHint, newClientId: newClientId,
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, teamTabHtml: teamTabHtml,
     levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml, createFormHtml: createFormHtml,
     bannersHtml: bannersHtml, reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
-    searchResultsHtml: searchResultsHtml };
+    searchResultsHtml: searchResultsHtml, replyStatusHtml: replyStatusHtml };
   if (typeof window !== "undefined") window.JavisTeams = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

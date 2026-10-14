@@ -607,9 +607,14 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             before = (before_ts, before_id) if before_ts is not None and before_id is not None else None
             page = deps.session_store().get_team_messages_page(team["session_id"], limit, before)
             # Phản hồi của chủ (T2) đi kèm từng tin, đọc một lần cho cả trang.
-            got = api.teams().reactions_for(team["session_id"], [m["id"] for m in page["messages"]])
+            ids = [m["id"] for m in page["messages"]]
+            got = api.teams().reactions_for(team["session_id"], ids)
+            # Kết cục lượt trả lời (0.142.0) đi kèm tin của chủ nhóm: tải lại trang vẫn thấy chờ, đang trả lời, lỗi.
+            replies = api.teams().replies_for(team_id, ids)
             for m in page["messages"]:
                 m["reaction"] = got.get(int(m["id"]))
+                if replies.get(int(m["id"])):
+                    m["replies"] = replies[int(m["id"])]
             return dict(page, ok=True)
         return await api.io(_do)
 
@@ -655,6 +660,24 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             if sub.get("task_id") and sub["created"]:
                 api.kick()
             return dict(sub, ok=True)
+        return await api.io(_do)
+
+    @app.post("/teams/{team_id}/messages/{message_id}/replies/{agent_key}/retry")
+    async def teams_reply_retry(team_id: str, message_id: int, agent_key: str, brain: str = "brain"):
+        """Thử lại một lượt trả lời bị lỗi (0.142.0). Bấm lặp hay bấm khi lượt đã xong thì trả trạng thái hiện tại, không
+        chạy thêm lượt nào."""
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            runner = api.runner()
+            try:
+                sub = runner.retry_reply(team_id, message_id, agent_key)
+            except TeamError as ex:
+                return _team_err(ex, 409)
+            if sub is not None:
+                runner._on_loop(lambda: api._spawn(runner.run_replies(sub)))
+            return {"ok": True, "retried": sub is not None, "replies": api.teams().replies_of(team_id, message_id)}
         return await api.io(_do)
 
     @app.post("/teams/{team_id}/messages/{message_id}/accept")

@@ -39,6 +39,10 @@ DEFAULT_CAPS = {
 TEAM_STATUS = ("active", "paused", "archived")
 STEP_KINDS = ("plan", "work", "help", "synthesize", "reply")
 TURN_ROLES = ("leader_reply", "member_reply", "plan", "work", "help", "synthesize")
+# Kết cục của một lượt trả lời trò chuyện (0.142.0), lưu bền để tải lại trang hay khởi động lại máy chủ không mất dấu:
+# queued (đang chờ) -> running (đang trả lời) -> done (xong) | error (lỗi, kèm lý do, có Thử lại).
+REPLY_STATUS = ("queued", "running", "done", "error")
+REPLY_OPEN = ("queued", "running")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS teams(
@@ -83,6 +87,13 @@ CREATE TABLE IF NOT EXISTS team_authority(
   grant_json TEXT NOT NULL DEFAULT '{}', granted_by TEXT NOT NULL DEFAULT '', granted_at REAL NOT NULL,
   revoked_at REAL, revoke_reason TEXT NOT NULL DEFAULT '');
 CREATE INDEX IF NOT EXISTS team_authority_team ON team_authority(team_id, revoked_at);
+CREATE TABLE IF NOT EXISTS team_replies(
+  team_id TEXT NOT NULL, message_id INTEGER NOT NULL, agent_key TEXT NOT NULL, seq INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'queued', reason TEXT NOT NULL DEFAULT '', detail TEXT NOT NULL DEFAULT '',
+  attempt INTEGER NOT NULL DEFAULT 1, turn_id TEXT, result_msg_id INTEGER, engine TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL, updated_at REAL NOT NULL,
+  PRIMARY KEY(team_id, message_id, agent_key));
+CREATE INDEX IF NOT EXISTS team_replies_open ON team_replies(status);
 CREATE TABLE IF NOT EXISTS team_reaction_log(
   id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, message_id INTEGER NOT NULL, reactor TEXT NOT NULL,
   team_id TEXT NOT NULL, value TEXT, reasons_json TEXT NOT NULL DEFAULT '[]', comment TEXT NOT NULL DEFAULT '',
@@ -778,3 +789,80 @@ class TeamStore:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM agent_busy WHERE agent_key=? AND lease_until > ?", (agent_key, t)).fetchone()
             return dict(r) if r else None
+
+    # ───────────── kết cục lượt trả lời trò chuyện (0.142.0) ─────────────
+
+    def queue_replies(self, team_id: str, message_id: int, agent_keys: list) -> list:
+        """Ghi các lượt trả lời của một tin là `queued`, theo thứ tự @. Đã có thì giữ nguyên (gửi lại không nhân đôi)."""
+        now = time.time()
+        with self._Tx(self) as c:
+            for i, key in enumerate(agent_keys):
+                c.execute("INSERT OR IGNORE INTO team_replies(team_id,message_id,agent_key,seq,status,created_at,"
+                          "updated_at) VALUES(?,?,?,?,'queued',?,?)", (team_id, int(message_id), key, i, now, now))
+        return self.replies_of(team_id, message_id)
+
+    def replies_of(self, team_id: str, message_id: int) -> list:
+        with closing(self._conn()) as c:
+            rows = c.execute("SELECT * FROM team_replies WHERE team_id=? AND message_id=? ORDER BY seq",
+                             (team_id, int(message_id))).fetchall()
+        return [dict(r) for r in rows]
+
+    def reply(self, team_id: str, message_id: int, agent_key: str) -> Optional[dict]:
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT * FROM team_replies WHERE team_id=? AND message_id=? AND agent_key=?",
+                          (team_id, int(message_id), agent_key)).fetchone()
+        return dict(r) if r else None
+
+    def replies_for(self, team_id: str, message_ids: list) -> dict:
+        """{message_id: [lượt trả lời theo thứ tự]} cho một trang tin."""
+        ids = [int(i) for i in message_ids or []]
+        out: dict = {}
+        if not ids:
+            return out
+        with closing(self._conn()) as c:
+            q = ",".join("?" * len(ids))
+            for r in c.execute(f"SELECT * FROM team_replies WHERE team_id=? AND message_id IN ({q}) ORDER BY seq",
+                               [team_id] + ids).fetchall():
+                out.setdefault(int(r["message_id"]), []).append(dict(r))
+        return out
+
+    def claim_reply(self, team_id: str, message_id: int, agent_key: str) -> bool:
+        """CAS queued -> running: mỗi lượt trả lời chạy tối đa một lần cho mỗi lần thử."""
+        with self._Tx(self) as c:
+            n = c.execute("UPDATE team_replies SET status='running', reason='', detail='', updated_at=? "
+                          "WHERE team_id=? AND message_id=? AND agent_key=? AND status='queued'",
+                          (time.time(), team_id, int(message_id), agent_key)).rowcount
+        return n == 1
+
+    def settle_reply(self, team_id: str, message_id: int, agent_key: str, status: str, *, reason: str = "",
+                     detail: str = "", turn_id: Optional[str] = None, result_msg_id: Optional[int] = None,
+                     engine: str = "", model: str = "") -> None:
+        if status not in REPLY_STATUS:
+            raise ValueError(status)
+        with self._Tx(self) as c:
+            c.execute("UPDATE team_replies SET status=?, reason=?, detail=?, turn_id=COALESCE(?,turn_id), "
+                      "result_msg_id=COALESCE(?,result_msg_id), engine=CASE WHEN ?='' THEN engine ELSE ? END, "
+                      "model=CASE WHEN ?='' THEN model ELSE ? END, updated_at=? "
+                      "WHERE team_id=? AND message_id=? AND agent_key=?",
+                      (status, str(reason or "")[:60], str(detail or "")[:500], turn_id, result_msg_id, engine,
+                       engine, model, model, time.time(), team_id, int(message_id), agent_key))
+
+    def retry_reply(self, team_id: str, message_id: int, agent_key: str) -> Optional[dict]:
+        """Thử lại một lượt lỗi: CAS error -> queued, tăng `attempt`. Bấm hai lần, hay bấm khi lượt đang chạy hoặc đã
+        xong, thì không làm gì (None): không có lượt thứ hai, không có kết quả trùng."""
+        with self._Tx(self) as c:
+            n = c.execute("UPDATE team_replies SET status='queued', attempt=attempt+1, reason='', detail='', "
+                          "updated_at=? WHERE team_id=? AND message_id=? AND agent_key=? AND status='error'",
+                          (time.time(), team_id, int(message_id), agent_key)).rowcount
+        return self.reply(team_id, message_id, agent_key) if n == 1 else None
+
+    def interrupt_open_replies(self) -> list:
+        """Sau khi khởi động lại: lượt trả lời còn `queued`/`running` không ai chạy nữa. Đánh `error` lý do `restart`
+        (có Thử lại) thay vì để quay mãi hay tự chạy lại ngoài ý chủ. Trả các dòng đã đổi."""
+        with self._Tx(self) as c:
+            rows = [dict(r) for r in c.execute(
+                "SELECT * FROM team_replies WHERE status IN ('queued','running')").fetchall()]
+            c.execute("UPDATE team_replies SET status='error', reason='restart', updated_at=? "
+                      "WHERE status IN ('queued','running')", (time.time(),))
+        return rows
+

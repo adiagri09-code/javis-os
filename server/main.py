@@ -22256,6 +22256,7 @@ resonance_api.register_a5(app, _RESONANCE_API_DEPS)
 # ── Nhóm chat team (T1, spec docs/superpowers/specs/2026-10-13-team-chat-design.md) ──
 import team_api  # noqa: E402
 import team_runner  # noqa: E402
+import team_engine  # noqa: E402
 
 
 def _team_agent_info(root, agent_key):
@@ -22275,8 +22276,9 @@ def _team_agent_info(root, agent_key):
 
 def _team_engine_for(team, agent_key, role):
     """Engine CHỈ CHỮ cho một lượt nhóm (phán quyết R3 của kế hoạch T1): thư mục trống, không MCP, cổng từ chối mọi công
-    cụ. Agent có model Claude riêng (`model` + provider anthropic-cli) thì chạy model đó; còn lại dùng model việc nền như
-    lượt Cộng hưởng, không tự đổi provider.
+    cụ. Model theo hợp đồng chat tương tác và giao việc (`team_engine`, 0.142.0): model riêng của trợ lý, thiếu hay chưa
+    cấu hình được thì model chính. KHÔNG còn đi qua `_resonance_engine` (model việc nền, hợp đồng Cộng hưởng): máy để
+    Codex làm model việc nền từng làm cả nhóm im lặng.
 
     Review T1:
     - R4: engine được DỰNG xong (và báo sẵn sàng) rồi mới gọi `req["engine_started"]`, mốc tính lượt của bộ chạy; dựng
@@ -22287,21 +22289,20 @@ def _team_engine_for(team, agent_key, role):
       gọi sau khi kiểm đầu ra còn hợp lệ; `commit` kiểm lại danh tính (mã bền còn trỏ đúng slug) ngay trước khi ghi."""
     root = team["brain_id"]
     info = _team_agent_info(root, agent_key) or {}
-    model = info.get("model") or ""
-    own_claude = bool(model) and _agent_model_provider(model, info.get("model_provider") or "") == "anthropic-cli"
+    settings = cfgmod.read_settings() or {}
+    spec = team_engine.choose_spec(
+        info.get("model") or "", info.get("model_provider") or "", _effective_main(settings),
+        _agent_model_provider, lambda sp: aux_engine.availability(sp, settings))
 
     def _build(system, tag):
-        if own_claude:
-            eng = _reply_policy_sandbox_engine(system, tag, cwd_name="team_cwd")
-            eng.model = model
-        else:
-            eng, why = _resonance_engine(system, tag)
-            if eng is None:
-                raise team_runner.EngineUnavailable(
-                    f"model việc nền chưa chạy được lượt chỉ chữ: {(why or {}).get('reason') or why}")
+        base = _reply_policy_sandbox_engine(system, tag, cwd_name="team_cwd")
+        try:
+            eng = team_engine.build(spec, base, tag, settings)
+        except team_engine.TeamEngineUnavailable as ex:
+            raise team_runner.EngineUnavailable(ex.reason)
         avail = getattr(eng, "is_available", None)
         if callable(avail) and not avail():
-            raise team_runner.EngineUnavailable("engine chưa sẵn sàng (kiểm tra trang Models)")
+            raise team_runner.EngineUnavailable(f"engine {spec['provider']} chưa sẵn sàng (kiểm tra trang Models)")
         return eng
 
     async def run(req):
@@ -22327,10 +22328,10 @@ def _team_engine_for(team, agent_key, role):
             _log_agent_run(root, slug, "", clean)
 
         return {"text": clean, "tokens_in": res["tokens_in"], "tokens_out": res["tokens_out"],
-                "lessons": lessons, "commit": commit}
+                "lessons": lessons, "commit": commit, "engine_note": spec.get("note") or ""}
 
     run.marks_engine = True
-    return ("anthropic-cli" if own_claude else "aux"), model, run
+    return spec["provider"], spec["model"], run
 
 
 class _TeamAdmin:

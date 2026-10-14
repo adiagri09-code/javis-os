@@ -421,18 +421,36 @@ class TeamRunner:
             return out
         if not created:
             return out
+        # Tin thường gọi ĐÚNG MỘT người điều phối (trưởng nhóm); tin có @ gọi đúng những người được @ theo agent_key.
+        targets = valid if wanted else ([team["leader_key"]] if team["leader_key"] else [])
         if team["status"] != "active":
             out["notes"].append("team_paused")
-        elif (valid if wanted else [team["leader_key"]] if team["leader_key"] else []) and not any(
-                self._daily_left_for(team, k) for k in (valid if wanted else [team["leader_key"]])):
+            self._blocked_replies(team, mid, targets, "team_paused")
+        elif targets and not any(self._daily_left_for(team, k) for k in targets):
             out["notes"].append("daily_cap")
-        elif wanted:
-            out["replies"] = valid
-        elif team["leader_key"]:
-            out["replies"] = [team["leader_key"]]
-        else:
+            self._blocked_replies(team, mid, targets, "cap", "daily_turns")
+        elif targets:
+            out["replies"] = targets
+            self.teams.queue_replies(team_id, mid, targets)
+            self._publish_replies(team_id, mid)
+        elif not wanted:
             out["notes"].append("no_leader")
         return out
+
+    def _blocked_replies(self, team: dict, mid: int, keys: list, reason: str, detail: str = "") -> None:
+        """Tin không chạy được lượt trả lời nào (nhóm tạm dừng, hết lượt hôm nay): vẫn ghi kết cục `error` kèm lý do để
+        khung chat hiện rõ và có Thử lại, thay vì im lặng."""
+        if not keys:
+            return
+        self.teams.queue_replies(team["team_id"], mid, keys)
+        for k in keys:
+            if self.teams.claim_reply(team["team_id"], mid, k):
+                self.teams.settle_reply(team["team_id"], mid, k, "error", reason=reason, detail=detail)
+        self._publish_replies(team["team_id"], mid)
+
+    def _publish_replies(self, team_id: str, mid: int) -> None:
+        self._publish({"type": "team_replies", "team_id": team_id, "message_id": int(mid),
+                       "replies": self.teams.replies_of(team_id, mid)})
 
     def _enqueue_for(self, team: dict, mid: int, text: str, assignees: list) -> tuple:
         title = re.sub(r"\s+", " ", text)[:80]
@@ -442,19 +460,81 @@ class TeamRunner:
             chat_id=f"team:{team['team_id']}")
 
     async def run_replies(self, submitted: dict) -> list:
-        """Lượt trả lời trò chuyện, tuần tự theo thứ tự @: người sau thấy câu trả lời của người trước."""
+        """Lượt trả lời trò chuyện, tuần tự theo thứ tự @: người sau thấy câu trả lời của người trước.
+
+        Mỗi lượt có kết cục lưu bền (`team_replies`): queued -> running -> done | error (kèm lý do). Lỗi của một lượt
+        (dựng engine hỏng, engine báo lỗi, hết lượt, lỗi nội bộ) KHÔNG làm mất các lượt sau và luôn hiện trong khung chat
+        với nút Thử lại; trước 0.142.0 kết cục lỗi bị bỏ đi nên nhóm im lặng."""
         outcomes = []
+        team_id, mid = submitted["team_id"], int(submitted["message_id"])
         for key in submitted.get("replies") or []:
-            team = self._team(submitted["team_id"])
-            role = "leader_reply" if key == team["leader_key"] else "member_reply"
-            body = (f"Chủ nhóm vừa nhắn (tin #{submitted['message_id']}):\n{submitted['text']}\n\n"
-                    "Trả lời ngắn gọn, đúng vai của bạn trong nhóm.")
-            if role == "leader_reply":
-                body += ("\nNếu trao đổi này nên thành một việc nhóm, bạn có thể ĐỀ XUẤT (chủ nhóm bấm mới thành việc): "
-                         '<!-- JAVIS_TEAM: {"op": "propose_job", "title": "...", "brief": "..."} -->')
-            outcomes.append(await self._turn(team, key, role, body, reply_to=submitted["message_id"],
-                                             vet=self._vet_reply))
+            if not await self._io(self.teams.claim_reply, team_id, mid, key):
+                continue   # đã chạy, đang chạy ở chỗ khác, hay đã có kết cục: không nhân đôi lượt
+            await self._io(self._publish_replies, team_id, mid)
+            try:
+                out = await self._reply_turn(team_id, key, mid, submitted["text"])
+            except asyncio.CancelledError:
+                await self._io(self._settle_reply_out, team_id, mid, key,
+                               {"status": "error", "error": "lượt bị huỷ giữa chừng"}, "interrupted")
+                raise
+            except Exception as ex:  # noqa: BLE001
+                out = {"status": "error", "error": f"lỗi nội bộ: {type(ex).__name__}: {str(ex)[:200]}",
+                       "internal": True}
+            await self._io(self._settle_reply_out, team_id, mid, key, out)
+            outcomes.append(out)
         return outcomes
+
+    async def _reply_turn(self, team_id: str, key: str, mid: int, text: str) -> dict:
+        team = self._team(team_id)
+        role = "leader_reply" if key == team["leader_key"] else "member_reply"
+        body = (f"Chủ nhóm vừa nhắn (tin #{mid}):\n{text}\n\n"
+                "Trả lời ngắn gọn, đúng vai của bạn trong nhóm.")
+        if role == "leader_reply":
+            body += ("\nNếu trao đổi này nên thành một việc nhóm, bạn có thể ĐỀ XUẤT (chủ nhóm bấm mới thành việc): "
+                     '<!-- JAVIS_TEAM: {"op": "propose_job", "title": "...", "brief": "..."} -->')
+
+        async def started(engine: str, model: str) -> None:
+            await self._io(self.teams.settle_reply, team_id, mid, key, "running", reason="answering",
+                           engine=engine, model=model)
+            await self._io(self._publish_replies, team_id, mid)
+
+        return await self._turn(team, key, role, body, reply_to=mid, vet=self._vet_reply, on_engine=started)
+
+    # Lý do lỗi của lượt trả lời (mã ngắn lưu bền; dashboard dịch sang lời thường).
+    _REPLY_REASON = {"cap": "cap", "busy_long": "busy", "team_paused": "team_paused", "member_left": "member_left",
+                     "superseded": "superseded"}
+
+    def _settle_reply_out(self, team_id: str, mid: int, key: str, out: dict, reason: str = "") -> None:
+        st = out.get("status")
+        if out.get("message_id"):
+            # Đã có tin trả lời (kể cả đầu ra đến muộn, chỉ còn là bằng chứng): lượt đã xong, không cho Thử lại.
+            self.teams.settle_reply(team_id, mid, key, "done", reason="" if out.get("applied") else str(st or ""),
+                                    turn_id=out.get("turn_id"), result_msg_id=int(out["message_id"]))
+        elif st == "error":
+            why = reason or ("internal" if out.get("internal") else
+                             "engine_unavailable" if out.get("before_engine") else "engine")
+            self.teams.settle_reply(team_id, mid, key, "error", reason=why, detail=str(out.get("error") or ""),
+                                    turn_id=out.get("turn_id"))
+        else:
+            self.teams.settle_reply(team_id, mid, key, "error", reason=self._REPLY_REASON.get(st, str(st or "unknown")),
+                                    detail=str(out.get("cap") or ""), turn_id=out.get("turn_id"))
+        self._publish_replies(team_id, mid)
+
+    def retry_reply(self, team_id: str, message_id: int, agent_key: str) -> Optional[dict]:
+        """Nút Thử lại trên một lượt trả lời lỗi. Trả `submitted` cho `run_replies` (chỉ một người), hay None khi không
+        có gì để thử lại (đã xong, đang chạy, bấm hai lần). Không ghi thêm tin của chủ nhóm, không thêm lượt nào khác."""
+        team = self._team(team_id)
+        if team["status"] == "archived":
+            raise TeamError("nhóm đã lưu trữ")
+        msg = self.sessions.team_message(team["session_id"], int(message_id))
+        if not msg or msg.get("author_kind") != "owner":
+            raise TeamError("không tìm thấy tin của chủ nhóm")
+        if not self.teams.is_active_member(team_id, agent_key):
+            raise TeamError(f"{self._name(team, agent_key)} không còn trong nhóm")
+        if self.teams.retry_reply(team_id, int(message_id), agent_key) is None:
+            return None
+        self._publish_replies(team_id, int(message_id))
+        return {"team_id": team_id, "message_id": int(message_id), "text": msg["content"], "replies": [agent_key]}
 
     def _vet_reply(self, team, role, ops, notes, task=None, step=None) -> tuple:
         meta: dict = {}
@@ -966,7 +1046,7 @@ class TeamRunner:
         return {"pre": "done", "engine": str(engine or ""), "model": str(model or ""), "fn": fn, "req": req}
 
     async def _turn(self, team: dict, agent_key: str, role: str, body: str, *, task: Optional[dict] = None,
-                    step: Optional[dict] = None, reply_to=None, vet=None) -> dict:
+                    step: Optional[dict] = None, reply_to=None, vet=None, on_engine=None) -> dict:
         """Một lượt của thành viên (spec 9.1): giữ chỗ (kèm kiểm trần), khoá bận, kiểm, dựng engine, mốc gọi engine,
         gọi, kiểm kết cục, chấp nhận đầu ra (kiểm muộn + ghi bài học), đăng tin. Mọi I/O chặn chạy ở luồng phụ (R5).
 
@@ -1011,6 +1091,11 @@ class TeamRunner:
                     await self._io(self.teams.mark_engine, turn_id, str(engine or prep["engine"]),
                                    str(model or prep["model"]))
                     marked = True
+                    if on_engine is not None:
+                        try:
+                            await on_engine(str(engine or prep["engine"]), str(model or prep["model"]))
+                        except Exception:  # noqa: BLE001 - trạng thái hiển thị không được làm hỏng lượt
+                            pass
 
             req["engine_started"] = engine_started
             if not getattr(fn, "marks_engine", False):
@@ -1071,7 +1156,6 @@ class TeamRunner:
                 # Khoá nguồn không kết thúc bằng số: `_source_id` không đọc nhầm thứ tự lệnh thành mã tin (review T3).
                 self._apply_admin(team_id, agent_key, op, notes, f"{turn_id}#op{i}")
         allowed = OPS_BY_ROLE.get(role, set())
-        allowed = OPS_BY_ROLE.get(role, set())
         kept = []
         for op in ops:
             if op["op"] not in allowed:
@@ -1091,6 +1175,8 @@ class TeamRunner:
             meta["held_lessons"] = held[:5]
         if task:
             meta["revision"] = step["job_revision"] if step else task["team_rev"]
+        if res.get("engine_note"):
+            notes.append(str(res["engine_note"])[:300])
         meta.update(extra)
         mid = self._post(self._team(team_id), clean or "(không có nội dung)", author_kind="agent", author_ref=agent_key,
                          reply_to=reply_to, task_id=task["id"] if task else None,
@@ -1175,6 +1261,14 @@ class TeamRunner:
         task = self.tasks.get_task(task_id)
         if self.tasks.team_block(task_id, kind, reason) is not None and task:
             self._notify(task["team_id"], f"Việc nhóm \"{task['title']}\" bị chặn: {reason}")
+            # Lỗi của việc chạy nền cũng hiện NGAY trong khung chat (0.142.0), không chỉ ở hộp thư và hàng việc.
+            team = self.teams.get(task["team_id"])
+            if team and team.get("status") != "archived":
+                try:
+                    self._post(team, f"Việc \"{task['title']}\" đang dừng: {reason}", author_kind="system",
+                               task_id=task_id, meta={"kind": "job_blocked", "block_kind": kind})
+                except Exception:  # noqa: BLE001 - tin báo không được làm hỏng việc chặn
+                    pass
             self._state(task["team_id"])
         return "team_blocked"
 
@@ -1785,6 +1879,8 @@ class TeamRunner:
         """Sau restart (spec 8.6): lượt chưa tới mốc engine thì hoàn, bước về chờ, việc chạy tiếp; lượt đã qua mốc thì
         `interrupted` (tính một lần), bước `interrupted`, việc chặn với nút "Chạy lại bước". Không tự chạy lại."""
         interrupted_tasks = set()
+        for r in self.teams.interrupt_open_replies():
+            self._publish_replies(r["team_id"], r["message_id"])
         for t in self.teams.open_turns():
             self.teams.release_busy(t["agent_key"], t["turn_id"])
             if t["engine_at"] is None:

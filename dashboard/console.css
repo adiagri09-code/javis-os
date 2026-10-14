@@ -2844,3 +2844,20 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   body.on-teams .cview-head { display: none; }
   body.on-teams #javisPet { display: none; }
 }
+
+/* 0.142.0: kết cục từng lượt trả lời dưới tin của chủ nhóm (chờ, đang trả lời, lỗi + Thử lại). Chữ 16px: đọc trên điện thoại. */
+.tm-replies { width: 100%; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; margin: 2px 0 6px; }
+.tm-reply { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: min(560px, 100%); font-size: 16px;
+  line-height: 1.4; color: var(--muted); padding: 6px 10px; border-radius: 12px; background: var(--surface-2); }
+.tm-reply-main { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.tm-reply-main b { color: var(--text); font-weight: 600; }
+.tm-reply-error { background: var(--warn-wash, var(--surface-2)); color: var(--warn-ink); border: 1px solid var(--warn-line, transparent); }
+.tm-reply-detail { display: block; font-size: 16px; opacity: .85; margin-top: 2px; }
+.tm-reply-retry { min-height: 44px; padding: 0 14px; font-size: 16px; display: inline-flex; align-items: center; gap: 6px; }
+.tm-sug-slug { font-size: 14px; color: var(--muted); margin-left: 4px; }
+.tm-dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+.tm-dots i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .35; animation: tm-dot 1.2s infinite; }
+.tm-dots i:nth-child(2) { animation-delay: .2s; }
+.tm-dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes tm-dot { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tm-dots i { animation: none; opacity: .6; } }
