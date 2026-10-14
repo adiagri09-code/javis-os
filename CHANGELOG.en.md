@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.154.0] - 2026-10-15
+### Added
+- **React to an agent's messages** in private and team chat (in progress).
+
 ## [0.152.0] - 2026-10-15
 ### Fixed
 - **Taking back the right to decide alone now covers a turn already running.** If the coordinator is mid-reply when you take it back and give it again, or give it for the first time, that turn's admin commands are dropped with a note; only the next turn uses the new permission.
