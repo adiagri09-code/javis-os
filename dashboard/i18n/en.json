@@ -4192,5 +4192,10 @@
   "ajobs.verify_for": "Assign a check: {title}",
   "ajobs.verify_label": "Check job for {name}",
   "ajobs.verify_ph": "What to check and against what",
-  "ajobs.verify_this": "Assign a check"
+  "ajobs.verify_this": "Assign a check",
+  "ws.yesterday": "Yesterday",
+  "ws.last_chat": "Last message: {when}",
+  "ws.resize_list": "Drag to resize the partner list",
+  "ws.resize_panel": "Drag to resize the right panel",
+  "ws.resize_hint": "Drag to resize, double-click to reset"
 }

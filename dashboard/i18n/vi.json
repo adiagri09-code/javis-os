@@ -4192,5 +4192,10 @@
   "ajobs.verify_for": "Giao kiểm chứng: {title}",
   "ajobs.verify_label": "Việc kiểm chứng giao cho {name}",
   "ajobs.verify_ph": "Cần kiểm tra điều gì, đối chiếu với đâu",
-  "ajobs.verify_this": "Giao kiểm chứng"
+  "ajobs.verify_this": "Giao kiểm chứng",
+  "ws.yesterday": "Hôm qua",
+  "ws.last_chat": "Nhắn gần nhất: {when}",
+  "ws.resize_list": "Kéo để đổi bề rộng danh sách cộng sự",
+  "ws.resize_panel": "Kéo để đổi bề rộng cột phải",
+  "ws.resize_hint": "Kéo để đổi bề rộng, nhấp đúp để về mặc định"
 }

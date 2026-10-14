@@ -255,3 +255,22 @@ Chủ repo xem ảnh 375 và yêu cầu (14/10/2026): công tắc Auto ở hàng
 tắc nằm trong thẻ, CÙNG HÀNG với tag, bên phải; nút ba chấm lên ngang hàng tên để tag còn đủ chỗ ở cột hẹp; trợ lý chưa có
 tag thì công tắc giữ một hàng đáy riêng. Đo trên trình duyệt: tâm công tắc lệch tâm tag tối đa 1px, tag không bị cắt chữ ở
 1366 và 375, không chồng nút ba chấm, vùng chạm 44px trên màn cảm ứng. Thẻ cũng gọn hơn một hàng.
+
+### Sau báo cáo: bố cục trang Cộng sự
+
+Chủ repo yêu cầu (14/10/2026, kèm ảnh danh sách chat có giờ):
+
+- **Giờ nhắn gần nhất** trên thẻ trợ lý, cùng hàng tên (hôm nay giờ:phút, hôm qua "Hôm qua", xa hơn ngày/tháng). Dữ liệu là
+  `last_chat_at` sẵn có của `/agents` (cũng là thứ tự danh sách); nay chỉ tính phiên đã có tin, vì bấm vào trợ lý là trang
+  tạo sẵn một phiên trống. Xong một lượt chat thì giờ trên thẻ đổi ngay.
+- **Cột phải mặc định ẩn** ở màn rộng; nút góc phải hiện lại và lựa chọn được nhớ (`javis_ws_right`). Mở Cài đặt để xác nhận
+  trợ lý vẫn tự hiện cột mà không ghi đè lựa chọn. Màn hẹp giữ ngăn kéo như cũ.
+- **Cột danh sách rộng hơn** (mặc định `clamp(240px, 24vw, 320px)` thay 210-260px) và **kéo được** ở đường biên, cả cột phải;
+  có tay kéo bàn phím (mũi tên trái/phải 16px), nhấp đúp về mặc định, chặn 220-560px (trái) và 280-640px (phải), không quá
+  45%/50% bề ngang trang; nhớ qua `javis_ws_left_w`, `javis_ws_right_w`.
+- **Cột phải ẩn thì chữ rộng ra:** bong bóng trả lời giãn tới `min(120ch, 100%)` thay vì 72 ký tự.
+
+Đo trên trình duyệt: 1366 cột trái 320px, kéo thêm 80px được 400px và còn sau tải lại; cột phải hiện, kéo 350 thành 430px;
+bong bóng 846/850px của khoang giữa khi cột phải ẩn (1366), 1298px ở 1920 (trần 120 ký tự); 375 không có tay kéo, không tràn
+ngang, giờ cùng hàng tên. Chữ giờ 14px để bằng tên trợ lý ở cột hẹp (ngoại lệ có chủ ý so với sàn 16px của phần mới).
+Test: `tests/js/test_cong_su_bo_cuc_0142.js`, thêm một kiểm ở `test_sessions_kenh_cong_su.py`.

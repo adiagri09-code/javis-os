@@ -3077,3 +3077,37 @@ span.tmp-lead { cursor: default; }
 @media (prefers-reduced-motion: no-preference) {
   .ws-jb-run svg { animation: ic-spin 1.6s linear infinite; }
 }
+
+/* 0.142.0: trang Cộng sự. Cột danh sách rộng hơn và kéo được ở đường biên, cột phải mặc định ẩn ở màn rộng (chủ repo chốt
+   14/10/2026). Bề rộng kéo được lưu trong biến --ws-left-w / --ws-right-w (workspace.js nhớ qua localStorage). Màn hẹp
+   hai cột là ngăn kéo nên không có tay kéo. */
+@media (min-width: 901px) {
+  .wspage > .ws-left { width: var(--ws-left-w, clamp(240px, 24vw, 320px)); position: relative; }
+}
+@media (min-width: 1061px) {
+  .wspage > .ws-right { width: var(--ws-right-w, 350px); position: relative; }
+  /* Cột phải đang ẩn: chữ trong khung chat giãn theo khoang giữa thay vì dừng ở 72 ký tự để lại khoảng trống bên phải. */
+  .wspage.right-open .ws-slot .msg-javis .bubble { max-width: min(120ch, 100%); }
+}
+.ws-resize { display: none; }
+@media (min-width: 901px) {
+  .ws-resize-left { display: block; position: absolute; top: 0; bottom: 0; right: -4px; width: 8px; z-index: 4;
+    cursor: col-resize; touch-action: none; }
+}
+@media (min-width: 1061px) {
+  .ws-resize-right { display: block; position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; z-index: 4;
+    cursor: col-resize; touch-action: none; }
+}
+.ws-resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent;
+  transition: background .12s; }
+.ws-resize:hover::after, .ws-resize:focus-visible::after, .wspage.ws-resizing .ws-resize::after { background: var(--accent); }
+.ws-resize:focus-visible { outline: none; }
+.wspage.ws-resizing { cursor: col-resize; user-select: none; }
+.wspage.ws-resizing .ws-left, .wspage.ws-resizing .ws-right { transition: none; }
+/* Giờ nhắn gần nhất trên thẻ trợ lý, cùng hàng với tên (như danh sách chat). Nút ba chấm đứng góc trên phải nên giờ chừa
+   chỗ cho nó qua padding-right sẵn có của thẻ. */
+.ws-item-text { flex: 1 1 auto; }
+.ws-item-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.ws-item-top > strong { flex: 1 1 auto; min-width: 0; }
+.ws-item-time { flex: none; font-size: 14px; color: var(--text3); font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) { .ws-item-time { font-size: 14px; } }

@@ -15,7 +15,7 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 - **Create a team and add members like on a messaging app:** accent-free search, tag filters, a ready-made team picture, members already in the team marked "Already in the team", the coordinator picked right on the chosen people; the team reads "You + N assistants". Typing @ works with the keyboard, each person called shows as its own chip, and two assistants with the same name still get the right one.
 - **Jobs tab on the Partners page** (replacing the Folder tab): every job of one assistant from teams, private chat and Auto, filtered by source, with the next step. **Assign a job** takes done criteria, lets you choose where the result goes and shows a review before creating; you can also assign a **verification** job to another assistant.
 ### Improved
-- **Resonance is now called Auto**, with its switch right inside the assistant card on the tag row and in the three-dot menu, separate from the job badge. Fixed reviewers are gone: old goals waiting for review are paused for you to check, never counted as passed.
+- **Tidier Partners page:** Resonance is now called **Auto**, with its switch on the tag row and in the three-dot menu; cards show the time of the last message; the right panel starts hidden so text gets wider, and both columns can be resized by dragging their edge. Fixed reviewers are gone: old goals waiting for review are paused for you to check, never counted as passed.
 
 ## [0.141.0] - 2026-10-14
 ### Improved
