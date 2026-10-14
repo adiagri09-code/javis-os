@@ -193,6 +193,29 @@ SQLite tạm, engine giả, không gọi model.
 
 Sửa số liệu: biên bản và báo cáo trước ghi test giao diện "190 mục". Thật ra lúc đó là 178 mục.
 
+## Review head `4f6268bd` (biên bản `exports/reviews/PR-645-4f6268bd-review.md`)
+
+Hai lỗi P2, sửa hết. Mỗi lỗi có test tái hiện chạy đỏ trước rồi xanh.
+
+1. **Tin cũ nhận tên và ảnh của trợ lý mới dùng lại slug.**
+   - **Lỗi:** sổ tác giả lấy tên và ảnh theo slug của file hiện tại. Xoá Minh rồi tạo Minh mới cùng slug thì mã cũ cũng thành "Minh mới".
+   - **Ảnh chụp nhân dạng:** nhân dạng giờ giữ theo agent_key (`TeamApi._identity`). File hiện tại chỉ được dùng khi dòng danh tính của đúng mã đó còn `active`; mã đã nghỉ hay đang `missing` thì không. Khi xác nhận được, nhân dạng được chụp vào cột mới `team_members.identity_json` (tự thêm cho kho cũ; chỉ ghi khi đổi).
+   - **Không xác nhận được:** dùng ảnh chụp gần nhất của chính mã đó.
+   - **Chưa từng chụp (bản ghi cũ):** dự phòng theo chính mã, tức tên theo slug lúc vào nhóm và ảnh suy từ mã (`avatar_seed`, dashboard vẽ theo mã chứ không theo slug). Không bao giờ lấy tên hay ảnh của trợ lý mới.
+   - **Test:** Minh cũ (ảnh mặc định) bị xoá; Minh mới cùng slug có hình và màu khác. Mã cũ giữ đúng "Minh" và ảnh cũ, mã mới là "Minh mới" với ảnh mới. Thêm ca xoá ảnh chụp thì mã cũ rơi về dự phòng của chính nó.
+2. **Lỗi ghim từ danh sách không nhìn thấy trên điện thoại.** Vùng thông báo nằm trong khung chat, mà khung chat bị ẩn khi đang ở danh sách.
+   - **Toast chung:** vùng thông báo `.tm-note` chuyển ra ngoài khung chat thành lớp nổi trên cả trang (`role="status"`, nền đặc). Có nút Thử lại khi thao tác chạy lại được, có nút đóng; tự ẩn sau 8 giây, có Thử lại thì 15 giây.
+   - **Ghim từ danh sách:** đi qua `pinTeamWith(id, on, btn, deps)`. Lỗi HTTP hay mất mạng thì báo kèm Thử lại chạy lại đúng thao tác. Mất mạng có câu riêng `teams.err_network` thay chữ "network", dùng cả khi gửi tin.
+   - **Test:** HTTP 500, fetch bị từ chối (không có unhandled rejection), Thử lại rồi lưu được. Kiểm thêm thông báo nằm ngoài khung chat và CSS không ẩn nó ở danh sách.
+   - **Smoke trình duyệt** ở 375px, đang ở danh sách: giả lập POST /pin trả 500 rồi mất mạng, thông báo nhìn thấy kèm Thử lại; Thử lại khi mạng ổn thì ghim được. Ảnh `exports/reviews/team-t5-smoke/m08-ghim-loi-mang-danh-sach-375.jpg`.
+
+Kiểm:
+- `tests/run.py --js` 186/186.
+- `test_teams_ui.js` 200 mục.
+- `tests/run.py team agent_avatar agents_danh_sach_nhe resonance_mvp_main route_table icons i18n changelog em_dash docs` 29/29.
+
+SQLite tạm, engine giả, không gọi model.
+
 ## Còn để lại (Minor, chưa làm)
 
 - Hai thành viên trùng tên hiển thị: @ luôn trỏ người đầu.

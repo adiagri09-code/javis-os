@@ -2592,6 +2592,16 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   color: var(--warn-ink); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tm-note[hidden], .tm-banner[hidden] { display: none; }
 .tm-banner .ws-btn { flex: none; }
+/* Thông báo chung là LỚP NỔI trên cả trang (con trực tiếp của .tm-page, ngoài khung chat): ở danh sách trên điện thoại
+   khung chat bị ẩn mà thông báo vẫn phải nhìn thấy (review 4f6268bd #2). Nền đặc vì nằm đè lên nội dung. */
+.tm-page > .tm-note { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 45; margin: 0;
+  width: max-content; max-width: min(560px, calc(100% - 24px)); background: var(--bg); border: 1px solid var(--warn-ink);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .18); }
+.tm-note-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.tm-note-retry { flex: none; }
+.tm-note-close { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px;
+  border: none; border-radius: 8px; background: none; color: inherit; cursor: pointer; }
+@media (max-width: 760px) { .tm-note-retry, .tm-note-close { min-height: 44px; min-width: 44px; } }
 
 /* Dải việc ở đầu khung chat: việc đang làm và việc chờ chủ (một nút giải quyết). */
 .tm-jobs { display: flex; flex-direction: column; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border); max-height: 40%; overflow-y: auto; }

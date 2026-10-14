@@ -519,7 +519,25 @@ check("#2 ảnh nhóm và gợi ý @ vẫn chỉ lấy thành viên đang hoạt
       !TM.teamAvatarHtml(Object.assign({}, team, { members: [members[0]], authors: ctxLeft.authors })).includes('data-slug="old"')
       && TM.mentionMatches([members[0]], "", []).every(function (m) { return m.agent_key !== "ag_old"; })
       && /authors: S\.team \? S\.team\.authors/.test(teamsJs));
+h = TM.messageHtml({ id: 51, author_kind: "agent", author_ref: "ag_x", content: "Tin cũ", meta: {} },
+  { members: [], authors: { ag_x: { slug: "minh", name: "minh", avatar: null, avatar_seed: "ag_x" } } });
+check("4f6268bd #1 tác giả cũ chưa có ảnh chụp: ảnh suy từ chính mã (không trùng ảnh mặc định của trợ lý mới cùng slug)",
+      /data-slug="ag_x"/.test(h) && !/data-slug="minh"/.test(h), h);
 delete global.window;
+
+// Review 4f6268bd #2: lỗi ghim từ danh sách phải NHÌN THẤY ở danh sách trên điện thoại (khung chat bị ẩn), kèm Thử lại
+const shellSrc = teamsJs.slice(teamsJs.indexOf("function shell()"), teamsJs.indexOf("function drawList()"));
+check("4f6268bd #2 vùng thông báo nằm ngoài khung chat (con trực tiếp của trang), là vùng đọc cho trình đọc màn hình",
+      /<div class="tm-scrim" hidden><\/div><div class="tm-note" role="status" aria-live="polite" hidden><\/div><\/div>/.test(shellSrc)
+      && (shellSrc.match(/tm-note/g) || []).length === 1, shellSrc);
+check("4f6268bd #2 CSS: thông báo là lớp nổi trên cả trang (không bị ẩn cùng khung chat ở danh sách điện thoại), có [hidden]",
+      /\.tm-page > \.tm-note \{[^}]*position: absolute;[^}]*z-index: 45/.test(css) && css.includes(".tm-note[hidden]")
+      && !/data-view="list"\][^{]*\.tm-note/.test(css));
+check("thông báo kèm nút Thử lại và nút đóng, chữ được escape", (function (x) {
+  return x.includes("Lỗi &lt;b&gt;") && /class="ws-btn tm-note-retry"/.test(x) && /class="tm-note-close"/.test(x) && x.includes(vi["teams.retry_action"]);
+})(TM.noteHtml("Lỗi <b>", true)) && !TM.noteHtml("Đã lưu", false).includes("tm-note-retry"));
+check("4f6268bd #2 pinTeam của trang dùng pinTeamWith với setNote (vùng thông báo chung)",
+      /function pinTeam\(id, on, btn\) \{\s*return pinTeamWith\(id, on, btn,/.test(teamsJs));
 
 // Ghim ngay trên danh sách: máy tính rê chuột hiện nút ghim, chuột phải hay nhấn giữ (điện thoại) mở menu Ghim / Bỏ ghim
 const tPin = Object.assign({}, team, { pinned_at: 1791900000 }), tPlain = Object.assign({}, team, { team_id: "tm_2", pinned_at: null });
@@ -539,7 +557,7 @@ check("nhấn giữ dòng nhóm mở menu, chặn cú bấm mở nhóm ngay sau 
       && /if \(d\.team && S\.swallowClick\) \{ S\.swallowClick = false; return; \}/.test(teamsJs)
       && /"contextmenu"[\s\S]{0,500}\.tm-team"\);\s*if \(row\) \{ e\.preventDefault\(\); openRowMenu/.test(teamsJs)
       && /e\.key === "Escape" && S\.rowMenu/.test(teamsJs) && /function openRowMenu\(id\) \{\s*S\.rowMenu = id;/.test(teamsJs));
-check("ghim từ danh sách dùng cùng cách lưu (lỗi thì báo, không kẹt)", /function pinTeam\(id, on, btn\)[\s\S]{0,500}savePin\(/.test(teamsJs)
+check("ghim từ danh sách dùng cùng cách lưu (lỗi thì báo, không kẹt)", /function pinTeamWith\(id, on, btn, deps\)[\s\S]{0,500}savePin\(/.test(teamsJs)
       && /\/teams\/" \+ q\(id\) \+ "\/pin"/.test(teamsJs));
 check("CSS: nút ghim hiện khi rê chuột hay focus, máy chạm ẩn (dùng nhấn giữ); menu có [hidden], mục menu 44px",
       /\.tm-team-wrap:hover \.tm-row-pin, \.tm-row-pin:focus-visible \{ opacity: 1; \}/.test(css)
@@ -573,5 +591,31 @@ check("khoá chữ ghim có ở vi và en", ["teams.pin_team", "teams.unpin_team
   check("#1 lưu được: gửi đúng giá trị, khoá trong lúc lưu, xong thì bật lại", seen && seen.want === true && seen.disabled === true
         && b.checked === true && b.disabled === false && done === 1 && failed.length === 0, JSON.stringify([seen, b]));
   check("#1 trình xử lý công tắc dùng savePin và báo lỗi qua fail/setNote", /tm-pin-toggle[\s\S]{0,600}savePin\(/.test(teamsJs));
+
+  // 4f6268bd #2: ghim từ danh sách (chế độ danh sách trên điện thoại) lỗi thì báo nhìn thấy kèm Thử lại
+  const notes = [];
+  const deps = function (resp) {
+    return { post: function () { return typeof resp === "function" ? resp() : Promise.resolve(resp); },
+      notify: function (text, retry) { notes.push({ text: text, retry: retry }); }, reload: function () { notes.push({ reloaded: true }); } };
+  };
+  await TM.pinTeamWith("tm_1", true, null, deps({ code: 500, j: { error: "Máy chủ lỗi" } }));
+  check("4f6268bd #2 HTTP 500: báo lỗi nhìn thấy kèm Thử lại, không tải lại như đã ghim", notes.length === 1
+        && notes[0].text.includes("Máy chủ lỗi") && typeof notes[0].retry === "function", JSON.stringify(notes));
+  notes.length = 0;
+  let unh = null;
+  const onU = function (e) { unh = e; };
+  process.on("unhandledRejection", onU);
+  await TM.pinTeamWith("tm_1", true, null, deps(function () { return Promise.reject(new Error("offline")); }));
+  await new Promise(function (res) { setTimeout(res, 20); });
+  process.removeListener("unhandledRejection", onU);
+  check("4f6268bd #2 mất mạng: báo lỗi mạng kèm Thử lại, không có lỗi bị bỏ sót", notes.length === 1 && unh === null
+        && notes[0].text === vi["teams.err_network"] && typeof notes[0].retry === "function", JSON.stringify(notes));
+  let calls = 0;
+  const d2 = deps(function () { calls++; return Promise.resolve(calls === 1 ? { code: 503, j: {} } : { code: 200, j: {} }); });
+  notes.length = 0;
+  await TM.pinTeamWith("tm_1", true, null, d2);
+  await notes[0].retry();
+  check("4f6268bd #2 bấm Thử lại gửi lại đúng thao tác; lần sau lưu được thì tải lại danh sách", calls === 2
+        && notes.some(function (n) { return n.reloaded; }), JSON.stringify(notes));
   process.exit(fails ? 1 : 0);
 })();

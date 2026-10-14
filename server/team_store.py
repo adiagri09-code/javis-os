@@ -127,6 +127,10 @@ class TeamStore:
             if "committed_at" not in cols:
                 # Mốc ghi bài học của lượt vào bộ nhớ agent (chỉ một lần, chỉ khi đầu ra được chấp nhận).
                 c.execute("ALTER TABLE team_turns ADD COLUMN committed_at REAL")
+            if "identity_json" not in {r[1] for r in c.execute("PRAGMA table_info(team_members)").fetchall()}:
+                # Ảnh chụp nhân dạng (tên, ảnh) của thành viên lúc còn xác nhận được theo agent_key, để tin cũ giữ đúng
+                # người viết sau khi trợ lý bị xoá và slug được dùng lại cho trợ lý khác (review 4f6268bd #1).
+                c.execute("ALTER TABLE team_members ADD COLUMN identity_json TEXT")
             if "pinned_at" not in {r[1] for r in c.execute("PRAGMA table_info(teams)").fetchall()}:
                 # Ghim nhóm lên đầu danh sách (T5); NULL là không ghim.
                 c.execute("ALTER TABLE teams ADD COLUMN pinned_at REAL")
@@ -280,7 +284,15 @@ class TeamStore:
     def _member(r) -> dict:
         return {"team_id": r["team_id"], "agent_key": r["agent_key"], "slug_at_join": r["slug_at_join"],
                 "role": r["role"], "status": r["status"], "managed_by_team": bool(r["managed_by_team"]),
-                "joined_at": r["joined_at"], "left_at": r["left_at"]}
+                "joined_at": r["joined_at"], "left_at": r["left_at"],
+                "identity": json.loads(r["identity_json"]) if r["identity_json"] else None}
+
+    def set_identity(self, team_id: str, agent_key: str, identity: dict) -> None:
+        """Ghi ảnh chụp nhân dạng {slug, name, avatar} của thành viên (mọi trạng thái). Chỉ ghi khi đổi."""
+        data = _j(identity)
+        with self._Tx(self) as c:
+            c.execute("UPDATE team_members SET identity_json=? WHERE team_id=? AND agent_key=? "
+                      "AND (identity_json IS NULL OR identity_json != ?)", (data, team_id, agent_key, data))
 
     def add_member(self, team_id: str, agent_key: str, slug: str, by: str = "owner") -> dict:
         now = time.time()

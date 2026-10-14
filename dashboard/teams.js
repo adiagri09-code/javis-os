@@ -169,8 +169,11 @@
   function agentAva(m, size) {
     m = m || {};
     var A = typeof window !== "undefined" && window.JavisAvatar;
+    // `avatar_seed`: tác giả cũ không còn xác nhận được nhân dạng thì ảnh suy từ chính mã của họ, không suy từ slug (slug
+    // có thể đã thuộc trợ lý mới; review 4f6268bd #1).
     if (A && A.html && m.slug) {
-      return '<span class="tm-face" aria-hidden="true">' + A.html({ slug: m.slug, avatar: m.avatar || undefined }, size || 28) +
+      return '<span class="tm-face" aria-hidden="true">' + A.html({ slug: m.avatar_seed || m.slug, avatar: m.avatar || undefined },
+        size || 28) +
         "</span>";
     }
     return avaHtml(m.name || m.slug);
@@ -826,10 +829,25 @@
 
   function teamUrl(path) { return "/teams/" + q(S.activeId) + (path || ""); }
 
-  function setNote(text) {
+  // Thông báo chung (lớp nổi trên cả trang, nhìn thấy cả khi đang ở danh sách): chữ, nút Thử lại khi có, nút đóng.
+  function noteHtml(text, retry) {
+    return '<span class="tm-note-text">' + esc(text) + "</span>" +
+      (retry ? '<button type="button" class="ws-btn tm-note-retry">' + esc(tw("teams.retry_action")) + "</button>" : "") +
+      '<button type="button" class="tm-note-close" aria-label="' + esc(tw("teams.close")) + '" title="' + esc(tw("teams.close")) +
+      '">' + ic("x") + "</button>";
+  }
+
+  var noteTimer = null;
+  // `retry`: hàm chạy lại thao tác vừa lỗi (nút Thử lại). Thông báo tự ẩn sau 8 giây, có Thử lại thì 15 giây.
+  function setNote(text, retry) {
     S.note = text || "";
+    S.noteRetry = S.note && typeof retry === "function" ? retry : null;
+    clearTimeout(noteTimer);
     var n = S.el.querySelector(".tm-note");
-    if (n) { n.textContent = S.note; n.hidden = !S.note; }
+    if (!n) return;
+    n.innerHTML = S.note ? noteHtml(S.note, !!S.noteRetry) : "";
+    n.hidden = !S.note;
+    if (S.note) noteTimer = setTimeout(function () { if (S && S.note === text) setNote(""); }, S.noteRetry ? 15000 : 8000);
   }
 
   function fail(r) {
@@ -843,9 +861,11 @@
       '<button type="button" class="ws-btn tm-new">' + ic("plus") + esc(tw("teams.create")) + "</button></div>" +
       '<div class="tm-teams"></div><button type="button" class="ws-btn tm-more-teams" hidden>' + esc(tw("teams.next_page")) + "</button></aside>" +
       '<section class="tm-chat"><div class="tm-bar tm-chat-head"></div><div class="tm-search" hidden></div>' +
-      '<div class="tm-note" hidden></div><div class="tm-banners"></div><div class="tm-jobs" hidden></div>' +
+      '<div class="tm-banners"></div><div class="tm-jobs" hidden></div>' +
       '<div class="tm-filterbar" hidden></div><div class="tm-msgs" aria-live="polite"></div><div class="tm-composer"></div></section>' +
-      '<aside class="tm-side" hidden></aside><div class="tm-scrim" hidden></div></div>';
+      // Vùng thông báo chung NGOÀI khung chat: trên điện thoại khung chat bị ẩn khi đang ở danh sách, thông báo (vd. ghim
+      // lỗi) vẫn phải nhìn thấy (review 4f6268bd #2).
+      '<aside class="tm-side" hidden></aside><div class="tm-scrim" hidden></div><div class="tm-note" role="status" aria-live="polite" hidden></div></div>';
   }
 
   function drawList() {
@@ -1254,7 +1274,7 @@
       if (again) again.focus();
       loadMsgs(false); loadQueue();
     }).catch(function () {
-      setNote(tw("teams.err", { e: "network" }));
+      setNote(tw("teams.err_network"));
       drawHint();
     });
   }
@@ -1338,19 +1358,26 @@
   }
 
   // Ghim từ danh sách: cùng cách lưu với công tắc trong tab Nhóm (khoá nút trong lúc lưu, lỗi thì báo để thử lại).
-  function pinTeam(id, on, btn) {
+  // Ghim một nhóm theo id, phụ thuộc truyền vào để test được: `post(on)` gửi, `notify(chữ, thửLại)` báo lỗi ở vùng thông
+  // báo chung, `reload()` tải lại khi lưu được. Lỗi HTTP hay mất mạng: báo lỗi nhìn thấy kèm Thử lại chạy lại đúng thao tác.
+  function pinTeamWith(id, on, btn, deps) {
     var box = { checked: on, disabled: false };
     if (btn) btn.disabled = true;
-    return savePin(box, function (want) { return call("POST", "/teams/" + q(id) + "/pin", { on: want }); },
-      function () {
-        if (btn) btn.disabled = false;
-        loadTeams(false);
-        if (id === S.activeId) loadTeam();
-      },
+    var again = function () { return pinTeamWith(id, on, null, deps); };
+    return savePin(box, function (want) { return deps.post(want); },
+      function () { if (btn) btn.disabled = false; deps.reload(); },
       function (r) {
         if (btn) btn.disabled = false;
-        if (r && r.network) setNote(tw("teams.err", { e: "network" })); else fail(r);
+        deps.notify(r && r.network ? tw("teams.err_network") : tw("teams.err", { e: (r && r.j && r.j.error) || (r && r.code) || "?" }),
+          again);
       });
+  }
+
+  function pinTeam(id, on, btn) {
+    return pinTeamWith(id, on, btn, {
+      post: function (want) { return call("POST", "/teams/" + q(id) + "/pin", { on: want }); },
+      notify: setNote,
+      reload: function () { loadTeams(false); if (id === S.activeId) loadTeam(); } });
   }
 
   function onClick(e) {
@@ -1369,6 +1396,13 @@
     }
     if (d.team) return openTeam(d.team);
     if (t.classList.contains("tm-scrim")) return closeSide();
+    if (t.classList.contains("tm-note-close")) { setNote(""); return; }
+    if (t.classList.contains("tm-note-retry")) {
+      var run = S.noteRetry;
+      setNote("");
+      if (run) run();
+      return;
+    }
     if (t.classList.contains("tm-adv-sum")) {
       // Nhớ Nâng cao đang mở để lần vẽ lại sau (có tin mới, đổi thành viên) không đóng nó; mở thì tải sổ lượt.
       var det = t.parentNode;
@@ -1605,7 +1639,7 @@
       // bật lại để thử lại, và báo lỗi (review b93c46bd #1).
       savePin(e.target, function (on) { return call("POST", teamUrl("/pin"), { on: on }); },
         function (r) { act(r, drawSide); },
-        function (r) { if (r && r.network) setNote(tw("teams.err", { e: "network" })); else fail(r); });
+        function (r) { if (r && r.network) setNote(tw("teams.err_network")); else fail(r); });
       return;
     }
     if (e.target.name && /^tm-auth-(cap|ceil)-[a-z_]+-unl$/.test(e.target.name)) {
@@ -1750,7 +1784,7 @@
     jobStripHtml: jobStripHtml, blockedAction: blockedAction, jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
     mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, composerHint: composerHint, newClientId: newClientId,
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, teamTabHtml: teamTabHtml,
-    levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, levelsHtml: levelsHtml, turnsHtml: turnsHtml, createFormHtml: createFormHtml,
+    levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml, createFormHtml: createFormHtml,
     bannersHtml: bannersHtml, reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
     searchResultsHtml: searchResultsHtml };

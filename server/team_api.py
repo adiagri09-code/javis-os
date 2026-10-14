@@ -143,9 +143,28 @@ class TeamApi:
 
     # ───────────── khung nhìn ─────────────
 
+    def _identity(self, team: dict, m: dict, reg: dict, by_slug: dict) -> dict:
+        """Nhân dạng {slug, name, avatar} của một thành viên, GIỮ THEO agent_key (review 4f6268bd #1).
+
+        File trợ lý hiện tại chỉ được dùng khi xác nhận nó thuộc đúng mã này: dòng danh tính của mã còn `active` (mã đã
+        nghỉ vì trợ lý bị xoá, hay `missing` chờ chủ xác nhận, thì file cùng slug có thể là trợ lý KHÁC). Khi xác nhận
+        được thì chụp lại nhân dạng vào kho nhóm. Không xác nhận được thì dùng ảnh chụp gần nhất của chính mã đó; chưa
+        từng chụp (bản ghi cũ) thì dự phòng theo chính mã: tên theo slug lúc vào nhóm, ảnh suy từ mã (`avatar_seed`),
+        không bao giờ lấy tên hay ảnh của trợ lý mới cùng slug."""
+        slug = reg.get("slug") or m["slug_at_join"]
+        info = by_slug.get(slug) if reg.get("status") == "active" else None
+        if info:
+            ident = {"slug": slug, "name": info.get("name") or slug, "avatar": info.get("avatar")}
+            if m.get("identity") != ident:
+                self.teams().set_identity(team["team_id"], m["agent_key"], ident)
+            return ident
+        if m.get("identity"):
+            return dict(m["identity"])
+        return {"slug": slug, "name": m["slug_at_join"] or slug, "avatar": None, "avatar_seed": m["agent_key"]}
+
     def member_views(self, team: dict, meta: Optional[list] = None) -> list:
-        """Thành viên của nhóm kèm tên và ảnh đại diện ĐÚNG ảnh trợ lý đang dùng (`avatar` của file trợ lý; trợ lý chưa
-        chọn ảnh thì dashboard tự suy từ slug như trang Cộng sự)."""
+        """Thành viên đang hoạt động của nhóm kèm tên và ảnh đại diện ĐÚNG ảnh trợ lý đang dùng (`avatar` của file trợ lý;
+        trợ lý chưa chọn ảnh thì dashboard tự suy từ slug như trang Cộng sự). Nhân dạng giữ theo agent_key (`_identity`)."""
         root = team["brain_id"]
         meta = self.deps.agents_meta(root) if meta is None else meta
         by_slug = {m["slug"]: m for m in (meta or [])}
@@ -153,30 +172,23 @@ class TeamApi:
         out = []
         for m in self.teams().members(team["team_id"]):
             reg = rs.agent_by_key(root, m["agent_key"]) or {}
-            slug = reg.get("slug") or m["slug_at_join"]
-            info = by_slug.get(slug) or {}
-            out.append({"agent_key": m["agent_key"], "slug": slug, "name": info.get("name") or slug,
-                        "avatar": info.get("avatar"),
-                        "role": m["role"], "status": m["status"], "agent_status": reg.get("status") or "",
-                        "resonance_enabled": bool(reg.get("enabled")), "joined_at": m["joined_at"],
-                        "managed": bool(m.get("managed_by_team"))})
+            ident = self._identity(team, m, reg, by_slug)
+            out.append(dict(ident, agent_key=m["agent_key"],
+                            role=m["role"], status=m["status"], agent_status=reg.get("status") or "",
+                            resonance_enabled=bool(reg.get("enabled")), joined_at=m["joined_at"],
+                            managed=bool(m.get("managed_by_team"))))
         return out
 
     def authors(self, team: dict, meta: Optional[list] = None) -> dict:
         """Sổ tác giả {agent_key: {slug, name, avatar}} của MỌI trợ lý từng ở nhóm, kể cả đã rời: tin cũ giữ đúng tên và
-        ảnh của người viết (review b93c46bd #2). Ảnh nhóm và gợi ý @ không dùng sổ này, chỉ dùng thành viên đang hoạt
-        động."""
+        ảnh của người viết (review b93c46bd #2), theo agent_key chứ không theo slug (review 4f6268bd #1). Ảnh nhóm và gợi ý
+        @ không dùng sổ này, chỉ dùng thành viên đang hoạt động."""
         root = team["brain_id"]
         meta = self.deps.agents_meta(root) if meta is None else meta
         by_slug = {m["slug"]: m for m in (meta or [])}
         rs = self.deps.resonance_store()
-        out = {}
-        for m in self.teams().members(team["team_id"], include_removed=True):
-            reg = rs.agent_by_key(root, m["agent_key"]) or {}
-            slug = reg.get("slug") or m["slug_at_join"]
-            info = by_slug.get(slug) or {}
-            out[m["agent_key"]] = {"slug": slug, "name": info.get("name") or slug, "avatar": info.get("avatar")}
-        return out
+        return {m["agent_key"]: self._identity(team, m, rs.agent_by_key(root, m["agent_key"]) or {}, by_slug)
+                for m in self.teams().members(team["team_id"], include_removed=True)}
 
     def faces(self, team: dict, meta: list) -> dict:
         """Ảnh nhóm ở danh sách: tối đa 4 gương mặt thành viên đang hoạt động (trưởng nhóm trước) và tổng số người."""

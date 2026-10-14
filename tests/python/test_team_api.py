@@ -234,7 +234,12 @@ c.post(f"/teams/{TID}/members{Q}", json={"slug": "minh"})
 c.post("/agents/delete", data={"slug": "minh", "brain": str(BR)})
 mem = c.get(f"/teams/{TID}{Q}").json()["team"]["members"]
 check("xoá agent: không còn là thành viên", keys["minh"] not in {m["agent_key"] for m in mem})
-(BR / "agents" / "minh.md").write_text("---\nname: Minh mới\n---\nx\n", encoding="utf-8", newline="\n")
+import agent_avatar  # noqa: E402
+old_ava = agent_avatar.for_agent({}, "minh")   # Minh cũ không chọn ảnh: ảnh mặc định suy từ slug
+new_shape = next(s for s in agent_avatar.SHAPES if s != old_ava["shape"])
+new_pal = next(p for p in ("ruby", "jade") if p != old_ava["palette"])
+(BR / "agents" / "minh.md").write_text(f"---\nname: Minh mới\navatar:\n  shape: {new_shape}\n  palette: {new_pal}\n---\nx\n",
+                                       encoding="utf-8", newline="\n")
 r = c.post(f"/teams/{TID}/members{Q}", json={"slug": "minh"})
 new_key = next(m["agent_key"] for m in r.json()["team"]["members"] if m["slug"] == "minh")
 check("tạo lại cùng slug: mã mới, phải thêm lại mới là thành viên", new_key != keys["minh"])
@@ -246,6 +251,19 @@ check("#2 sổ tác giả gồm cả người đã rời (mã cũ của Minh), k
       and isinstance(au[keys["minh"]].get("avatar"), dict) and au[keys["minh"]]["avatar"].get("shape")
       and keys["minh"] not in {m["agent_key"] for m in v["members"]}, au.get(keys["minh"]))
 check("#2 sổ tác giả gồm cả thành viên đang hoạt động", all(m["agent_key"] in au for m in v["members"]))
+# Review 4f6268bd #1: hai trợ lý cùng slug ở hai thời điểm giữ nhân dạng RIÊNG theo agent_key
+check("4f6268bd #1 mã cũ giữ đúng Minh cũ (tên, ảnh), không nhận của Minh mới",
+      au[keys["minh"]]["name"] == "Minh" and au[keys["minh"]]["avatar"] == old_ava, au.get(keys["minh"]))
+check("4f6268bd #1 mã mới là Minh mới (tên, ảnh mới)", au[new_key]["name"] == "Minh mới"
+      and au[new_key]["avatar"]["shape"] == new_shape and au[new_key]["avatar"]["palette"] == new_pal, au.get(new_key))
+check("4f6268bd #1 thành viên đang hoạt động là Minh mới", next(m for m in v["members"] if m["agent_key"] == new_key)["name"]
+      == "Minh mới")
+# Bản ghi cũ chưa có ảnh chụp nhân dạng (trước bản sửa): mã đã nghỉ không lấy tên/ảnh của người mới cùng slug
+with api.teams()._Tx(api.teams()) as tx:
+    tx.execute("UPDATE team_members SET identity_json=NULL WHERE team_id=? AND agent_key=?", (TID, keys["minh"]))
+fb = c.get(f"/teams/{TID}{Q}").json()["team"]["authors"][keys["minh"]]
+check("4f6268bd #1 chưa có ảnh chụp: dùng nhân dạng dự phòng của chính mã cũ (tên theo slug lúc vào, ảnh suy từ mã)",
+      fb["name"] == "minh" and fb.get("avatar") is None and fb.get("avatar_seed") == keys["minh"], fb)
 
 # Việc đang chạy nhưng không còn ai chạy (đã dừng ở điểm điều phối lúc tạm dừng) phải bị huỷ khi lưu trữ.
 jr = c.post(f"/teams/{TID}/messages{Q}", json={"text": "Việc treo", "client_msg_id": "j6", "as_job": True,
