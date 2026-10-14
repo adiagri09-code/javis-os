@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.121.0] - 2026-10-14
+### Thêm mới
+- **Trưởng nhóm Toàn quyền:** chủ nhóm cấp quyền cho trưởng nhóm tự vận hành nhóm trong phạm vi được cho phép.
+
 ## [0.120.0] - 2026-10-14
 ### Thêm mới
 - **Thả cảm xúc cho tin của trợ lý trong nhóm:** 👍 ❤️ 😂 😮 😢 😡. Rê chuột vào tin để thấy nút mặt cười; trên điện thoại nhấn giữ tin.
