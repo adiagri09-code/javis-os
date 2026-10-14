@@ -228,7 +228,7 @@ Bằng chứng cũ không thể tự đẩy bậc mãi: bước 2-3 cần bằng
 | 10 ❤️ trong 1 phút (`u ≈ 0.48`) | tối đa một bậc ở kỳ đó; kỳ sau không lên nữa vì không có bằng chứng mới |
 | im hoàn toàn từ B3 | khoảng ngày 2 xuống B4, ngày 8 B5, ngày 22 B6, ngày 50 B7, khoảng ngày 110 ngủ đông; tức 30 ngày ở B6, 90 ngày ở B7, 180 ngày ngủ đông |
 | 3 tin chủ động đã xem bị bỏ qua | ước lượng âm nhẹ (`u ≈ -0.02`), không tự xuống bậc vì `unhelpful`; chỉ `low_demand` nếu cũng không có gì khác |
-| 3 reaction có lý do "sai dữ kiện" (`u ≈ -0.25`) | xuống một bậc (`unhelpful`) sau dwell |
+| 5 reaction có lý do "sai dữ kiện" (`u ≈ -0.24`) | giữ (chưa đủ); reaction thứ 6 (`u ≈ -0.27`) thì xuống một bậc (`unhelpful`) sau dwell |
 | im lặng đúng (không tín hiệu, có cơ hội nhưng phán xử chọn im) | không phạt; không coi là `low_demand` khi có cơ hội |
 | chủ gọi trực tiếp lúc ngủ đông | về B3 ngay, giữ ước lượng |
 
