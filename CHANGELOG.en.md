@@ -10,7 +10,8 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.141.0] - 2026-10-14
 ### Improved
-- **Zalo bots can see the photo in a quoted message.** In progress.
+- **Zalo bots can see the photo in a quoted message.** Quote (reply to) a photo and tag the bot with "look at this" and the bot sees that photo. Before, the bot got only the text and said it could not see the photo, so you had to send the photo again and tag within 3 minutes.
+- Works in groups and private chats, and when you press "Reply for me" in the inbox. The photo must be one Javis read when it was sent, that is, sent after the Zalo account was connected.
 
 ## [0.140.0] - 2026-10-14
 ### Added

@@ -519,6 +519,11 @@ class Transport:
             meta["co_anh"] = True
             # 0.74.1: the photo's link, so the bot can actually look at it (see `chatbot_runtime.anh_cho_bot`).
             meta["image_url"] = str((ev.get("metadata") or {}).get("image_url") or "")
+        elif not vao_nhom:
+            # 0.141.0: a message that QUOTES a photo ("@bot xem ảnh này" as a reply to it) shows the bot that photo.
+            url_quote = zc.anh_duoc_quote(self.conn_id, thread, md0)
+            if url_quote:
+                meta.update(co_anh=True, image_url=url_quote, anh_quote=True)
         duoc_goi = False
         pol = None
         if vao_nhom:

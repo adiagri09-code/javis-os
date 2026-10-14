@@ -770,6 +770,49 @@ def nhan_dien_goi(conn_id: str, ev: dict, ten_khac=()) -> tuple:
     return tag, rep
 
 
+def _link_trong_quote(rt: dict) -> str:
+    """A photo link the quote itself carries, or "". javis-zalo 1.4 gives `replyTo` only {senderId, senderName, text,
+    msgId}; for a quoted photo Zalo may put the photo's serialized payload in `text` ({"href": ..., "thumb": ...}).
+    Plain text is NOT read as a link: a quoted chat line that happens to hold a URL is not a photo."""
+    for k in ("imageUrl", "image_url", "mediaUrl"):
+        v = str(rt.get(k) or "").strip()
+        if v.startswith("https://"):
+            return v
+    cands = [rt.get("attachment"), rt.get("attach"), rt.get("text")]
+    for c in cands:
+        if isinstance(c, str) and c.strip().startswith("{"):
+            try:
+                c = json.loads(c)
+            except ValueError:
+                continue
+        if isinstance(c, dict):
+            for k in ("url", "href", "hdUrl", "normalUrl", "thumb"):
+                v = str(c.get(k) or "").strip()
+                if v.startswith("https://"):
+                    return v
+    return ""
+
+
+def anh_duoc_quote(conn_id: str, thread: str, md: dict) -> str:
+    """Link of the photo a message QUOTES (replies to), or "" (0.141.0).
+
+    Field report 2026-10-14: in a group someone quoted a product photo and tagged the bot to look at it; the bot only
+    got the text and said it could not see the photo, so the owner's workaround was "send the photo, then tag the bot
+    within 3 minutes". The quote carries the photo's message id (`replyTo.msgId`, Zalo's global id, the same id the
+    photo was stored under when Javis read it), so the stored photo message gives the link. A link inside the quote
+    payload is the fallback, for a photo sent before Javis started reading this account."""
+    rt = (md or {}).get("replyTo")
+    if not isinstance(rt, dict):
+        return ""
+    mid = str(_lay(rt, "msgId", "globalMsgId", "id", mac_dinh="") or "").strip()
+    if mid:
+        goc = conversations.tin_theo_id(KENH, str(conn_id), str(thread), mid)
+        url = str((goc.get("metadata") or {}).get("image_url") or "").strip() if goc.get("message_type") == "image" else ""
+        if url.startswith("https://"):
+            return url
+    return _link_trong_quote(rt)
+
+
 def dang_ky_bot(conn_id: str, tb: Any) -> None:
     _BOTS[str(conn_id)] = tb
     start()
