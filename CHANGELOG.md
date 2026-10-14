@@ -8,7 +8,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.148.0] - 2026-10-15
 ### Cải thiện
-- Đang làm: kéo đổi bề rộng các khung ở trang Trò chuyện và trang đồ thị; số tin của từng cuộc hội thoại ở trang Chatbot.
+- **Kéo đổi bề rộng khung:** ở trang đồ thị (cột thư mục và khung hội thoại) và trang Trò chuyện (cột Hội thoại), rê chuột vào đường biên rồi kéo; nhấp đúp để về mặc định. Bề rộng được nhớ cho lần sau.
+- **Trang Chatbot hiện số tin của từng cuộc hội thoại** (viên xám, vd. "12 tin"), nằm cạnh số đỏ là số tin chưa đọc.
 
 ## [0.146.0] - 2026-10-14
 ### Sửa lỗi

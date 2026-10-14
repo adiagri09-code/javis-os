@@ -4197,5 +4197,12 @@
   "ws.last_chat": "Last message: {when}",
   "ws.resize_list": "Drag to resize the partner list",
   "ws.resize_panel": "Drag to resize the right panel",
-  "ws.resize_hint": "Drag to resize, double-click to reset"
+  "ws.resize_hint": "Drag to resize, double-click to reset",
+  "ht.so_tin_title": "{count} messages in this conversation",
+  "ht.chua_doc_title": "{count} unread messages",
+  "common.resize_col": "Drag to resize the column",
+  "common.resize_hint": "Drag to resize, double-click to reset",
+  "common.resize_vault": "Drag to resize the folder column",
+  "common.resize_chatcol": "Drag to resize the chat panel",
+  "common.resize_chatside": "Drag to resize the conversation list"
 }

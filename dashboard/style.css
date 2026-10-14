@@ -471,7 +471,8 @@ button, input, select, textarea { font-family: inherit; }
   display: grid;
   /* minmax(0, 1fr) rất quan trọng: canvas và chuỗi tool dài không được dùng min-content
      để nới cột giữa rồi đẩy khung hội thoại ra ngoài viewport. */
-  grid-template-columns: 260px minmax(0, 1fr) 320px;
+  /* Bề rộng hai cột kéo được ở đường biên (0.148.0, col-resize.js); thiếu biến thì về mặc định cũ. */
+  grid-template-columns: var(--hud-left-w, 260px) minmax(0, 1fr) var(--hud-right-w, 320px);
   min-width: 0;
   overflow: hidden;
 }
@@ -491,7 +492,7 @@ button, input, select, textarea { font-family: inherit; }
    Trò chuyện mượn đúng node này (nằm trong .cside-pane) và ở đó không có gì để thu -
    selector con trực tiếp giữ cho trạng thái thu không đi lạc theo node. */
 .vault-expand { display: none; }
-body.vault-thu .hud-body { grid-template-columns: 44px minmax(0, 1fr) 320px; }
+body.vault-thu .hud-body { grid-template-columns: 44px minmax(0, 1fr) var(--hud-right-w, 320px); }
 body.vault-thu .hud-body > .hud-left { padding: 12px 6px; align-items: center; overflow: hidden; }
 body.vault-thu .hud-body > .hud-left > :not(.vault-expand) { display: none; }
 body.vault-thu .hud-body > .hud-left > .vault-expand {
@@ -513,7 +514,7 @@ body.vault-thu .hud-body > .hud-left > .vault-expand:hover { color: var(--accent
 .chatcol-thu-btn svg, .chatcol-expand svg { transform: scaleX(-1); }
 @media (max-width: 860px) { .chatcol-thu-btn { display: none; } }
 @media (min-width: 861px) {
-  body.chatcol-thu .hud-body { grid-template-columns: 260px minmax(0, 1fr) 44px; }
+  body.chatcol-thu .hud-body { grid-template-columns: var(--hud-left-w, 260px) minmax(0, 1fr) 44px; }
   body.vault-thu.chatcol-thu .hud-body { grid-template-columns: 44px minmax(0, 1fr) 44px; }
   body.chatcol-thu .hud-body > .hud-right { padding: 12px 6px; align-items: center; overflow: hidden; }
   body.chatcol-thu .hud-body > .hud-right > :not(.chatcol-expand) { display: none; }

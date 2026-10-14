@@ -10,7 +10,8 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.148.0] - 2026-10-15
 ### Improved
-- In progress: resizable panels on the Chat and graph pages; message count for each conversation on the Chatbot page.
+- **Resizable panels:** on the graph page (folder column and chat panel) and the Chat page (conversation list), hover the edge and drag; double-click to reset. The width is remembered.
+- **The Chatbot inbox shows each conversation's message count** (grey pill, e.g. "12 msgs"), next to the red unread count.
 
 ## [0.146.0] - 2026-10-14
 ### Fixed
