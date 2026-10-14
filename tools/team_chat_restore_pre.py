@@ -14,7 +14,10 @@ Thứ tự, để không bao giờ báo thành công cho một lần khôi phụ
 2. Chép MỌI kho hiện tại sang `<tên>.post-0.111.0-<thời điểm>` bằng SQLite backup API (lấy cả phần còn trong WAL): hồ sơ
    sau nâng (việc nhóm, tin nhóm, nhóm, sổ lượt) giữ nguyên để đọc lại.
 3. Gỡ `team.sqlite3` (cùng file -wal, -shm) khỏi chỗ chạy.
-4. Ghi đè từng kho bằng snapshot. Một bước hỏng thì trả các kho đã ghi (và `team.sqlite3`) về đúng bản ở bước 2, báo lỗi.
+4. Ghi đè từng kho bằng snapshot. Một bước hỏng thì trả MỌI kho có thể đã bị đụng về đúng bản ở bước 2 (kho vốn không
+   có thì gỡ đi), kiểm lại từng kho sau khi trả, rồi báo lỗi. Một kho được tính là "có thể đã đụng" TRƯỚC khi bắt đầu
+   ghi, không phải sau khi ghi xong (review T1 R9): lỗi sau khi backup đã commit (checkpoint, đóng kết nối) vẫn được trả
+   về. Trả về không được thì báo rõ kho nào và bản sao nào để cứu tay; không bao giờ nói đã trả về khi chưa.
 
 Mất khỏi kho chạy: mọi việc Kanban, tin chat và nhóm sau lúc nâng. Giữ: các bản `.post-0.111.0-<thời điểm>` cạnh file
 kho, và snapshot `.pre-0.111.0` (nâng lại dùng lại đúng snapshot này, không chụp đè). Hạ KHÔNG khôi phục vẫn chạy được:
@@ -30,6 +33,7 @@ import sys
 import time
 from contextlib import closing
 from pathlib import Path
+from typing import Optional
 
 SNAPSHOT_SUFFIX = ".pre-0.111.0"
 POST_TAG = ".post-0.111.0-"
@@ -91,10 +95,32 @@ def plan(state_dir: str) -> dict:
     return {"ok": True, "todo": todo, "team": team if team.is_file() else None, "error": ""}
 
 
-def restore(state_dir: str, *, _fail_on: str = "") -> dict:
-    """Khôi phục cả bộ kho trong `state_dir` về trước 0.111.0. Trả {ok, restored, kept, removed, error}.
+def _tables(path: Path) -> dict:
+    """{bảng: số dòng} của một kho (để kiểm kho đã trả về đúng bản sao)."""
+    with closing(sqlite3.connect(str(path), timeout=10)) as c:
+        names = [r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                                         "AND name NOT LIKE 'sqlite_%' ORDER BY name").fetchall()]
+        return {n: c.execute(f'SELECT COUNT(*) FROM "{n}"').fetchone()[0] for n in names}
 
-    `_fail_on` (chỉ cho test): tên kho mà bước ghi đè giả lập hỏng, để kiểm đường trả về bản trước khi khôi phục."""
+
+def _put_back(store: Path, copy: Optional[Path]) -> str:
+    """Trả `store` về `copy` (bản sao trước khi khôi phục); `copy` None nghĩa là trước đó kho không có: gỡ đi. Kiểm lại
+    sau khi trả. Trả "" nếu đúng, còn không thì lý do."""
+    try:
+        _remove_db(store)
+        if copy is None:
+            return "" if not store.exists() else "vẫn còn file"
+        _backup(copy, store)
+        return "" if _tables(store) == _tables(copy) else "nội dung khác bản sao"
+    except Exception as ex:  # noqa: BLE001
+        return f"{type(ex).__name__}: {ex}"
+
+
+def restore(state_dir: str, *, _fail_on: str = "") -> dict:
+    """Khôi phục cả bộ kho trong `state_dir` về trước 0.111.0. Trả {ok, restored, kept, removed, error} và, khi trả về
+    không trọn, `unrecoverable` [{store, copy, reason}].
+
+    `_fail_on` (chỉ cho test): tên kho mà bước ghi đè giả lập hỏng TRƯỚC khi ghi."""
     p = plan(state_dir)
     if not p["ok"]:
         return {"ok": False, "restored": [], "kept": [], "removed": [], "error": p["error"]}
@@ -110,32 +136,38 @@ def restore(state_dir: str, *, _fail_on: str = "") -> dict:
     except Exception as ex:  # noqa: BLE001
         return {"ok": False, "restored": [], "kept": [str(v) for v in kept.values()], "removed": [],
                 "error": f"không chép được bản sao trước khi khôi phục: {type(ex).__name__}: {ex}"}
+    touched: list = []     # kho CÓ THỂ đã bị đổi: thêm vào TRƯỚC khi bắt đầu đụng tới
     restored, removed = [], []
     try:
         # Bước 3: gỡ kho nhóm khỏi chỗ chạy (đã có bản sao).
         if p["team"]:
+            touched.append(p["team"])
             _remove_db(p["team"])
             removed.append(str(p["team"]))
         # Bước 4: ghi đè từng kho bằng snapshot.
         for store, snap in p["todo"]:
+            touched.append(store)
             if _fail_on and store.name == _fail_on:
                 raise OSError(f"giả lập hỏng khi ghi {store.name}")
             _backup(snap, store)
             restored.append(store)
     except Exception as ex:  # noqa: BLE001
-        back = []
-        for store in restored + ([p["team"]] if p["team"] else []):
-            src = kept.get(store)
-            try:
-                if src is not None:
-                    _remove_db(store)
-                    _backup(src, store)
-                    back.append(store.name)
-            except Exception as ex2:  # noqa: BLE001
-                back.append(f"{store.name} (KHÔNG trả về được: {ex2})")
+        back, bad = [], []
+        for store in touched:
+            why = _put_back(store, kept.get(store))
+            if why:
+                bad.append({"store": str(store), "copy": str(kept[store]) if store in kept else "",
+                            "reason": why})
+            else:
+                back.append(store.name)
+        msg = (f"khôi phục dở ở {type(ex).__name__}: {ex}; đã trả về bản trước khi khôi phục: "
+               + (", ".join(back) or "không có kho nào cần trả"))
+        if bad:
+            msg += ("; KHÔNG trả về được: "
+                    + ", ".join(f"{b['store']} ({b['reason']}; bản sao: {b['copy'] or 'không có, trước đó chưa có kho'})"
+                                for b in bad))
         return {"ok": False, "restored": [], "kept": [str(v) for v in kept.values()], "removed": [],
-                "error": f"khôi phục dở ở {type(ex).__name__}: {ex}; đã trả về bản trước khi khôi phục: "
-                         + (", ".join(back) or "không có kho nào cần trả")}
+                "error": msg, "unrecoverable": bad}
     return {"ok": True, "restored": [str(s) for s in restored], "kept": [str(v) for v in kept.values()],
             "removed": removed}
 

@@ -215,6 +215,9 @@ class TeamRunner:
         self._locks_loop: Any = None
         self._loop: Any = None
         self._loop_thread: Optional[int] = None
+        # Pool chung của tiến trình (review T1 R8): task_id -> team_id của việc đang giữ chỗ. Đọc, ghi trong `_pool_lock`.
+        self._pool: dict[str, str] = {}
+        self._pool_lock = threading.Lock()
         # Khoá chấp nhận đầu ra (R3): kiểm "đầu ra còn hợp lệ" và ghi bài học bền nằm trong cùng một khoá với các thao
         # tác làm đầu ra hết hợp lệ (bỏ thành viên, đổi trưởng nhóm, huỷ, sửa yêu cầu, xoá agent). Không có khe nào giữa
         # lúc kiểm và lúc ghi để một thao tác như vậy chen vào.
@@ -651,11 +654,11 @@ class TeamRunner:
         with self.accept_lock:
             status = self._still_valid(team_id, agent_key, role, task, step)
             applied = status == "done"
-            if applied and callable(commit) and self.teams.claim_commit(turn_id):
-                try:
-                    commit()
-                except Exception as ex:  # noqa: BLE001
-                    notes.append(f"Không ghi được bài học của lượt: {type(ex).__name__}")
+            # Bước của việc nhóm: bài học ghi ở pha ÁP DỤNG (`_apply_step`), nơi kiểm lại hiệu lực lần cuối trong cùng
+            # khoá (review T1 R7). Lượt trò chuyện không có pha áp dụng: ghi ở đây.
+            if applied and step is None:
+                self._commit_once(turn_id, commit, notes)
+        allowed = OPS_BY_ROLE.get(role, set())
         allowed = OPS_BY_ROLE.get(role, set())
         kept = []
         for op in ops:
@@ -681,7 +684,16 @@ class TeamRunner:
                          reply_to=reply_to, task_id=task["id"] if task else None,
                          step_id=step["step_id"] if step else None, meta=meta)
         return {"status": status, "applied": applied, "ops": kept, "notes": notes, "message_id": mid,
-                "text": clean, "sha": meta["sha"], "turn_id": turn_id, "extra": extra}
+                "text": clean, "sha": meta["sha"], "turn_id": turn_id, "extra": extra,
+                "commit": commit if applied and step is not None else None, "lessons": held}
+
+    def _commit_once(self, turn_id: str, commit: Any, notes: list) -> None:
+        """Ghi bài học của lượt đúng một lần (gọi trong `accept_lock`, sau khi đã kiểm đầu ra còn hiệu lực)."""
+        if callable(commit) and self.teams.claim_commit(turn_id):
+            try:
+                commit()
+            except Exception as ex:  # noqa: BLE001
+                notes.append(f"Không ghi được bài học của lượt: {type(ex).__name__}")
 
     def _still_valid(self, team_id: str, agent_key: str, role: str, task: Optional[dict],
                      step: Optional[dict]) -> str:
@@ -798,13 +810,29 @@ class TeamRunner:
                 if s["kind"] == "work" and s["status"] == "done" and s["applied"]
                 and int(s["job_revision"]) == int(task["team_rev"]) and s["result_msg_id"]]
 
-    def _finish(self, team: dict, task_id: str, msg_id: int, text: str) -> str:
-        if self.tasks.team_finish(task_id, text) is not None:
+    def _finish(self, team: dict, task_id: str, msg_id: int, text: str, rev: int) -> Optional[str]:
+        """Chốt việc bằng kết quả của bản yêu cầu `rev` (CAS ở kho, review T1 R7). Yêu cầu đã sửa sang bản khác thì kết
+        quả này chỉ là bằng chứng: không chốt, việc làm lại theo bản mới."""
+        if self.tasks.team_finish(task_id, text, expected_rev=rev) is not None:
             self.sessions.update_team_message_meta(team["session_id"], msg_id, {"job_result": True})
             self._publish({"type": "team_message", "team_id": team["team_id"],
                            "message": self.sessions.team_message(team["session_id"], msg_id)})
             self._state(team["team_id"])
-        return "done"
+            return "done"
+        cur = self.tasks.get_task(task_id)
+        if cur and cur["status"] == "team_running" and int(cur["team_rev"]) != int(rev):
+            self._supersede(team, msg_id, "old_revision")
+            return self._recoordinate(team, cur, {"agent_key": ""}, "yêu cầu đã sửa")
+        return None
+
+    def _supersede(self, team: dict, msg_id: Optional[int], status: str) -> None:
+        """Tin kết quả đã đăng nhưng hết hiệu lực trước khi áp dụng: đổi nhãn thành bằng chứng (applied=false)."""
+        if not msg_id:
+            return
+        self.sessions.update_team_message_meta(team["session_id"], msg_id,
+                                               {"status": status, "applied": False, "superseded": True})
+        self._publish({"type": "team_message", "team_id": team["team_id"],
+                       "message": self.sessions.team_message(team["session_id"], msg_id)})
 
     def _chain(self, step: dict) -> list:
         """Các bước đang chờ câu trả lời phía trên `step` (theo parent_step), gần nhất trước."""
@@ -889,7 +917,13 @@ class TeamRunner:
                     return res
 
     def _job_tick(self, task_id: str) -> tuple:
-        """Một điểm điều phối của việc (luồng phụ): ("return", kết quả), ("continue",) hay ("run", team, task, step)."""
+        """Một điểm điều phối của việc (luồng phụ): ("return", kết quả), ("continue",) hay ("run", team, task, step).
+        Chạy trong `accept_lock` (review T1 R7): đọc trạng thái, chốt việc hay thêm bước không xen được với sửa yêu cầu,
+        huỷ, bỏ thành viên, đổi trưởng nhóm."""
+        with self.accept_lock:
+            return self._job_tick_locked(task_id)
+
+    def _job_tick_locked(self, task_id: str) -> tuple:
         task = self.tasks.get_task(task_id)
         if not task or task["status"] != "team_running":
             if task and task["status"] == "cancelled":
@@ -928,7 +962,8 @@ class TeamRunner:
                    and int(s["job_revision"]) == int(task["team_rev"])]
         if len(results) == 1:
             m = self.sessions.team_message(team["session_id"], results[0]["result_msg_id"])
-            return self._finish(team, task["id"], results[0]["result_msg_id"], (m or {}).get("content", ""))
+            return self._finish(team, task["id"], results[0]["result_msg_id"], (m or {}).get("content", ""),
+                                int(results[0]["job_revision"]))
         if len(results) > 1:
             if not team["leader_key"]:
                 return self._block(task["id"], "no_leader", "Nhóm chưa có trưởng nhóm để tổng hợp")
@@ -943,7 +978,23 @@ class TeamRunner:
         return await self._io(self._apply_step, team, task, step, out)
 
     def _apply_step(self, team: dict, task: dict, step: dict, out: dict) -> Optional[str]:
-        """Áp kết cục một lượt vào bước và việc (luồng phụ)."""
+        """Áp kết cục một lượt vào bước và việc (luồng phụ), trong `accept_lock` (review T1 R7).
+
+        Giữa pha chấp nhận và pha này có một khe (hai lần vào luồng phụ): chủ có thể sửa yêu cầu, huỷ, bỏ thành viên hay
+        đổi trưởng nhóm. Vì vậy hiệu lực được kiểm LẠI ở đây, trong cùng khoá với các thao tác đó, ngay trước khi áp tác
+        động (hoàn tất bước, thêm bước, chốt việc). Hết hiệu lực thì tin kết quả thành bằng chứng và đi đúng nhánh đến
+        muộn. Chốt việc còn có CAS revision ở kho (`team_finish(expected_rev=...)`)."""
+        with self.accept_lock:
+            if out.get("status") == "done" and out.get("applied"):
+                now = self._still_valid(team["team_id"], step["agent_key"], step["kind"], task, step)
+                if now != "done":
+                    self._supersede(team, out.get("message_id"), now)
+                    out = dict(out, status=now, applied=False, ops=[], commit=None)
+                else:
+                    self._commit_once(out.get("turn_id") or "", out.get("commit"), out.setdefault("notes", []))
+            return self._apply_step_locked(team, task, step, out)
+
+    def _apply_step_locked(self, team: dict, task: dict, step: dict, out: dict) -> Optional[str]:
         sid = step["step_id"]
         st = out["status"]
         if st == "cap":
@@ -995,13 +1046,13 @@ class TeamRunner:
                 return self._block(task["id"], "failed", "Kế hoạch giao việc cho người không có trong nhóm")
             self.teams.finish_step(sid, "done", mid, True)
             if not assigns:
-                return self._finish(team, task["id"], mid, out["text"])
+                return self._finish(team, task["id"], mid, out["text"], int(step["job_revision"]))
             ok = self._add_steps(team, task, [{"kind": "work", "agent": a["agent"], "brief": a["brief"],
                                                "inputs": [mid]} for a in assigns])
             return None if ok else "team_blocked"
         if kind == "synthesize":
             self.teams.finish_step(sid, "done", mid, True)
-            return self._finish(team, task["id"], mid, out["text"])
+            return self._finish(team, task["id"], mid, out["text"], int(step["job_revision"]))
         # work, help
         helps = out["ops"]
         if helps:
@@ -1025,45 +1076,82 @@ class TeamRunner:
         return None
 
     async def dispatch_once(self, wait: bool = True) -> list:
-        """Nhận việc đầu hàng của các nhóm còn chỗ chạy (spec 8.3). Pool riêng `max_parallel_teams` nhóm. Phần đọc,
-        nhận việc, tạo bước đầu chạy ở luồng phụ (R5); bị huỷ giữa chừng thì việc vừa nhận về lại hàng chờ."""
+        """Nhận việc đầu hàng của các nhóm còn chỗ chạy (spec 8.3). Pool riêng `max_parallel_teams` nhóm.
+
+        Tính chỗ trống, nhận việc và giữ chỗ trong pool là MỘT đoạn găng (`_claim_batch`, khoá `_pool_lock`, luồng phụ),
+        nên hai lần đánh thức đồng thời không cùng nhận một chỗ trống (review T1 R8). Model chạy ngoài khoá. Bị huỷ hay
+        lỗi giữa lúc nhận và lúc đăng ký task thì việc vừa nhận về lại hàng chờ và trả chỗ."""
         self._jobs = {k: v for k, v in self._jobs.items() if not v.done()}
-        slots = self.max_parallel_teams - len(self._jobs)
-        claimed = []
-        if slots > 0:
-            claimed = await self._io(self._claim_batch, list(self._jobs), slots,
-                                     undo=lambda got: [self.tasks.team_requeue(tid) for tid, _ in got])
+        claimed = await self._io(self._claim_batch, undo=self._unclaim)
         for task_id, team_id in claimed:
-            self._jobs[task_id] = asyncio.ensure_future(self.run_job(task_id))
+            self._start_job(task_id)
             self._state(team_id)
         if wait:
             await self.wait_jobs()
         return [tid for tid, _ in claimed]
 
-    def _claim_batch(self, running_ids: list, slots: int) -> list:
-        busy_teams = {(self.tasks.get_task(k) or {}).get("team_id") for k in running_ids}
-        out: list = []
-        for team_id in self.tasks.teams_with_waiting():
-            if len(out) >= slots:
-                break
-            if team_id in busy_teams:
-                continue
-            team = self.teams.get(team_id)
-            if not team or team["status"] != "active":
-                continue
-            task = self.tasks.claim_team_next(team_id, self.worker_id,
-                                              max_running=int(team["caps"]["running_jobs"]))
-            if not task:
-                continue
-            first = self.start_job_steps(task["id"])
-            if first == "no_leader":
-                self._block(task["id"], "no_leader", "Nhóm chưa có trưởng nhóm")
-                continue
-            if first == "assignee_removed":
-                self._block(task["id"], "assignee_removed", "Người được giao đã rời nhóm")
-                continue
-            out.append((task["id"], team_id))
-        return out
+    def _claim_batch(self) -> list:
+        with self._pool_lock:
+            slots = self.max_parallel_teams - len(self._pool)
+            busy_teams = set(self._pool.values())
+            out: list = []
+            current: Optional[str] = None   # việc đã nhận nhưng chưa xong bước đầu (lỗi ở đây cũng phải trả về hàng)
+            try:
+                for team_id in self.tasks.teams_with_waiting():
+                    if len(out) >= slots:
+                        break
+                    if team_id in busy_teams:
+                        continue
+                    team = self.teams.get(team_id)
+                    if not team or team["status"] != "active":
+                        continue
+                    task = self.tasks.claim_team_next(team_id, self.worker_id,
+                                                      max_running=int(team["caps"]["running_jobs"]))
+                    if not task:
+                        continue
+                    current = task["id"]
+                    first = self.start_job_steps(task["id"])
+                    current = None
+                    if first == "no_leader":
+                        self._block(task["id"], "no_leader", "Nhóm chưa có trưởng nhóm")
+                        continue
+                    if first == "assignee_removed":
+                        self._block(task["id"], "assignee_removed", "Người được giao đã rời nhóm")
+                        continue
+                    self._pool[task["id"]] = team_id
+                    busy_teams.add(team_id)
+                    out.append((task["id"], team_id))
+            except BaseException:
+                # Lỗi giữa chừng: việc đã nhận trong lượt này (kể cả việc đang tạo bước đầu) về hàng chờ, trả chỗ.
+                for tid in [x for x, _ in out] + ([current] if current else []):
+                    self._pool.pop(tid, None)
+                    try:
+                        self.tasks.team_requeue(tid)
+                    except Exception:  # noqa: BLE001
+                        pass
+                raise
+            return out
+
+    def _unclaim(self, claimed: list) -> None:
+        """Hoàn tác `_claim_batch` khi dispatch bị huỷ trước lúc đăng ký task: việc về hàng chờ, trả chỗ."""
+        with self._pool_lock:
+            for tid, _ in claimed:
+                self._pool.pop(tid, None)
+                self.tasks.team_requeue(tid)
+
+    def _start_job(self, task_id: str, team_id: Optional[str] = None) -> None:
+        """Tạo task asyncio cho một việc đã giữ chỗ trong pool; xong (kể cả lỗi, huỷ) thì trả chỗ."""
+        if team_id is not None:
+            with self._pool_lock:
+                self._pool.setdefault(task_id, team_id)
+        job = asyncio.ensure_future(self.run_job(task_id))
+        self._jobs[task_id] = job
+        job.add_done_callback(lambda _j, tid=task_id: self._pool_release(tid, _j))
+
+    def _pool_release(self, task_id: str, job: Any) -> None:
+        with self._pool_lock:
+            if self._jobs.get(task_id) in (None, job):
+                self._pool.pop(task_id, None)
 
     async def wait_jobs(self) -> None:
         """Chờ mọi việc đang chạy trong tiến trình này. Việc nào văng lỗi thì ném lại lỗi đầu tiên (không nuốt)."""
@@ -1082,7 +1170,7 @@ class TeamRunner:
 
     async def resume_jobs(self, task_ids: list) -> None:
         for tid in task_ids:
-            self._jobs[tid] = asyncio.ensure_future(self.run_job(tid))
+            self._start_job(tid, "")
         await self.wait_jobs()
 
     # ───────────── lệnh của chủ, phục hồi ─────────────
@@ -1136,7 +1224,7 @@ class TeamRunner:
         running = await self._io(lambda: [t["id"] for t in self.tasks.team_queue(team_id)["running"]])
         ids = [tid for tid in running if tid not in self._jobs or self._jobs[tid].done()]
         for tid in ids:
-            self._jobs[tid] = asyncio.ensure_future(self.run_job(tid))
+            self._start_job(tid, team_id)
 
     def unblock(self, task_id: str, action: str = "resume") -> bool:
         """Gỡ chặn: `retry` chạy lại bước lỗi hay bị ngắt (bước mới, lượt mới); `resume` cho chạy tiếp như cũ."""

@@ -1,4 +1,4 @@
-"""Nhóm chat team T1: hồi quy cho review mã vòng 1 (exports/reviews/PR-628-T1-code-r1-review.md, R1 tới R5).
+"""Nhóm chat team T1: hồi quy cho review mã vòng 1 (R1 tới R5) và vòng 2 (R7 tới R9), exports/reviews/PR-628-T1-code-r*-review.md.
 
     python tests/run.py team_t1_review -v
 
@@ -596,8 +596,463 @@ def section_r5():
           code == 200 and gap < 100, (gap, code))
 
 
+# ═════════════ R7, R8, R9 (review T1 vòng 2): biên áp kết quả, pool chung, khôi phục hỏng sau ghi ═════════════
+WAIT = 5  # giây: mọi chờ đồng bộ trong các mục dưới đều có hạn, không dựa vào ngủ cố định
+
+
+def world_n(label, engine_fn, count=1, members=1):
+    """`count` nhóm, mỗi nhóm `members` agent riêng (agent-<nhóm>-<i>), agent đầu là trưởng nhóm. Engine là hàm async
+    nhận req (giả), agent_info chấp nhận mọi mã."""
+    _n[0] += 1
+    d = TEMP / f"{_n[0]:02d}-{label}"
+    d.mkdir(parents=True)
+    ss = sessions.SessionStore(db_path=d / "chat.db")
+    ts = task_store.TaskStore(d / "kanban.sqlite3")
+    tm = team_store.TeamStore(d / "team.sqlite3")
+    teams = []
+    for i in range(count):
+        tid = team_store.new_team_id()
+        sid = ss.create_session(brain=str(d), channel=f"team:{tid}")
+        tm.create_team(str(d), f"{label}{i}", "", sid, team_id=tid)
+        for j in range(members):
+            tm.add_member(tid, f"agent-{i}-{j}", f"a{i}{j}")
+        tm.set_leader(tid, f"agent-{i}-0")
+        teams.append(tm.get(tid))
+    r = TR.TeamRunner(teams=tm, tasks=ts, sessions=ss, engine_for=lambda *a: ("fake", "fake", engine_fn),
+                      agent_info=lambda root, key: {"slug": key, "name": key, "system": "Fake"})
+    return r, tm, ts, ss, teams
+
+
+def gate_apply(r, kinds):
+    """Chặn ở cửa vào `_apply_step` cho bước đầu tiên thuộc `kinds` (sau khi đầu ra đã được chấp nhận và đăng)."""
+    entered, release = threading.Event(), threading.Event()
+    original = r._apply_step
+
+    def gated(team, task, step, out):
+        if step["kind"] in kinds and not entered.is_set():
+            entered.set()
+            if not release.wait(WAIT):
+                raise TimeoutError("test barrier")
+        return original(team, task, step, out)
+    return gated, entered, release
+
+
+async def race_at_apply(r, kinds, action):
+    """Chạy dispatch thật; khi một bước `kinds` tới cửa áp dụng thì chạy `action` (ở luồng phụ, như route) rồi nhả."""
+    gated, entered, release = gate_apply(r, kinds)
+    got = {}
+    with patch.object(r, "_apply_step", side_effect=gated):
+        work = asyncio.ensure_future(r.dispatch_once())
+        reached = await asyncio.to_thread(entered.wait, WAIT)
+        try:
+            if reached:
+                got["action"] = await asyncio.to_thread(action)
+        finally:
+            release.set()
+        await asyncio.wait_for(work, 20)
+    got["reached"] = reached
+    return got
+
+
+def scripted(answers, hits=None):
+    """Engine giả theo thứ tự; mỗi câu trả lời kèm `commit` ghi lại vào `hits` (giả bài học)."""
+    calls = []
+
+    async def fn(req):
+        calls.append(req)
+        text = answers[len(calls) - 1] if len(calls) <= len(answers) else f"EXTRA_{len(calls)}"
+        tag = text
+
+        def commit():
+            if hits is not None:
+                hits.append(tag)
+        return {"text": text, "commit": commit, "lessons": [f"L_{tag}"]}
+    return fn, calls
+
+
+def section_r7():
+    # 1. Kế hoạch trả lời trực tiếp (không giao ai) + sửa yêu cầu giữa chấp nhận và áp dụng (kịch bản reviewer).
+    hits = []
+    fn, calls = scripted(["OLD_RESULT", "NEW_RESULT"], hits)
+    r, tm, ts, ss, teams = world_n("r7-plan", fn)
+    t = teams[0]
+    job = r.submit(t["team_id"], "Original brief", as_job=True, client_msg_id="j")["task_id"]
+
+    def amend():
+        with r.accept_lock:
+            return ts.team_amend(job, "NEW_REQUIREMENT")
+    got = run(race_at_apply(r, ("plan",), amend))
+    task = ts.get_task(job)
+    old = [m for m in agent_msgs(ss, t) if m["content"] == "OLD_RESULT"]
+    check("R7 kế hoạch trả lời trực tiếp: tới cửa áp dụng, sửa yêu cầu thành công (bản 2)",
+          got.get("reached") and got.get("action") == 2, got)
+    check("R7 kế hoạch: yêu cầu mới KHÔNG bị chốt bằng kết quả bản cũ; làm lại và chốt NEW_RESULT ở bản 2",
+          task["status"] == "done" and task["team_rev"] == 2 and task["result"] == "NEW_RESULT" and len(calls) == 2,
+          (task["status"], task["team_rev"], task["result"], len(calls)))
+    check("R7 kế hoạch: bước bản 1 không áp dụng; tin cũ còn làm bằng chứng (applied=false, old_revision)",
+          [(s["job_revision"], s["status"], bool(s["applied"])) for s in tm.steps(job)][0] == (1, "cancelled", False)
+          and old and old[0]["meta"]["applied"] is False and old[0]["meta"]["status"] == "old_revision"
+          and not old[0]["meta"].get("job_result"), (tm.steps(job), old and old[0]["meta"]))
+    check("R7 kế hoạch: bài học của kết quả cũ không ghi, của kết quả mới ghi đúng một lần", hits == ["NEW_RESULT"],
+          hits)
+
+    # 2. Đối chứng: không sửa yêu cầu thì kết quả bản 1 chốt bình thường, bài học ghi một lần.
+    hits = []
+    fn, calls = scripted(["OLD_RESULT"], hits)
+    r, tm, ts, ss, teams = world_n("r7-plan-control", fn)
+    job = r.submit(teams[0]["team_id"], "Original brief", as_job=True, client_msg_id="j")["task_id"]
+    got = run(race_at_apply(r, ("plan",), lambda: None))
+    task = ts.get_task(job)
+    check("R7 đối chứng: không sửa thì bản 1 chốt OLD_RESULT, một lượt, bài học một lần",
+          task["status"] == "done" and task["team_rev"] == 1 and task["result"] == "OLD_RESULT" and len(calls) == 1
+          and hits == ["OLD_RESULT"], (task, hits))
+
+    # 3. Bước làm (@ trực tiếp) + sửa yêu cầu ở cửa áp dụng: người được giao làm lại theo bản mới.
+    fn, calls = scripted(["OLD_WORK", "NEW_WORK"])
+    r, tm, ts, ss, teams = world_n("r7-work", fn)
+    t = teams[0]
+    job = r.submit(t["team_id"], "Viết", mentions=["agent-0-0"], as_job=True, client_msg_id="j")["task_id"]
+    def amend_work():
+        with r.accept_lock:
+            return ts.team_amend(job, "thêm")
+    got = run(race_at_apply(r, ("work",), amend_work))
+    task = ts.get_task(job)
+    check("R7 bước làm: kết quả cũ không chốt bản 2; làm lại, chốt NEW_WORK",
+          got.get("action") == 2 and task["status"] == "done" and task["team_rev"] == 2
+          and task["result"] == "NEW_WORK", (got, task["status"], task["result"]))
+
+    # 4. Bước tổng hợp + sửa yêu cầu ở cửa áp dụng: tổng hợp cũ không chốt; hai người làm lại, tổng hợp lại.
+    fn, calls = scripted(["W1", "W2", "OLD_SYNTH", "W1b", "W2b", "NEW_SYNTH"])
+    r, tm, ts, ss, teams = world_n("r7-synth", fn, members=3)
+    t = teams[0]
+    job = r.submit(t["team_id"], "Hai phần", mentions=["agent-0-1", "agent-0-2"], as_job=True,
+                   client_msg_id="j")["task_id"]
+
+    def amend_synth():
+        with r.accept_lock:
+            return ts.team_amend(job, "đổi hướng")
+    got = run(race_at_apply(r, ("synthesize",), amend_synth))
+    task = ts.get_task(job)
+    check("R7 tổng hợp: tổng hợp bản cũ không chốt bản 2; chốt NEW_SYNTH sau khi làm lại",
+          got.get("reached") and got.get("action") == 2 and task["status"] == "done" and task["team_rev"] == 2
+          and task["result"] == "NEW_SYNTH", (got, task["status"], task["result"], [c["role"] for c in calls]))
+
+    # 5. Hoàn tất thắng trước: sửa yêu cầu sau khi việc đã xong bị từ chối (route trả 409).
+    fn, calls = scripted(["DONE_FIRST"])
+    r, tm, ts, ss, teams = world_n("r7-finish-first", fn)
+    job = r.submit(teams[0]["team_id"], "Brief", as_job=True, client_msg_id="j")["task_id"]
+    run(r.dispatch_once())
+    with r.accept_lock:
+        rev = ts.team_amend(job, "muộn")
+    check("R7 hoàn tất thắng trước: sửa yêu cầu bị từ chối, việc giữ kết quả và bản 1",
+          rev is None and ts.get_task(job)["result"] == "DONE_FIRST" and ts.get_task(job)["team_rev"] == 1)
+
+    # 6. Huỷ ở cửa áp dụng: việc huỷ, không có kết quả, tin cũ thành bằng chứng.
+    hits = []
+    fn, calls = scripted(["LATE_PLAN"], hits)
+    r, tm, ts, ss, teams = world_n("r7-cancel", fn)
+    t = teams[0]
+    job = r.submit(t["team_id"], "Brief", as_job=True, client_msg_id="j")["task_id"]
+    run(race_at_apply(r, ("plan",), lambda: r.cancel_job(job)))
+    task = ts.get_task(job)
+    m = agent_msgs(ss, t)[0]
+    check("R7 huỷ ở cửa áp dụng: việc huỷ, không chốt, tin thành bằng chứng late_cancelled, không ghi bài học",
+          task["status"] == "cancelled" and task["result"] != "LATE_PLAN" and m["meta"]["applied"] is False
+          and m["meta"]["status"] == "late_cancelled" and hits == [], (task["status"], m["meta"], hits))
+
+    # 7. Bỏ thành viên ở cửa áp dụng (@ trực tiếp): không chốt, chặn assignee_removed.
+    hits = []
+    fn, calls = scripted(["LEFT_WORK"], hits)
+    r, tm, ts, ss, teams = world_n("r7-left", fn, members=2)
+    t = teams[0]
+    job = r.submit(t["team_id"], "Brief", mentions=["agent-0-1"], as_job=True, client_msg_id="j")["task_id"]
+
+    def remove():
+        with r.accept_lock:
+            return tm.remove_member(t["team_id"], "agent-0-1")
+    run(race_at_apply(r, ("work",), remove))
+    task = ts.get_task(job)
+    check("R7 bỏ thành viên ở cửa áp dụng: không chốt, chặn assignee_removed, không ghi bài học",
+          task["status"] == "team_blocked" and task["block_kind"] == "assignee_removed" and hits == [], (task, hits))
+
+    # 8. Đổi trưởng nhóm ở cửa áp dụng (bước lập kế hoạch): kế hoạch cũ không chốt, trưởng nhóm mới điều phối.
+    fn, calls = scripted(["OLD_LEADER_PLAN", "NEW_LEADER_PLAN"])
+    r, tm, ts, ss, teams = world_n("r7-leader", fn, members=2)
+    t = teams[0]
+    job = r.submit(t["team_id"], "Brief", as_job=True, client_msg_id="j")["task_id"]
+
+    def swap():
+        with r.accept_lock:
+            return tm.set_leader(t["team_id"], "agent-0-1")
+    run(race_at_apply(r, ("plan",), swap))
+    task = ts.get_task(job)
+    check("R7 đổi trưởng nhóm ở cửa áp dụng: kế hoạch cũ không chốt, trưởng nhóm mới chốt",
+          task["status"] == "done" and task["result"] == "NEW_LEADER_PLAN"
+          and calls[-1]["agent_key"] == "agent-0-1", (task["status"], task["result"]))
+
+    # 9. CAS ở kho: chốt bằng bản cũ bị từ chối dù không qua khoá của bộ chạy.
+    r, tm, ts, ss, teams = world_n("r7-cas", scripted([])[0])
+    job = r.submit(teams[0]["team_id"], "Brief", as_job=True, client_msg_id="j")["task_id"]
+    ts.claim_team_next(teams[0]["team_id"], "w")
+    ts.team_amend(job, "bản 2")
+    try:
+        stale = ts.team_finish(job, "OLD", expected_rev=1)
+    except TypeError as ex:
+        stale = f"thiếu API: {ex}"
+    check("R7 CAS kho: team_finish(expected_rev=1) khi đã bản 2 không chốt", stale is None
+          and ts.get_task(job)["status"] == "team_running", stale)
+    try:
+        fresh = ts.team_finish(job, "NEW", expected_rev=2)
+    except TypeError as ex:
+        fresh = f"thiếu API: {ex}"
+    check("R7 CAS kho đối chứng: đúng bản thì chốt", fresh == "team_running" and ts.get_task(job)["result"] == "NEW",
+          fresh)
+
+
+def section_r8():
+    async def pool_case(concurrent):
+        release = asyncio.Event()
+        calls = []
+
+        async def fn(req):
+            calls.append(req["team_id"])
+            await release.wait()
+            return {"text": "OK"}
+        r, tm, ts, ss, teams = world_n("r8-race" if concurrent else "r8-seq", fn, count=4)
+        r.max_parallel_teams = 2
+        for t in teams:
+            r.submit(t["team_id"], "Một việc", as_job=True, client_msg_id="j")
+        if concurrent:
+            barrier = threading.Barrier(2)
+            original = r._claim_batch
+
+            def gated(*a):
+                barrier.wait(timeout=WAIT)
+                return original(*a)
+            with patch.object(r, "_claim_batch", side_effect=gated):
+                await asyncio.wait_for(asyncio.gather(r.dispatch_once(wait=False), r.dispatch_once(wait=False)), 20)
+        else:
+            await r.dispatch_once(wait=False)
+            await r.dispatch_once(wait=False)
+        for _ in range(500):
+            if len(calls) >= len([j for j in r._jobs.values() if not j.done()]):
+                break
+            await asyncio.sleep(0.01)
+        # Model đang chạy: khoá pool KHÔNG bị giữ qua engine.
+        lock = getattr(r, "_pool_lock", None)
+        free = lock.acquire(blocking=False) if lock is not None else None
+        if free:
+            lock.release()
+        res = {"jobs": len(r._jobs), "running": len(ts.team_running_tasks()), "calls": len(calls),
+               "pool_lock_free": free}
+        release.set()
+        await asyncio.wait_for(r.wait_jobs(), 20)
+        for _ in range(3):   # chạy hết hai việc còn lại, mỗi lượt tối đa 2
+            await asyncio.wait_for(r.dispatch_once(), 20)
+        res["done"] = sum(1 for t in teams for x in ts.team_history(t["team_id"]) if x["status"] == "done") \
+            if hasattr(ts, "team_history") else None
+        res["pool_left"] = len(getattr(r, "_pool", {}) or {})
+        return res
+
+    race = run(pool_case(True))
+    seq = run(pool_case(False))
+    check("R8 hai dispatch đồng thời, bốn nhóm, trần 2: chỉ 2 việc chạy, 2 lời gọi engine",
+          race["calls"] == 2 and race["running"] == 2 and race["jobs"] == 2, race)
+    check("R8 đối chứng tuần tự: 2 việc chạy", seq["calls"] == 2 and seq["running"] == 2, seq)
+    check("R8 khoá pool không bị giữ trong lúc model chạy", race["pool_lock_free"] is True, race)
+    check("R8 sau khi xong: pool trả hết chỗ", race["pool_left"] == 0 and seq["pool_left"] == 0, (race, seq))
+
+    # Lỗi giữa chừng khi nhận việc: việc đã nhận trong lượt về lại hàng, không rò chỗ; lượt sau nhận đủ 2.
+    async def error_case():
+        async def fn(req):
+            return {"text": "OK"}
+        r, tm, ts, ss, teams = world_n("r8-error", fn, count=3)
+        r.max_parallel_teams = 2
+        for t in teams:
+            r.submit(t["team_id"], "Một việc", as_job=True, client_msg_id="j")
+        original = r.start_job_steps
+        n = {"c": 0}
+
+        def flaky(task_id):
+            n["c"] += 1
+            if n["c"] == 2:
+                raise sqlite3.OperationalError("database is locked")
+            return original(task_id)
+        err = None
+        with patch.object(r, "start_job_steps", side_effect=flaky):
+            try:
+                await r.dispatch_once(wait=False)
+            except sqlite3.OperationalError as ex:
+                err = str(ex)
+        state = {"err": err, "running": len(ts.team_running_tasks()), "jobs": len(r._jobs),
+                 "pool": len(getattr(r, "_pool", {}) or {})}
+        await r.dispatch_once()
+        state["after_running_done"] = sum(1 for t in teams for x in ts.team_history(t["team_id"])
+                                          if x["status"] == "done")
+        return state
+    st = run(error_case())
+    check("R8 lỗi giữa lúc nhận việc: lỗi nổi lên, không việc nào kẹt team_running, không giữ chỗ",
+          st["err"] and st["running"] == 0 and st["jobs"] == 0 and st["pool"] == 0, st)
+    check("R8 sau lỗi: lượt điều phối kế tiếp nhận đủ 2 việc và chạy xong", st["after_running_done"] == 2, st)
+
+    # Huỷ (lặp) dispatch khi luồng phụ đang nhận việc: việc vừa nhận về hàng, không rò chỗ, không nhận trùng.
+    async def cancel_case():
+        async def fn(req):
+            return {"text": "OK"}
+        r, tm, ts, ss, teams = world_n("r8-cancel", fn, count=2)
+        r.max_parallel_teams = 2
+        for t in teams:
+            r.submit(t["team_id"], "Một việc", as_job=True, client_msg_id="j")
+        inside, go = threading.Event(), threading.Event()
+        original = ts.claim_team_next
+
+        def slow_claim(*a, **k):
+            out = original(*a, **k)
+            inside.set()
+            go.wait(WAIT)
+            return out
+        with patch.object(ts, "claim_team_next", side_effect=slow_claim):
+            d = asyncio.ensure_future(r.dispatch_once(wait=False))
+            await asyncio.to_thread(inside.wait, WAIT)
+            d.cancel()
+            await asyncio.sleep(0)
+            d.cancel()
+            go.set()
+            try:
+                await asyncio.wait_for(d, 20)
+                how = "finished"
+            except asyncio.CancelledError:
+                how = "cancelled"
+        state = {"how": how, "running": len(ts.team_running_tasks()), "jobs": len(r._jobs),
+                 "pool": len(getattr(r, "_pool", {}) or {}),
+                 "queued": sum(len(ts.team_queue(t["team_id"])["waiting"]) for t in teams)}
+        await r.dispatch_once()
+        state["done"] = sum(1 for t in teams for x in ts.team_history(t["team_id"]) if x["status"] == "done")
+        return state
+    st = run(cancel_case())
+    check("R8 huỷ lặp khi đang nhận việc: việc về hàng chờ, không team_running mồ côi, không giữ chỗ",
+          st["how"] == "cancelled" and st["running"] == 0 and st["jobs"] == 0 and st["pool"] == 0
+          and st["queued"] == 2, st)
+    check("R8 sau huỷ: điều phối kế tiếp chạy xong cả hai, mỗi việc một lần", st["done"] == 2, st)
+
+
+def section_r9():
+    import importlib
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "tools"))
+    RT = importlib.import_module("team_chat_restore_pre")
+
+    def fixture(label, *, conversations_absent=False):
+        d = TEMP / f"r9-{label}"
+        d.mkdir()
+        for name, table, marker in RT.STORES:
+            for suffix in ("", RT.SNAPSHOT_SUFFIX):
+                if suffix == "" and conversations_absent and name == "conversations.db":
+                    continue
+                db = sqlite3.connect(d / (name + suffix))
+                db.execute(f"CREATE TABLE {table}(id INTEGER PRIMARY KEY" + (f", {marker} TEXT" if not suffix else "") + ")")
+                db.execute(f"INSERT INTO {table}(id) VALUES (?)", (2 if not suffix else 1,))
+                db.commit()
+                db.close()
+        db = sqlite3.connect(d / RT.TEAM_STORE)
+        db.execute("CREATE TABLE evidence(id INTEGER)")
+        db.execute("INSERT INTO evidence VALUES(2)")
+        db.commit()
+        db.close()
+        return d
+
+    def live(d):
+        out = {}
+        for name, table, _ in RT.STORES:
+            p = d / name
+            if not p.exists():
+                out[name] = None
+                continue
+            db = sqlite3.connect(p)
+            out[name] = db.execute(f"SELECT id FROM {table}").fetchone()[0]
+            db.close()
+        out["team"] = (d / RT.TEAM_STORE).exists()
+        return out
+
+    def posts(d):
+        return sorted(p.name.split(".post-")[0] for p in d.iterdir() if ".post-0.111.0-" in p.name)
+
+    original = RT._backup
+
+    def after_write(target):
+        def fake(src, dst):
+            original(src, dst)
+            if src.name == target + RT.SNAPSHOT_SUFFIX:
+                raise sqlite3.OperationalError("injected disk I/O error after backup")
+        return fake
+
+    pre_state = {"kanban.sqlite3": 2, "conversations.db": 2, "team": True}
+    for target in ("kanban.sqlite3", "conversations.db"):
+        d = fixture(f"after-{target}")
+        with patch.object(RT, "_backup", side_effect=after_write(target)):
+            res = RT.restore(str(d))
+        check(f"R9 lỗi SAU khi ghi {target}: ok=false, cả ba kho về đúng trước khi khôi phục, giữ bản sao",
+              res["ok"] is False and live(d) == pre_state
+              and posts(d) == ["conversations.db", "kanban.sqlite3", "team.sqlite3"], (res, live(d), posts(d)))
+        d = fixture(f"before-{target}")
+        res = RT.restore(str(d), _fail_on=target)
+        check(f"R9 lỗi TRƯỚC khi ghi {target}: ok=false, cả ba kho về đúng trước khi khôi phục",
+              res["ok"] is False and live(d) == pre_state, (res, live(d)))
+
+    # Gỡ kho nhóm hỏng giữa chừng.
+    d = fixture("team-remove")
+    orig_remove = RT._remove_db
+    seen = {"n": 0}
+
+    def flaky_remove(path):
+        if path.name == RT.TEAM_STORE and seen["n"] == 0:
+            seen["n"] += 1
+            raise PermissionError("file đang bị khoá")
+        return orig_remove(path)
+    with patch.object(RT, "_remove_db", side_effect=flaky_remove):
+        res = RT.restore(str(d))
+    check("R9 lỗi khi gỡ kho nhóm: ok=false, cả ba kho về đúng trước khi khôi phục",
+          res["ok"] is False and live(d) == pre_state, (res, live(d)))
+
+    # Đích vốn không có (kho phiên chưa từng có, chỉ có snapshot): hỏng sau khi ghi thì gỡ lại, không để lẫn.
+    d = fixture("absent", conversations_absent=True)
+    with patch.object(RT, "_backup", side_effect=after_write("conversations.db")):
+        res = RT.restore(str(d))
+    check("R9 đích vốn không có, lỗi sau khi ghi: kho đó lại không có, hai kho kia về đúng",
+          res["ok"] is False and live(d) == {"kanban.sqlite3": 2, "conversations.db": None, "team": True},
+          (res, live(d)))
+    d = fixture("absent-control", conversations_absent=True)
+    res = RT.restore(str(d))
+    check("R9 đối chứng đích vốn không có: khôi phục tạo kho từ snapshot, cả bộ về bản trước nâng",
+          res["ok"] and live(d) == {"kanban.sqlite3": 1, "conversations.db": 1, "team": False}, (res, live(d)))
+
+    # Không trả về được: báo rõ kho và bản sao, không nói đã trả về.
+    d = fixture("unrecoverable")
+
+    def broken(src, dst):
+        if ".post-0.111.0-" in src.name and dst.name == "conversations.db":
+            raise OSError("không đọc được bản sao")
+        original(src, dst)
+        if src.name == "conversations.db" + RT.SNAPSHOT_SUFFIX:
+            raise sqlite3.OperationalError("injected disk I/O error after backup")
+    with patch.object(RT, "_backup", side_effect=broken):
+        res = RT.restore(str(d))
+    bad = res.get("unrecoverable") or []
+    check("R9 không trả về được: báo rõ kho, lý do và đường dẫn bản sao; bản sao còn nguyên",
+          res["ok"] is False and [Path(b["store"]).name for b in bad] == ["conversations.db"]
+          and "KHÔNG trả về được" in res["error"] and Path(bad[0]["copy"]).is_file()
+          and "conversations.db" not in res["error"].split("đã trả về bản trước khi khôi phục: ")[-1].split(";")[0],
+          res)
+
+    d = fixture("control")
+    res = RT.restore(str(d))
+    check("R9 đối chứng không lỗi: cả bộ về bản trước nâng, gỡ kho nhóm",
+          res["ok"] and live(d) == {"kanban.sqlite3": 1, "conversations.db": 1, "team": False}, (res, live(d)))
+
+
 # Mỗi nhóm chạy riêng: một nhóm văng lỗi (vd. mã cũ thiếu API) thành FAIL của nhóm đó, không che nhóm khác.
-for _name, _fn in (("R1", section_r1), ("R2", section_r2), ("R3", section_r3), ("R4", section_r4), ("R5", section_r5)):
+for _name, _fn in (("R1", section_r1), ("R2", section_r2), ("R3", section_r3), ("R4", section_r4), ("R5", section_r5),
+                   ("R7", section_r7), ("R8", section_r8), ("R9", section_r9)):
     try:
         _fn()
     except Exception as _ex:  # noqa: BLE001

@@ -1319,15 +1319,17 @@ class TaskStore:
     def _team_move(
         self, task_id: str, allowed_from: tuple, status: str, event_type: str, message: str = "",
         *, block_kind: str = "", block_reason: str = "", result: Optional[str] = None,
-        run_status: str = "",
+        run_status: str = "", expected_rev: Optional[int] = None,
     ) -> Optional[str]:
-        """Chuyển trạng thái một việc nhóm. Trả trạng thái TRƯỚC khi chuyển, None nếu không áp."""
+        """Chuyển trạng thái một việc nhóm. Trả trạng thái TRƯỚC khi chuyển, None nếu không áp. `expected_rev`: chỉ áp
+        khi `team_rev` vẫn là bản đó (CAS cùng giao dịch, review T1 R7)."""
         ts = now()
         with self._lock:
             self._tx()
             try:
                 row = self._team_row(task_id)
-                if not row or row["status"] not in allowed_from:
+                if not row or row["status"] not in allowed_from or (
+                        expected_rev is not None and int(row["team_rev"] or 1) != int(expected_rev)):
                     self._db.rollback()
                     return None
                 prev = str(row["status"])
@@ -1366,9 +1368,11 @@ class TaskStore:
         return self._team_move(task_id, ("team_running",), "team_queued", "team_requeued", reason,
                                run_status="stale")
 
-    def team_finish(self, task_id: str, result: str = "") -> Optional[str]:
+    def team_finish(self, task_id: str, result: str = "", expected_rev: Optional[int] = None) -> Optional[str]:
+        """Chốt việc xong. Có `expected_rev` thì chỉ chốt khi yêu cầu chưa bị sửa sang bản khác: kết quả của bản cũ
+        không bao giờ thành kết quả của bản mới (review T1 R7)."""
         return self._team_move(task_id, ("team_running",), "done", "team_done", "done",
-                               result=result, run_status="completed")
+                               result=result, run_status="completed", expected_rev=expected_rev)
 
     def team_cancel(self, task_id: str, reason: str = "owner cancel") -> Optional[str]:
         return self._team_move(task_id, TEAM_OPEN_STATUS, "cancelled", "team_cancelled", reason,

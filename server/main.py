@@ -6836,7 +6836,11 @@ async def delete_agent(slug: str = Form(...), brain: str = Form("brain")):
             # Nhóm chat team (spec 11.4): mã nghỉ thì thành viên thành `agent_gone` ở mọi nhóm của brain, xử lý như bỏ
             # thành viên. Chưa có kho nhóm thì không tạo kho.
             if gone and _TEAM_API.exists():
-                _TEAM_API.teams().mark_agent_gone(_brain_key(brain), gone["agent_key"])
+                # Cùng khoá chấp nhận, áp dụng đầu ra của bộ chạy nhóm (review T1 R3, R7), ở luồng phụ.
+                def _gone(root=_brain_key(brain), key=gone["agent_key"]):
+                    with _TEAM_API.guard():
+                        _TEAM_API.teams().mark_agent_gone(root, key)
+                await asyncio.to_thread(_gone)
     except Exception as e:  # noqa: BLE001
         print(f"[resonance agent retire] {type(e).__name__}: {e}", file=sys.stderr)
     return {"ok": True}
