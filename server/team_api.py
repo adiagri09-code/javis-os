@@ -161,13 +161,25 @@ class TeamApi:
         q = self.deps.task_store().team_queue(team_id)
         return {"running": len(q["running"]), "waiting": len(q["waiting"]), "blocked": len(q["blocked"])}
 
+    def last_message(self, team: dict) -> Optional[dict]:
+        """Tin cuối của nhóm cho dòng xem trước ở danh sách (T5): loại người gửi, tên, 120 ký tự đầu, giờ."""
+        page = self.deps.session_store().get_team_messages_page(team["session_id"], limit=1)
+        msgs = page.get("messages") or []
+        if not msgs:
+            return None
+        m = msgs[-1]
+        author = self.runner()._name(team, m["author_ref"]) if m.get("author_kind") == "agent" and m.get("author_ref") else ""
+        return {"author_kind": m.get("author_kind") or "", "author": author,
+                "text": " ".join(str(m.get("content") or "").split())[:120], "ts": m.get("ts") or 0}
+
     def view(self, team: dict) -> dict:
         q = self.deps.task_store().team_queue(team["team_id"])
         return dict(team, members=self.member_views(team),
                     counts={"running": len(q["running"]), "waiting": len(q["waiting"]), "blocked": len(q["blocked"])},
                     running=[{"id": t["id"], "title": t["title"]} for t in q["running"]],
                     busy=self.runner().busy_view(team["team_id"]),
-                    authority=self.runner().authority_view(team["team_id"]))
+                    authority=self.runner().authority_view(team["team_id"]),
+                    usage=self.runner().usage(team["team_id"]))
 
     def register_agent(self, root: str, slug: str) -> dict:
         return self.deps.resonance_store().agent_register(RS.Principal("owner", "owner", root), slug)
@@ -255,7 +267,7 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 return _err(404, "Không tìm thấy brain", "Brain not found")
             if not api.exists():
                 return {"ok": True, "teams": [], "next": None}
-            rows = [dict(t, counts=api.counts(t["team_id"]))
+            rows = [dict(t, counts=api.counts(t["team_id"]), last=api.last_message(t))
                     for t in api.teams().list_teams(root, limit=limit, before=before)]
             nxt = rows[-1]["updated_at"] if len(rows) >= max(1, min(int(limit), 200)) else None
             return {"ok": True, "teams": rows, "next": nxt}
@@ -496,6 +508,22 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             api.kick()
             api.runner()._state(team_id)
             return {"ok": True}
+        return await api.io(_do)
+
+    @app.post("/teams/{team_id}/tasks/{task_id}/extend")
+    async def teams_task_extend(team_id: str, task_id: str, brain: str = "brain"):
+        """Nút "Cho thêm lượt" (T5): nâng đúng giới hạn việc vừa chạm thêm một nấc rồi cho chạy tiếp."""
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            if not _own_task(team_id, task_id):
+                return _err(404, "Không có việc này trong nhóm", "No such job in this team")
+            out = api.runner().extend_job(task_id)
+            if out is None:
+                return _err(409, "Việc không bị chặn vì hết lượt", "The job is not blocked by a limit")
+            api.kick()
+            return dict(out, ok=True)
         return await api.io(_do)
 
     @app.get("/teams/{team_id}/messages")

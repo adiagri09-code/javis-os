@@ -79,6 +79,11 @@ FIXED_LIMITS = {
     "account": "Quyền của tài khoản model đang dùng",
     "technical": "Giới hạn kỹ thuật: lượt nhóm chỉ chữ, một lượt mỗi agent cùng lúc, hạn khoá bận",
 }
+# Nút "Cho thêm lượt" (T5): mỗi lần bấm nâng đúng trần đã chạm thêm một nấc, kèm tin hệ thống bằng lời thường.
+EXTEND_STEP = {"daily_turns": 20, "task_turns": 6, "task_steps": 4}
+EXTEND_TEXT = {"daily_turns": "Chủ nhóm cho nhóm thêm {n} lần trả lời hôm nay để làm tiếp \"{title}\".",
+               "task_turns": "Chủ nhóm cho việc \"{title}\" thêm {n} lần trả lời.",
+               "task_steps": "Chủ nhóm cho việc \"{title}\" thêm {n} bước."}
 REASON_LABEL = {"on_point": "Đúng ý", "wrong_facts": "Sai dữ kiện", "missing": "Thiếu ý", "too_long": "Quá dài",
                 "unclear": "Khó hiểu", "off_topic": "Lạc đề"}
 
@@ -1169,7 +1174,7 @@ class TeamRunner:
         """Thêm bước nếu không vượt trần bước mỗi việc; vượt thì chặn `cap_reached`, không thêm bước nào."""
         cap = self._caps(team)["task_steps"]
         if cap is not None and len(self.teams.steps(task["id"])) + len(specs) > int(cap):
-            self._block(task["id"], "cap_reached", f"Đã chạm trần {cap} bước mỗi việc")
+            self._block(task["id"], "cap_reached", f"Việc đã dùng hết {cap} bước cho phép")
             return False
         for s in specs:
             self.teams.add_step(task["id"], team["team_id"], s["kind"], s["agent"], int(s.get("rev") or task["team_rev"]),
@@ -1398,15 +1403,16 @@ class TeamRunner:
         st = out["status"]
         if st == "cap":
             self.teams.requeue_step(sid)
-            what = "lượt mỗi ngày của nhóm" if out["cap"] == "daily_turns" else "lượt mỗi việc"
-            return self._block(task["id"], "cap_reached", f"Đã chạm trần {what}")
+            why = ("Nhóm đã dùng hết số lần trả lời hôm nay" if out["cap"] == "daily_turns"
+                   else "Việc đã dùng hết số lần trả lời cho phép")
+            return self._block(task["id"], "cap_reached", why)
         if st == "busy_long":
             self.teams.requeue_step(sid)
             return self._block(task["id"], "agent_busy_long",
                                f"{self._name(team, step['agent_key'])} bận ở nhóm khác quá lâu")
         if st == "error":
             self.teams.finish_step(sid, "failed", note=out["error"])
-            return self._block(task["id"], "failed", f"Lượt lỗi: {out['error']}")
+            return self._block(task["id"], "failed", f"Trợ lý gặp lỗi khi làm: {out['error']}")
         mid = out.get("message_id")
         if st in ("late_cancelled", "late"):
             self.teams.finish_step(sid, "cancelled", mid, False, "đến sau khi huỷ, không áp dụng")
@@ -1436,7 +1442,7 @@ class TeamRunner:
                 # Không áp dụng và để ở trạng thái lỗi: "Chạy lại bước" chạy lại đúng bước này; không có kết quả lặp nào
                 # được coi là kết quả việc.
                 self.teams.finish_step(sid, "failed", mid, False, "không tiến triển")
-                return self._block(task["id"], "no_progress", "Hai lượt liền nhau không có kết quả mới")
+                return self._block(task["id"], "no_progress", "Hai lần liền trợ lý không làm ra gì mới")
         kind = step["kind"]
         if kind == "plan":
             assigns = out["ops"]
@@ -1638,6 +1644,55 @@ class TeamRunner:
                                     last["brief"], last["input_refs"], last["parent_step"])
         return self.tasks.team_unblock(task_id) is not None
 
+    def _hit_cap(self, team: dict, task: dict) -> Optional[str]:
+        """Trần nào đang chặn việc `cap_reached`: lần trả lời trong ngày, lượt của việc, hay số bước. Đọc lại số thật."""
+        waiting = next((s for s in self.teams.steps(task["id"]) if s["status"] == "queued"), None)
+        caps = self._caps(team, waiting["agent_key"] if waiting else None)
+        if caps["daily_turns"] is not None and \
+                self.teams.count_team_turns(team["team_id"], self._day_start()) >= int(caps["daily_turns"]):
+            return "daily_turns"
+        if caps["task_turns"] is not None and self.teams.count_task_turns(task["id"]) >= int(caps["task_turns"]):
+            return "task_turns"
+        # Còn lại chỉ trần bước: chặn khi số bước CỘNG bước định thêm vượt trần, nên số bước hiện có có thể dưới trần.
+        return "task_steps" if caps["task_steps"] is not None else None
+
+    def extend_job(self, task_id: str) -> Optional[dict]:
+        """Nút "Cho thêm lượt" trên việc bị chặn vì hết lượt (T5): chủ nâng ĐÚNG trần đã chạm thêm một nấc (EXTEND_STEP),
+        rồi việc về hàng chờ chạy tiếp. Trần lấy từ Toàn quyền nếu hộp cấp quyền đang đặt số cho trần đó (nâng cả trần
+        tối đa khi cần), không thì trần của nhóm. Không phải việc chặn vì hết lượt thì không làm gì, trả None."""
+        task = self.tasks.get_task(task_id)
+        if not task or task["status"] != "team_blocked" or task.get("block_kind") != "cap_reached":
+            return None
+        team = self._team(task["team_id"])
+        cap = self._hit_cap(team, task)
+        added, value = 0, None
+        if cap:
+            added = EXTEND_STEP[cap]
+            with self.accept_lock:
+                auth = self.teams.active_authority(team["team_id"])
+                g = ((auth or {}).get("grant") or {}).get("caps") or {}
+                gv = g.get(cap)
+                if auth and isinstance(gv, int) and not isinstance(gv, bool):
+                    value = gv + added
+                    ceil = ((auth.get("grant") or {}).get("ceilings") or {}).get(cap)
+                    raise_ceil = {cap: value} if isinstance(ceil, int) and ceil < value else None
+                    self.teams.update_authority_caps(auth["id"], {cap: value}, "owner", ceilings=raise_ceil)
+                else:
+                    value = int(team["caps"][cap]) + added
+                    self.teams.set_caps(team["team_id"], {cap: value})
+            self.teams.log_event(team["team_id"], "caps_extended", "owner", None,
+                                 {"task_id": task_id, "cap": cap, "added": added, "value": value})
+            self._system(team, EXTEND_TEXT[cap].format(n=added, title=task["title"]), "caps_extended")
+        self.tasks.team_unblock(task_id)
+        self._state(team["team_id"])
+        return {"cap": cap, "added": added, "value": value}
+
+    def usage(self, team_id: str) -> dict:
+        """Số lần trả lời nhóm đã dùng hôm nay và giới hạn đang áp (None là không giới hạn), cho dòng "Hôm nay đã dùng"."""
+        team = self._team(team_id)
+        return {"today": self.teams.count_team_turns(team_id, self._day_start()),
+                "cap": self._caps(team, team["leader_key"])["daily_turns"]}
+
     def resume_no_leader(self, team_id: str) -> int:
         """Nhóm vừa có trưởng nhóm: các việc bị chặn `no_leader` về hàng chờ, đúng chỗ cũ."""
         n = 0
@@ -1701,7 +1756,7 @@ class TeamRunner:
         for task in self.tasks.team_running_tasks():
             self.tasks.team_take_over(task["id"], self.worker_id)
             if task["id"] in interrupted_tasks:
-                self._block(task["id"], "interrupted", "Server khởi động lại khi bước đang chạy")
+                self._block(task["id"], "interrupted", "Máy chủ khởi động lại giữa chừng nên bước đang làm bị dừng")
                 blocked.append(task["id"])
             else:
                 resumed.append(task["id"])

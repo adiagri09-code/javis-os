@@ -577,9 +577,9 @@ class TeamStore:
                 return None
             return self._authority(r)
 
-    def update_authority_caps(self, authority_id: int, caps: dict, by: str) -> bool:
+    def update_authority_caps(self, authority_id: int, caps: dict, by: str, ceilings: Optional[dict] = None) -> bool:
         """Trưởng nhóm đổi trần trong trần trần (người gọi đã kiểm). CAS theo dòng còn hiệu lực: dòng đã thu hồi thì
-        không đổi gì, trả False."""
+        không đổi gì, trả False. `ceilings` chỉ chủ dùng (nút "Cho thêm lượt" nâng cả trần tối đa khi cần)."""
         with self._Tx(self) as c:
             r = c.execute("SELECT * FROM team_authority WHERE id=? AND revoked_at IS NULL", (int(authority_id),)).fetchone()
             if r is None:
@@ -587,6 +587,8 @@ class TeamStore:
             g = json.loads(r["grant_json"] or "{}")
             before = dict(g.get("caps") or {})
             g["caps"] = dict(before, **caps)
+            if ceilings:
+                g["ceilings"] = dict(g.get("ceilings") or {}, **ceilings)
             c.execute("UPDATE team_authority SET grant_json=? WHERE id=?", (_j(g), int(authority_id)))
             self._event(c, r["team_id"], "caps_changed", by, before, g["caps"])
             return True

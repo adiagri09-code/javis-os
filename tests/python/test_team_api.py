@@ -189,6 +189,27 @@ check("tiếp tục nhóm: việc chạy", main.tasks_feature.store.get_task(jn)
 jw = c.post(f"/teams/{TID}/messages{Q}", json={"text": "Việc chờ", "client_msg_id": "j5", "as_job": True}).json()["task_id"]
 r = c.post(f"/teams/{TID}/tasks/{jw}/unblock{Q}", json={"action": "retry"})
 check("gỡ chặn việc không bị chặn: 409", r.status_code == 409)
+
+# T5: tin cuối ở danh sách nhóm, số lần đã dùng hôm nay, nút "Cho thêm lượt"
+row = c.get(f"/teams{Q}").json()["teams"][0]
+last = row.get("last") or {}
+check("T5 danh sách nhóm kèm tin cuối (loại người gửi, tên, trích, giờ)", last.get("text") == "Việc chờ"
+      and last.get("author_kind") == "owner" and last.get("ts", 0) > 0 and "author" in last, row.get("last"))
+v = c.get(f"/teams/{TID}{Q}").json()["team"]
+check("T5 chi tiết nhóm kèm số lần đã dùng hôm nay và giới hạn", v.get("usage", {}).get("cap") == 50
+      and v["usage"]["today"] >= 1, v.get("usage"))
+check("T5 Cho thêm lượt cho việc không bị chặn: 409", c.post(f"/teams/{TID}/tasks/{jw}/extend{Q}").status_code == 409)
+c.post(f"/teams/{TID}/caps{Q}", json={"caps": {"daily_turns": v["usage"]["today"]}})
+dispatch()
+check("T5 hết lần trả lời hôm nay: việc chặn cap_reached",
+      main.tasks_feature.store.get_task(jw)["block_kind"] == "cap_reached")
+r = c.post(f"/teams/{TID}/tasks/{jw}/extend{Q}")
+check("T5 Cho thêm lượt: 200, nâng trần ngày, việc về hàng", r.status_code == 200
+      and r.json()["cap"] == "daily_turns" and r.json()["value"] == v["usage"]["today"] + 20
+      and main.tasks_feature.store.get_task(jw)["status"] == "team_queued", r.text)
+check("T5 Cho thêm lượt việc nhóm khác: 404", c.post(f"/teams/{TID}/tasks/t_khong_co/extend{Q}").status_code == 404)
+c.post(f"/teams/{TID}/tasks/{jw}/cancel{Q}")
+c.post(f"/teams/{TID}/caps{Q}", json={"caps": {"daily_turns": 50}})
 r = c.delete(f"/teams/{TID}/members/{keys['minh']}{Q}")
 check("bỏ thành viên", r.status_code == 200 and keys["minh"] not in {m["agent_key"] for m in r.json()["team"]["members"]})
 c.post(f"/teams/{TID}/members{Q}", json={"slug": "minh"})
