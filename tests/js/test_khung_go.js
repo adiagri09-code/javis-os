@@ -52,5 +52,9 @@ const coding = fs.readFileSync(path.join(ROOT, "dashboard/coding.js"), "utf8");
 check("trang Coding vẫn chèn hàng chip ngữ cảnh vào #modelBar (hiện vì không còn rỗng)",
   coding.indexOf('getElementById("modelBar")') !== -1 && css.indexOf(".model-bar:empty { display: none; }") !== -1);
 
+const slash = fs.readFileSync(path.join(ROOT, "dashboard/chat-slash.js"), "utf8");
+check("menu / neo vào khung gõ (#hudVoice), không che ảnh đính kèm",
+  slash.indexOf('input.closest(".hud-voice") || input') !== -1);
+
 if (fails.length) { console.log("\nFAIL - test_khung_go: " + fails.length + " lỗi"); process.exit(1); }
 console.log("\nOK - test_khung_go: tất cả pass");
