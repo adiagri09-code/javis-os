@@ -22332,6 +22332,49 @@ def _team_engine_for(team, agent_key, role):
     return ("anthropic-cli" if own_claude else "aux"), model, run
 
 
+class _TeamAdmin:
+    """Thao tác của host cho lệnh quản trị của trưởng nhóm Toàn quyền (T3, spec 13). Bộ chạy gọi ở pha chấp nhận, ở luồng
+    phụ, trong `accept_lock` (thứ tự khoá: accept_lock rồi _AGENT_META_LOCK, như `delete_agent`)."""
+
+    def exists(self, root, slug):
+        return _agent_md_path(root, slug) is not None
+
+    def register(self, root, slug):
+        return _TEAM_API.register_agent(root, slug)
+
+    def create_agent(self, root, name, role, prompt):
+        """Tạo trợ lý MỚI, không bao giờ ghi đè: slug trùng thì thêm -2, -3. Gắn tag "Nhóm" để không bị trống nhãn."""
+        base = _ascii_slug(name) or "tro-ly"
+        with _AGENT_META_LOCK:
+            d = _agents_dir(root)
+            d.mkdir(parents=True, exist_ok=True)
+            slug, n = base, 2
+            while (d / f"{slug}.md").exists():
+                slug, n = f"{base}-{n}", n + 1
+            meta = {"type": "agent", "name": name, "slug": slug, "role": role, "skills": [], "model": "",
+                    "updated": _today()}
+            agent_tags.write_tags(meta, agent_tags.normalize_tags(["Nhóm"]))
+            _write_md(d / f"{slug}.md", meta, (prompt or "").strip() or role or name)
+        return slug
+
+    def edit_prompt(self, root, slug, prompt):
+        with _AGENT_META_LOCK:
+            path = _agent_md_path(root, slug)
+            if path is None:
+                raise FileNotFoundError(slug)
+            meta, _old = _read_md(path)
+            if not meta:
+                # Frontmatter hỏng hay không có: ghi lại sẽ xoá tên, vai, model, tag của trợ lý (review T3).
+                raise ValueError("file trợ lý không có frontmatter đọc được, không sửa")
+            meta["updated"] = _today()
+            _write_md(path, meta, prompt)
+
+    def set_resonance(self, root, slug, on, by):
+        if on and _agent_md_path(root, slug) is None:
+            raise FileNotFoundError(slug)
+        _resonance_store().agent_set_enabled(resonance_store.Principal("owner", by, _brain_key(root)), slug, bool(on))
+
+
 async def _team_notify(session_id, text):
     await _bo_vao_hom_thu(f"{WEB_CHAT_PREFIX}{session_id}", text, kind="report",
                           label=localefmt.chu("Nhóm", "Team"), source="team")
@@ -22341,7 +22384,7 @@ _TEAM_API = team_api.register(app, team_api.TeamApiDeps(
     brain_key=lambda b: _brain_key(b), session_store=lambda: get_store(),
     task_store=lambda: tasks_feature.store, resonance_store=lambda: _resonance_store(),
     agents_meta=_resonance_agents_meta, agent_info=_team_agent_info, engine_for=_team_engine_for,
-    broadcast=lambda ev: _CHAT_RUNTIME.publish(ev), notify=_team_notify))
+    broadcast=lambda ev: _CHAT_RUNTIME.publish(ev), notify=_team_notify, admin=_TeamAdmin()))
 
 
 if __name__ == "__main__":

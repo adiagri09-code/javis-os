@@ -47,6 +47,7 @@ class TeamApiDeps:
     notify: Optional[Callable[[str, str], Any]] = None  # (session_id nhóm, chữ) -> hộp thư (async)
     spawn: Callable[[Any], Any] = field(default=asyncio.ensure_future)
     store_path: Optional[Path] = None                  # mặc định STATE_DIR/team.sqlite3
+    admin: Any = None                                  # thao tác host cho lệnh quản trị Toàn quyền (T3)
 
 
 async def _body(request: Request) -> dict:
@@ -118,7 +119,7 @@ class TeamApi:
                 teams=self.teams(), tasks=self.deps.task_store(), sessions=self.deps.session_store(),
                 engine_for=lambda team, key, role: self.deps.engine_for(team, key, role),
                 agent_info=lambda root, key: self.deps.agent_info(root, key),
-                publish=publish, notify=notify, worker_id="team-runner")
+                publish=publish, notify=notify, worker_id="team-runner", admin=self.deps.admin)
             if self._loop is not None:
                 self._runner._loop, self._runner._loop_thread = self._loop, self._loop_thread
         return self._runner
@@ -152,7 +153,8 @@ class TeamApi:
             slug = reg.get("slug") or m["slug_at_join"]
             out.append({"agent_key": m["agent_key"], "slug": slug, "name": names.get(slug) or slug,
                         "role": m["role"], "status": m["status"], "agent_status": reg.get("status") or "",
-                        "resonance_enabled": bool(reg.get("enabled")), "joined_at": m["joined_at"]})
+                        "resonance_enabled": bool(reg.get("enabled")), "joined_at": m["joined_at"],
+                        "managed": bool(m.get("managed_by_team"))})
         return out
 
     def counts(self, team_id: str) -> dict:
@@ -164,7 +166,8 @@ class TeamApi:
         return dict(team, members=self.member_views(team),
                     counts={"running": len(q["running"]), "waiting": len(q["waiting"]), "blocked": len(q["blocked"])},
                     running=[{"id": t["id"], "title": t["title"]} for t in q["running"]],
-                    busy=self.runner().busy_view(team["team_id"]))
+                    busy=self.runner().busy_view(team["team_id"]),
+                    authority=self.runner().authority_view(team["team_id"]))
 
     def register_agent(self, root: str, slug: str) -> dict:
         return self.deps.resonance_store().agent_register(RS.Principal("owner", "owner", root), slug)
@@ -594,6 +597,51 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             if err:
                 return err
             return {"ok": True, "turns": api.teams().turns(team_id, since, max(1, min(int(limit), 2000)))}
+        return await api.io(_do)
+
+    # ───────────── Toàn quyền (T3, spec 13, 15.1) ─────────────
+
+    @app.post("/teams/{team_id}/authority")
+    async def teams_authority(team_id: str, request: Request, brain: str = "brain"):
+        """Chủ bật, sửa hay thu hồi Toàn quyền cho trưởng nhóm `{mode: "full"|"limited", grant}`. Route của dashboard
+        (auth, CSRF); không lệnh JAVIS_TEAM nào gọi tới đây, nên trưởng nhóm không tự nâng mình lên Toàn quyền."""
+        body = await _body(request)
+
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            mode = str(body.get("mode") or "")
+            runner = api.runner()
+            try:
+                if mode == "full":
+                    grant = body.get("grant")
+                    if not isinstance(grant, dict):
+                        return _err(400, "Thiếu hộp cấp quyền", "Missing grant")
+                    runner.grant_authority(team_id, grant, by="owner")
+                elif mode == "limited":
+                    runner.revoke_authority(team_id, by="owner", reason=str(body.get("reason") or "chủ thu hồi")[:200])
+                else:
+                    return _err(400, "Chế độ không hợp lệ", "Invalid mode")
+            except TeamError as ex:
+                return _team_err(ex)
+            return {"ok": True, "team": api.view(api.teams().get(team_id))}
+        return await api.io(_do)
+
+    @app.post("/teams/{team_id}/members/{agent_key}/managed")
+    async def teams_member_managed(team_id: str, agent_key: str, request: Request, brain: str = "brain"):
+        """Chủ đánh dấu (hay bỏ) "giao cho nhóm này quản lý" (spec 13.3). Mỗi agent tối đa một nhóm quản lý: 409."""
+        on = bool((await _body(request)).get("on", True))
+
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            try:
+                api.runner().set_managed(team_id, agent_key, on, by="owner")
+            except TeamError as ex:
+                return _team_err(ex, 409)
+            return {"ok": True, "team": api.view(api.teams().get(team_id))}
         return await api.io(_do)
 
     return api

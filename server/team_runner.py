@@ -60,6 +60,21 @@ FEEDBACK_EXCERPT = 160
 # Câu dặn cố định đi kèm khối phản hồi (spec 14.4 mục 3), nguyên văn.
 FEEDBACK_NOTE = ("Emoji là cảm xúc của chủ nhóm, có thể về sự việc được kể; đừng coi là chấm điểm. Chỉ điều chỉnh theo "
                  "lý do chất lượng và góp ý chữ. Chưa rõ thì giữ cách làm.")
+# Toàn quyền (T3, spec 13, 15.2). Trần trưởng nhóm đổi được (trong trần trần của chủ) và lệnh quản trị.
+AUTH_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns")
+MODEL_TURN_CAPS = ("task_turns", "daily_turns")   # "Không giới hạn" của hai trần này chỉ cho provider chủ tích (D6)
+ADMIN_OPS_PER_TURN = 10   # trần lệnh quản trị mỗi lượt (review T3)
+ADMIN_OPS = ("open_job", "reprioritize", "add_member", "remove_member", "create_agent", "set_cap", "set_resonance",
+             "edit_agent", "interrupt")
+CAP_LABEL = {"task_turns": "lượt mỗi việc", "task_steps": "bước mỗi việc", "help_depth": "độ sâu nhờ hỗ trợ",
+             "daily_turns": "lượt mỗi ngày của nhóm"}
+# Trần không bỏ được, luôn hiện trong hộp cấp quyền (spec 13.2).
+FIXED_LIMITS = {
+    "server_call_ceiling": "JAVIS_RESONANCE_CALL_CEILING do máy chủ đặt (chỉ ảnh hưởng mục tiêu Cộng hưởng)",
+    "provider_quota": "Hạn mức của gói thuê bao hay của nhà cung cấp model",
+    "account": "Quyền của tài khoản model đang dùng",
+    "technical": "Giới hạn kỹ thuật: lượt nhóm chỉ chữ, một lượt mỗi agent cùng lúc, hạn khoá bận",
+}
 REASON_LABEL = {"on_point": "Đúng ý", "wrong_facts": "Sai dữ kiện", "missing": "Thiếu ý", "too_long": "Quá dài",
                 "unclear": "Khó hiểu", "off_topic": "Lạc đề"}
 
@@ -207,7 +222,7 @@ class TeamRunner:
     def __init__(self, *, teams, tasks, sessions, engine_for: Callable[[dict, str, str], tuple],
                  agent_info: Callable[[str, str], Optional[dict]], publish: Optional[Callable[[dict], Any]] = None,
                  notify: Optional[Callable[[str, str], Any]] = None, worker_id: str = "team-runner",
-                 max_parallel_teams: int = 2, clock: Callable[[], float] = time.time):
+                 max_parallel_teams: int = 2, clock: Callable[[], float] = time.time, admin: Any = None):
         self.teams = teams
         self.tasks = tasks
         self.sessions = sessions
@@ -218,6 +233,9 @@ class TeamRunner:
         self.worker_id = worker_id
         self.max_parallel_teams = max(1, int(max_parallel_teams))
         self.clock = clock
+        # Thao tác của host mà lệnh quản trị Toàn quyền cần (tạo agent, sửa lời nhắc, Cộng hưởng, cấp mã). None: lệnh
+        # cần host bị từ chối kèm ghi chú.
+        self.admin = admin
         self._jobs: dict[str, asyncio.Task] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         self._locks_loop: Any = None
@@ -303,7 +321,12 @@ class TeamRunner:
         return time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
 
     def _daily_left(self, team: dict) -> bool:
-        return self.teams.count_team_turns(team["team_id"], self._day_start()) < int(team["caps"]["daily_turns"])
+        return self._daily_left_for(team, None)
+
+    def _daily_left_for(self, team: dict, agent_key: Optional[str]) -> bool:
+        """Còn lượt trong ngày cho lượt của `agent_key` (trần theo provider của chính agent đó, D6)."""
+        cap = self._caps(team, agent_key)["daily_turns"]
+        return cap is None or self.teams.count_team_turns(team["team_id"], self._day_start()) < int(cap)
 
     def _post(self, team: dict, text: str, *, author_kind: str, author_ref: str = "", reply_to=None,
               task_id=None, step_id=None, meta=None, role: str = "assistant") -> int:
@@ -383,7 +406,8 @@ class TeamRunner:
             return out
         if team["status"] != "active":
             out["notes"].append("team_paused")
-        elif not self._daily_left(team):
+        elif (valid if wanted else [team["leader_key"]] if team["leader_key"] else []) and not any(
+                self._daily_left_for(team, k) for k in (valid if wanted else [team["leader_key"]])):
             out["notes"].append("daily_cap")
         elif wanted:
             out["replies"] = valid
@@ -444,6 +468,245 @@ class TeamRunner:
             chat_id=f"team:{team_id}")
         self._state(team_id)
         return tid
+
+    # ───────────── Toàn quyền (T3, spec mục 13) ─────────────
+
+    def _provider(self, team: dict, agent_key: Optional[str]) -> str:
+        """Provider của lượt (để áp D6): đúng nhãn mà `engine_for` trả, tức cùng luật chọn engine thật (review T3: suy
+        riêng thì agent cũ có model Claude mà thiếu provider bị coi nhầm là model việc nền). `engine_for` chỉ dựng closure,
+        không gọi model. Lỗi thì coi như model việc nền."""
+        if not agent_key:
+            return "aux"
+        try:
+            return str(self.engine_for(team, agent_key, "work")[0] or "aux")
+        except Exception:  # noqa: BLE001
+            return "aux"
+
+    def effective_caps(self, team_id: str, provider: str = "aux", team: Optional[dict] = None) -> dict:
+        """Trần đang áp cho nhóm (spec 13.2). Quyền giới hạn: trần của nhóm (chủ đặt, luôn là số). Toàn quyền còn hiệu
+        lực: trần trong hộp cấp quyền đè lên; "Không giới hạn" trả `None` (KHÔNG thay bằng số lớn). Không giới hạn lượt
+        model chỉ cho provider chủ tích (D6); provider khác dùng trần của nhóm."""
+        team = team or self._team(team_id)
+        caps = {k: team["caps"][k] for k in team["caps"]}
+        auth = self.teams.active_authority(team_id)
+        if not auth:
+            return caps
+        grant = auth["grant"] or {}
+        allowed = set(grant.get("providers_unlimited") or [])
+        for k, v in (grant.get("caps") or {}).items():
+            if k not in AUTH_CAPS:
+                continue
+            if isinstance(v, dict) and v.get("unlimited"):
+                if k in MODEL_TURN_CAPS and provider not in allowed:
+                    continue
+                caps[k] = None
+            elif isinstance(v, (int, float)) and not isinstance(v, bool):
+                caps[k] = int(v)
+        return caps
+
+    def _caps(self, team: dict, agent_key: Optional[str] = None) -> dict:
+        # Quyền giới hạn (đa số nhóm): không cần biết provider, khỏi dựng engine_for.
+        if self.teams.active_authority(team["team_id"]) is None:
+            return {k: team["caps"][k] for k in team["caps"]}
+        return self.effective_caps(team["team_id"], self._provider(team, agent_key), team)
+
+    @staticmethod
+    def _cap_value(v: Any) -> Any:
+        """Chuẩn hoá một giá trị trần trong hộp cấp quyền: số >= 0, hay {"unlimited": True}. Sai khuôn thì lỗi."""
+        if isinstance(v, dict) and v.get("unlimited") is True:
+            return {"unlimited": True}
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or int(v) < 0:
+            raise TeamError("trần phải là số không âm hay Không giới hạn")
+        return int(v)
+
+    @staticmethod
+    def _within(value: Any, ceiling: Any) -> bool:
+        if ceiling is None:
+            return False
+        if isinstance(ceiling, dict) and ceiling.get("unlimited"):
+            return True
+        if isinstance(value, dict):
+            return False
+        return int(value) <= int(ceiling)
+
+    def _clean_grant(self, grant: dict) -> dict:
+        grant = dict(grant or {})
+        ceilings = {k: self._cap_value(v) for k, v in (grant.get("ceilings") or {}).items() if k in AUTH_CAPS}
+        caps = {k: self._cap_value(v) for k, v in (grant.get("caps") or {}).items() if k in AUTH_CAPS}
+        for k, v in caps.items():
+            # Không có trần tối đa: chủ đặt trần cố định, trưởng nhóm không đổi được (kiểm ở `set_cap`).
+            if k in ceilings and not self._within(v, ceilings[k]):
+                raise TeamError(f"trần {k} vượt trần trần")
+        providers = [str(p) for p in (grant.get("providers_unlimited") or []) if str(p).strip()]
+        return {"caps": caps, "ceilings": ceilings, "can_interrupt": bool(grant.get("can_interrupt")),
+                "providers_unlimited": providers, "billing": str(grant.get("billing") or "")[:40]}
+
+    def grant_authority(self, team_id: str, grant: dict, by: str = "owner") -> dict:
+        """Chủ bật hay sửa Toàn quyền (trưởng nhóm không có đường nào gọi tới đây)."""
+        clean = self._clean_grant(grant)
+        with self.accept_lock:
+            row = self.teams.grant_authority(team_id, clean, by=by)
+        team = self._team(team_id)
+        self._post(team, f"Chủ nhóm đã bật Toàn quyền cho trưởng nhóm {self._name(team, row['leader_key'])}.",
+                   author_kind="system", meta={"kind": "authority_granted"})
+        self._state(team_id)
+        return row
+
+    def revoke_authority(self, team_id: str, by: str = "owner", reason: str = "") -> bool:
+        """Thu hồi (spec 13.5): ghi `revoked_at`; lệnh quản trị sau mốc này bị từ chối (kiểm trong `accept_lock`)."""
+        with self.accept_lock:
+            done = self.teams.revoke_authority(team_id, by=by, reason=reason or "chủ thu hồi")
+        if done:
+            self._post(self._team(team_id), "Chủ nhóm đã thu hồi Toàn quyền. Nhóm về Quyền giới hạn.",
+                       author_kind="system", meta={"kind": "authority_revoked"})
+            self._state(team_id)
+        return done
+
+    def set_managed(self, team_id: str, agent_key: str, on: bool, by: str = "owner") -> None:
+        with self.accept_lock:
+            self.teams.set_managed(team_id, agent_key, on, by=by)
+        self._state(team_id)
+
+    def authority_view(self, team_id: str) -> dict:
+        team = self._team(team_id)
+        auth = self.teams.active_authority(team_id)
+        return {"authority": auth, "effective_caps": self.effective_caps(team_id, "aux", team),
+                "fixed_limits": dict(FIXED_LIMITS)}
+
+    def _authority_lines(self, team: dict, auth: dict, agent_key: str) -> list:
+        """Khối "Toàn quyền" trong lời nhắc của trưởng nhóm: trần đang áp, lệnh quản trị dùng được (đúng cú pháp khối
+        JAVIS_TEAM), giới hạn không bỏ được. Ngắt việc chỉ hiện khi chủ cho."""
+        caps = self.effective_caps(team["team_id"], self._provider(team, agent_key), team)
+        shown = [f"{CAP_LABEL[k]}: {'Không giới hạn' if caps.get(k) is None else caps.get(k)}" for k in AUTH_CAPS]
+        ops = [
+            '{"op": "open_job", "title": "...", "brief": "...", "agent": "<thành viên, tuỳ chọn>"}',
+            '{"op": "reprioritize", "task_id": "...", "on": true}',
+            '{"op": "add_member", "slug": "<slug trợ lý có sẵn>"}',
+            '{"op": "remove_member", "agent": "<thành viên>"}',
+            '{"op": "create_agent", "name": "...", "role": "...", "prompt": "..."}',
+            '{"op": "set_cap", "cap": "<task_turns|task_steps|help_depth|daily_turns>", "value": 10}',
+            '{"op": "edit_agent", "agent": "<trợ lý do nhóm quản lý>", "prompt": "..."}',
+            '{"op": "set_resonance", "agent": "<trợ lý do nhóm quản lý>", "on": true}',
+        ]
+        if (auth.get("grant") or {}).get("can_interrupt"):
+            ops.append('{"op": "interrupt", "task_id": "...", "reason": "..."}')
+        return (["\n## Toàn quyền (chủ nhóm cấp cho bạn, thu hồi được bất cứ lúc nào)",
+                 "Trần đang áp: " + "; ".join(shown) + ".",
+                 "Lệnh quản trị, mỗi lệnh một khối ở cuối câu trả lời: <!-- JAVIS_TEAM: {...} -->"]
+                + [f"- {o}" for o in ops]
+                + ["Chỉ sửa được trợ lý do nhóm này quản lý. Không vượt được: hạn mức gói thuê bao hay nhà cung cấp, "
+                   "lượt chỉ chữ, một lượt mỗi trợ lý cùng lúc. Lệnh của chủ nhóm luôn thắng."])
+
+    def _system(self, team: dict, text: str, kind: str) -> None:
+        self._post(team, text, author_kind="system", meta={"kind": kind})
+
+    def _apply_admin(self, team_id: str, leader_key: str, op: dict, notes: list, source: str) -> None:
+        """Một lệnh quản trị của trưởng nhóm Toàn quyền (spec 13, 15.2). Người gọi giữ `accept_lock` và đã kiểm Toàn
+        quyền còn hiệu lực cho đúng `leader_key`. Lỗi thì ghi chú trên tin, không ném."""
+        team = self._team(team_id)
+        auth = self.teams.active_authority(team_id)
+        if not auth or auth["leader_key"] != leader_key:
+            notes.append(f"Lệnh '{op.get('op')}' cần Toàn quyền, đã bỏ")
+            return
+        grant = auth["grant"] or {}
+        by = f"leader:{leader_key}"
+        root = team["brain_id"]
+        lead = self._name(team, leader_key)
+        kind = op.get("op")
+        admin = self.admin
+        try:
+            if kind == "open_job":
+                title = re.sub(r"\s+", " ", str(op.get("title") or "")).strip()[:120]
+                if not title:
+                    raise TeamError("mở việc cần tiêu đề")
+                who = self._resolve(team, op.get("agent")) if op.get("agent") else None
+                tid, created = self.tasks.enqueue_team(
+                    root, team_id, title, str(op.get("brief") or title)[:4000], source_ref=f"leader:{source}",
+                    assignee_key=who or "", coordinator_key=team["leader_key"] or "", chat_id=f"team:{team_id}")
+                if created:
+                    self.teams.log_event(team_id, "job_opened", by, None, {"task_id": tid, "title": title})
+                    self._system(team, f"Trưởng nhóm {lead} đã mở việc \"{title}\".", "job_opened")
+            elif kind == "reprioritize":
+                task = self.tasks.get_task(str(op.get("task_id") or ""))
+                if not task or task.get("team_id") != team_id or task.get("lane") != "team":
+                    raise TeamError("không có việc này trong nhóm")
+                version = self.tasks.team_queue(team_id)["version"]
+                self.tasks.team_priority(task["id"], bool(op.get("on", True)), version)
+                self.teams.log_event(team_id, "job_reprioritized", by, None,
+                                     {"task_id": task["id"], "on": bool(op.get("on", True))})
+                self._system(team, f"Trưởng nhóm {lead} đã {'ưu tiên' if op.get('on', True) else 'bỏ ưu tiên'} việc "
+                                   f"\"{task['title']}\".", "job_reprioritized")
+            elif kind == "add_member":
+                slug = str(op.get("slug") or "").strip()
+                if not admin or not slug or not admin.exists(root, slug):
+                    raise TeamError(f"không có trợ lý '{slug}'")
+                reg = admin.register(root, slug)
+                self.teams.add_member(team_id, reg["agent_key"], slug, by=by)
+                self._system(team, f"Trưởng nhóm {lead} đã thêm {self._name(team, reg['agent_key'])} vào nhóm.",
+                             "member_added")
+            elif kind == "remove_member":
+                key = self._resolve(team, op.get("agent"))
+                if not key or key == leader_key:
+                    raise TeamError("không bỏ được thành viên này")
+                name = self._name(team, key)
+                self.teams.remove_member(team_id, key, by=by)
+                self._system(team, f"Trưởng nhóm {lead} đã bỏ {name} khỏi nhóm.", "member_removed")
+            elif kind == "create_agent":
+                name = str(op.get("name") or "").strip()[:80]
+                if not admin or not name:
+                    raise TeamError("tạo trợ lý cần tên")
+                slug = admin.create_agent(root, name, str(op.get("role") or "")[:200], str(op.get("prompt") or "")[:8000])
+                reg = admin.register(root, slug)
+                self.teams.add_member(team_id, reg["agent_key"], slug, by=by)
+                self.teams.set_managed(team_id, reg["agent_key"], True, by=by)
+                self.teams.log_event(team_id, "agent_created", by, None, {"agent_key": reg["agent_key"], "slug": slug})
+                self._system(team, f"Trưởng nhóm {lead} đã tạo trợ lý {name} (do nhóm quản lý) và thêm vào nhóm.",
+                             "agent_created")
+            elif kind in ("set_resonance", "edit_agent"):
+                key = self._resolve(team, op.get("agent"))
+                m = self.teams.member(team_id, key) if key else None
+                if not m or not m.get("managed_by_team"):
+                    raise TeamError("chỉ sửa được trợ lý do nhóm này quản lý")
+                info = self.agent_info(root, key) or {}
+                slug = info.get("slug") or m["slug_at_join"]
+                others = [t["name"] for t in self.teams.teams_with_member(key) if t["team_id"] != team_id]
+                if kind == "set_resonance":
+                    admin.set_resonance(root, slug, bool(op.get("on")), by)
+                    what = f"{'bật' if op.get('on') else 'tắt'} Cộng hưởng cho {info.get('name') or slug}"
+                else:
+                    prompt = str(op.get("prompt") or "").strip()
+                    if not prompt:
+                        raise TeamError("sửa trợ lý cần lời nhắc mới")
+                    admin.edit_prompt(root, slug, prompt[:8000])
+                    what = f"sửa lời nhắc của {info.get('name') or slug}"
+                self.teams.log_event(team_id, "agent_" + kind, by, None, {"agent_key": key, "other_teams": others})
+                tail = f" Thay đổi này cũng áp cho nhóm: {', '.join(others)}." if others else ""
+                self._system(team, f"Trưởng nhóm {lead} đã {what}.{tail}", "agent_" + kind)
+            elif kind == "set_cap":
+                cap = str(op.get("cap") or "")
+                if cap not in AUTH_CAPS:
+                    raise TeamError(f"không có trần '{cap}'")
+                value = {"unlimited": True} if op.get("unlimited") else self._cap_value(op.get("value"))
+                if not self._within(value, (grant.get("ceilings") or {}).get(cap)):
+                    raise TeamError(f"trần {cap} vượt trần trần chủ đặt")
+                if not self.teams.update_authority_caps(auth["id"], {cap: value}, by):
+                    raise TeamError("Toàn quyền vừa bị thu hồi")
+                shown = "Không giới hạn" if isinstance(value, dict) else str(value)
+                self._system(team, f"Trưởng nhóm {lead} đã đặt trần {CAP_LABEL.get(cap, cap)}: {shown}.", "caps_changed")
+            elif kind == "interrupt":
+                if not grant.get("can_interrupt"):
+                    raise TeamError("chưa được chủ cho quyền ngắt việc đang chạy")
+                task = self.tasks.get_task(str(op.get("task_id") or ""))
+                if not task or task.get("team_id") != team_id or task["status"] != "team_running":
+                    raise TeamError("không có việc đang chạy này trong nhóm")
+                reason = str(op.get("reason") or "").strip()[:300] or "không nêu lý do"
+                self.cancel_job(task["id"], f"trưởng nhóm ngắt: {reason}")
+                self.teams.log_event(team_id, "job_interrupted", by, None, {"task_id": task["id"], "reason": reason})
+                self._system(team, f"Trưởng nhóm {lead} đã ngắt việc \"{task['title']}\": {reason}.", "job_interrupted")
+            else:
+                raise TeamError(f"không có lệnh '{kind}'")
+        except Exception as ex:  # noqa: BLE001
+            notes.append(f"Lệnh '{kind}' không áp dụng được: {ex}")
 
     # ───────────── phản hồi (T2, spec mục 14) ─────────────
 
@@ -529,6 +792,9 @@ class TeamRunner:
             lines.append(f"\n## Lịch sử gần đây của nhóm (tối đa {NEW_MSG_LIMIT} tin, cũ trước; "
                          "\"mới\" là tin sau lượt trước của bạn)")
             lines.extend(reversed(rendered))
+        auth = self.teams.active_authority(team["team_id"]) if agent_key == team.get("leader_key") else None
+        if auth and role in LEADER_ROLES:
+            lines.extend(self._authority_lines(team, auth, agent_key))
         feedback = self._feedback_lines(team, agent_key)
         if feedback:
             lines.append("\n## Phản hồi gần đây của chủ nhóm (về tin của bạn trong nhóm này)")
@@ -592,9 +858,10 @@ class TeamRunner:
     def _reserve(self, team: dict, task_id: Optional[str], step_id: Optional[str], agent_key: str,
                  role: str) -> str:
         """Kiểm trần và giữ chỗ trong MỘT giao dịch của kho (R5): không có khe giữa đếm và ghi."""
+        caps = self._caps(self._team(team["team_id"]), agent_key)
         return self.teams.reserve_turn(team["team_id"], task_id, step_id, agent_key, role,
-                                       daily_cap=int(team["caps"]["daily_turns"]), day_start=self._day_start(),
-                                       task_cap=int(team["caps"]["task_turns"]) if task_id else None)
+                                       daily_cap=caps["daily_turns"], day_start=self._day_start(),
+                                       task_cap=caps["task_turns"] if task_id else None)
 
     def _refund_if_unmarked(self, turn_id: str) -> None:
         """Hoàn lượt chưa tới mốc gọi engine, đúng một lần. Lượt đã qua mốc thì để nguyên (đã tính)."""
@@ -716,6 +983,19 @@ class TeamRunner:
             # khoá (review T1 R7). Lượt trò chuyện không có pha áp dụng: ghi ở đây.
             if applied and step is None:
                 self._commit_once(turn_id, commit, notes)
+            # Lệnh quản trị Toàn quyền (spec 13, 15.2): chỉ lượt của trưởng nhóm, đầu ra còn hiệu lực; kiểm Toàn quyền
+            # TRONG khoá này, cùng khoá với thu hồi, nên lệnh tới sau mốc thu hồi bị từ chối (13.5).
+            admin_ops = [op for op in ops if op["op"] in ADMIN_OPS]
+            ops = [op for op in ops if op["op"] not in ADMIN_OPS]
+            for i, op in enumerate(admin_ops):
+                if not applied or role not in LEADER_ROLES:
+                    notes.append(f"Lệnh '{op['op']}' không dùng được ở lượt này, đã bỏ")
+                    continue
+                if i >= ADMIN_OPS_PER_TURN:
+                    notes.append(f"Mỗi lượt tối đa {ADMIN_OPS_PER_TURN} lệnh quản trị, đã bỏ phần thừa")
+                    break
+                # Khoá nguồn không kết thúc bằng số: `_source_id` không đọc nhầm thứ tự lệnh thành mã tin (review T3).
+                self._apply_admin(team_id, agent_key, op, notes, f"{turn_id}#op{i}")
         allowed = OPS_BY_ROLE.get(role, set())
         allowed = OPS_BY_ROLE.get(role, set())
         kept = []
@@ -826,8 +1106,8 @@ class TeamRunner:
 
     def _add_steps(self, team: dict, task: dict, specs: list) -> bool:
         """Thêm bước nếu không vượt trần bước mỗi việc; vượt thì chặn `cap_reached`, không thêm bước nào."""
-        cap = int(team["caps"]["task_steps"])
-        if len(self.teams.steps(task["id"])) + len(specs) > cap:
+        cap = self._caps(team)["task_steps"]
+        if cap is not None and len(self.teams.steps(task["id"])) + len(specs) > int(cap):
             self._block(task["id"], "cap_reached", f"Đã chạm trần {cap} bước mỗi việc")
             return False
         for s in specs:
@@ -936,8 +1216,8 @@ class TeamRunner:
                 notes.append(f"Không nhờ ngược trong cùng một việc: {self._name(team, key)} đang chờ bạn, đã bỏ")
                 continue
             depth = 1 + sum(1 for s in [step] + chain if s["kind"] == "help")
-            cap = int(team["caps"]["help_depth"])
-            if depth > cap:
+            cap = self._caps(team)["help_depth"]
+            if cap is not None and depth > int(cap):
                 notes.append(f"Đã tới độ sâu nhờ hỗ trợ tối đa ({cap}), không nhờ tiếp được")
                 continue
             kept.append({"op": "request_help", "agent": key, "question": str(op.get("question") or "")[:4000]})

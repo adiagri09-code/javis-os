@@ -209,4 +209,44 @@ check("CSS 375px: sáu nút 44px lọt bề ngang (khe 4px, đệm 6px; smoke T2
       /\.tm-react-panel \{ padding: 8px 6px; \}/.test(css) && /\.tm-react-row \{ flex-wrap: nowrap; justify-content: space-between; gap: 4px; \}/.test(css));
 check("CSS: bảng chọn display:flex có luật [hidden] riêng", /\.tm-react-panel\[hidden\] \{ display: none; \}/.test(css));
 
+// ───────────── T3: hộp cấp Toàn quyền, công tắc Nhóm quản lý (spec mục 13) ─────────────
+const limitedTeam = Object.assign({}, team, { authority: { authority: null,
+  effective_caps: { task_turns: 12, task_steps: 8, help_depth: 2, daily_turns: 100 }, fixed_limits: {} } });
+let ah = TM.authorityHtml(limitedTeam);
+check("Quyền giới hạn: nói rõ trưởng nhóm chỉ đề xuất, có nút Bật, không có nút Thu hồi",
+      ah.includes(vi["teams.auth.off"]) && ah.includes(vi["teams.auth.grant"]) && !ah.includes("tm-auth-revoke"), ah);
+check("hộp cấp quyền đủ dòng của 13.1: phạm vi, agent do nhóm quản lý, provider, thanh toán, trần, ngắt việc, trần không bỏ được",
+      ah.includes(vi["teams.auth.scope"]) && ah.includes(vi["teams.auth.managed_none"]) && ah.includes(vi["teams.auth.providers"])
+      && ah.includes(vi["teams.auth.billing"]) && (ah.match(/name="tm-auth-ceil-[a-z_]+" value/g) || []).length === 4
+      && ah.includes(vi["teams.auth.interrupt"]) && ["teams.auth.fixed_server", "teams.auth.fixed_provider",
+        "teams.auth.fixed_account", "teams.auth.fixed_technical"].every(function (k) { return ah.includes(vi[k]); }), ah);
+const fullTeam = Object.assign({}, team, { members: [Object.assign({}, members[0]), Object.assign({}, members[1], { managed: true })],
+  authority: { authority: { leader_key: "ag_lan", granted_at: 1791900000,
+    grant: { caps: { task_turns: { unlimited: true } }, ceilings: { task_turns: { unlimited: true }, daily_turns: 150 },
+      providers_unlimited: ["aux"], can_interrupt: true, billing: "api" } },
+    effective_caps: { task_turns: null, task_steps: 8, help_depth: 2, daily_turns: 100 } } });
+ah = TM.authorityHtml(fullTeam);
+check("Toàn quyền bật: trạng thái nêu trưởng nhóm, có Lưu và Thu hồi", ah.includes("tm-auth-on") && ah.includes("Lan")
+      && ah.includes(vi["teams.auth.update"]) && ah.includes("tm-auth-revoke"), ah);
+check("Không giới hạn hiện bằng chữ, ô số tắt, ô tích bật (null + cờ, không phải số lớn)",
+      ah.includes(vi["teams.cap.task_turns"] + ": " + vi["teams.auth.unlimited"])
+      && /name="tm-auth-cap-task_turns" value="" disabled/.test(ah) && /name="tm-auth-cap-task_turns-unl" checked/.test(ah), ah);
+check("trần trần số hiện đúng, provider và quyền ngắt việc đã chọn được đánh dấu",
+      /name="tm-auth-ceil-daily_turns" value="150"/.test(ah) && /value="aux" checked/.test(ah)
+      && /name="tm-auth-interrupt" checked/.test(ah) && /value="api" checked/.test(ah), ah);
+check("agent do nhóm quản lý được liệt kê", ah.includes(vi["teams.auth.managed"].replace("{names}", "Minh &lt;b&gt;")), ah);
+check("chưa có trưởng nhóm: chỉ nhắc chọn trưởng nhóm", TM.authorityHtml(Object.assign({}, limitedTeam, { leader_key: null }))
+      .includes(vi["teams.auth.need_leader"]));
+const mh3 = TM.membersHtml(fullTeam, []);
+check("tab Thành viên có công tắc Nhóm quản lý theo trạng thái", (mh3.match(/class="tm-managed-toggle"/g) || []).length === 2
+      && /data-key="ag_minh" checked/.test(mh3) && mh3.includes(vi["teams.managed"]), mh3);
+check("review T3 #6: Toàn quyền bật thì form trần báo trần lấy theo mục Toàn quyền; giới hạn thì không",
+      TM.settingsFormHtml(fullTeam).includes(vi["teams.caps_full_note"]) && !TM.settingsFormHtml(limitedTeam).includes(vi["teams.caps_full_note"]));
+const authKeys = ["teams.cap.help_depth", "teams.auth.provider_aux", "teams.auth.provider_claude", "teams.auth.billing_sub",
+  "teams.auth.billing_api", "teams.auth.fixed_server", "teams.auth.fixed_provider", "teams.auth.fixed_account",
+  "teams.auth.fixed_technical"];
+check("khoá Toàn quyền tra qua bảng có ở cả vi và en", authKeys.every(function (k) { return vi[k] && en[k]; }));
+check("CSS: lớp flex mới của Toàn quyền có luật [hidden] riêng", /\.tm-auth\[hidden\]/.test(css) && /\.tm-auth-pair\[hidden\]/.test(css)
+      && /\.tm-unl\[hidden\]/.test(css));
+
 process.exit(fails ? 1 : 0);
