@@ -127,6 +127,13 @@ class TeamStore:
             if "committed_at" not in cols:
                 # Mốc ghi bài học của lượt vào bộ nhớ agent (chỉ một lần, chỉ khi đầu ra được chấp nhận).
                 c.execute("ALTER TABLE team_turns ADD COLUMN committed_at REAL")
+            if "identity_json" not in {r[1] for r in c.execute("PRAGMA table_info(team_members)").fetchall()}:
+                # Ảnh chụp nhân dạng (tên, ảnh) của thành viên lúc còn xác nhận được theo agent_key, để tin cũ giữ đúng
+                # người viết sau khi trợ lý bị xoá và slug được dùng lại cho trợ lý khác (review 4f6268bd #1).
+                c.execute("ALTER TABLE team_members ADD COLUMN identity_json TEXT")
+            if "pinned_at" not in {r[1] for r in c.execute("PRAGMA table_info(teams)").fetchall()}:
+                # Ghim nhóm lên đầu danh sách (T5); NULL là không ghim.
+                c.execute("ALTER TABLE teams ADD COLUMN pinned_at REAL")
 
     def _conn(self) -> sqlite3.Connection:
         c = sqlite3.connect(str(self.path), timeout=10, isolation_level=None)
@@ -159,7 +166,8 @@ class TeamStore:
         caps.update(json.loads(r["caps_json"] or "{}"))
         return {"team_id": r["team_id"], "brain_id": r["brain_id"], "name": r["name"], "description": r["description"],
                 "session_id": r["session_id"], "leader_key": r["leader_key"], "leader_mode": r["leader_mode"],
-                "status": r["status"], "caps": caps, "created_at": r["created_at"], "updated_at": r["updated_at"]}
+                "status": r["status"], "caps": caps, "created_at": r["created_at"], "updated_at": r["updated_at"],
+                "pinned_at": r["pinned_at"]}
 
     def _event(self, c, team_id: str, kind: str, by: str, before: Any = None, after: Any = None) -> None:
         c.execute("INSERT INTO team_events(team_id,kind,by,before_json,after_json,created_at) VALUES(?,?,?,?,?,?)",
@@ -192,17 +200,31 @@ class TeamStore:
 
     def list_teams(self, brain_id: str, limit: int = 50, before: Optional[float] = None,
                    include_archived: bool = False) -> list:
-        q = "SELECT * FROM teams WHERE brain_id=?"
+        """Nhóm của brain, mới cập nhật trước. Trang đầu (`before` trống) mở bằng các nhóm đã ghim (ghim sau đứng trước);
+        phần còn lại (và mọi trang sau, theo con trỏ `updated_at`) chỉ gồm nhóm không ghim, nên không nhóm nào lặp."""
+        base = "SELECT * FROM teams WHERE brain_id=?" + ("" if include_archived else " AND status != 'archived'")
+        q = base + " AND pinned_at IS NULL"
         args: list = [brain_id]
-        if not include_archived:
-            q += " AND status != 'archived'"
         if before is not None:
             q += " AND updated_at < ?"
             args.append(float(before))
         q += " ORDER BY updated_at DESC LIMIT ?"
         args.append(max(1, min(int(limit), 200)))
         with closing(self._conn()) as c:
-            return [self._team(r) for r in c.execute(q, args).fetchall()]
+            pinned = [] if before is not None else [self._team(r) for r in c.execute(
+                base + " AND pinned_at IS NOT NULL ORDER BY pinned_at DESC", (brain_id,)).fetchall()]
+            return pinned + [self._team(r) for r in c.execute(q, args).fetchall()]
+
+    def set_pinned(self, team_id: str, on: bool, by: str = "owner") -> Optional[dict]:
+        """Ghim (hay bỏ ghim) nhóm lên đầu danh sách. Không đổi `updated_at`."""
+        with self._Tx(self) as c:
+            r = c.execute("SELECT pinned_at FROM teams WHERE team_id=?", (team_id,)).fetchone()
+            if r is None:
+                raise TeamError("không có nhóm này")
+            after = time.time() if on else None
+            c.execute("UPDATE teams SET pinned_at=? WHERE team_id=?", (after, team_id))
+            self._event(c, team_id, "pinned" if on else "unpinned", by, {"pinned_at": r["pinned_at"]}, {"pinned_at": after})
+        return self.get(team_id)
 
     def update(self, team_id: str, by: str = "owner", **fields) -> dict:
         allowed = {"name", "description", "status"}
@@ -262,7 +284,15 @@ class TeamStore:
     def _member(r) -> dict:
         return {"team_id": r["team_id"], "agent_key": r["agent_key"], "slug_at_join": r["slug_at_join"],
                 "role": r["role"], "status": r["status"], "managed_by_team": bool(r["managed_by_team"]),
-                "joined_at": r["joined_at"], "left_at": r["left_at"]}
+                "joined_at": r["joined_at"], "left_at": r["left_at"],
+                "identity": json.loads(r["identity_json"]) if r["identity_json"] else None}
+
+    def set_identity(self, team_id: str, agent_key: str, identity: dict) -> None:
+        """Ghi ảnh chụp nhân dạng {slug, name, avatar} của thành viên (mọi trạng thái). Chỉ ghi khi đổi."""
+        data = _j(identity)
+        with self._Tx(self) as c:
+            c.execute("UPDATE team_members SET identity_json=? WHERE team_id=? AND agent_key=? "
+                      "AND (identity_json IS NULL OR identity_json != ?)", (data, team_id, agent_key, data))
 
     def add_member(self, team_id: str, agent_key: str, slug: str, by: str = "owner") -> dict:
         now = time.time()
@@ -368,6 +398,16 @@ class TeamStore:
                      "after": json.loads(r["after_json"]), "created_at": r["created_at"]}
                     for r in c.execute("SELECT * FROM team_events WHERE team_id=? ORDER BY id DESC LIMIT ?",
                                        (team_id, int(limit))).fetchall()]
+
+    def cap_record(self, team_id: str, task_id: str) -> Optional[dict]:
+        """Bản ghi `cap_blocked` mới nhất của ĐÚNG việc `task_id` (trần đã chạm, các bước bị từ chối), tra thẳng trong kho
+        chứ không trong đuôi sự kiện của cả nhóm: nhóm bận có thể sinh hàng trăm sự kiện khác sau lần chặn (review
+        b93c46bd #3). Không có thì None."""
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT after_json FROM team_events WHERE team_id=? AND kind='cap_blocked' "
+                          "AND json_extract(after_json, '$.task_id')=? ORDER BY id DESC LIMIT 1",
+                          (team_id, str(task_id))).fetchone()
+        return json.loads(r["after_json"]) if r else None
 
     # ───────────── bước nội bộ của việc nhóm ─────────────
 
@@ -577,9 +617,9 @@ class TeamStore:
                 return None
             return self._authority(r)
 
-    def update_authority_caps(self, authority_id: int, caps: dict, by: str) -> bool:
+    def update_authority_caps(self, authority_id: int, caps: dict, by: str, ceilings: Optional[dict] = None) -> bool:
         """Trưởng nhóm đổi trần trong trần trần (người gọi đã kiểm). CAS theo dòng còn hiệu lực: dòng đã thu hồi thì
-        không đổi gì, trả False."""
+        không đổi gì, trả False. `ceilings` chỉ chủ dùng (nút "Cho thêm lượt" nâng cả trần tối đa khi cần)."""
         with self._Tx(self) as c:
             r = c.execute("SELECT * FROM team_authority WHERE id=? AND revoked_at IS NULL", (int(authority_id),)).fetchone()
             if r is None:
@@ -587,6 +627,8 @@ class TeamStore:
             g = json.loads(r["grant_json"] or "{}")
             before = dict(g.get("caps") or {})
             g["caps"] = dict(before, **caps)
+            if ceilings:
+                g["ceilings"] = dict(g.get("ceilings") or {}, **ceilings)
             c.execute("UPDATE team_authority SET grant_json=? WHERE id=?", (_j(g), int(authority_id)))
             self._event(c, r["team_id"], "caps_changed", by, before, g["caps"])
             return True

@@ -143,31 +143,84 @@ class TeamApi:
 
     # ───────────── khung nhìn ─────────────
 
-    def member_views(self, team: dict) -> list:
+    def _identity(self, team: dict, m: dict, reg: dict, by_slug: dict) -> dict:
+        """Nhân dạng {slug, name, avatar} của một thành viên, GIỮ THEO agent_key (review 4f6268bd #1).
+
+        File trợ lý hiện tại chỉ được dùng khi xác nhận nó thuộc đúng mã này: dòng danh tính của mã còn `active` (mã đã
+        nghỉ vì trợ lý bị xoá, hay `missing` chờ chủ xác nhận, thì file cùng slug có thể là trợ lý KHÁC). Khi xác nhận
+        được thì chụp lại nhân dạng vào kho nhóm. Không xác nhận được thì dùng ảnh chụp gần nhất của chính mã đó; chưa
+        từng chụp (bản ghi cũ) thì dự phòng theo chính mã: tên theo slug lúc vào nhóm, ảnh suy từ mã (`avatar_seed`),
+        không bao giờ lấy tên hay ảnh của trợ lý mới cùng slug."""
+        slug = reg.get("slug") or m["slug_at_join"]
+        info = by_slug.get(slug) if reg.get("status") == "active" else None
+        if info:
+            ident = {"slug": slug, "name": info.get("name") or slug, "avatar": info.get("avatar")}
+            if m.get("identity") != ident:
+                self.teams().set_identity(team["team_id"], m["agent_key"], ident)
+            return ident
+        if m.get("identity"):
+            return dict(m["identity"])
+        return {"slug": slug, "name": m["slug_at_join"] or slug, "avatar": None, "avatar_seed": m["agent_key"]}
+
+    def member_views(self, team: dict, meta: Optional[list] = None) -> list:
+        """Thành viên đang hoạt động của nhóm kèm tên và ảnh đại diện ĐÚNG ảnh trợ lý đang dùng (`avatar` của file trợ lý;
+        trợ lý chưa chọn ảnh thì dashboard tự suy từ slug như trang Cộng sự). Nhân dạng giữ theo agent_key (`_identity`)."""
         root = team["brain_id"]
-        names = {m["slug"]: m.get("name") or m["slug"] for m in (self.deps.agents_meta(root) or [])}
+        meta = self.deps.agents_meta(root) if meta is None else meta
+        by_slug = {m["slug"]: m for m in (meta or [])}
         rs = self.deps.resonance_store()
         out = []
         for m in self.teams().members(team["team_id"]):
             reg = rs.agent_by_key(root, m["agent_key"]) or {}
-            slug = reg.get("slug") or m["slug_at_join"]
-            out.append({"agent_key": m["agent_key"], "slug": slug, "name": names.get(slug) or slug,
-                        "role": m["role"], "status": m["status"], "agent_status": reg.get("status") or "",
-                        "resonance_enabled": bool(reg.get("enabled")), "joined_at": m["joined_at"],
-                        "managed": bool(m.get("managed_by_team"))})
+            ident = self._identity(team, m, reg, by_slug)
+            out.append(dict(ident, agent_key=m["agent_key"],
+                            role=m["role"], status=m["status"], agent_status=reg.get("status") or "",
+                            resonance_enabled=bool(reg.get("enabled")), joined_at=m["joined_at"],
+                            managed=bool(m.get("managed_by_team"))))
         return out
+
+    def authors(self, team: dict, meta: Optional[list] = None) -> dict:
+        """Sổ tác giả {agent_key: {slug, name, avatar}} của MỌI trợ lý từng ở nhóm, kể cả đã rời: tin cũ giữ đúng tên và
+        ảnh của người viết (review b93c46bd #2), theo agent_key chứ không theo slug (review 4f6268bd #1). Ảnh nhóm và gợi ý
+        @ không dùng sổ này, chỉ dùng thành viên đang hoạt động."""
+        root = team["brain_id"]
+        meta = self.deps.agents_meta(root) if meta is None else meta
+        by_slug = {m["slug"]: m for m in (meta or [])}
+        rs = self.deps.resonance_store()
+        return {m["agent_key"]: self._identity(team, m, rs.agent_by_key(root, m["agent_key"]) or {}, by_slug)
+                for m in self.teams().members(team["team_id"], include_removed=True)}
+
+    def faces(self, team: dict, meta: list) -> dict:
+        """Ảnh nhóm ở danh sách: tối đa 4 gương mặt thành viên đang hoạt động (trưởng nhóm trước) và tổng số người."""
+        active = [m for m in self.member_views(team, meta) if m["status"] == "active"]
+        active.sort(key=lambda m: (m["agent_key"] != team.get("leader_key"), m["joined_at"]))
+        return {"faces": [{"slug": m["slug"], "name": m["name"], "avatar": m["avatar"]} for m in active[:4]],
+                "member_count": len(active)}
 
     def counts(self, team_id: str) -> dict:
         q = self.deps.task_store().team_queue(team_id)
         return {"running": len(q["running"]), "waiting": len(q["waiting"]), "blocked": len(q["blocked"])}
 
+    def last_message(self, team: dict) -> Optional[dict]:
+        """Tin cuối của nhóm cho dòng xem trước ở danh sách (T5): loại người gửi, tên, 120 ký tự đầu, giờ."""
+        page = self.deps.session_store().get_team_messages_page(team["session_id"], limit=1)
+        msgs = page.get("messages") or []
+        if not msgs:
+            return None
+        m = msgs[-1]
+        author = self.runner()._name(team, m["author_ref"]) if m.get("author_kind") == "agent" and m.get("author_ref") else ""
+        return {"author_kind": m.get("author_kind") or "", "author": author,
+                "text": " ".join(str(m.get("content") or "").split())[:120], "ts": m.get("ts") or 0}
+
     def view(self, team: dict) -> dict:
         q = self.deps.task_store().team_queue(team["team_id"])
-        return dict(team, members=self.member_views(team),
+        meta = self.deps.agents_meta(team["brain_id"]) or []
+        return dict(team, members=self.member_views(team, meta), authors=self.authors(team, meta),
                     counts={"running": len(q["running"]), "waiting": len(q["waiting"]), "blocked": len(q["blocked"])},
                     running=[{"id": t["id"], "title": t["title"]} for t in q["running"]],
                     busy=self.runner().busy_view(team["team_id"]),
-                    authority=self.runner().authority_view(team["team_id"]))
+                    authority=self.runner().authority_view(team["team_id"]),
+                    usage=self.runner().usage(team["team_id"]))
 
     def register_agent(self, root: str, slug: str) -> dict:
         return self.deps.resonance_store().agent_register(RS.Principal("owner", "owner", root), slug)
@@ -255,9 +308,12 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 return _err(404, "Không tìm thấy brain", "Brain not found")
             if not api.exists():
                 return {"ok": True, "teams": [], "next": None}
-            rows = [dict(t, counts=api.counts(t["team_id"]))
+            meta = deps.agents_meta(root) or []
+            rows = [dict(t, counts=api.counts(t["team_id"]), last=api.last_message(t), **api.faces(t, meta))
                     for t in api.teams().list_teams(root, limit=limit, before=before)]
-            nxt = rows[-1]["updated_at"] if len(rows) >= max(1, min(int(limit), 200)) else None
+            # Con trỏ trang sau chỉ tính nhóm không ghim (nhóm ghim luôn nằm ở trang đầu).
+            plain = [t for t in rows if not t.get("pinned_at")]
+            nxt = plain[-1]["updated_at"] if len(plain) >= max(1, min(int(limit), 200)) else None
             return {"ok": True, "teams": rows, "next": nxt}
         return await api.io(_do)
 
@@ -496,6 +552,35 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             api.kick()
             api.runner()._state(team_id)
             return {"ok": True}
+        return await api.io(_do)
+
+    @app.post("/teams/{team_id}/pin")
+    async def teams_pin(team_id: str, request: Request, brain: str = "brain"):
+        """Ghim (`on: true`) hay bỏ ghim nhóm lên đầu danh sách."""
+        on = bool((await _body(request)).get("on"))
+
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            api.teams().set_pinned(team_id, on)
+            return {"ok": True, "pinned": on}
+        return await api.io(_do)
+
+    @app.post("/teams/{team_id}/tasks/{task_id}/extend")
+    async def teams_task_extend(team_id: str, task_id: str, brain: str = "brain"):
+        """Nút "Cho thêm lượt" (T5): nâng đúng giới hạn việc vừa chạm thêm một nấc rồi cho chạy tiếp."""
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            if not _own_task(team_id, task_id):
+                return _err(404, "Không có việc này trong nhóm", "No such job in this team")
+            out = api.runner().extend_job(task_id)
+            if out is None:
+                return _err(409, "Việc không bị chặn vì hết lượt", "The job is not blocked by a limit")
+            api.kick()
+            return dict(out, ok=True)
         return await api.io(_do)
 
     @app.get("/teams/{team_id}/messages")

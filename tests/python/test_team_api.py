@@ -189,6 +189,43 @@ check("tiếp tục nhóm: việc chạy", main.tasks_feature.store.get_task(jn)
 jw = c.post(f"/teams/{TID}/messages{Q}", json={"text": "Việc chờ", "client_msg_id": "j5", "as_job": True}).json()["task_id"]
 r = c.post(f"/teams/{TID}/tasks/{jw}/unblock{Q}", json={"action": "retry"})
 check("gỡ chặn việc không bị chặn: 409", r.status_code == 409)
+
+# T5: tin cuối ở danh sách nhóm, số lần đã dùng hôm nay, nút "Cho thêm lượt"
+row = c.get(f"/teams{Q}").json()["teams"][0]
+last = row.get("last") or {}
+check("T5 danh sách nhóm kèm tin cuối (loại người gửi, tên, trích, giờ)", last.get("text") == "Việc chờ"
+      and last.get("author_kind") == "owner" and last.get("ts", 0) > 0 and "author" in last, row.get("last"))
+v = c.get(f"/teams/{TID}{Q}").json()["team"]
+check("T5 chi tiết nhóm kèm số lần đã dùng hôm nay và giới hạn", v.get("usage", {}).get("cap") == 50
+      and v["usage"]["today"] >= 1, v.get("usage"))
+check("T5 Cho thêm lượt cho việc không bị chặn: 409", c.post(f"/teams/{TID}/tasks/{jw}/extend{Q}").status_code == 409)
+c.post(f"/teams/{TID}/caps{Q}", json={"caps": {"daily_turns": v["usage"]["today"]}})
+dispatch()
+check("T5 hết lần trả lời hôm nay: việc chặn cap_reached",
+      main.tasks_feature.store.get_task(jw)["block_kind"] == "cap_reached")
+r = c.post(f"/teams/{TID}/tasks/{jw}/extend{Q}")
+check("T5 Cho thêm lượt: 200, nâng trần ngày, việc về hàng", r.status_code == 200
+      and r.json()["cap"] == "daily_turns" and r.json()["value"] == v["usage"]["today"] + 20
+      and main.tasks_feature.store.get_task(jw)["status"] == "team_queued", r.text)
+check("T5 Cho thêm lượt việc nhóm khác: 404", c.post(f"/teams/{TID}/tasks/t_khong_co/extend{Q}").status_code == 404)
+c.post(f"/teams/{TID}/tasks/{jw}/cancel{Q}")
+c.post(f"/teams/{TID}/caps{Q}", json={"caps": {"daily_turns": 50}})
+
+# Ảnh đại diện đúng ảnh trợ lý đang dùng; ảnh nhóm ghép từ ảnh thành viên; ghim nhóm
+v = c.get(f"/teams/{TID}{Q}").json()["team"]
+check("thành viên kèm ảnh đại diện của trợ lý (hình, bảng màu)", all(
+    isinstance(m.get("avatar"), dict) and m["avatar"].get("shape") and m["avatar"].get("palette") for m in v["members"]), v["members"])
+row = c.get(f"/teams{Q}").json()["teams"][0]
+check("dòng nhóm kèm tối đa 4 gương mặt (trưởng nhóm trước) và tổng số người",
+      1 <= len(row.get("faces") or []) <= 4 and row["member_count"] == len([m for m in v["members"] if m["status"] == "active"])
+      and row["faces"][0]["slug"] == next(m["slug"] for m in v["members"] if m["agent_key"] == v["leader_key"])
+      and all(f.get("avatar", {}).get("shape") for f in row["faces"]), row.get("faces"))
+r = c.post(f"/teams/{TID}/pin{Q}", json={"on": True})
+check("ghim nhóm: 200, dòng nhóm có mốc ghim", r.status_code == 200
+      and c.get(f"/teams{Q}").json()["teams"][0]["pinned_at"], r.text)
+check("ghim nhóm của brain khác: 404", c.post(f"/teams/{TID}/pin?brain={BR2}", json={"on": True}).status_code == 404)
+c.post(f"/teams/{TID}/pin{Q}", json={"on": False})
+check("bỏ ghim", c.get(f"/teams{Q}").json()["teams"][0]["pinned_at"] is None)
 r = c.delete(f"/teams/{TID}/members/{keys['minh']}{Q}")
 check("bỏ thành viên", r.status_code == 200 and keys["minh"] not in {m["agent_key"] for m in r.json()["team"]["members"]})
 c.post(f"/teams/{TID}/members{Q}", json={"slug": "minh"})
@@ -197,10 +234,36 @@ c.post(f"/teams/{TID}/members{Q}", json={"slug": "minh"})
 c.post("/agents/delete", data={"slug": "minh", "brain": str(BR)})
 mem = c.get(f"/teams/{TID}{Q}").json()["team"]["members"]
 check("xoá agent: không còn là thành viên", keys["minh"] not in {m["agent_key"] for m in mem})
-(BR / "agents" / "minh.md").write_text("---\nname: Minh mới\n---\nx\n", encoding="utf-8", newline="\n")
+import agent_avatar  # noqa: E402
+old_ava = agent_avatar.for_agent({}, "minh")   # Minh cũ không chọn ảnh: ảnh mặc định suy từ slug
+new_shape = next(s for s in agent_avatar.SHAPES if s != old_ava["shape"])
+new_pal = next(p for p in ("ruby", "jade") if p != old_ava["palette"])
+(BR / "agents" / "minh.md").write_text(f"---\nname: Minh mới\navatar:\n  shape: {new_shape}\n  palette: {new_pal}\n---\nx\n",
+                                       encoding="utf-8", newline="\n")
 r = c.post(f"/teams/{TID}/members{Q}", json={"slug": "minh"})
 new_key = next(m["agent_key"] for m in r.json()["team"]["members"] if m["slug"] == "minh")
 check("tạo lại cùng slug: mã mới, phải thêm lại mới là thành viên", new_key != keys["minh"])
+# Review b93c46bd #2: tác giả tin cũ đã rời nhóm vẫn có tên và ảnh, tra theo agent_key độc lập với thành viên hiện tại
+v = c.get(f"/teams/{TID}{Q}").json()["team"]
+au = v.get("authors") or {}
+check("#2 sổ tác giả gồm cả người đã rời (mã cũ của Minh), kèm slug, tên, ảnh",
+      keys["minh"] in au and au[keys["minh"]]["slug"] == "minh" and au[keys["minh"]].get("name")
+      and isinstance(au[keys["minh"]].get("avatar"), dict) and au[keys["minh"]]["avatar"].get("shape")
+      and keys["minh"] not in {m["agent_key"] for m in v["members"]}, au.get(keys["minh"]))
+check("#2 sổ tác giả gồm cả thành viên đang hoạt động", all(m["agent_key"] in au for m in v["members"]))
+# Review 4f6268bd #1: hai trợ lý cùng slug ở hai thời điểm giữ nhân dạng RIÊNG theo agent_key
+check("4f6268bd #1 mã cũ giữ đúng Minh cũ (tên, ảnh), không nhận của Minh mới",
+      au[keys["minh"]]["name"] == "Minh" and au[keys["minh"]]["avatar"] == old_ava, au.get(keys["minh"]))
+check("4f6268bd #1 mã mới là Minh mới (tên, ảnh mới)", au[new_key]["name"] == "Minh mới"
+      and au[new_key]["avatar"]["shape"] == new_shape and au[new_key]["avatar"]["palette"] == new_pal, au.get(new_key))
+check("4f6268bd #1 thành viên đang hoạt động là Minh mới", next(m for m in v["members"] if m["agent_key"] == new_key)["name"]
+      == "Minh mới")
+# Bản ghi cũ chưa có ảnh chụp nhân dạng (trước bản sửa): mã đã nghỉ không lấy tên/ảnh của người mới cùng slug
+with api.teams()._Tx(api.teams()) as tx:
+    tx.execute("UPDATE team_members SET identity_json=NULL WHERE team_id=? AND agent_key=?", (TID, keys["minh"]))
+fb = c.get(f"/teams/{TID}{Q}").json()["team"]["authors"][keys["minh"]]
+check("4f6268bd #1 chưa có ảnh chụp: dùng nhân dạng dự phòng của chính mã cũ (tên theo slug lúc vào, ảnh suy từ mã)",
+      fb["name"] == "minh" and fb.get("avatar") is None and fb.get("avatar_seed") == keys["minh"], fb)
 
 # Việc đang chạy nhưng không còn ai chạy (đã dừng ở điểm điều phối lúc tạm dừng) phải bị huỷ khi lưu trữ.
 jr = c.post(f"/teams/{TID}/messages{Q}", json={"text": "Việc treo", "client_msg_id": "j6", "as_job": True,

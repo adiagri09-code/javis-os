@@ -4342,18 +4342,18 @@
  {
   "order": 432,
   "type": "APIRoute",
-  "path": "/teams/{team_id}/messages",
-  "name": "teams_messages",
+  "path": "/teams/{team_id}/pin",
+  "name": "teams_pin",
   "methods": [
-   "GET"
+   "POST"
   ],
   "trong": null
  },
  {
   "order": 433,
   "type": "APIRoute",
-  "path": "/teams/{team_id}/messages/{message_id}/reaction",
-  "name": "teams_reaction",
+  "path": "/teams/{team_id}/tasks/{task_id}/extend",
+  "name": "teams_task_extend",
   "methods": [
    "POST"
   ],
@@ -4363,6 +4363,26 @@
   "order": 434,
   "type": "APIRoute",
   "path": "/teams/{team_id}/messages",
+  "name": "teams_messages",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 435,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/messages/{message_id}/reaction",
+  "name": "teams_reaction",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 436,
+  "type": "APIRoute",
+  "path": "/teams/{team_id}/messages",
   "name": "teams_send",
   "methods": [
    "POST"
@@ -4370,7 +4390,7 @@
   "trong": null
  },
  {
-  "order": 435,
+  "order": 437,
   "type": "APIRoute",
   "path": "/teams/{team_id}/messages/{message_id}/accept",
   "name": "teams_accept",
@@ -4380,7 +4400,7 @@
   "trong": null
  },
  {
-  "order": 436,
+  "order": 438,
   "type": "APIRoute",
   "path": "/teams/{team_id}/messages/{message_id}/decision",
   "name": "teams_decision",
@@ -4390,7 +4410,7 @@
   "trong": null
  },
  {
-  "order": 437,
+  "order": 439,
   "type": "APIRoute",
   "path": "/teams/{team_id}/turns",
   "name": "teams_turns",
@@ -4400,7 +4420,7 @@
   "trong": null
  },
  {
-  "order": 438,
+  "order": 440,
   "type": "APIRoute",
   "path": "/teams/{team_id}/authority",
   "name": "teams_authority",
@@ -4410,7 +4430,7 @@
   "trong": null
  },
  {
-  "order": 439,
+  "order": 441,
   "type": "APIRoute",
   "path": "/teams/{team_id}/members/{agent_key}/managed",
   "name": "teams_member_managed",
@@ -4420,7 +4440,7 @@
   "trong": null
  },
  {
-  "order": 440,
+  "order": 442,
   "type": "APIRoute",
   "path": "/teams/{team_id}/search",
   "name": "teams_search",
