@@ -8,7 +8,12 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.142.0] - 2026-10-14
 ### Sửa lỗi
-- Đang làm: chat nhóm trả lời thật, tạo nhóm kiểu Zalo, tab Công việc cho từng trợ lý.
+- **Chat nhóm hết im lặng.** Trợ lý trả lời bằng model riêng của nó, chưa đặt thì bằng model chính, không còn bị chặn khi model việc nền là ChatGPT (Codex). Mỗi tin hiện rõ ai đang chờ, đang trả lời, hay chưa trả lời được kèm lý do và nút **Thử lại**; tải lại trang vẫn còn.
+### Thêm mới
+- **Tạo nhóm như Zalo:** tìm trợ lý không cần gõ dấu, lọc theo tag, chọn nhiều người, chọn Điều phối trong số đã chọn; bạn luôn hiện là người tạo và quản lý nhóm. Gõ @ gọi đúng người kể cả khi hai trợ lý trùng tên.
+- **Tab Công việc ở trang Cộng sự** (thay tab Thư mục): mọi việc của một trợ lý từ nhóm, chat riêng và Auto, chia Đang làm, Đang chờ, Cần bạn, Đã xong, có nút **Giao việc**, Mở và Huỷ từng việc.
+### Cải thiện
+- **Cộng hưởng đổi tên thành Auto**, công tắc nằm ngay trong thẻ trợ lý và trong menu ba chấm. Bỏ người review cố định: mục tiêu cũ đang chờ review được tạm dừng để bạn xem, không tự coi là đạt.
 
 ## [0.141.0] - 2026-10-14
 ### Cải thiện

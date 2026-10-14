@@ -10,7 +10,12 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.142.0] - 2026-10-14
 ### Fixed
-- In progress: team chat answers for real, Zalo-style team creation, a Jobs tab per assistant.
+- **Team chat is no longer silent.** Assistants answer with their own model, or the main model when they have none, and are no longer blocked when the background model is ChatGPT (Codex). Each message shows who is waiting, answering, or could not answer with the reason and a **Try again** button, and it survives a reload.
+### Added
+- **Create a team like on a messaging app:** search assistants without accents, filter by tag, pick several at once, choose the coordinator among them; you always show as the team creator and manager. Typing @ calls the right assistant even when two share a name.
+- **Jobs tab on the Partners page** (replacing the Folder tab): every job of one assistant from teams, private chat and Auto, split into In progress, Waiting, Needs you and Done, with **Assign a job**, Open and Cancel per job.
+### Improved
+- **Resonance is now called Auto**, with its switch right inside the assistant card and in the three-dot menu. Fixed reviewers are gone: old goals waiting for review are paused for you to check, never counted as passed.
 
 ## [0.141.0] - 2026-10-14
 ### Improved
