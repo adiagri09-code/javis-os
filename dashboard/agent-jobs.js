@@ -37,7 +37,11 @@
   var SOURCE_ICON = { team: "users", chat: "message-circle", auto: "zap" };
 
   function sourceText(j) {
-    if (j.source === "team") return tw("ajobs.src.team", { name: j.source_label || "" });
+    if (j.source === "team") {
+      // Tên nhóm đã mở đầu bằng chữ "Nhóm" thì không ghép thêm ("Nhóm Nhóm kiểm thử").
+      var name = String(j.source_label || ""), head = tw("ajobs.src.team", { name: "" }).trim().toLowerCase();
+      return head && name.toLowerCase().indexOf(head) === 0 ? name : tw("ajobs.src.team", { name: name });
+    }
     return tw(SOURCE_KEY[j.source] || "ajobs.src.chat");
   }
 

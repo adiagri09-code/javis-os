@@ -136,7 +136,7 @@
       var a = bySlug(roster, s) || { slug: s, name: s };
       return '<span class="tmp-sel">' + face(a, 24) + '<span class="tmp-sel-name">' + esc(a.name || a.slug) + "</span>" +
         '<button type="button" class="tmp-sel-x" data-pick-toggle="' + esc(s) + '" aria-label="' +
-        esc(tw("teams.pick.unselect", { name: a.name || a.slug })) + '">' + (ic("x") || "×") + "</button></span>";
+        esc(tw("teams.pick.unselect", { name: a.name || a.slug })) + '">' + ic("x") + "</button></span>";
     }).join("") + "</div>";
   }
 
@@ -156,7 +156,7 @@
       return '<label class="tmp-row' + (on ? " is-on" : "") + '"><input type="checkbox" class="tmp-check" data-pick-slug="' +
         esc(a.slug) + '"' + (on ? " checked" : "") + ">" + face(a, 40) + '<span class="tmp-text"><span class="tmp-name">' +
         esc(a.name || a.slug) + "</span>" + (sub ? '<span class="tmp-role">' + esc(sub) + "</span>" : "") +
-        '</span><span class="tmp-tick" aria-hidden="true">' + (on ? (ic("check") || "✓") : "") + "</span></label>";
+        '</span><span class="tmp-tick" aria-hidden="true">' + (on ? ic("check") : "") + "</span></label>";
     }).join("");
   }
 
@@ -186,7 +186,7 @@
     var create = st.mode === "create";
     var title = tw(create ? "teams.pick.title_create" : "teams.pick.title_add");
     var head = '<div class="tmp-head"><h2 class="tmp-title" id="tmp-title">' + esc(title) + "</h2>" +
-      '<button type="button" class="tmp-close tmp-cancel" aria-label="' + esc(tw("teams.pick.close")) + '">' + (ic("x") || "×") +
+      '<button type="button" class="tmp-close tmp-cancel" aria-label="' + esc(tw("teams.pick.close")) + '">' + ic("x") +
       "</button></div>";
     var name = create ? '<div class="tmp-namebox"><label class="tmp-field"><span>' + esc(tw("teams.name")) + "</span>" +
       '<input class="tmp-name-input" maxlength="120" value="' + esc(st.name || "") + '" placeholder="' +

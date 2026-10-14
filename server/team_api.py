@@ -611,7 +611,16 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             got = api.teams().reactions_for(team["session_id"], ids)
             # Kết cục lượt trả lời (0.142.0) đi kèm tin của chủ nhóm: tải lại trang vẫn thấy chờ, đang trả lời, lỗi.
             replies = api.teams().replies_for(team_id, ids)
+            # Tên việc của các tin gắn việc (0.142.0): việc đã xong không còn trong hàng đợi, tải lại trang thì nhãn chỉ
+            # còn mã việc. Đọc thẳng bản ghi gốc, chỉ việc thuộc đúng nhóm này.
+            titles = {}
+            for tid in {m.get("task_id") for m in page["messages"] if m.get("task_id")}:
+                tk = deps.task_store().get_task(tid)
+                if tk and tk.get("team_id") == team_id:
+                    titles[tid] = tk.get("title") or ""
             for m in page["messages"]:
+                if m.get("task_id") in titles:
+                    m["task_title"] = titles[m["task_id"]]
                 m["reaction"] = got.get(int(m["id"]))
                 if replies.get(int(m["id"])):
                     m["replies"] = replies[int(m["id"])]

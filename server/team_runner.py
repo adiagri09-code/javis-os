@@ -229,7 +229,9 @@ class TextOnlyOutcome:
         if f["auth_refresh_race"]:
             raise EngineOutcomeError("auth", f["subtype"])
         if f["is_error"]:
-            raise EngineOutcomeError("final_error", f["subtype"] or f["content"][:200])
+            # Câu lỗi của engine (vd. "model không tồn tại") nói được nhiều hơn subtype (Claude CLI có khi ghi "success"
+            # cho một final lỗi), nên ưu tiên nội dung.
+            raise EngineOutcomeError("final_error", f["content"].strip()[:200] or f["subtype"])
         if not f["content"].strip():
             raise EngineOutcomeError("empty")
         return {"text": f["content"], "tokens_in": self.tokens_in, "tokens_out": self.tokens_out}
@@ -513,7 +515,8 @@ class TeamRunner:
         elif st == "error":
             why = reason or ("internal" if out.get("internal") else
                              "engine_unavailable" if out.get("before_engine") else "engine")
-            self.teams.settle_reply(team_id, mid, key, "error", reason=why, detail=str(out.get("error") or ""),
+            self.teams.settle_reply(team_id, mid, key, "error", reason=why,
+                                    detail=str(out.get("detail") or out.get("error") or ""),
                                     turn_id=out.get("turn_id"))
         else:
             self.teams.settle_reply(team_id, mid, key, "error", reason=self._REPLY_REASON.get(st, str(st or "unknown")),
@@ -1117,7 +1120,9 @@ class TeamRunner:
                 await self._io(self.teams.settle_turn, turn_id, "error")
                 msg = (OUTCOME_TEXT.get(ex.kind, ex.kind) + (f" ({ex.detail})" if ex.detail else "")
                        if isinstance(ex, EngineOutcomeError) else str(ex))
-                return {"status": "error", "error": msg[:500], "turn_id": turn_id}
+                # `detail`: riêng câu của engine (dòng trạng thái lượt trả lời đã có nhãn lý do, khỏi lặp lại).
+                detail = (ex.detail or OUTCOME_TEXT.get(ex.kind, ex.kind)) if isinstance(ex, EngineOutcomeError) else str(ex)
+                return {"status": "error", "error": msg[:500], "detail": detail[:500], "turn_id": turn_id}
             if not marked:
                 await engine_started()
             res = res or {}

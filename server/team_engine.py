@@ -62,7 +62,7 @@ def choose_spec(agent_model: str, agent_provider: str, main: dict, resolve: Call
         ok, why = available(spec)
         if ok:
             return spec
-        note = f"Model riêng của trợ lý ({prov}) chưa dùng được: {why}. Lượt này chạy bằng model chính."
+        note = f"Model riêng của trợ lý ({prov}) chưa dùng được: {str(why or '').strip().rstrip('.')}. Lượt này chạy bằng model chính."
     else:
         note = ""
     m = dict(main or {})

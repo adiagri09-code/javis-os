@@ -2864,7 +2864,7 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 
 /* 0.142.0: hộp chọn thành viên kiểu Zalo (team-picker.js). Máy tính: hộp giữa màn hình; điện thoại: màn đầy đủ, footer
    cố định. Chữ tối thiểu 16px, vùng chạm 44px. */
-.tmp-layer { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.tmp-layer { position: fixed; inset: 0; z-index: 3300; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .tmp-scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, .45); }
 .tmp-dialog { position: relative; display: flex; flex-direction: column; width: min(560px, 100%); max-height: min(760px, 90vh);
   background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 18px 50px rgba(0, 0, 0, .25);

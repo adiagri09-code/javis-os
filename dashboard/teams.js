@@ -330,7 +330,7 @@
     if (!mine) head.push('<span class="tm-who">' + esc(who) + "</span>");
     if (!mine && meta.role && ROLE_KEY[meta.role]) head.push('<span class="tm-role">' + esc(tw(ROLE_KEY[meta.role])) + "</span>");
     if (m.task_id) {
-      var title = (ctx.taskTitles || {})[m.task_id] || m.task_id;
+      var title = (ctx.taskTitles || {})[m.task_id] || m.task_title || m.task_id;
       head.push('<button type="button" class="tm-tag" data-task="' + esc(m.task_id) + '">' + ic("list-todo") +
         '<span class="tm-tag-text">' + esc(tw("teams.job_tag", { title: title })) + "</span></button>");
     } else if (mine && meta.as_job) {
@@ -867,7 +867,7 @@
       filterTask: "", taskTitles: {}, teamNames: {}, note: "", skipped: {}, picker: null, draft: null,
       focusPicker: false, focusBack: null, searchOpen: false, searchResults: null, searchQuery: "", jumped: null,
       openMember: null, advOpen: false, turns: [], sideOpener: null, rowMenu: null, focusRowMenu: false, swallowClick: false,
-      picked: [], retrying: {}, pickSt: null, pickOpener: null, roster: [] };
+      picked: [], retrying: {}, pickSt: null, pickOpener: null, pickHost: null, roster: [] };
   }
 
   function teamUrl(path) { return "/teams/" + q(S.activeId) + (path || ""); }
@@ -1472,8 +1472,7 @@
 
   function closePicker() {
     S.pickSt = null;
-    var host = S.el.querySelector(".tmp-host");
-    if (host) host.innerHTML = "";
+    if (S.pickHost) { S.pickHost.remove(); S.pickHost = null; }
     var back = S.pickOpener;
     S.pickOpener = null;
     if (back && back.isConnected) { try { back.focus(); } catch (e) {} }
@@ -1485,11 +1484,18 @@
     var P = TP();
     var st = S.pickSt;
     if (!P || !st) return;
-    var host = S.el.querySelector(".tmp-host");
-    if (!host) {
+    // Lớp phủ gắn vào <body>, không vào trang: trang nằm trong .cview (một stacking context thấp hơn thanh trên của
+    // app), nên trên điện thoại thanh đó đè lên đầu hộp và che nút đóng. Sự kiện gắn thẳng vào lớp phủ.
+    var host = S.pickHost;
+    if (!host || !host.isConnected) {
       host = document.createElement("div");
       host.className = "tmp-host";
-      S.el.appendChild(host);
+      document.body.appendChild(host);
+      host.addEventListener("click", onClick);
+      host.addEventListener("change", onChange);
+      host.addEventListener("input", onInput);
+      host.addEventListener("keydown", onKey);
+      S.pickHost = host;
     }
     var roster = S.roster || [];
     if (part === "all" || !host.firstChild) {
@@ -1498,7 +1504,7 @@
       if (first && !(typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches)) first.focus();
       return;
     }
-    var put = function (sel, h) { var el = host.querySelector(sel); if (el) el.innerHTML = h; };
+    var put = function (sel, h) { var box = host.querySelector(sel); if (box) box.innerHTML = h; };
     put(".tmp-tags-box", P.tagsHtml(roster, st));
     put(".tmp-list", P.listHtml(roster, st));
     if (part === "filter") return;
@@ -1565,7 +1571,7 @@
     if (S.rowMenu && !(e.target.closest && e.target.closest(".tm-row-menu")) && !(t && t.dataset && t.dataset.pinTeam)) {
       if (!(t && t.dataset && t.dataset.team && S.swallowClick)) closeRowMenu();
     }
-    if (!t || !S.el.contains(t)) return;
+    if (!t || !(S.el.contains(t) || (S.pickHost && S.pickHost.contains(t)))) return;
     var d = t.dataset || {};
     // Nhấn giữ vừa mở menu ghim: cú bấm sinh ra lúc nhấc tay không được mở nhóm.
     if (d.team && S.swallowClick) { S.swallowClick = false; return; }
@@ -1879,6 +1885,26 @@
     }
   }
 
+  function onInput(e) {
+    if (S.pickSt && e.target.classList.contains("tmp-search-input")) {
+      S.pickSt.query = e.target.value;
+      drawPicker("filter");
+      return;
+    }
+    if (S.pickSt && e.target.classList.contains("tmp-name-input")) { S.pickSt.name = e.target.value; return; }
+    if (S.pickSt && e.target.classList.contains("tmp-desc-input")) { S.pickSt.desc = e.target.value; return; }
+    if (e.target.classList.contains("tm-react-comment") && S.picker !== null) {
+      S.draft = { mid: S.picker, reasons: panelValues(S.picker, msgById(S.picker)).reasons, comment: e.target.value };
+      return;
+    }
+    if (e.target.classList.contains("tm-input")) {
+      S.pending = S.pending && S.pending.text === e.target.value.trim() ? S.pending : null;
+      grow(e.target);
+      suggest();
+      drawHint();
+    }
+  }
+
   var refreshTimer = null;
   function onTeamEvent(ev) {
     if (!S || !S.el || !S.el.isConnected) return;
@@ -1912,6 +1938,7 @@
   // Rời trang (console.js gọi qua _pageLeave): đóng ngăn, bỏ hẹn giờ; trang dựng lại từ đầu lần ghé sau.
   function leave() {
     clearTimeout(refreshTimer);
+    if (S && S.pickSt) closePicker();
     if (S) { S.side = false; S.picker = null; }
   }
 
@@ -1920,25 +1947,7 @@
     shell();
     el.addEventListener("click", onClick);
     el.addEventListener("change", onChange);
-    el.addEventListener("input", function (e) {
-      if (S.pickSt && e.target.classList.contains("tmp-search-input")) {
-        S.pickSt.query = e.target.value;
-        drawPicker("filter");
-        return;
-      }
-      if (S.pickSt && e.target.classList.contains("tmp-name-input")) { S.pickSt.name = e.target.value; return; }
-      if (S.pickSt && e.target.classList.contains("tmp-desc-input")) { S.pickSt.desc = e.target.value; return; }
-      if (e.target.classList.contains("tm-react-comment") && S.picker !== null) {
-        S.draft = { mid: S.picker, reasons: panelValues(S.picker, msgById(S.picker)).reasons, comment: e.target.value };
-        return;
-      }
-      if (e.target.classList.contains("tm-input")) {
-        S.pending = S.pending && S.pending.text === e.target.value.trim() ? S.pending : null;
-        grow(e.target);
-        suggest();
-        drawHint();
-      }
-    });
+    el.addEventListener("input", onInput);
     el.addEventListener("keydown", onKey);
     // Điện thoại: nhấn giữ một tin mở bảng của tin đó (cảm xúc và ghim cho tin trợ lý, ghim cho tin của chủ; spec 14.3).
     var hold = null, hx = 0, hy = 0, held = false;
