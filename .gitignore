@@ -90,6 +90,10 @@ server/kanban.sqlite3*
 # kanban.sqlite3* trên - test không đặt JAVIS_STATE_DIR sẽ ghi rơi vào server/ vì
 # execute_workflow giờ luôn chạm workflow_runs.get_store().
 server/workflow_runs.sqlite3*
+# Kho Cộng hưởng (mục tiêu, sổ danh tính agent) và kho nhóm chat team: dữ liệu chạy, cùng lớp với kanban.sqlite3*.
+# Server chạy từ worktree mà không đặt JAVIS_STATE_DIR sẽ ghi vào server/.
+server/resonance.sqlite3*
+server/team.sqlite3*
 server/tg_brain.json
 server/update_state.json
 server/logs/
