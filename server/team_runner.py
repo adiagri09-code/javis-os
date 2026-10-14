@@ -467,10 +467,14 @@ class TeamRunner:
         """Khối "Phản hồi gần đây của chủ nhóm" cho lượt kế của CHÍNH agent này trong CHÍNH nhóm này: tối đa 5 mục trong
         30 ngày, emoji gốc kèm tên loại, lý do, góp ý, đoạn trích. Mục đã bỏ không còn trong kho nên tự rời khối."""
         rows = self.teams.recent_feedback(team["team_id"], agent_key, self.clock() - FEEDBACK_DAYS * 86400,
-                                          FEEDBACK_LIMIT)
+                                          FEEDBACK_LIMIT * 3)
         out = []
         for fb in rows:
-            msg = self.sessions.team_message(team["session_id"], fb["message_id"]) or {}
+            if len(out) >= FEEDBACK_LIMIT:
+                break
+            msg = self.sessions.team_message(team["session_id"], fb["message_id"])
+            if msg is None:
+                continue   # tin không còn (phiên bị xoá bớt): phản hồi không còn ngữ cảnh, bỏ
             excerpt = re.sub(r"\s+", " ", str(msg.get("content") or "")).strip()
             if len(excerpt) > FEEDBACK_EXCERPT:
                 excerpt = excerpt[:FEEDBACK_EXCERPT] + "..."
@@ -480,7 +484,9 @@ class TeamRunner:
             if fb["reasons"]:
                 parts.append("lý do: " + ", ".join(REASON_LABEL.get(x, x) for x in fb["reasons"]))
             if fb["comment"]:
-                parts.append(f'góp ý: "{fb["comment"]}"')
+                # Một dòng mỗi mục: góp ý nhiều dòng không được giả thành đầu mục mới của khối ngữ cảnh.
+                comment = re.sub(r"\s+", " ", fb["comment"]).strip()
+                parts.append(f'góp ý: "{comment}"')
             out.append(" · ".join(parts))
         return out
 

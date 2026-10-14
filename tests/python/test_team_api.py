@@ -238,6 +238,15 @@ check("route reaction: tin của chủ 400", c.post(f"/teams/{TID}/messages/{om[
     "value": "like", "nonce": "rx3"}).status_code == 400)
 check("route reaction: brain khác 404", c.post(f"/teams/{TID}/messages/{am['id']}/reaction?brain={BR2}", json={
     "value": "like", "nonce": "rx4"}).status_code == 404)
+# Review T2 #1: khung lọc theo việc (chi tiết việc) cũng phải kèm phản hồi, kẻo bấm emoji ở đó xoá lý do và góp ý.
+tm_ = [m for m in page if m["author_kind"] == "agent" and m.get("task_id")][0]
+c.post(f"/teams/{TID}/messages/{tm_['id']}/reaction{Q}", json={"value": "wow", "reasons": ["missing"],
+                                                                  "comment": "Thêm số liệu", "nonce": "rx-task"})
+det = c.get(f"/teams/{TID}/tasks/{tm_['task_id']}{Q}").json()["messages"]
+check("chi tiết việc kèm phản hồi của từng tin (khung lọc theo việc không mất lý do, góp ý)",
+      [(m.get("reaction") or {}).get("comment") for m in det if m["id"] == tm_["id"]] == ["Thêm số liệu"], det[:2])
+r = c.post(f"/teams/{TID}/messages/{am['id']}/reaction{Q}", json={"value": "like", "nonce": "rx-task"})
+check("nonce đã dùng cho tin khác: 400, không báo đã lưu", r.status_code == 400, r.text)
 kinds = [getattr(getattr(x, "cr_code", None), "co_name", "") for x in spawned]
 check("route reaction: không mở lượt nào, chỉ đẩy gói WS", len(c.get(f"/teams/{TID}/turns{Q}").json()["turns"])
       == turns0 and not ({"run_replies", "dispatch_once"} & set(kinds)) and "fake_publish" in kinds, kinds)

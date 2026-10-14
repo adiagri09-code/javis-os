@@ -433,8 +433,12 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             task = _own_task(team_id, task_id)
             if not task:
                 return _err(404, "Không có việc này trong nhóm", "No such job in this team")
-            return {"ok": True, "task": task, "steps": api.teams().steps(task_id),
-                    "messages": deps.session_store().team_messages_of_task(team["session_id"], task_id)}
+            msgs = deps.session_store().team_messages_of_task(team["session_id"], task_id)
+            # Khung lọc theo việc dùng danh sách này: thiếu phản hồi thì bấm emoji ở đây sẽ xoá lý do, góp ý (review T2).
+            got = api.teams().reactions_for(team["session_id"], [m["id"] for m in msgs])
+            for m in msgs:
+                m["reaction"] = got.get(int(m["id"]))
+            return {"ok": True, "task": task, "steps": api.teams().steps(task_id), "messages": msgs}
         return await api.io(_do)
 
     @app.post("/teams/{team_id}/tasks/{task_id}/cancel")

@@ -192,8 +192,18 @@ check("không có phản hồi: không chip", TM.reactionChipHtml(am, null) === 
 check("thả cảm xúc gửi nonce mới mỗi lần, không mở lượt", /\/reaction"\)[\s\S]{0,120}nonce: newClientId\(\)/.test(teamsJs));
 check("điện thoại: nhấn giữ tin mở bộ chọn, có ngưỡng rung tay", teamsJs.includes('"pointerdown"') && /> 10/.test(teamsJs));
 check("gói WS không mang phản hồi thì giữ phản hồi đang có", teamsJs.includes('!("reaction" in nm)'));
-check("CSS: nút mặt cười hiện khi rê chuột, luôn hiện trên máy chạm", /\.tm-msg-agent:hover \.tm-react-btn/.test(css)
-      && /@media \(hover: none\) \{ \.tm-react-btn \{ opacity: 1; \} \}/.test(css));
+check("CSS: nút mặt cười hiện khi rê chuột, luôn hiện trên máy chạm, tắt menu nhấn giữ của máy",
+      /\.tm-msg-agent:hover \.tm-react-btn/.test(css)
+      && /@media \(hover: none\) \{ \.tm-react-btn \{ opacity: 1; \} \.tm-msg-agent \{ -webkit-touch-callout: none; \} \}/.test(css));
+// Review T2 #4 tới #6
+check("đang soạn góp ý thì vẽ lại giữ con trỏ, chỗ cuộn, không kéo xuống cuối",
+      /typing = S\.picker !== null && act && act\.classList/.test(teamsJs) && /ta\.setSelectionRange\(typing\.start, typing\.end\)/.test(teamsJs)
+      && /\(stick \|\| atEnd\) && S\.picker === null/.test(teamsJs));
+check("mở bộ chọn đưa focus vào emoji đầu; đóng trả focus về nút mặt cười",
+      /S\.focusPicker = true/.test(teamsJs) && /\.tm-react-panel \.tm-react-pick"\);\s*if \(first\) first\.focus\(\)/.test(teamsJs)
+      && /\.tm-react-btn\[data-react-open="' \+ S\.focusBack/.test(teamsJs));
+check("nhấn giữ chỉ cho chạm và bút, không cho chuột; chặn menu ngữ cảnh của lần giữ đó",
+      teamsJs.includes('if (e.pointerType === "mouse") return;') && /"contextmenu"[\s\S]{0,80}if \(held\) \{ e\.preventDefault\(\)/.test(teamsJs));
 check("CSS: điện thoại hàng ngang lớn, vùng chạm >= 44px", /\.tm-react-pick \{ flex: 1 1 0; min-width: 44px; min-height: 48px/.test(css));
 check("CSS 375px: sáu nút 44px lọt bề ngang (khe 4px, đệm 6px; smoke T2 thấy 😡 tràn mép)",
       /\.tm-react-panel \{ padding: 8px 6px; \}/.test(css) && /\.tm-react-row \{ flex-wrap: nowrap; justify-content: space-between; gap: 4px; \}/.test(css));

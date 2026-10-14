@@ -534,11 +534,17 @@ class TeamStore:
         if len(comment) > COMMENT_MAX:
             raise TeamError(f"góp ý tối đa {COMMENT_MAX} ký tự")
         nonce = str(nonce or "").strip()
-        if not nonce:
-            raise TeamError("thiếu nonce")
+        if not nonce or len(nonce) > 100:
+            raise TeamError("nonce không hợp lệ")
         now = time.time()
         with self._Tx(self) as c:
-            if c.execute("SELECT 1 FROM team_reaction_log WHERE nonce=?", (nonce,)).fetchone() is None:
+            seen = c.execute("SELECT session_id, message_id, reactor FROM team_reaction_log WHERE nonce=?",
+                             (nonce,)).fetchone()
+            if seen is not None and (seen["session_id"], int(seen["message_id"]), seen["reactor"]) != (
+                    session_id, int(message_id), reactor):
+                # Nonce của lần gửi khác: không được trả 200 "đã lưu" cho một tin không hề đổi.
+                raise TeamError("nonce đã dùng cho một tin khác")
+            if seen is None:
                 c.execute("INSERT INTO team_reaction_log(session_id,message_id,reactor,team_id,value,reasons_json,"
                           "comment,content_sha,nonce,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
                           (session_id, int(message_id), reactor, team_id, val, _j(reasons), comment, content_sha,

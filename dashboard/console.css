@@ -2535,7 +2535,7 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .tm-react-btn { border: none; background: none; color: var(--text3); cursor: pointer; padding: 2px 6px; border-radius: 8px;
   opacity: 0; transition: opacity .12s; }
 .tm-msg-agent:hover .tm-react-btn, .tm-react-btn:focus-visible { opacity: 1; }
-@media (hover: none) { .tm-react-btn { opacity: 1; } }
+@media (hover: none) { .tm-react-btn { opacity: 1; } .tm-msg-agent { -webkit-touch-callout: none; } }
 .tm-react-chip { border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 999px;
   padding: 1px 10px; font-size: 12px; cursor: pointer; margin-right: auto; }
 .tm-react-emoji { font-size: 15px; margin-right: 4px; }

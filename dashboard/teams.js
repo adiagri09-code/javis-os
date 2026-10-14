@@ -404,7 +404,8 @@
   function fresh(el) {
     return { el: el, teams: [], next: null, activeId: "", team: null, queue: null, msgs: [], hasMore: false,
       agents: [], mentions: [], asJob: false, pending: null, tab: "jobs", side: false, view: "list",
-      filterTask: "", taskTitles: {}, teamNames: {}, note: "", creating: false, skipped: {}, picker: null, draft: null };
+      filterTask: "", taskTitles: {}, teamNames: {}, note: "", creating: false, skipped: {}, picker: null, draft: null,
+      focusPicker: false, focusBack: null };
   }
 
   function teamUrl(path) { return "/teams/" + q(S.activeId) + (path || ""); }
@@ -473,6 +474,10 @@
       return;
     }
     var atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    // Đang soạn góp ý trong bộ chọn mà có tin mới tới: giữ con trỏ và chỗ cuộn, không kéo xuống cuối (review T2).
+    var act = document.activeElement;
+    var typing = S.picker !== null && act && act.classList && act.classList.contains("tm-react-comment") ?
+      { start: act.selectionStart, end: act.selectionEnd, top: box.scrollTop } : null;
     var list = S.msgs.filter(function (m) { return !S.skipped[m.id]; });
     box.innerHTML = (S.hasMore ? '<button type="button" class="ws-btn tm-older">' + esc(tw("teams.older")) + "</button>" : "") +
       list.map(function (m) {
@@ -480,7 +485,24 @@
         if (S.skipped["p" + m.id] && m.meta && m.meta.proposal) mm = Object.assign({}, m, { meta: Object.assign({}, m.meta, { proposal: null }) });
         return messageHtml(mm, ctx());
       }).join("");
-    if (stick || atEnd) box.scrollTop = box.scrollHeight;
+    if (typing) {
+      box.scrollTop = typing.top;
+      var ta = box.querySelector(".tm-react-comment");
+      if (ta) { ta.focus(); try { ta.setSelectionRange(typing.start, typing.end); } catch (e) {} }
+      return;
+    }
+    if ((stick || atEnd) && S.picker === null) box.scrollTop = box.scrollHeight;
+    if (S.focusPicker) {
+      // Mở bộ chọn: focus vào emoji đầu (bàn phím và trình đọc màn hình vào được bảng, Escape đóng được).
+      S.focusPicker = false;
+      var first = box.querySelector(".tm-react-panel .tm-react-pick");
+      if (first) first.focus();
+    }
+    if (S.focusBack !== null && S.focusBack !== undefined) {
+      var back = box.querySelector('.tm-react-btn[data-react-open="' + S.focusBack + '"]');
+      S.focusBack = null;
+      if (back) back.focus();
+    }
   }
 
   function drawRunbar() {
@@ -714,12 +736,14 @@
       return;
     }
     if (d.reactOpen) {
+      var was = S.picker;
       S.picker = S.picker === Number(d.reactOpen) ? null : Number(d.reactOpen);
       S.draft = null;
+      if (S.picker !== null) S.focusPicker = true; else S.focusBack = was;
       drawMsgs(false);
       return;
     }
-    if (d.reactClose) { S.picker = null; S.draft = null; drawMsgs(false); return; }
+    if (d.reactClose) { S.focusBack = S.picker; S.picker = null; S.draft = null; drawMsgs(false); return; }
     if (d.react) {
       var cur = msgById(Number(d.mid));
       var form = panelValues(Number(d.mid), cur);
@@ -797,6 +821,7 @@
       if (r.code !== 200) return fail(r);
       var m = msgById(mid);
       if (m) m.reaction = r.j.reaction || null;
+      S.focusBack = S.picker;
       S.picker = null;
       S.draft = null;
       setNote(tw("teams.react_saved"));
@@ -874,7 +899,7 @@
   }
 
   function onKey(e) {
-    if (e.key === "Escape" && S.picker !== null) { S.picker = null; S.draft = null; drawMsgs(false); return; }
+    if (e.key === "Escape" && S.picker !== null) { S.focusBack = S.picker; S.picker = null; S.draft = null; drawMsgs(false); return; }
     if (e.target.classList && e.target.classList.contains("tm-input") && e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       send();
@@ -914,16 +939,22 @@
     });
     el.addEventListener("keydown", onKey);
     // Điện thoại: nhấn giữ tin của trợ lý mở bộ chọn cảm xúc (spec 14.3).
-    var hold = null, hx = 0, hy = 0;
+    var hold = null, hx = 0, hy = 0, held = false;
     var stopHold = function () { clearTimeout(hold); hold = null; };
     el.addEventListener("pointerdown", function (e) {
+      if (e.pointerType === "mouse") return;   // chuột đã có nút mặt cười khi rê; giữ chuột để bôi chữ như thường
       var msg = e.target.closest && e.target.closest(".tm-msg-agent");
       if (!msg || e.target.closest("button, a, input, textarea, select")) return;
       stopHold();
       hx = e.clientX; hy = e.clientY;
       hold = setTimeout(function () {
-        S.picker = Number(msg.getAttribute("data-mid")); S.draft = null; drawMsgs(false);
+        hold = null; held = true;
+        S.picker = Number(msg.getAttribute("data-mid")); S.draft = null; S.focusPicker = true; drawMsgs(false);
       }, 500);
+    });
+    // Nhấn giữ đã mở bộ chọn: chặn menu ngữ cảnh mặc định của máy chạm (chọn chữ, sao chép) cho lần giữ đó.
+    el.addEventListener("contextmenu", function (e) {
+      if (held) { e.preventDefault(); held = false; }
     });
     el.addEventListener("pointermove", function (e) {
       if (hold && (Math.abs(e.clientX - hx) > 10 || Math.abs(e.clientY - hy) > 10)) stopHold();
