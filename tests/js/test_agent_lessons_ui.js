@@ -118,5 +118,27 @@ check("bản tiếng Việt có dấu", /[ăâđêôơưạảấầẩẫậắ
 check("không em dash / en dash", !/[–—]/.test(src + JSON.stringify(Object.fromEntries(
   Object.entries(vi).filter(([k]) => k.startsWith("lessons."))))));
 
+// Smoke T3 (ngăn Nhóm): hàng thành viên của một nhóm chỉ vẽ phần của nhóm đó, tên nhóm thay mã, không lặp ô phán xử.
+{
+  const JUI = require(path.join(ROOT, "dashboard", "agent-judge-ui.js"));
+  const sv = { slug: "lan", resonance: true, contexts: [], parts: {
+    lessons: { slug: "lan", agent_key: "ag_l", budget: { cap: 6, used: 0, reserved: 2 }, legacy: [], changes: [], scopes: [
+      { scope: "dm:ag_l", lessons: [{ id: 2, scope: "dm:ag_l", kind: "method", text: "Bài học chat riêng", source: "self", source_refs: [] }] },
+      { scope: "team:tm_1", lessons: [{ id: 1, scope: "team:tm_1", kind: "presentation", text: "Bài học nhóm", source: "owner", source_refs: [] }] }] },
+    judge: { name: "judge", agent_key: "ag_l", contexts: [{ context_ref: "team:tm_1", label: "Nhóm A", decisions: [] }] } } };
+  const reg = [{ name: "lessons", render: LUI.part.render }, { name: "judge", render: JUI.render }];
+  const rowHtml = P.partsHtml(sv, reg, { slug: "lan", only: "team:tm_1", teamNames: { tm_1: "Nhóm A" } });
+  check("smoke T3: hàng thành viên nhóm chỉ hiện bài học của nhóm đó, không hiện chat riêng",
+    rowHtml.includes("Bài học nhóm") && !rowHtml.includes("Bài học chat riêng"), rowHtml);
+  check("smoke T3: phạm vi nhóm hiện tên nhóm, không hiện mã thô", rowHtml.includes("Nhóm A") && !rowHtml.includes("tm_1<"), rowHtml);
+  check("smoke T3: ô phán xử không vẽ lần hai trong khung nhịp của hàng nhóm", !rowHtml.includes('data-part="judge"'), rowHtml);
+  const cardHtml = P.partsHtml(sv, reg, { slug: "lan" });
+  check("smoke T3: thẻ trợ lý (không lọc) vẫn hiện mọi phạm vi và ô phán xử", cardHtml.includes("Bài học chat riêng")
+    && cardHtml.includes('data-part="judge"'), cardHtml);
+  const panel = P.panelHtml({ resonance: true, contexts: [], parts: {} }, { slug: "lan", registry: [] });
+  check("smoke T3: Auto đang bật mà chưa có nhịp thì không khuyên bật Auto", panel.includes(vi["pulse.empty_waiting"])
+    && !panel.includes(vi["pulse.empty"]) && !!en["pulse.empty_waiting"], panel);
+}
+
 console.log(fails ? `\n${fails} FAIL` : "\nALL OK");
 process.exit(fails ? 1 : 0);

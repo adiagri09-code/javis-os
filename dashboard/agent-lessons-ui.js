@@ -55,10 +55,13 @@
 
   function pick(map, v, dflt) { return Object.prototype.hasOwnProperty.call(map, v) ? map[v] : dflt; }
 
-  function scopeLabel(scope) {
+  function scopeLabel(scope, teamNames) {
     var s = String(scope || "");
     if (s === "*") return tw("lessons.scope.all");
     if (s.indexOf("dm:") === 0) return tw("lessons.scope.dm");
+    if (s.indexOf("team:") === 0 && teamNames && teamNames[s.slice(5)]) {
+      return tw("lessons.scope.team", { name: teamNames[s.slice(5)] });
+    }
     if (s.indexOf("team:") === 0) {
       var JP = (typeof window !== "undefined" && window.JavisPulse) || null;
       return JP && JP.contextLabel ? JP.contextLabel(s) : tw("lessons.scope.team", { name: s.slice(5) });
@@ -137,11 +140,13 @@
       esc(tw("lessons.unlimited")) + "</option></select></label>" +
       '<div class="pulse-line pulse-note">' + esc(tw("lessons.budget_note")) + "</div>";
     var scopes = p.scopes || [];
+    // Hàng thành viên của MỘT nhóm: chỉ bài học của nhóm đó và bài học dùng mọi nơi (không hiện chat riêng ở đây).
+    if (o.only) scopes = scopes.filter(function (x) { return x.scope === o.only || x.scope === "*"; });
     if (!scopes.length) {
       html += '<div class="pulse-line">' + esc(tw("lessons.empty")) + "</div>";
     }
     scopes.forEach(function (s) {
-      html += '<div class="lessons-scope"><div class="lessons-scope-name">' + esc(scopeLabel(s.scope)) + "</div>" +
+      html += '<div class="lessons-scope"><div class="lessons-scope-name">' + esc(scopeLabel(s.scope, o.teamNames)) + "</div>" +
         '<ul class="pulse-list lessons-list">' + (s.lessons || []).map(lessonItem).join("") + "</ul></div>";
     });
     if ((p.legacy || []).length) {
@@ -245,7 +250,9 @@
     });
   }
 
-  var part = { name: "lessons", render: function (view) { return partHtml(view, {}); } };
+  var part = { name: "lessons", render: function (view, _el, ctx) {
+    return partHtml(view, { only: (ctx && ctx.only) || "", teamNames: (ctx && ctx.teamNames) || {} });
+  } };
   if (typeof window !== "undefined") {
     window.JavisPulseParts = window.JavisPulseParts || [];
     if (!window.JavisPulseParts.some(function (x) { return x && x.name === "lessons"; })) window.JavisPulseParts.push(part);

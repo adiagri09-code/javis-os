@@ -167,6 +167,19 @@
     host.innerHTML = viewHtml(view, { compact: compact, busy: (state[key] || {}).busy, note: (state[key] || {}).note });
   }
 
+  // Tải lại khung phán xử của một ô sau khi lưu nhãn (ngưỡng và độ lệch do máy chủ tính). Lỗi mạng thì giữ khung cũ.
+  function refreshView(host, slug, key, compact) {
+    if (typeof window === "undefined" || !window.fetch) return null;
+    var ctx = key.slice(key.indexOf("|") + 1);
+    return window.fetch(viewUrl(slug, brain(), ctx === "*" ? "" : ctx), { credentials: "same-origin" }).then(function (r) {
+      return r.json().then(function (j) { return { code: r.status, j: j || {} }; });
+    }).then(function (r) {
+      if (r.code !== 200 || !r.j.judge) return;
+      cache[key] = { at: Date.now(), view: r.j.judge };
+      paint(host, key, r.j.judge, compact);
+    }).catch(function () { return null; });
+  }
+
   function bind(host, slug, key, getView, compact) {
     if (host.getAttribute("data-ajd-bound") === "1") return;
     host.setAttribute("data-ajd-bound", "1");
@@ -186,6 +199,8 @@
         st.note[id] = res.text;
         if (res.ok && res.decision) replaceDecision(getView(), res.decision);
         paint(host, key, getView(), compact);
+        // Nhãn dịch ngưỡng của ngữ cảnh ở máy chủ: lấy lại khung để dòng "Ngưỡng ... (độ lệch ...)" đúng số mới.
+        if (res.ok) refreshView(host, slug, key, compact);
       });
     });
   }
@@ -222,6 +237,8 @@
       if (slug) bind(el, slug, key, function () { return (cache[key] || {}).view; }, false);
       return el.innerHTML;
     }
+    // Hàng thành viên của một nhóm đã có ô phán xử riêng cho đúng nhóm đó (teams.js): không vẽ lần hai trong khung nhịp.
+    if (ctx && ctx.only) return "";
     var part = a && a.parts ? a.parts.judge : a;
     if (!part || part.error || !part.contexts) return "";
     cache[key] = { at: Date.now(), view: part };
@@ -239,7 +256,7 @@
   }
 
   var api = { decisionHtml: decisionHtml, contextHtml: contextHtml, viewHtml: viewHtml, postLabel: postLabel,
-    labelUrl: labelUrl, viewUrl: viewUrl, hydrate: hydrate, render: render };
+    labelUrl: labelUrl, viewUrl: viewUrl, hydrate: hydrate, render: render, refreshView: refreshView };
   if (typeof window !== "undefined") {
     window.JavisAgentJudge = api;
     window.JavisPulseParts = window.JavisPulseParts || [];

@@ -4337,6 +4337,7 @@
   "pulse.fb.status.superseded": "Replaced",
   "pulse.fb.status.void": "Removed",
   "pulse.fb.share": "({p}% share)",
+  "pulse.empty_waiting": "No pace here yet. Auto is on: the pace appears after the first wake.",
   "pulse.empty": "No pace here yet. Turn on Auto for the assistant to let it pace itself.",
   "pulse.error": "Not saved: {e}",
   "pulse.error_generic": "the server did not confirm",

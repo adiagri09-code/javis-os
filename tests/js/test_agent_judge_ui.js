@@ -122,6 +122,19 @@ function fakeFetch(status, body, seen) {
   check("mục phán xử lỗi hay rỗng thì trang nhịp không vẽ gì", UI.render({ parts: { judge: { error: "x" } } }, null,
     { slug: "lan" }) === "" && UI.render({ parts: {} }, null, { slug: "lan" }) === "");
 
+  // Smoke T3: sau khi lưu nhãn, ô phán xử lấy lại khung từ máy chủ để dòng ngưỡng/độ lệch đúng số mới.
+  {
+    const calls = [];
+    global.window = { fetch: function (url) { calls.push(url); return Promise.resolve({ status: 200, json: function () {
+      return Promise.resolve({ judge: Object.assign({}, view, { contexts: [Object.assign({}, view.contexts[0],
+        { offset: -0.075, threshold: 0.525 })] }) }); } }); } };
+    const host = { innerHTML: "" };
+    await UI.refreshView(host, "lan", "lan|team:t1", false);
+    delete global.window;
+    check("smoke T3: lưu nhãn xong thì tải lại khung và vẽ ngưỡng mới", calls.length === 1 && calls[0].includes("/agents/lan/judge")
+      && (host.innerHTML.includes("0.53") || host.innerHTML.includes("0.525")), host.innerHTML.slice(0, 300));
+  }
+
   console.log(fails ? `\n${fails} FAIL` : "\nOK");
   process.exit(fails ? 1 : 0);
 })();
