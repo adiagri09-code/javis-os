@@ -8,6 +8,12 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.164.0] - 2026-10-15
+### Added
+- **The Fast mode bolt now really switches each brain:** Claude Code and the Anthropic API (Opus 5.5, Opus 5, Opus 4.8), ChatGPT through Codex, the OpenAI API, OpenRouter and Gemini. Brains without Fast mode (Grok, Antigravity, Groq, DeepSeek, Ollama) keep a dimmed bolt.
+- **Bolt off means normal speed:** for Codex, Javis forces the normal tier even when the model or the Codex config defaults to Fast. Background runs (loops, reminders, Kanban, teams) always run at normal speed.
+- **When a provider refuses Fast mode** (account not eligible, limit reached), Javis resends at normal speed and the turn does not fail; hover the bolt to see why.
+
 ## [0.162.0] - 2026-10-15
 ### Security
 - **Plugins you install load by default**, no environment variable needed. Each plugin still runs only after you click **Enable** on its card (a plugin Javis creates from chat always starts disabled), and the permission level still decides every tool call.

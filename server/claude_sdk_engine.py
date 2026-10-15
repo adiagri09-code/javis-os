@@ -823,7 +823,7 @@ class ClaudeSDK:
         # là nó thoát ngay với "unknown option", tức hỏng trọn lượt chat.
         if self.effort and "effort" in fields:
             kw["effort"] = self.effort
-        # Fast mode (0.163.0): main._cli_fast sets this only for a turn with the bolt on and a model
+        # Fast mode (0.164.0): main._cli_fast sets this only for a turn with the bolt on and a model
         # that supports it. The SDK forwards `settings` to Claude Code as a JSON string.
         if getattr(self, "fast_settings", None) and "settings" in fields:
             kw["settings"] = self.fast_settings

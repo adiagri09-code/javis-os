@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-import fast_mode   # composer Fast mode bolt: per-provider parameters (0.163.0)
+import fast_mode   # composer Fast mode bolt: per-provider parameters (0.164.0)
 import limit_learner
 import localefmt
 import vision_input
@@ -692,7 +692,7 @@ async def _openai_compat_stream(url, label, api_key, model, messages, reasoning,
     if reasoning not in (None, "", "off") and send_reasoning:
         payload["reasoning_effort"] = api_effort(reasoning)
     payload.update(extra_payload or {})
-    payload.update(fast_extra or {})   # Fast mode (0.163.0)
+    payload.update(fast_extra or {})   # Fast mode (0.164.0)
     try:
         timeout = httpx.Timeout(120.0, connect=15.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -881,7 +881,7 @@ async def _fast_retry(provider, fast, make):
 
 
 async def anthropic_stream(api_key, model, messages, reasoning="off"):
-    """Anthropic Messages API without tools; Fast mode with one retry without it (0.163.0)."""
+    """Anthropic Messages API without tools; Fast mode with one retry without it (0.164.0)."""
     async for ev in _fast_retry("anthropic-api", fast_mode.current() and fast_mode.claude_supports(model),
                                 lambda fast: _anthropic_stream_once(api_key, model, messages, reasoning, fast)):
         yield ev
@@ -1100,7 +1100,7 @@ async def single_tool_plan(provider, api_key, model, messages, reasoning, tool_s
 
 
 async def openrouter_stream(api_key, model, messages, reasoning="off"):
-    """OpenRouter without tools; Fast mode with one retry without it (0.163.0)."""
+    """OpenRouter without tools; Fast mode with one retry without it (0.164.0)."""
     async for ev in _fast_retry("openrouter", fast_mode.current(),
                                 lambda fast: _openrouter_stream_once(api_key, model, messages, reasoning, fast)):
         yield ev
@@ -1250,7 +1250,7 @@ def _codex_input(messages):
 
 
 async def openai_responses_stream(access_token, account_id, model, messages, reasoning="off"):
-    """ChatGPT plan (OAuth) through the Codex Responses backend; Fast mode with one retry (0.163.0)."""
+    """ChatGPT plan (OAuth) through the Codex Responses backend; Fast mode with one retry (0.164.0)."""
     async for ev in _fast_retry("openai-oauth", fast_mode.current(), lambda fast: _openai_responses_stream_once(
             access_token, account_id, model, messages, reasoning, fast)):
         yield ev
@@ -1820,7 +1820,7 @@ async def _cc_tool_loop(url, headers, model, messages, mcp_tools, mcp_route, rea
                     r = await client.post(url, headers=headers, json=payload)
             if r.status_code != 200:
                 body_text = r.text or ""
-                # Fast mode (0.163.0): the provider refused service_tier, so drop it and retry the round.
+                # Fast mode (0.164.0): the provider refused service_tier, so drop it and retry the round.
                 if (reasoning_extra or {}).get("service_tier") and fast_mode.refused(r.status_code, body_text, "service_tier"):
                     reasoning_extra = {k: v for k, v in reasoning_extra.items() if k != "service_tier"}
                     fast_mode.remember(str(label).lower(), "fallback", body_text[:160])
@@ -2030,7 +2030,7 @@ async def openai_chat_with_mcp(api_key, model, messages, reasoning, mcp_tools, m
     extra = {}
     if reasoning not in (None, "", "off") and _openai_is_reasoning(model):
         extra["reasoning_effort"] = api_effort(reasoning)
-    extra.update(fast_mode.compat_params("openai", fast_mode.current()))   # Fast mode (0.163.0)
+    extra.update(fast_mode.compat_params("openai", fast_mode.current()))   # Fast mode (0.164.0)
     yield {"type": "meta", "model": model}
     async for ev in _cc_tool_loop(OPENAI_URL, headers, model or "gpt-4o-mini", messages, mcp_tools, mcp_route, extra, "OpenAI"):
         yield ev
@@ -2081,7 +2081,7 @@ async def gemini_chat_with_mcp(api_key, model, messages, reasoning, mcp_tools, m
     extra = {}
     if reasoning not in (None, "", "off") and _gemini_is_reasoning(model):
         extra["reasoning_effort"] = api_effort(reasoning)
-    extra.update(fast_mode.compat_params("gemini", fast_mode.current()))   # Fast mode (0.163.0)
+    extra.update(fast_mode.compat_params("gemini", fast_mode.current()))   # Fast mode (0.164.0)
     yield {"type": "meta", "model": model}
     async for ev in _cc_tool_loop(GEMINI_URL, headers, model or "gemini-2.5-flash", messages, mcp_tools, mcp_route, extra, "Gemini"):
         yield ev
@@ -2093,7 +2093,7 @@ async def openrouter_chat_with_mcp(api_key, model, messages, reasoning, mcp_tool
     extra = {}
     if reasoning not in (None, "", "off"):
         extra["reasoning"] = {"effort": api_effort(reasoning)}
-    extra.update(fast_mode.compat_params("openrouter", fast_mode.current()))   # Fast mode (0.163.0)
+    extra.update(fast_mode.compat_params("openrouter", fast_mode.current()))   # Fast mode (0.164.0)
     yield {"type": "meta", "model": model}
     async for ev in _cc_tool_loop(OPENROUTER_URL, headers, model or "openai/gpt-4o-mini", messages, mcp_tools, mcp_route, extra, "OpenRouter",
                                   cache_system=_is_claude_model(model)):
@@ -2126,7 +2126,7 @@ async def responses_with_mcp(access_token, account_id, model, messages, reasonin
     if not (account_id or ""):
         headers.pop("chatgpt-account-id", None)
     model = model or "gpt-5-codex"
-    fast_extra = fast_mode.responses_params(fast_mode.current())   # Fast mode (0.163.0)
+    fast_extra = fast_mode.responses_params(fast_mode.current())   # Fast mode (0.164.0)
     yield {"type": "meta", "model": model}
     timeout = httpx.Timeout(180, connect=15)
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -2291,7 +2291,7 @@ async def anthropic_chat_with_mcp(api_key, model, messages, reasoning, mcp_tools
         tools[-1]["cache_control"] = {"type": "ephemeral"}   # tools = prefix ổn định, cache 1 lần đủ
     yield {"type": "meta", "model": model}
     extras = _anthropic_reasoning(model, reasoning)
-    fast_h, fast_b = fast_mode.anthropic_params(model, fast_mode.current())   # Fast mode (0.163.0)
+    fast_h, fast_b = fast_mode.anthropic_params(model, fast_mode.current())   # Fast mode (0.164.0)
     timeout = httpx.Timeout(180, connect=15)
     async with httpx.AsyncClient(timeout=timeout) as client:
         usage_in = usage_out = 0

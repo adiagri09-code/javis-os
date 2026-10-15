@@ -6,6 +6,12 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.164.0] - 2026-10-15
+### Thêm mới
+- **Tia sét Fast mode chạy thật trên từng bộ não:** Claude Code và Anthropic API (Opus 5.5, Opus 5, Opus 4.8), ChatGPT qua Codex, OpenAI API, OpenRouter và Gemini. Bộ não không có Fast mode (Grok, Antigravity, Groq, DeepSeek, Ollama) vẫn để tia sét mờ.
+- **Tắt tia sét là tốc độ thường thật:** với Codex, Javis ép về tốc độ thường kể cả khi model hoặc cấu hình Codex đang để mặc định là Fast. Việc chạy nền (loop, nhắc hẹn, Kanban, nhóm) luôn chạy tốc độ thường.
+- **Nhà cung cấp từ chối Fast mode** (tài khoản không đủ điều kiện, vượt giới hạn) thì Javis tự gửi lại ở tốc độ thường, lượt chat không hỏng; rê chuột vào tia sét sẽ thấy lý do.
+
 ## [0.162.0] - 2026-10-15
 ### Bảo mật
 - **Plugin do bạn cài được tải mặc định**, không cần đặt biến môi trường nữa. Từng plugin vẫn chỉ chạy khi bạn bấm **Bật** trên thẻ của nó (plugin Javis tạo qua chat luôn bắt đầu ở trạng thái tắt), và mức quyền vẫn quyết định từng lần gọi tool.

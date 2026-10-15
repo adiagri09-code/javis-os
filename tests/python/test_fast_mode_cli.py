@@ -1,4 +1,4 @@
-"""Fast mode on the CLI brains (0.163.0): Claude Code through the Agent SDK, and Codex CLI.
+"""Fast mode on the CLI brains (0.164.0): Claude Code through the Agent SDK, and Codex CLI.
 
     python tests/run.py fast_mode_cli
 """

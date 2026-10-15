@@ -120,7 +120,7 @@
     const n = fastNote(eff.provider, eff.model);
     fb.setAttribute("aria-pressed", n.supported && state.fast ? "true" : "false");
     fb.setAttribute("aria-disabled", n.supported ? "false" : "true");
-    // 0.163.0: the last real state this brain reported (cooldown, provider refusal) as an extra line.
+    // 0.164.0: the last real state this brain reported (cooldown, provider refusal) as an extra line.
     const key = n.supported && state.fast ? fastStateKey(fastStates[eff.provider]) : "";
     fb.title = "Fast mode\n" + window.t(n.note) + (key ? "\n" + window.t(key) : "");
   }

@@ -46,7 +46,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from claude_cli import CodexCLI, claude_engine, find_claude_cli, find_codex_cli, cancel_all, _empty_mcp_file, auth_status as claude_auth_status, auth_login as claude_auth_login, auth_logout as claude_auth_logout, auth_login_ui_start, auth_login_ui_code, mcp_native_add, mcp_native_remove, mcp_native_status, mcp_open_auth_terminal, mcp_native_list, codex_mcp_native_list, codex_mcp_native_add, codex_mcp_native_remove, codex_mcp_native_status, codex_mcp_open_login_terminal
 import claude_cli   # binary `claude`: tìm đường, auth, và danh mục model nhúng sẵn trong CLI
 import codex_models   # thang effort mà CHÍNH Codex khai cho từng model (model/list)
-import fast_mode   # composer Fast mode bolt: per-turn choice and per-brain parameters (0.163.0)
+import fast_mode   # composer Fast mode bolt: per-turn choice and per-brain parameters (0.164.0)
 import config as cfgmod
 import update_state
 _ver_tuple = update_state.ver_tuple
@@ -3891,7 +3891,7 @@ def _cli_do_sau_khac(cli, mod, reasoning, message):
 
 
 def _cli_fast(cli):
-    """Fast mode for Claude Code (0.163.0): `settings='{"fastMode": true}'` on the SDK options
+    """Fast mode for Claude Code (0.164.0): `settings='{"fastMode": true}'` on the SDK options
     when this turn has the bolt on and the model supports it (Opus 5.5, Opus 5, Opus 4.8)."""
     try:
         cli.fast_settings = fast_mode.claude_sdk_settings(getattr(cli, "model", "") or "", fast_mode.current())
@@ -3900,7 +3900,7 @@ def _cli_fast(cli):
 
 
 def _codex_fast(cli):
-    """Fast mode for Codex CLI (0.163.0): `-c service_tier=...`, replacing any earlier tier entry.
+    """Fast mode for Codex CLI (0.164.0): `-c service_tier=...`, replacing any earlier tier entry.
 
     On asks for `priority` when the model declares it. Off forces `default`, because some Codex
     models default to `priority` and the user's config.toml may set it (owner approved)."""
@@ -22710,7 +22710,7 @@ async def agent_jobs_assign(slug: str, request: Request, brain: str = "brain"):
 
 @app.get("/model/fast-state")
 async def model_fast_state():
-    """Last Fast mode state each brain reported (on, cooldown, fallback), for the bolt tooltip (0.163.0)."""
+    """Last Fast mode state each brain reported (on, cooldown, fallback), for the bolt tooltip (0.164.0)."""
     return {"states": fast_mode.states()}
 
 

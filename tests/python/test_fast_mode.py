@@ -1,4 +1,4 @@
-"""Fast mode helpers (0.163.0): support matrix, per-provider parameters, refusal detection,
+"""Fast mode helpers (0.164.0): support matrix, per-provider parameters, refusal detection,
 the per-turn ContextVar and the last observed state per brain.
 
     python tests/run.py fast_mode

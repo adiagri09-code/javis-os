@@ -114,7 +114,7 @@ def _normalize_items(items: Any) -> list[dict]:
                 if isinstance(x, dict) and x.get("reasoningEffort")
             ],
             "upgrade": raw.get("upgrade"),
-            # 0.163.0, Fast mode: the tier ids the model declares ("priority" is Fast).
+            # 0.164.0, Fast mode: the tier ids the model declares ("priority" is Fast).
             "service_tiers": [
                 str(t.get("id")) for t in (raw.get("serviceTiers") or [])
                 if isinstance(t, dict) and t.get("id")

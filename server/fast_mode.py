@@ -1,4 +1,4 @@
-"""Fast mode: the composer bolt (settings.model.fast) wired into each brain (0.163.0).
+"""Fast mode: the composer bolt (settings.model.fast) wired into each brain (0.164.0).
 
 One place decides, per brain, which parameter turns the fast tier on, so no engine sends a
 parameter its model does not declare (spec: docs/superpowers/specs/2026-10-15-composer-plus-fast-mode-design.md).

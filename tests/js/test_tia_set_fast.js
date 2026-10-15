@@ -30,7 +30,7 @@ cases.forEach(([p, mo, sup, note]) => {
 ["fast.claude", "fast.codex", "fast.api", "fast.none", "fast.model_none"].forEach(k =>
   check("key " + k + " in vi and en", !!vi[k] && !!en[k]));
 check("the tooltip starts with 'Fast mode' and no on/off text shows on the page", src.indexOf('"Fast mode\\n" + window.t(') !== -1);
-// 0.163.0: Fast mode is wired into the engines, so the "takes effect in the next update" line is gone,
+// 0.164.0: Fast mode is wired into the engines, so the "takes effect in the next update" line is gone,
 // and the tooltip shows the last real state the brain reported (GET /model/fast-state).
 check("the pending line is gone now that Fast mode is wired", src.indexOf("fast.pending") === -1 && !vi["fast.pending"] && !en["fast.pending"]);
 check("the bolt reads the real state from /model/fast-state", src.indexOf('"/model/fast-state"') !== -1);

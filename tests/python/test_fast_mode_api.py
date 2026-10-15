@@ -1,4 +1,4 @@
-"""Fast mode on the API brains (0.163.0): the right parameter per provider when the bolt is on,
+"""Fast mode on the API brains (0.164.0): the right parameter per provider when the bolt is on,
 nothing when it is off, and one retry without it when the provider refuses.
 
     python tests/run.py fast_mode_api
