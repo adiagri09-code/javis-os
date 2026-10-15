@@ -1159,7 +1159,8 @@ class ReviewHost:
                            "can_revert": bool(pc and pc.get("status") != "reverted" and ch["status"] in ("applied",
                                                                                                          "kept"))})
         reviews = AP.events(store, key, kinds=("reaction_review", "self_review"), limit=5)
-        return {"name": "lessons", "agent_key": key,
+        reg = store.agent_any(key) or {}
+        return {"name": "lessons", "agent_key": key, "slug": reg.get("slug") or "",
                 "scopes": [{"scope": s, "lessons": scopes[s]} for s in order], "legacy": legacy,
                 "changes": out_ch,
                 "proposals": [{"id": p["id"], "area": p["area"], "text": p["text"],
