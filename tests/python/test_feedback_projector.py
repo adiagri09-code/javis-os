@@ -243,5 +243,15 @@ live = [x["source_ref"] for r_ in W.reasons(agent_key=ag["agent_key"]) for x in 
 check("review T2 P3: chiếu chạy đua: chỉ còn nguồn của trạng thái mới nhất, nguồn cũ không sống lại",
       live == [f"rx:dm:{g2['log_id']}"], live)
 
+# Review T2 vòng 2: dọn khoá cặp không bao giờ bỏ khoá đang được giữ hay đang được chờ.
+held = FP._pair_lock("cap:giu")
+held.__enter__()
+for k in range(5200):
+    with FP._pair_lock(f"cap:{k}"):
+        pass
+check("review T2 vòng 2: khoá cặp đang giữ không bị dọn khi bảng khoá đầy", "cap:giu" in FP._LOCKS
+      and FP._LOCKS["cap:giu"][1] == 1 and len(FP._LOCKS) <= 5001 + 2500, len(FP._LOCKS))
+held.__exit__(None, None, None)
+
 print(f"\n{'FAIL' if fails else 'PASS'} - test_feedback_projector: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)
