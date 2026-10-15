@@ -201,8 +201,10 @@ class FeedbackProjector:
         on = bool(agent and agent.get("status") == "active" and agent.get("enabled"))
         resumed = res.resumed_at(agent_key, ctx) if (res is not None and on) else None
         if not on or (resumed is not None and float(row.get("created_at") or 0) < float(resumed)):
-            self._set_status(kind, row, row["id"], "stored_only",
-                             _chu("Cộng hưởng tắt nên chỉ lưu", "Resonance is off, so it is only stored"))
+            # Nhãn "Đã nhận, chỉ lưu" do giao diện dịch; lý do nói ĐÚNG vì sao (tắt, hay có trước lúc bật lại), không lặp nhãn.
+            why = (_chu("Cộng hưởng của trợ lý đang tắt", "The assistant's Resonance is off") if not on else
+                   _chu("Phản hồi có trước lúc bật lại Cộng hưởng", "Sent before Resonance was turned back on"))
+            self._set_status(kind, row, row["id"], "stored_only", why)
             return {"route": "stored_only", "source_ref": src, "agent_key": agent_key}
         if goal_id:
             g = res.goal_brain(goal_id)

@@ -98,8 +98,11 @@ const STATUSES = ["received", "pending_review", "reviewing", "adjusted", "no_cha
 check("bảy trạng thái của hợp đồng đều có khoá viết trọn trong reactions.js",
       STATUSES.every((s) => reactJs.includes('"react.status.' + s + '"')) && Object.keys(JR.STATUS_KEY).length === 7);
 check("nhãn trạng thái có ở vi (có dấu) và en", STATUSES.every((s) => vi["react.status." + s] && en["react.status." + s])
-      && vi["react.status.received"] === "Đã nhận" && vi["react.status.stored_only"] === "Đã nhận, Cộng hưởng tắt nên chỉ lưu",
+      && vi["react.status.received"] === "Đã nhận" && vi["react.status.stored_only"] === "Đã nhận, chỉ lưu",
       STATUSES.filter((s) => !vi["react.status." + s] || !en["react.status." + s]).join(","));
+check("smoke T2: lý do trùng ý với nhãn không bị lặp, lý do khác nhãn vẫn hiện",
+      (JR.statusHtml({ status: "stored_only", status_reason: vi["react.status.stored_only"] }).match(/chỉ lưu/g) || []).length === 1
+      && JR.statusHtml({ status: "stored_only", status_reason: "Cộng hưởng của trợ lý đang tắt" }).includes("Cộng hưởng của trợ lý đang tắt"));
 check("mỗi trạng thái vẽ đúng nhãn", STATUSES.every((s) => JR.statusHtml({ status: s }).includes(vi["react.status." + s])
       && JR.statusHtml({ status: s }).includes('data-status="' + s + '"')));
 h = JR.statusHtml({ status: "waiting_quota", status_reason: "Hết <hạn> mức hôm nay" });

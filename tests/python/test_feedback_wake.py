@@ -98,7 +98,7 @@ for i, mid in enumerate(mids):
     dm(ss, pj, dsid, mid, ag, f"off{i}", "love")
 tmid = team_msg(ss, T, ag["agent_key"], "Tin nhóm")
 r.react(T["team_id"], tmid, "angry", reasons=["wrong_facts"], nonce="toff")
-check("Cộng hưởng tắt (chat riêng): 'Đã nhận, Cộng hưởng tắt nên chỉ lưu'",
+check("Cộng hưởng tắt (chat riêng): 'Đã nhận, chỉ lưu'",
       all(ss.dm_reaction_of(dsid, m)["status"] == "stored_only" for m in mids))
 check("Cộng hưởng tắt (nhóm): stored_only", tm.reaction_of(T["session_id"], tmid)["status"] == "stored_only")
 check("Cộng hưởng tắt: KHÔNG lý do thức nào, không lượt model", W.reasons() == [] and fake.calls == []
@@ -114,6 +114,9 @@ pj.project_pending()
 check("bật lại KHÔNG phát lại: phản hồi trước mốc (kể cả dòng còn chờ chiếu) không tạo lý do",
       W.reasons() == [] and ss.dm_reaction_of(dsid, late_mid)["status"] == "stored_only"
       and ss.dm_reaction_log_row(pending["log_id"])["effect_state"] == "done")
+late_why = ss.dm_reaction_of(dsid, late_mid)["status_reason"]
+check("smoke T2: phản hồi có trước lúc bật lại ghi đúng lý do (không nói Cộng hưởng đang tắt)",
+      ("trước lúc bật lại" in late_why or "before Resonance" in late_why) and "đang tắt" not in late_why, late_why)
 new_mid = ss.append_message(dsid, "assistant", "Câu sau khi bật")
 dm(ss, pj, dsid, new_mid, ag, "on-new", "love")
 rs = W.reasons()

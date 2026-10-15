@@ -134,9 +134,12 @@
   function statusHtml(R, opts) {
     if (!R || !STATUS_KEY[R.status]) return "";
     var p = pfx(opts);
+    var label = tw(STATUS_KEY[R.status]);
     var why = String(R.status_reason || "").trim();
+    // Lý do trùng ý với nhãn (dữ liệu cũ ghi lý do bằng chính câu của nhãn) thì không lặp lại.
+    if (why && label.toLowerCase().indexOf(why.toLowerCase()) >= 0) why = "";
     return '<div class="' + p + '-react-status" data-status="' + esc(R.status) + '" role="status">' +
-      esc(tw(STATUS_KEY[R.status])) + (why ? '<span class="' + p + '-react-why">' + esc(why) + "</span>" : "") + "</div>";
+      esc(label) + (why ? '<span class="' + p + '-react-why">' + esc(why) + "</span>" : "") + "</div>";
   }
 
   // Reaction của trưởng nhóm, thành viên (hợp đồng mục 5): chip CHỈ ĐỌC có tên agent, tách khỏi chip của chủ.

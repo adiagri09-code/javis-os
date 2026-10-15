@@ -16,7 +16,8 @@ Tài liệu này chốt mặt tiếp giáp giữa phần máy chủ và phần g
 ## 2. Trạng thái của một reaction (do host ghi, giao diện chỉ hiển thị)
 
 `status`: `received` (Đã nhận), `pending_review` (Chờ xem xét), `reviewing` (Đang xem xét), `adjusted` (Đã điều chỉnh),
-`no_change` (Không cần đổi), `waiting_quota` (Chờ hạn mức), `stored_only` (Đã nhận, Cộng hưởng tắt nên chỉ lưu).
+`no_change` (Không cần đổi), `waiting_quota` (Chờ hạn mức), `stored_only` (Đã nhận, chỉ lưu; `status_reason` nói vì sao:
+Cộng hưởng của trợ lý đang tắt, hay phản hồi có trước lúc bật lại Cộng hưởng).
 `status_reason`: một câu ngắn host viết sẵn theo ngôn ngữ giao diện (có thể rỗng). Giao diện hiện nhãn của `status` qua i18n
 (`react.status.<status>`, viết trọn từng khoá) và thêm `status_reason` nếu có.
 

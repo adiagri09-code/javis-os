@@ -161,7 +161,7 @@ thị trên reaction cũng do bộ chiếu ghi ngược sau khi lý do đổi tr
   buộc gì để thả emoji.
 - Nhiều tab: gói WS `chat_reaction` (chat riêng) và `team_message` (đã có); khung lọc theo việc của nhóm cũng nhận gói.
 - Trạng thái dưới chip theo host: Đã nhận; Chờ xem xét; Đang xem xét; Đã điều chỉnh; Không cần đổi; Chờ hạn mức (mỗi trạng thái có
-  lý do ngắn). Agent tắt Cộng hưởng: "Đã nhận, Cộng hưởng tắt nên chỉ lưu".
+  lý do ngắn). Agent tắt Cộng hưởng (hay phản hồi có trước lúc bật lại): "Đã nhận, chỉ lưu" kèm lý do đúng trường hợp.
 - Điện thoại: nút luôn hiện, vùng chạm 44px, chữ 16px.
 
 ### 4.3 Hiệu lực

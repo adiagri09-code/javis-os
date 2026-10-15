@@ -3850,7 +3850,7 @@
   "react.status.adjusted": "Adjusted",
   "react.status.no_change": "No change needed",
   "react.status.waiting_quota": "Waiting for quota",
-  "react.status.stored_only": "Received; Resonance is off, so it is only stored",
+  "react.status.stored_only": "Received, stored only",
   "react.agent_chip": "{name}: {what}",
   "react.sending": "Sending feedback...",
   "react.err_network": "No network connection, so the feedback was not sent.",

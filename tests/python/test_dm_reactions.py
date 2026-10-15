@@ -90,7 +90,8 @@ check("khuôn R đúng hợp đồng (đủ trường, không thừa)", set(R) =
                                                                   "status", "status_reason", "source_kind", "revision",
                                                                   "updated_at"} and R["source_kind"] == "owner"
       and R["revision"] == 6, R)
-check("trợ lý tắt Cộng hưởng: 'Đã nhận, Cộng hưởng tắt nên chỉ lưu'", R["status"] == "stored_only" and R["status_reason"])
+check("trợ lý tắt Cộng hưởng: 'Đã nhận, chỉ lưu' kèm lý do Cộng hưởng đang tắt", R["status"] == "stored_only"
+      and ("đang tắt" in R["status_reason"] or "is off" in R["status_reason"]), R)
 r = post(S_LAN, a1, {"value": "none", "reasons": ["too_long"], "axis": "should_silent", "comment": "Gọn hơn",
                      "nonce": "change"})
 R = r.json()["reaction"]

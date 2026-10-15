@@ -3850,7 +3850,7 @@
   "react.status.adjusted": "Đã điều chỉnh",
   "react.status.no_change": "Không cần đổi",
   "react.status.waiting_quota": "Chờ hạn mức",
-  "react.status.stored_only": "Đã nhận, Cộng hưởng tắt nên chỉ lưu",
+  "react.status.stored_only": "Đã nhận, chỉ lưu",
   "react.agent_chip": "{name}: {what}",
   "react.sending": "Đang gửi phản hồi...",
   "react.err_network": "Mất kết nối mạng nên phản hồi chưa gửi được.",
