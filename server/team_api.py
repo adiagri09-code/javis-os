@@ -606,13 +606,14 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 return _err(400, "Thiếu nội dung sửa", "The change is empty")
             runner = api.runner()
             with runner.accept_lock:
-                authors = runner.result_authors(deps.task_store().get_task(task_id))
+                shares = runner.result_shares(deps.task_store().get_task(task_id))
                 rev = deps.task_store().team_amend(task_id, text)
             if rev is None:
                 return _err(409, "Việc đã kết thúc", "The job has already ended")
             runner._state(team_id)
-            # T3 (6.1): sửa yêu cầu SAU khi đã có kết quả: -0.4 cho người nộp kết quả của bản trước.
-            runner.pulse_task_event("revise", team_id, authors, f"revise:{task_id}:{rev}")
+            # T3 (6.1): sửa yêu cầu SAU khi đã có kết quả: -0.4 cho người nộp kết quả của bản trước, phân bổ theo 6.5 khi
+            # có bản tổng hợp (review T3 P P3).
+            runner.pulse_task_event("revise", team_id, list(shares), f"revise:{task_id}:{rev}", shares=shares)
             return {"ok": True, "revision": rev}
         return await api.io(_do)
 

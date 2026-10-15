@@ -1631,13 +1631,38 @@ class TeamRunner:
             main = [s["agent_key"] for s in done if s["kind"] == "plan"]
         return [k for k in dict.fromkeys(main) if k]
 
+    def result_shares(self, task: Optional[dict]) -> dict:
+        """Phần của từng người nộp kết quả cho tín hiệu "sửa yêu cầu sau kết quả" / "huỷ" (review T3 P P3): có bước tổng
+        hợp thì phân bổ như phản hồi trên bản tổng hợp (6.5: 0,8 chia theo tập đầu vào, trần 0,6, 0,2 cho tác giả tổng
+        hợp); không thì chia đều cho người nộp kết quả. Tổng bằng 1; chưa có kết quả thì rỗng."""
+        if not task:
+            return {}
+        rev = int(task.get("team_rev") or 0)
+        done = [s for s in self.teams.steps(task["id"]) if s["status"] == "done" and s["applied"]
+                and s["result_msg_id"] and int(s["job_revision"]) == rev]
+        synth = [s for s in done if s["kind"] == "synthesize"]
+        if synth:
+            last = synth[-1]
+            refs = {str(x) for x in (last.get("input_refs") or [])}
+            work = [s for s in done if s["kind"] == "work"]
+            inputs = [s["agent_key"] for s in work if str(s["result_msg_id"]) in refs] or [s["agent_key"] for s in work]
+            try:
+                import agent_pulse
+                return {k: v for k, v in agent_pulse.attribute(last["agent_key"], inputs).items() if k and v > 0}
+            except ImportError:
+                pass
+        authors = self.result_authors(task)
+        return {a: 1.0 / len(authors) for a in authors} if authors else {}
+
     def pulse_task_event(self, event: str, team_id: str, authors: list, source: str, subject: str = "",
-                         wake_why: str = "") -> None:
-        authors = [a for a in dict.fromkeys(authors or []) if a]
-        if authors:
-            self._pulse("record_task_event", event, context_ref=f"team:{team_id}",
-                        agents={a: 1.0 / len(authors) for a in authors}, source_ref_=source, subject_ref=subject,
-                        wake_why=wake_why)
+                         wake_why: str = "", shares: Optional[dict] = None) -> None:
+        agents = {k: float(v) for k, v in (shares or {}).items() if k and float(v) > 0}
+        if not agents:
+            authors = [a for a in dict.fromkeys(authors or []) if a]
+            agents = {a: 1.0 / len(authors) for a in authors} if authors else {}
+        if agents:
+            self._pulse("record_task_event", event, context_ref=f"team:{team_id}", agents=agents, source_ref_=source,
+                        subject_ref=subject, wake_why=wake_why)
 
     def message_view(self, team: dict, msg: dict, reaction: Any = _UNPINNED) -> dict:
         """Tin nhóm cho gói WS và trang tin: reaction của chủ, reaction của agent (chip riêng, chỉ đọc), `content_sha`."""
@@ -2946,13 +2971,14 @@ class TeamRunner:
         quyền), lưu trữ nhóm, huỷ việc treo khi tạm dừng không phải phản hồi của chủ về kết quả, nên không ghi gì (review
         T3 P P2-2: agent không tạo tín hiệu cho agent, lưu trữ nhóm không phạt người đã nộp kết quả)."""
         before = self.tasks.get_task(task_id)
-        authors = self.result_authors(before) if (before and owner_cancel) else []
+        shares = self.result_shares(before) if (before and owner_cancel) else {}
         prev = self._cancel_records(task_id, reason)
         if prev is not None:
             self._on_loop(self._cancel_task, task_id)
             if before and owner_cancel:
-                # T3 (6.1): chủ huỷ sau khi đã có kết quả là bằng chứng chưa hữu ích (-0.4) cho người nộp kết quả đó.
-                self.pulse_task_event("cancel", before["team_id"], authors, f"cancel:{task_id}")
+                # T3 (6.1): chủ huỷ sau khi đã có kết quả là bằng chứng chưa hữu ích (-0.4) cho người nộp kết quả đó,
+                # phân bổ theo 6.5 khi có bản tổng hợp.
+                self.pulse_task_event("cancel", before["team_id"], list(shares), f"cancel:{task_id}", shares=shares)
         return prev
 
     def _cancel_records(self, task_id: str, reason: str) -> Optional[str]:

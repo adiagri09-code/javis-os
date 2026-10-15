@@ -23438,8 +23438,17 @@ def _pulse_enqueue(key, ctx, item, src):
         team["brain_id"], team["team_id"], item["title"], item.get("brief") or item["title"],
         source_ref=f"pulse:{key}:{src}", coordinator_key=key, chat_id=f"team:{team['team_id']}", created_by=f"agent:{key}")
     if created:
+        # Dấu vết quản trị như lệnh open_job của trưởng nhóm (review T3 P P3, mục 10): sự kiện nhóm và tin hệ thống.
+        runner = _TEAM_API.runner()
+        try:
+            _TEAM_API.teams().log_event(team["team_id"], "job_opened", f"pulse:{key}", None,
+                                        {"task_id": tid, "title": item["title"], "source_ref": src, "via": "pulse"})
+            runner._system(team, f"Trưởng nhóm {runner._name(team, key)} đã mở việc \"{item['title']}\" (lượt tự rà "
+                                 "soát định kỳ).", "job_opened")
+        except Exception as _e:  # noqa: BLE001
+            print(f"[pulse enqueue audit] {type(_e).__name__}: {_e}", file=sys.stderr)
         _TEAM_API.kick()
-        _TEAM_API.runner()._state(team["team_id"])
+        runner._state(team["team_id"])
     return tid
 
 
@@ -23666,7 +23675,8 @@ def _pulse_seen_resolve(ctx, ids, session_id):
 agent_pulse_host.register(app, agent_pulse_host.PulseRouteDeps(
     brain_key=lambda b: _brain_key(b), agent_exists=lambda root, slug: _agent_md_path(root, slug) is not None,
     agent_key=lambda root, slug: _agent_jobs_key(root, slug), store=_pulse_store, seen_resolve=_pulse_seen_resolve,
-    proposal_action=lambda prop, decision: _pulse_proposal_action(prop, decision)))
+    proposal_action=lambda prop, decision: _pulse_proposal_action(prop, decision),
+    contexts=lambda key: _pulse_contexts(key)))
 
 # ── Bộ phán xử theo agent: lịch sử quyết định và nút sửa (T3 phần J, 0.156.0) ──
 def _judge_agent_key(root, slug):

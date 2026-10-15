@@ -219,9 +219,13 @@ rv = [s for k in K.values() for s in AP.signals(gs, k) if s["source_ref"] == f"r
 check("sửa yêu cầu sau kết quả: -0.4 w0.8 chia cho người nộp kết quả, tổng 1",
       len(rv) == 3 and all(s["value"] == -0.4 and s["w"] == 0.8 for s in rv)
       and near(sum(s["share"] for s in rv), 1.0), rv)
+shares_c = r.result_shares(ts.get_task(task))
 r.cancel_job(task, owner_cancel=True)   # route chủ huỷ việc (team_api)
 cc = [s for k in K.values() for s in AP.signals(gs, k) if s["source_ref"] == f"cancel:{task}"]
-check("huỷ sau khi có kết quả: -0.4 cho người nộp kết quả", len(cc) == 3 and all(s["value"] == -0.4 for s in cc), cc)
+# Có bản tổng hợp: phân bổ như phản hồi trên bản tổng hợp (6.5, review T3 P P3), không chia đều.
+check("huỷ sau khi có kết quả: -0.4 cho người nộp kết quả, chia theo 6.5", cc and all(s["value"] == -0.4 for s in cc)
+      and {s["agent_key"]: round(s["share"], 6) for s in cc} == {k: round(v, 6) for k, v in shares_c.items()}
+      and near(sum(s["share"] for s in cc), 1.0), (cc, shares_c))
 task2 = r.submit(tid, "Việc chưa ai làm", as_job=True, client_msg_id="j2")["task_id"]
 r.cancel_job(task2, owner_cancel=True)
 check("huỷ khi chưa có kết quả: không ai bị tính", all(s["source_ref"] != f"cancel:{task2}" for k in K.values()

@@ -96,6 +96,15 @@ for status in ("paused", "archived"):
 teams.update(TID, status="active")
 check("nhóm hoạt động trở lại: đăng được", main._pulse_post(KEY, CTX, "y", {"proactive": True}) is not None)
 
+# ═════ P P3: việc do lượt quét xếp có dấu vết quản trị như open_job ═════
+teams.set_leader(TID, KEY)
+tid9 = main._pulse_enqueue(KEY, CTX, {"title": "Rà việc cũ", "brief": "b"}, "task:9")
+evs = [e for e in teams.events(TID) if e.get("kind") == "job_opened"]
+sysm = [m for m in ss.team_messages_after(TSID, 0, 500) if m.get("author_kind") == "system"
+        and (m.get("meta") or {}).get("kind") == "job_opened"]
+check("lượt quét xếp việc: ghi team_events job_opened (nguồn pulse) và tin hệ thống", tid9 and evs and sysm
+      and "Rà việc cũ" in sysm[-1]["content"], (tid9, evs[-1:], sysm[-1:]))
+
 # ═════ L P2-2: bản sửa ở chat riêng vào ĐÚNG phiên nguồn, kèm reply_to và dấu lượt xem xét ═════
 SRC = ss.create_session(brain=BK, channel="agent:lan")
 REPORT = ss.create_session(brain=BK, channel="agent:lan")

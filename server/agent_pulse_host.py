@@ -38,7 +38,7 @@ from io_offload import call_hook
 
 TICK_S = 30.0
 CONTEXT_REFRESH_S = 300.0
-SCAN_TIMEOUT_S = 600.0     # một lượt tối đa 10 phút (nằm trong một kỳ lease)
+SCAN_TIMEOUT_S = 540.0     # một lượt tối đa 9 phút: dưới lease 15 phút và dưới mốc đối soát sổ lượt 10 phút
 SEEN_MAX_IDS = 200
 ACTIONS = ("none", "propose", "enqueue", "say")
 REASON_CODES_SERVED_ELSEWHERE = ("reaction_review", "related_review", "wait_unblocked")
@@ -370,6 +370,12 @@ class PulseHost:
             if not in_scope(r["agent_key"], r["context_ref"]):
                 continue   # ngữ cảnh ngoài phạm vi: lý do giữ nguyên, không phục vụ
             reasons.append(r)
+        try:
+            import agent_budget
+            # Thứ tự tiêu hạn mức (mục 9): reaction_review > related_review > wait_unblocked, cũ trước trong cùng loại.
+            reasons = agent_budget.sort_by_priority(reasons)
+        except ImportError:
+            pass
         return claims, reasons
 
     def _remind_waiting(self, store, now: float) -> None:
@@ -468,6 +474,11 @@ class PulseHost:
     def _due_ref(self, cl: dict) -> str:
         return f"pulse:{cl['agent_key']}:{cl['context_ref']}:{int(round(cl['due_at'] * 1000))}"
 
+    def _clear_quota(self, store, cl) -> None:
+        with store._Tx(store) as c:
+            c.execute("UPDATE agent_pulse SET quota_wait=0 WHERE agent_key=? AND context_ref=? AND quota_wait<>0",
+                      (cl["agent_key"], cl["context_ref"]))
+
     def _set_quota(self, store, cl, now, why: str) -> None:
         with store._Tx(store) as c:
             c.execute("UPDATE agent_pulse SET quota_wait=1 WHERE agent_key=? AND context_ref=?",
@@ -486,6 +497,10 @@ class PulseHost:
         self._local_busy.add(key)
         try:
             ok, why = await asyncio.to_thread(self.budget, key, "scan", now)
+            if ok:
+                # Nhãn "Chờ hạn mức" chỉ đứng khi đang thật sự hết hạn mức (review T3 P P3: trước đây đứng mãi tới lượt
+                # quét thành công kế tiếp).
+                await asyncio.to_thread(self._clear_quota, store, cl)
             if not ok:
                 await asyncio.to_thread(self._set_quota, store, cl, now, why or "agent_daily_calls")
                 await asyncio.to_thread(self._finish, store, cl, now)
@@ -503,6 +518,8 @@ class PulseHost:
                     purpose="scan", reason_ref=due_ref, agent_key=key, brain_id=cl.get("brain_id") or "",
                     context_ref=ctx, obligation=False, now=now))
             except AL.ReasonBusy:
+                # Lịch khác đang giữ đúng mã lượt này: nhả lịch (dời như khi bận), không kẹt tới khi lease hết hạn.
+                await asyncio.to_thread(self._finish, store, cl, now, AP.BUSY_DEFER_S)
                 return {"outcome": "ledger_busy"}
             if cid is None:
                 await asyncio.to_thread(self._set_quota, store, cl, now, "server_ceiling")
@@ -598,7 +615,9 @@ class PulseHost:
                 if not refs:
                     # Quét giới hạn không có cơ hội: không tạo việc khi không có nguồn (không tạo việc để giữ mình bận).
                     return {"action": "none", "reason": "no_source", "wanted": action}
-                src = refs[0]
+                # Model trỏ nguồn bịa: KHÔNG thay bằng cơ hội đầu (gắn đề xuất vào sai nguồn và khoá nguồn đó), mà bỏ
+                # (review T3 P P3).
+                return {"action": "none", "reason": "bad_source", "wanted": action, "source_ref": src[:200]}
             ver = next((str(o.get("version") or "") for o in fresh if o["source_ref"] == src), "")
             if await asyncio.to_thread(AP.proposal_blocked, store, key, ctx, src, ver):
                 # Đã đề xuất (hay đã bị bác) cho đúng nguồn và phiên bản này: không mở lại khi không có dữ kiện mới.
@@ -668,6 +687,8 @@ class PulseRouteDeps:
     seen_resolve: Callable[[str, list, str], list]          # (context_ref, ids, session_id) -> [(ctx, mid, key, sid)]
     # (đề xuất, "accepted"|"rejected") -> {"task_id"?}: chấp nhận thì xếp việc qua hàng đợi chung với quyền của chủ.
     proposal_action: Optional[Callable[[dict, str], Optional[dict]]] = None
+    # agent_key -> ngữ cảnh trong phạm vi (nhóm đang tham gia, chat riêng). None: không kiểm thêm (test cũ).
+    contexts: Optional[Callable[[str], list]] = None
 
 
 def register(app, deps: PulseRouteDeps) -> None:
@@ -732,6 +753,12 @@ def register(app, deps: PulseRouteDeps) -> None:
         if ctx:
             if not (ctx.startswith("team:") or ctx == f"dm:{key}" or ctx == "*"):
                 raise ValueError("ngữ cảnh không thuộc trợ lý")
+            if ctx.startswith("team:") and deps.contexts is not None:
+                # Chỉ nhóm agent đang tham gia, hay nhóm đã có dòng nhịp (để chủ vẫn tạm dừng, đặt lại được): không tạo
+                # dòng có lịch cho nhóm không liên quan (review T3 P P3).
+                known = {r["context_ref"] for r in AP.rows(store, key)}
+                if ctx not in known and ctx not in set(deps.contexts(key) or []):
+                    raise ValueError("trợ lý không ở nhóm này")
             return [ctx]
         if not allow_all:
             raise ValueError("chọn một ngữ cảnh")
