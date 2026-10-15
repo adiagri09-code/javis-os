@@ -40,6 +40,11 @@ from typing import Any, Callable, Iterable, Optional
 
 import agent_lessons as AL
 
+try:
+    from fastapi import Request  # chú thích kiểu của route phải ở mức module (annotations dạng chuỗi)
+except ImportError:  # pragma: no cover - test thuần không cần fastapi
+    Request = Any  # type: ignore
+
 OUTCOMES = ("keep", "ask_back", "revise", "lesson")
 LESSON_KINDS = ("presentation", "method")
 REVIEW_KEYS = frozenset(("outcome", "message", "lesson", "consumed", "reason"))
@@ -1225,7 +1230,6 @@ def register_routes(app, deps: LearnRouteDeps) -> None:
     - `POST /agents/{slug}/lessons/{lesson_id}/promote`: chủ đưa một bài học nhóm/chat riêng lên dùng mọi nơi.
     - `POST /agents/{slug}/budget` {daily_calls: số | "unlimited"}: hạn mức lượt tự phát mỗi ngày của trợ lý.
     Quay lại một thay đổi của tự rà soát dùng route của P (`POST /agents/{slug}/pulse/revert` kèm `change_id`)."""
-    from fastapi import Request
     from fastapi.responses import JSONResponse
     import localefmt
     import agent_budget as AB
