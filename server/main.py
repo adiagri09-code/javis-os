@@ -22696,12 +22696,28 @@ def _judge_send(decision, payload, mode):
         return None
     key = decision.get("agent_key") or (payload or {}).get("agent_key") or ""
     ctx = decision.get("context_ref") or (payload or {}).get("context_ref") or ""
-    text = (payload or {}).get("ask_clarify") if mode == "ask_clarify" else (payload or {}).get("draft")
+    if mode == "ask_clarify":
+        # Câu hỏi làm rõ khi hết chờ ở chat riêng (review T3 J P2-3): KHÔNG đăng nguyên văn `ask_clarify` (chữ do model
+        # phán xử viết từ prompt có dữ liệu chat, là đường tiêm lệnh vào chat riêng của chủ, và trái 7.1 "câu nói ra do agent
+        # tạo"). Gửi một câu cố định của host; câu của bộ phán xử chỉ nằm trong quyết định (lịch sử phán xử) làm ngữ cảnh.
+        if not str((payload or {}).get("ask_clarify") or "").strip():
+            return None
+        text = _judge_clarify_template()
+    else:
+        text = (payload or {}).get("draft")
     if not key or not ctx or not str(text or "").strip():
         return None
     return _pulse_send(key, ctx, str(text), {"source_ref": (payload or {}).get("source_ref") or
                                              decision.get("source_event") or "",
                                              "decision_id": decision.get("decision_id")})
+
+
+def _judge_clarify_template():
+    """Câu cố định của host khi một tin chủ động ở chat riêng chờ quá 30 phút mà vẫn thiếu thông tin."""
+    return localefmt.chu("Mình có một tin định gửi nhưng còn thiếu thông tin nên đã chờ và chưa gửi. Khi bạn tiện, cứ "
+                         "nhắn mình để làm rõ.",
+                         "I had a message ready but some information was missing, so I waited and did not send it. "
+                         "Message me whenever you want to clarify.")
 
 
 def _wire_judge_with_pulse():

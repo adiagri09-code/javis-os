@@ -515,7 +515,9 @@ class Judge:
 
     def register_sender(self, fn: Callable[..., Any]) -> None:
         """Phần P/L đăng ký cách GỬI tin chủ động khi một lần chờ ở chat riêng được gỡ và xét lại thành `speak`:
-        `fn(decision, payload, mode)` (`mode` = "send" | "ask_clarify"), có thể là coroutine."""
+        `fn(decision, payload, mode)` (`mode` = "send" | "ask_clarify"), có thể là coroutine. Với "ask_clarify", câu
+        `payload["ask_clarify"]` là chữ của model phán xử: người gửi KHÔNG được đăng nguyên văn nó như lời của agent (7.1),
+        chỉ dùng làm ngữ cảnh nội bộ; host gửi câu cố định của mình (review T3 J P2-3)."""
         if fn not in self._senders:
             self._senders.append(fn)
 
