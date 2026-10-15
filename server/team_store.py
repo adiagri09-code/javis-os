@@ -1104,6 +1104,13 @@ class TeamStore:
             r = c.execute("SELECT * FROM agent_busy WHERE agent_key=? AND lease_until > ?", (agent_key, t)).fetchone()
             return dict(r) if r else None
 
+    def busy_keys(self, now: Optional[float] = None) -> set:
+        """Mọi agent đang giữ khoá bận còn hạn (một câu đọc cho cả nhịp lớp 3)."""
+        t = time.time() if now is None else float(now)
+        with closing(self._conn()) as c:
+            return {str(r[0]) for r in c.execute("SELECT agent_key FROM agent_busy WHERE lease_until > ?",
+                                                 (t,)).fetchall()}
+
     # ───────────── kết cục lượt trả lời trò chuyện (0.142.0) ─────────────
 
     def queue_replies(self, team_id: str, message_id: int, agent_keys: list) -> list:

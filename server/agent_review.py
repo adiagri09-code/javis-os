@@ -504,12 +504,13 @@ class ReviewHost:
     async def serve_reaction_review(self, reason: dict) -> dict:
         """Phục vụ MỘT lý do `reaction_review` (4.4). Trả {"outcome", ...} để test và nhật ký đọc."""
         from agent_ledger import CallLedger, WakeReasons
-        store = self._store()
+        # Vòng pulse gọi hàm này trên event loop: mọi đọc/ghi kho ở luồng phụ (GOAL mục 10).
+        store = await asyncio.to_thread(self._store)
         if store is None:
             return {"outcome": "no_store"}
         rid = int(reason["id"])
         W = WakeReasons(store)
-        cur = W.get(rid)
+        cur = await asyncio.to_thread(W.get, rid)
         if cur is None or cur["status"] != "pending" or cur["code"] != "reaction_review":
             return {"outcome": "gone"}
         key, ctx = cur["agent_key"], cur["context_ref"]
@@ -527,18 +528,18 @@ class ReviewHost:
                 except Exception:  # noqa: BLE001
                     pass
         try:
-            ok, why = self._budget(store, key, "reaction_review", now, reason_ref=f"wr:{rid}")
+            ok, why = await asyncio.to_thread(self._budget, store, key, "reaction_review", now, f"wr:{rid}")
             if not ok:
-                live = [s["source_ref"] for s in W.sources(rid, live_only=True)]
+                live = [s["source_ref"] for s in await asyncio.to_thread(W.sources, rid, True)]
                 await self._astatus(live, "waiting_quota",
                                         _chu("Hết hạn mức lượt hôm nay của trợ lý", "The assistant's daily turns are used up"))
-                self._event(store, key, ctx, "quota", reason=why or "agent_daily_calls",
-                            payload={"reason_id": rid, "purpose": "reaction_review"}, at=now)
+                await asyncio.to_thread(self._event, store, key, ctx, "quota", why or "agent_daily_calls",
+                                        {"reason_id": rid, "purpose": "reaction_review"}, now)
                 return {"outcome": "quota", "reason": why}
             cl = await asyncio.to_thread(lambda: W.claim(rid, purpose="reaction_review", obligation=False, now=now))
             if cl["outcome"] != "claimed":
                 if cl["outcome"] == "quota":
-                    live = [s["source_ref"] for s in W.sources(rid, live_only=True)]
+                    live = [s["source_ref"] for s in await asyncio.to_thread(W.sources, rid, True)]
                     await self._astatus(live, "waiting_quota",
                                             _chu("Đã chạm trần lượt chung của máy chủ",
                                                  "The server-wide turn ceiling is reached"))
@@ -660,11 +661,12 @@ class ReviewHost:
         if sent and sent.get("message_id") is not None:
             await self._astatus(list(rv.get("consumed") or []), "adjusted",
                                     _chu("Đã gửi tin mới sau khi chờ", "Sent the new message after waiting"))
-            store = self._store()
+            store = await asyncio.to_thread(self._store)
             if store is not None:
-                self._event(store, key, ctx, "reaction_review_sent", reason=str(rv.get("outcome") or ""),
-                            payload={"reason_id": rv.get("reason_id"), "message_id": sent["message_id"],
-                                     "decision_id": (decision or {}).get("decision_id")})
+                await asyncio.to_thread(self._event, store, key, ctx, "reaction_review_sent",
+                                        str(rv.get("outcome") or ""),
+                                        {"reason_id": rv.get("reason_id"), "message_id": sent["message_id"],
+                                         "decision_id": (decision or {}).get("decision_id")})
 
     def recover_stale_claims(self, now: Optional[float] = None) -> list:
         """Lý do `reaction_review` còn `claimed` quá một lượt (10 phút + 60 giây) mà tiến trình này không còn chạy lượt đó
@@ -953,7 +955,7 @@ class ReviewHost:
     async def maybe_self_review(self, agent_key: str) -> dict:
         """Tự rà soát một agent khi đủ điều kiện (8.3). Trả {"outcome", ...}."""
         from agent_ledger import CallLedger, ReasonBusy
-        store = self._store()
+        store = await asyncio.to_thread(self._store)
         if store is None:
             return {"outcome": "no_store"}
         key = str(agent_key)
@@ -969,10 +971,10 @@ class ReviewHost:
             if not await asyncio.to_thread(self.deps.try_busy, key, tok):
                 return {"outcome": "busy"}
             try:
-                ok, bwhy = self._budget(store, key, "review", now)
+                ok, bwhy = await asyncio.to_thread(self._budget, store, key, "review", now)
                 if not ok:
-                    self._event(store, key, "*", "quota", reason=bwhy or "agent_daily_calls",
-                                payload={"purpose": "review"}, at=now)
+                    await asyncio.to_thread(self._event, store, key, "*", "quota", bwhy or "agent_daily_calls",
+                                            {"purpose": "review"}, now)
                     return {"outcome": "quota", "reason": bwhy}
                 ledger = CallLedger(store)
                 review_ref = f"selfreview:{key}:{int(now * 1000)}"
@@ -983,7 +985,8 @@ class ReviewHost:
                 except ReasonBusy:
                     return {"outcome": "ledger_busy"}
                 if cid is None:
-                    self._event(store, key, "*", "quota", reason="server_ceiling", payload={"purpose": "review"}, at=now)
+                    await asyncio.to_thread(self._event, store, key, "*", "quota", "server_ceiling",
+                                            {"purpose": "review"}, now)
                     return {"outcome": "quota", "reason": "server_ceiling"}
                 return await self._self_review_run(store, key, ev, ledger, cid, review_ref, now)
             finally:
@@ -995,7 +998,7 @@ class ReviewHost:
             self._self_running.discard(key)
 
     async def _self_review_run(self, store, key, ev, ledger, cid, review_ref, now) -> dict:
-        contexts = [c for c in (self.deps.contexts(key) or []) if c != "*"]
+        contexts = [c for c in (await asyncio.to_thread(self.deps.contexts, key) or []) if c != "*"]
         if f"dm:{key}" not in contexts:
             contexts.append(f"dm:{key}")
         prompt, shown, known = await asyncio.to_thread(self.self_prompt, store, key, ev, contexts)
@@ -1133,7 +1136,7 @@ class ReviewHost:
     async def tick(self, agents: Optional[Iterable[str]] = None) -> dict:
         """Một nhịp (gọi trước `PulseHost.tick` mỗi 30 giây): cập nhật nhãn cho cửa sổ quan sát, rồi kiểm agent nào đến
         hạn tự rà soát (mỗi agent tối đa một lần kiểm mỗi 10 phút) và chạy ở tác vụ riêng."""
-        store = self._store()
+        store = await asyncio.to_thread(self._store)
         if store is None:
             return {"skipped": "no_store"}
         try:

@@ -22757,20 +22757,46 @@ def _register_judge_view_part():
         return False
 
 
-def _judge_dm_owner_message(brain, slug, conv_sid):
-    """Chủ nhắn trong chat riêng với trợ lý: gỡ các lần chờ "tin mới của chủ" của ngữ cảnh `dm:<agent_key>` (7.4)."""
+def _judge_dm_release_sync(brain, slug, conv_sid):
+    """Phần đọc/ghi kho của `_judge_dm_owner_message` (luồng phụ). Trả (bộ phán xử, các lần chờ vừa gỡ)."""
+    if _agent_judge_store(create=False) is None:
+        return None, []
+    rs = _resonance_store()
+    pin = rs.session_pin(conv_sid) if conv_sid else None
+    key = pin["agent_key"] if pin else ((rs.agent(_brain_key(brain), slug) or {}).get("agent_key") or "")
+    if not key:
+        return None, []
+    judge = _agent_judge()
+    return judge, judge.release_waits(f"dm:{key}", {"kind": "owner_message"})
+
+
+async def _judge_dm_release_bg(brain, slug, conv_sid):
     try:
-        if _agent_judge_store(create=False) is None:
-            return
-        rs = _resonance_store()
-        pin = rs.session_pin(conv_sid) if conv_sid else None
-        key = pin["agent_key"] if pin else ((rs.agent(_brain_key(brain), slug) or {}).get("agent_key") or "")
-        if not key:
-            return
-        judge = _agent_judge()
-        items = judge.release_waits(f"dm:{key}", {"kind": "owner_message"})
+        judge, items = await asyncio.to_thread(_judge_dm_release_sync, brain, slug, conv_sid)
         if items:
-            asyncio.ensure_future(judge.process_released(items))
+            await judge.process_released(items)
+    except Exception as _e:  # noqa: BLE001 - gỡ chờ hỏng không được làm hỏng lượt chat
+        print(f"[agent judge dm release] {type(_e).__name__}: {_e}", file=sys.stderr)
+
+
+_JUDGE_DM_TASKS = set()
+
+
+def _judge_dm_owner_message(brain, slug, conv_sid):
+    """Chủ nhắn trong chat riêng với trợ lý: gỡ các lần chờ "tin mới của chủ" của ngữ cảnh `dm:<agent_key>` (7.4) bằng
+    `judge.release_waits` trong `_judge_dm_release_sync`. Gọi từ lượt chat trên event loop: việc kho chạy nền ở luồng phụ,
+    lượt chat không chờ (T3 hiệu năng). Ngoài event loop thì chạy luôn (đồng bộ)."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    try:
+        if loop is None:
+            _judge_dm_release_sync(brain, slug, conv_sid)
+            return
+        t = asyncio.ensure_future(_judge_dm_release_bg(brain, slug, conv_sid))
+        _JUDGE_DM_TASKS.add(t)
+        t.add_done_callback(_JUDGE_DM_TASKS.discard)
     except Exception as _e:  # noqa: BLE001 - gỡ chờ hỏng không được làm hỏng lượt chat
         print(f"[agent judge dm release] {type(_e).__name__}: {_e}", file=sys.stderr)
 
@@ -23264,6 +23290,22 @@ def _pulse_busy(key):
                            "g.status='active' AND g.run_state='running' LIMIT 1", (key,)))
 
 
+def _pulse_busy_snapshot():
+    """Như `_pulse_busy` nhưng đọc kho MỘT lần cho cả nhịp (T3 hiệu năng): khoá bận, việc nhóm đang chạy/xếp hàng, goal
+    đang chạy. Trước đây mỗi agent tới hạn quét lại mọi việc nhóm hai lần. Trả hàm agent_key -> bận."""
+    keys = set()
+    if _TEAM_API.exists():
+        teams = _TEAM_API.teams()
+        keys |= teams.busy_keys()
+        for status in ("team_running", "team_queued"):
+            for t in tasks_feature.store.team_tasks_by_status(status):
+                keys.update(k for k in (t.get("assignee_key"), t.get("coordinator_key")) if k)
+    keys.update(r["agent_key"] for r in _pulse_sql(
+        "SELECT DISTINCT a.agent_key FROM goals g JOIN goal_agents a ON a.goal_id=g.id WHERE g.status='active' AND "
+        "g.run_state='running'"))
+    return lambda key: key in keys
+
+
 _PULSE_LOCAL_BUSY = set()
 
 
@@ -23484,7 +23526,7 @@ def _pulse_host():
     if _PULSE_HOST[0] is None:
         _PULSE_HOST[0] = agent_pulse_host.PulseHost(agent_pulse_host.PulseHostDeps(
             store=_pulse_store, agents=_pulse_agents, contexts=_pulse_contexts, busy=_pulse_busy,
-            try_busy=_pulse_try_busy, release_busy=_pulse_release_busy, opportunities=_pulse_opportunities,
+            busy_snapshot=_pulse_busy_snapshot, try_busy=_pulse_try_busy, release_busy=_pulse_release_busy, opportunities=_pulse_opportunities,
             persona=_pulse_persona, engine_for=lambda k, c, p: _pulse_engine_for(k, c, p),
             can_enqueue=_pulse_can_enqueue, enqueue=_pulse_enqueue, propose=_pulse_propose, send=_pulse_send,
             notify=_pulse_notify, interacted=_pulse_interacted, project_pending=_feedback_pulse_tick,
@@ -23712,8 +23754,10 @@ async def _learn_tick():
     try:
         _learn_register_sender()
         h = agent_review.default()
-        if h is not None and _pulse_store() is not None:
-            await h.tick(agents=[a["agent_key"] for a in _pulse_agents()])
+        # Đọc kho ở luồng phụ: nhịp chạy trên event loop (GOAL mục 10).
+        agents = await asyncio.to_thread(lambda: None if _pulse_store() is None else _pulse_agents())
+        if h is not None and agents is not None:
+            await h.tick(agents=[a["agent_key"] for a in agents])
     except Exception as e:  # noqa: BLE001
         print(f"[learn tick] {type(e).__name__}: {e}", file=sys.stderr)
 

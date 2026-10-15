@@ -149,6 +149,9 @@ class PulseHostDeps:
     agents: Callable[[], list]                                 # () -> [{agent_key, brain_id, slug}] đang bật Cộng hưởng
     contexts: Callable[[str], list]                            # agent_key -> ["team:<id>", "dm:<agent_key>"]
     busy: Callable[[str], bool] = lambda key: False            # đang có lượt nhóm/A2 hay việc nhóm/goal xếp hàng
+    # Một lần mỗi nhịp: () -> hàm agent_key -> bận (đọc kho MỘT lần cho mọi agent thay vì mỗi agent quét lại). None:
+    # dùng `busy` từng agent.
+    busy_snapshot: Optional[Callable[[], Callable[[str], bool]]] = None
     try_busy: Callable[[str, str], bool] = lambda key, tok: True
     release_busy: Callable[[str, str], Any] = lambda key, tok: None
     opportunities: Callable[[str, str, float], list] = lambda key, ctx, iv: []
@@ -216,7 +219,7 @@ class PulseHost:
                     await _maybe(self.deps.project_pending())
                 except Exception as ex:  # noqa: BLE001
                     print(f"[pulse project] {type(ex).__name__}: {ex}", file=sys.stderr)
-            if self.deps.store() is None:
+            if await asyncio.to_thread(self.deps.store) is None:
                 return {"skipped": "no_store"}
             now = float(self.deps.clock())
             claims, reasons = await asyncio.to_thread(self._code_pass, now)
@@ -280,11 +283,18 @@ class PulseHost:
                 "p.agent_key=r.agent_key AND p.context_ref=r.context_ref WHERE r.status='pending' ORDER BY r.id "
                 "LIMIT 100").fetchall()]
         busy_cache: dict = {}
+        busy_fn = self.deps.busy
+        if self.deps.busy_snapshot is not None and (due or pend):
+            try:
+                busy_fn = self.deps.busy_snapshot()
+            except Exception as ex:  # noqa: BLE001
+                print(f"[pulse busy] {type(ex).__name__}: {ex}", file=sys.stderr)
+                busy_fn = lambda key: True  # noqa: E731 - kho lỗi: coi như bận, dời lịch (an toàn)
 
         def is_busy(key):
             if key not in busy_cache:
                 try:
-                    busy_cache[key] = bool(self.deps.busy(key)) or key in self._local_busy
+                    busy_cache[key] = bool(busy_fn(key)) or key in self._local_busy
                 except Exception:  # noqa: BLE001
                     busy_cache[key] = True
             return busy_cache[key]
@@ -358,44 +368,54 @@ class PulseHost:
             c.execute("UPDATE agent_pulse SET next_due_at=?, claim_token='', claim_until=NULL, updated_at=? "
                       "WHERE agent_key=? AND context_ref=?", (nd, now, cl["agent_key"], cl["context_ref"]))
 
+    def _wake_code(self, store, cl: dict, now: float) -> dict:
+        """Phần CODE của một lần thức (luồng phụ, một lần chuyển luồng thay vì nhiều): ước lượng, bậc, cơ hội. Trả
+        {"done": kết quả} khi không cần lượt quét, hay {"fresh", "bounded", "eval"} khi cần."""
+        key, ctx = cl["agent_key"], cl["context_ref"]
+        row = AP.row(store, key, ctx)
+        iv = AP.interval(int(row["tier"])) or AP.TIERS[AP.INIT_TIER]
+        try:
+            raw = self.deps.opportunities(key, ctx, iv)
+        except Exception as ex:  # noqa: BLE001
+            print(f"[pulse opportunities] {type(ex).__name__}: {ex}", file=sys.stderr)
+            raw = []
+        fresh = AP.fresh_opportunities(store, key, ctx, raw, now)
+        with closing(store._conn()) as c:
+            pending = c.execute("SELECT COUNT(*) FROM agent_wake_reasons WHERE agent_key=? AND context_ref=? AND "
+                                "status='pending'", (key, ctx)).fetchone()[0]
+        ev = AP.evaluate(store, key, ctx, at=now, has_opportunity=bool(fresh) or pending > 0, count_wake=True)
+        row = AP.row(store, key, ctx)
+        if row["state"] not in AP.SCHEDULED:
+            self._finish(store, cl, now)
+            return {"done": {"outcome": "no_schedule", "state": row["state"], "eval": ev}}
+        bounded = (not fresh and row["state"] in ("active", "awake")
+                   and int(row.get("scan_counter") or 0) >= AP.SCAN_EVERY
+                   and (row.get("last_scan_at") is None or now - float(row["last_scan_at"]) >= AP.SCAN_MIN_GAP_S))
+        if not fresh and not bounded:
+            AP.record_event(store, key, ctx, "no_action", reason=ev["reason"], at=now)
+            self._finish(store, cl, now)
+            return {"done": {"outcome": "no_action", "eval": ev}}
+        return {"fresh": fresh, "bounded": bounded, "eval": ev}
+
     async def wake_step(self, cl: dict) -> dict:
-        """Một lần thức của (agent, ngữ cảnh) đã nhận lịch: code trước (ước lượng, bậc, cơ hội), model chỉ khi cần."""
-        store = self.deps.store()
+        """Một lần thức của (agent, ngữ cảnh) đã nhận lịch: code trước (ước lượng, bậc, cơ hội), model chỉ khi cần. Mọi
+        đọc/ghi kho ở luồng phụ (GOAL mục 10)."""
+        store = None
         key, ctx = cl["agent_key"], cl["context_ref"]
         now = float(self.deps.clock())
         try:
-            row = await asyncio.to_thread(AP.row, store, key, ctx)
-            iv = AP.interval(int(row["tier"])) or AP.TIERS[AP.INIT_TIER]
-            try:
-                raw = await asyncio.to_thread(self.deps.opportunities, key, ctx, iv)
-            except Exception as ex:  # noqa: BLE001
-                print(f"[pulse opportunities] {type(ex).__name__}: {ex}", file=sys.stderr)
-                raw = []
-            fresh = await asyncio.to_thread(AP.fresh_opportunities, store, key, ctx, raw, now)
-            with closing(store._conn()) as c:
-                pending = c.execute("SELECT COUNT(*) FROM agent_wake_reasons WHERE agent_key=? AND context_ref=? AND "
-                                    "status='pending'", (key, ctx)).fetchone()[0]
-            ev = await asyncio.to_thread(lambda: AP.evaluate(store, key, ctx, at=now,
-                                                             has_opportunity=bool(fresh) or pending > 0,
-                                                             count_wake=True))
-            row = await asyncio.to_thread(AP.row, store, key, ctx)
-            if row["state"] not in AP.SCHEDULED:
-                await asyncio.to_thread(self._finish, store, cl, now)
-                return {"outcome": "no_schedule", "state": row["state"], "eval": ev}
-            bounded = (not fresh and row["state"] in ("active", "awake")
-                       and int(row.get("scan_counter") or 0) >= AP.SCAN_EVERY
-                       and (row.get("last_scan_at") is None or now - float(row["last_scan_at"]) >= AP.SCAN_MIN_GAP_S))
-            if not fresh and not bounded:
-                await asyncio.to_thread(AP.record_event, store, key, ctx, "no_action", reason=ev["reason"], at=now)
-                await asyncio.to_thread(self._finish, store, cl, now)
-                return {"outcome": "no_action", "eval": ev}
-            out = await self._scan(store, cl, fresh, bounded, now)
-            out["eval"] = ev
+            store = await asyncio.to_thread(self.deps.store)
+            got = await asyncio.to_thread(self._wake_code, store, cl, now)
+            if "done" in got:
+                return got["done"]
+            out = await self._scan(store, cl, got["fresh"], got["bounded"], now)
+            out["eval"] = got["eval"]
             return out
         except Exception as ex:  # noqa: BLE001
             print(f"[pulse wake] {key} {ctx}: {type(ex).__name__}: {ex}", file=sys.stderr)
             try:
-                await asyncio.to_thread(self._finish, store, cl, now)
+                if store is not None:
+                    await asyncio.to_thread(self._finish, store, cl, now)
             except Exception:  # noqa: BLE001
                 pass
             return {"outcome": "error", "error": f"{type(ex).__name__}: {ex}"}
@@ -420,7 +440,7 @@ class PulseHost:
             return {"outcome": "busy"}
         self._local_busy.add(key)
         try:
-            ok, why = self.budget(key, "scan", now)
+            ok, why = await asyncio.to_thread(self.budget, key, "scan", now)
             if not ok:
                 await asyncio.to_thread(self._set_quota, store, cl, now, why or "agent_daily_calls")
                 await asyncio.to_thread(self._finish, store, cl, now)
@@ -457,7 +477,8 @@ class PulseHost:
         try:
             if self.deps.engine_for is None:
                 raise RuntimeError("no engine")
-            engine, model, run = self.deps.engine_for(key, ctx, "scan")
+            # Dựng engine đọc file trợ lý và kho (brain, model riêng): luồng phụ.
+            engine, model, run = await asyncio.to_thread(self.deps.engine_for, key, ctx, "scan")
         except Exception as ex:  # noqa: BLE001
             await asyncio.to_thread(ledger.refund, cid)
             await asyncio.to_thread(AP.record_event, store, key, ctx, "scan_error", reason=f"engine: {type(ex).__name__}",
@@ -474,7 +495,7 @@ class PulseHost:
         prompt = ("Ngữ cảnh: " + ctx + "\n" + ("Danh sách cơ hội:\n" + "\n".join(lines) if lines else
                   "Không có cơ hội mới trong danh sách. Đây là lần quét giới hạn định kỳ: chỉ hành động khi thật sự "
                   "thấy việc đáng làm trong phạm vi đã giao; không thì none."))
-        system = (self.deps.persona(key) or "") + SCAN_RULES
+        system = (await asyncio.to_thread(self.deps.persona, key) or "") + SCAN_RULES
         req = {"system": system, "prompt": prompt, "engine_started": engine_started, "team_id": ctx,
                "turn_id": due_ref, "agent_key": key, "context_ref": ctx, "purpose": "scan"}
         try:
@@ -498,14 +519,17 @@ class PulseHost:
         result = await self._act(store, cl, act, fresh, bounded, due_ref, now)
         await asyncio.to_thread(AP.consume_opportunities, store, key, ctx, fresh, f"call:{cid}", now)
         await asyncio.to_thread(ledger.settle, cid, "ok", (out or {}).get("tokens_in"), (out or {}).get("tokens_out"))
-        with store._Tx(store) as c:
-            c.execute("UPDATE agent_pulse SET scan_counter=0, last_scan_at=?, quota_wait=0 WHERE agent_key=? AND "
-                      "context_ref=?", (now, key, ctx))
-            AP._event(c, key, ctx, "scan", source="bounded" if bounded else "opportunities",
-                      reason=result.get("action", "none"),
-                      payload={"call_id": cid, "result": result, "opportunities": [o["source_ref"] for o in fresh]},
-                      at=now)
-        await asyncio.to_thread(self._finish, store, cl, now)
+
+        def scanned():
+            with store._Tx(store) as c:
+                c.execute("UPDATE agent_pulse SET scan_counter=0, last_scan_at=?, quota_wait=0 WHERE agent_key=? AND "
+                          "context_ref=?", (now, key, ctx))
+                AP._event(c, key, ctx, "scan", source="bounded" if bounded else "opportunities",
+                          reason=result.get("action", "none"),
+                          payload={"call_id": cid, "result": result, "opportunities": [o["source_ref"] for o in fresh]},
+                          at=now)
+            self._finish(store, cl, now)
+        await asyncio.to_thread(scanned)
         return {"outcome": "scanned", "call_id": cid, "result": result}
 
     async def _act(self, store, cl, act: Optional[dict], fresh: list, bounded: bool, due_ref: str, now: float) -> dict:
@@ -531,7 +555,7 @@ class PulseHost:
             if action == "enqueue":
                 allowed = False
                 try:
-                    allowed = bool(self.deps.can_enqueue(key, ctx))
+                    allowed = bool(await asyncio.to_thread(self.deps.can_enqueue, key, ctx))
                 except Exception:  # noqa: BLE001
                     allowed = False
                 if allowed and self.deps.enqueue is not None:
