@@ -223,6 +223,8 @@
   "cp.pin_gone": "This folder is no longer on disk.",
   "cp.pin_failed": "Could not pin this folder.",
   "cp.pin_empty": "No folders",
+  "cp.pin_current": "Pinned",
+  "cp.pin_extra": "Extra folders: {names}",
   "cp.brain_file": "Pick a file from the brain",
   "cp.commands": "Commands and skills",
   "cp.connections": "Connections",

@@ -38,7 +38,7 @@
   if (typeof module !== "undefined" && module.exports) module.exports = pure;
   if (typeof document === "undefined") return;
 
-  var state = createPinState(), folder = null, inBrain = false;
+  var state = createPinState(), folder = null, inBrain = false, extras = [];
   function tw(k, v) { return window.t ? window.t(k, v) : k; }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function brain() { try { return (window.JavisSessions && window.JavisSessions.brain()) || "brain"; } catch (e) { return "brain"; } }
@@ -53,6 +53,17 @@
   function pinUrl(id) { return "/coding/session/" + encodeURIComponent(id) + "/pin"; }
   function pinBody(p) { var b = new FormData(); b.append("path", p); b.append("brain", brain()); return b; }
   function isAbs(p) { return /^([A-Za-z]:[\\/]|\/|\\\\)/.test(String(p || "")); }
+  function norm(p) { return String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase(); }
+  // Is a path inside the open brain? Relative paths come from the brain list or search, so yes.
+  // An absolute path is compared with the brain path when that is absolute; when the brain is only
+  // known by an alias, the answer is unknown and the chip does not warn.
+  function inBrainPath(p) {
+    if (!isAbs(p)) return true;
+    var b = brain();
+    if (!isAbs(b)) return true;
+    var np = norm(p), nb = norm(b);
+    return np === nb || np.indexOf(nb + "/") === 0;
+  }
 
   function announce() {
     try { window.dispatchEvent(new CustomEvent("javis:pinned-folder-changed", { detail: { sid: sid(), folder: folder } })); } catch (e) {}
@@ -73,19 +84,27 @@
     var fast = document.getElementById("fastBtn");
     if (chip.parentElement !== host || chip.previousElementSibling !== fast) host.insertBefore(chip, fast ? fast.nextSibling : null);
     chip.classList.toggle("cp-pin-gone", folder.exists === false);
-    chip.title = folder.path + (folder.exists === false ? "\n" + tw("cp.pin_gone") : "") + (inBrain ? "" : "\n" + tw("cp.pin_outside"));
+    chip.title = folder.path + (folder.exists === false ? "\n" + tw("cp.pin_gone") : "") + (inBrain ? "" : "\n" + tw("cp.pin_outside")) +
+      (extras.length ? "\n" + tw("cp.pin_extra", { names: extras.join(", ") }) : "");
     chip.setAttribute("aria-label", tw("cp.pin_folder") + ": " + folder.name);
-    chip.innerHTML = icon() + "<span>" + esc(chipLabel(folder.name, narrow() ? 10 : 18)) + "</span>";
+    // Extra folders bound before 0.158.0 still reach the prompt: show them as +N instead of hiding them.
+    chip.innerHTML = icon() + "<span>" + esc(chipLabel(folder.name, narrow() ? 10 : 18)) + "</span>" +
+      (extras.length ? '<span class="cp-pin-more">+' + extras.length + "</span>" : "");
   }
   function apply(d) {
     folder = (d && d.folder) || null;
     inBrain = !!(d && d.in_brain);
+    extras = (folder && d && Array.isArray(d.extra_folders)) ? d.extra_folders : [];
     renderChip();
     announce();
   }
   function refresh() {
     var id = sid(), n = state.request(id);
-    if (!id) { apply(heldView()); return Promise.resolve(); }
+    if (!id) {
+      if (held && heldBrain !== brain()) dropHeld();   // the brain changed: the held pin belonged to the old one
+      apply(heldView());
+      return Promise.resolve();
+    }
     // Opening an existing conversation drops a pin held for an empty chat: it belonged there.
     held = null; state.takePending();
     return getJson("/coding/session/" + encodeURIComponent(id) + "?brain=" + encodeURIComponent(brain())).then(function (d) {
@@ -93,17 +112,18 @@
     });
   }
   // A pin chosen on an empty chat is held until the first message mints the session id.
-  var held = null;
+  var held = null, heldBrain = "";
+  function dropHeld() { held = null; heldBrain = ""; state.takePending(); }
   function heldView() {
     if (!held) return null;
-    return { folder: { name: String(held).split(/[\\/]/).filter(Boolean).pop() || held, path: held, exists: true }, in_brain: !isAbs(held) };
+    return { folder: { name: String(held).split(/[\\/]/).filter(Boolean).pop() || held, path: held, exists: true }, in_brain: inBrainPath(held) };
   }
   function pin(p) {
     var id = sid();
     if (!id) {
+      dropHeld();
       held = p || null;
-      state.takePending();
-      if (held) state.hold(held);
+      if (held) { heldBrain = brain(); state.hold(held); }
       apply(heldView());
       return Promise.resolve("");
     }
@@ -116,9 +136,11 @@
   }
   function claimPending(newSid) {
     if (!newSid) return null;                      // keep the held pin until a real session id exists
+    var sameBrain = heldBrain === brain();
     var p = state.takePending();
-    held = null;
+    held = null; heldBrain = "";
     if (!p) return null;                           // nothing held: the caller sends right away
+    if (!sameBrain) { apply(null); return null; }  // the brain changed since the pin was chosen
     // app.js waits for this promise before sending the first turn, so the turn runs in the folder.
     var n = state.request(newSid);
     return getJson(pinUrl(newSid), { method: "POST", body: pinBody(p) }).then(function (d) {
@@ -130,8 +152,11 @@
   }
 
   function panel(box, api) {
-    var head = folder ? '<button type="button" class="cp-mi" data-unpin="1">' + icon() + '<span class="cp-mi-lbl">' + esc(tw("cp.pin_unpin")) +
-      '</span><span class="cp-mi-hint">' + esc(folder.name) + '</span></button><div class="cp-sep"></div>' : "";
+    // The current folder is its own (non-clickable) row, Unpin a separate button (spec).
+    var head = folder ? '<div class="cp-mi cp-pin-current" aria-current="true">' + icon() + '<span class="cp-mi-lbl">' + esc(folder.name) +
+      '</span><span class="cp-mi-hint">' + esc(tw("cp.pin_current")) + "</span></div>" +
+      '<button type="button" class="cp-mi" data-unpin="1"><span class="cp-mi-lbl">' + esc(tw("cp.pin_unpin")) + "</span></button>" +
+      '<div class="cp-sep"></div>' : "";
     box.innerHTML = head + '<input type="search" class="cp-search" placeholder="' + esc(tw("cp.pin_search_ph")) + '" aria-label="' +
       esc(tw("cp.pin_search_ph")) + '"><div class="cp-results"></div><div class="cp-sep"></div>' +
       '<button type="button" class="cp-mi" data-browse="1">' + icon() + '<span class="cp-mi-lbl">' + esc(tw("cp.pin_browse")) + "</span></button>" +
@@ -149,7 +174,7 @@
     }
     function load() {
       var q = input.value.trim(), n = ++seq;
-      var url = q ? "/files/search?mode=name&include_dirs=true&limit=30&brain=" + encodeURIComponent(brain()) + "&q=" + encodeURIComponent(q)
+      var url = q ? "/files/search?mode=name&only_dirs=true&limit=30&brain=" + encodeURIComponent(brain()) + "&q=" + encodeURIComponent(q)
         : "/files/list?brain=" + encodeURIComponent(brain());
       getJson(url).then(function (d) {
         if (!q && d && d.home) home = d.home;
@@ -189,5 +214,5 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 
-  window.JavisPinnedFolder = { claimPending: claimPending, current: function () { return folder; }, refresh: refresh };
+  window.JavisPinnedFolder = { claimPending: claimPending, current: function () { return folder; }, refresh: refresh, pin: pin };
 })();
