@@ -171,8 +171,10 @@ hạn), `tests/js/test_teams_ui.js` (hộp cấp quyền 6 dòng trần).
   gỡ mà quá 30 phút thì hết hạn ở `tick`; lý do được khép ở đường gọi trùng, nhóm tạm dừng, lần chờ bị huỷ; ca đã học nằm trong
   `<chat_data>`, lượt tự lên tiếng không mang `reason` của bộ phán xử; "một lượt mỗi (agent, tin gốc)" giữ thêm bằng sổ trong tiến
   trình có khoá.
-- **Lần chờ của tin chủ động trong NHÓM**: không có tin nhóm làm mốc nên khi gỡ chờ thì bị huỷ (lý do khép), không xét lại; chỉ chat
-  riêng có bước xét lại và gửi.
+- **Lần chờ của tin chủ động trong NHÓM** (vòng 2 P2-1): lần chờ có bản nháp và không có `message_id` được xét lại đúng một lần như ở
+  chat riêng (`_proactive_wait`): CAS `released -> rejudged`, khép lý do, `judge_proactive(rejudge_of=...)` với trần `judge_daily`
+  của nhóm (không hỏi hạn mức ngày của agent), `speak` thì gửi qua `_judge_send` -> `_pulse_post` (đã kiểm phạm vi). Lần chờ của lô
+  nhóm mà nhóm hay tin gốc không còn: quyết định `silent/wait_cancelled` nhìn thấy được.
 
 ## 9. Bằng chứng (nhánh `claude/team-adaptive-t3-judge`, head kiểm `1049027e`)
 

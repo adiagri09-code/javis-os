@@ -1072,9 +1072,17 @@ class TeamRunner:
         rid_of = {w["id"]: it.get("reason_id") for w, it in zip(waits, items)}
 
         def cancel(ws):
-            # Lần chờ huỷ thì lý do wait_unblocked của nó khép lại (review T3 J P3), không nằm `pending` mãi.
+            # Lần chờ huỷ thì lý do wait_unblocked của nó khép lại (review T3 J P3), không nằm `pending` mãi, và có một
+            # quyết định `silent/wait_cancelled` nhìn thấy được (review T3 vòng 2 P2-1): lần chờ không bao giờ ra đi im lặng.
             for w in ws:
-                st.move_wait(w["id"], "cancelled", frm="released")
+                if st.move_wait(w["id"], "cancelled", frm="released"):
+                    d0 = st.get_decision(int(w["decision_id"])) or {}
+                    st.add_decision({"agent_key": w["agent_key"], "context_ref": w["context_ref"],
+                                     "source_event": w.get("source_event") or "", "root_ref": w.get("root_ref") or "",
+                                     "kind": "wait", "verdict": "silent", "address": "none",
+                                     "silence_code": "wait_cancelled", "excerpt": d0.get("excerpt") or "",
+                                     "features": {"cancelled_wait": w["id"],
+                                                  "reply_to": int((w.get("payload") or {}).get("message_id") or 0)}})
             self.judge._close_reasons([rid_of.get(w["id"]) for w in ws], self.clock())
 
         if not team or team["status"] != "active":

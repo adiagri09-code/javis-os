@@ -67,9 +67,8 @@ Mỗi thay đổi tự rà soát đề xuất (áp hay không): `kind`, `signatu
      riêng của trợ lý thì về phiên báo cáo). Gửi được thì "Đã điều chỉnh", không thì "Không cần đổi" ("Chưa gửi được tin mới").
      Bộ phán xử dừng vì hết hạn mức hay chạm trần (`waiting_quota`, `judge_cap`, `server_ceiling`): "Chờ hạn mức", nguồn về lý do
      chờ (`WakeReasons.requeue`), lùi 10 phút; không phải "phán xử chọn im". `silent`: "Không cần đổi" ("Phán xử chọn im"). `wait`:
-     "Không cần đổi" ("Phán xử chọn chờ"); ở CHAT RIÊNG, khi J gỡ chờ và xét lại thành `speak`, bộ gửi `on_judge_send` (chỉ nhận
-     `origin = reaction_review`) gửi tin và đổi trạng thái sang "Đã điều chỉnh". Trong NHÓM, lần chờ của tin chủ động không có tin
-     nhóm làm mốc nên bị huỷ khi gỡ chờ (lý do khép), tức là tin không được gửi.
+     "Không cần đổi" ("Phán xử chọn chờ"); khi J gỡ chờ và xét lại thành `speak` (chat riêng và nhóm), bộ gửi `on_judge_send` (chỉ
+     nhận `origin = reaction_review`) gửi tin và đổi trạng thái sang "Đã điều chỉnh".
 7. Trạng thái ghi lên MỌI reaction trong `consumed` (kho chat riêng và kho nhóm, chỉ khi reaction còn ở đúng lần đổi đó), gói WS
    `chat_reaction`/`team_message`. Quyết định ghi `agent_pulse_events` kind `reaction_review` (reason = outcome, payload: reason_id,
    call_id, consumed, moved_to, status, lesson_id/decision_id/message_id).
@@ -203,3 +202,4 @@ lớp 3 theo `sort_by_priority`. Dòng `agent_daily_calls` vào bảng giới h�
 - Sửa sau review T3 (nhánh `claude/team-adaptive-t3-fix`): lượt phán xử tin mới ở chat riêng tiêu hạn mức ở mức `reaction_review`
   và cần 2 lượt trống trước khi nhận lý do; hết hạn mức ở bước phán xử không làm mất phản hồi (`requeue`); tự rà soát không học lại
   phản hồi đang chờ lượt xem xét reaction; quay lại `offset_set` theo phần dịch; `lesson_add` cần bằng chứng của ngữ cảnh đích.
+  Lần chờ của tin mới trong nhóm được xét lại một lần như ở chat riêng (vòng 2 P2-1).
