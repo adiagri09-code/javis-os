@@ -155,3 +155,17 @@ hạn), `tests/js/test_teams_ui.js` (hộp cấp quyền 6 dòng trần).
 - **Có thêm `GET /agents/{slug}/judge`** để hàng thành viên nhóm tải đúng một ngữ cảnh, không phụ thuộc phần P; khung nhịp của P
   dùng cùng `Judge.view`.
 - **Dọn quyết định**: mỗi giờ bỏ quyết định im cũ hơn 90 ngày không nhãn, không tin, không đang chờ.
+
+## 9. Bằng chứng (nhánh `claude/team-adaptive-t3-judge`, head kiểm `1049027e`)
+
+- `tests/run.py judge related team feedback agent_calls i18n icons route_table`: 43/43 xanh (439 giây).
+- `tests/run.py --js`: 193/193 xanh (76 giây).
+- **Sự cố đã khắc phục:** trước `1049027e`, một harness qua `main.py` (`test_team_t1_goal_host.py`, chạy lúc nối host mới xong)
+  dựng engine phán xử thật và gọi Claude CLI MỘT lần (claude-opus-5-5, 122 token ra, 15/10/2026 11:16 +07). Nguyên nhân: harness
+  cũ chỉ thay engine lượt nhóm, còn lô phán xử dùng model việc nền. Sửa: `tests/python/_paths.py` đặt
+  `JAVIS_NO_REAL_JUDGE_ENGINE=1` cho mọi test Python, `main._agent_judge_ask` ném `EngineUnavailable` trước khi dựng engine (lượt
+  được hoàn, ứng viên im); kiểm hồi quy trong `test_agent_judge_labels.py`. Hai lượt chạy đầy đủ sau đó không tạo thư mục
+  `agent_judge_cwd` nào mới.
+- Cùng lúc sửa: `team_runner.run_io` quay mãi khi chính tác vụ luồng phụ bị huỷ lúc event loop đóng (treo `test_team_api`);
+  `TeamRunner.wait_jobs` chờ cả việc nền của bộ phán xử.
+
