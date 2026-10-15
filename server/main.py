@@ -14732,6 +14732,9 @@ async def websocket_endpoint(ws: WebSocket):
                 "content": localefmt.chu("Javis đang suy nghĩ...", "Javis is thinking...")
             }))
 
+            if _persona and _persona[0] == "agent":
+                # T3 J (7.4): tin mới của chủ trong chat riêng gỡ các lần chờ "tin mới của chủ" của trợ lý này.
+                _judge_dm_owner_message(brain, _persona[1], conv_sid)
             # Dựng prompt cũ theo nhu cầu. Fast Path không đọc/nạp memory hoặc lịch sử cũ.
             sysprompt = None
 
@@ -22384,7 +22387,14 @@ def _team_agent_info(root, agent_key):
     if not reg or reg.get("status") != "active" or not _agent_md_path(root, reg["slug"]):
         return None
     name, system, model, provider = _workflow_agent_helpers(root, None)[1](reg["slug"])
-    return {"slug": reg["slug"], "name": name, "system": system, "model": model or "", "model_provider": provider or ""}
+    role = ""
+    try:
+        meta, _b = _read_md(_agent_md_path(root, reg["slug"]))
+        role = str((meta or {}).get("role") or "")
+    except Exception:  # noqa: BLE001
+        pass
+    return {"slug": reg["slug"], "name": name, "system": system, "model": model or "", "model_provider": provider or "",
+            "role": role}
 
 
 def _team_engine_for(team, agent_key, role):
@@ -22545,8 +22555,217 @@ def _feedback_projector():
             return _TEAM_API.runner().team_message_view(team_id, session_id, mid) if _TEAM_API.exists() else None
 
         _FEEDBACK_PROJECTOR[0] = feedback_projector.FeedbackProjector(
-            resonance=lambda: _resonance_store(), sessions=lambda: get_store(), teams=_teams, team_view=_view)
+            resonance=lambda: _resonance_store(), sessions=lambda: get_store(), teams=_teams, team_view=_view,
+            judge_label=lambda *a, **k: _agent_judge().label(*a, **k))
     return _FEEDBACK_PROJECTOR[0]
+
+
+# ── Bộ phán xử theo agent (T3 phần J, 0.156.0; docs/dev/team-chat-t3-judge.md) ──
+import agent_judge  # noqa: E402
+import agent_judge_store  # noqa: E402
+
+_AGENT_JUDGE = [None]
+_AGENT_JUDGE_STORE = [None]
+_JUDGE_VIEW_REGISTERED = [False]
+
+
+def _agent_judge_store(create=True):
+    """Kho `agent_judge.sqlite3`, mở lười: chưa có lượt phán xử nào thì không tạo file (đọc trả None)."""
+    if _AGENT_JUDGE_STORE[0] is None:
+        path = Path(cfgmod.STATE_DIR) / agent_judge_store.STORE_NAME
+        if not create and not path.is_file():
+            return None
+        _AGENT_JUDGE_STORE[0] = agent_judge_store.JudgeStore(path)
+    return _AGENT_JUDGE_STORE[0]
+
+
+async def _agent_judge_ask(prompt: str, purpose: str = "", started=None) -> str:
+    """Lượt phán xử: model việc nền người dùng chọn (trang Models), CHỈ CHỮ, thư mục trống, không MCP, cổng từ chối mọi
+    công cụ (prompt chứa chữ của chat). Không tự chọn model. Engine chưa sẵn sàng thì ném `EngineUnavailable` TRƯỚC khi gọi
+    model (lượt được hoàn); `started()` ghi mốc engine ngay trước lời gọi model."""
+    if os.environ.get("JAVIS_NO_REAL_JUDGE_ENGINE"):
+        # Chốt của bộ test (tests/python/_paths.py): không dựng model thật; lượt được hoàn, ứng viên im có lý do.
+        raise agent_judge.EngineUnavailable("JAVIS_NO_REAL_JUDGE_ENGINE: không dựng engine phán xử thật")
+    cli = _reply_policy_sandbox_engine("Bạn là bộ phán xử nói/chờ/im của một nhóm trợ lý. Chỉ trả về đúng khuôn JSON "
+                                       "được yêu cầu, không thêm lời dẫn.", "agent-judge", cwd_name="agent_judge_cwd")
+    base = cli
+    cli = aux_engine.strip_tools(_aux_swap(cli, mode="suggest", tag="agent-judge"), base)
+    if not cli.is_available():
+        raise agent_judge.EngineUnavailable("engine việc nền chưa sẵn sàng (kiểm tra trang Models)")
+    if callable(started):
+        started()
+    final = ""
+    async for ev in cli.query(prompt):
+        if ev.get("type") == "final":
+            final = ev.get("content", "") or ""
+        elif ev.get("type") == "error":
+            raise RuntimeError(str(ev.get("content") or "lỗi engine")[:200])
+    return final
+
+
+def _agent_judge_engine_label():
+    try:
+        spec = aux_engine.read_spec() or {}
+        return str(spec.get("provider") or "aux"), str(spec.get("model") or "")
+    except Exception:  # noqa: BLE001
+        return "aux", ""
+
+
+def _agent_judge_resonance_on(agent_key):
+    try:
+        if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+            return False
+        a = _resonance_store().agent_any(agent_key) or {}
+        return bool(a.get("status") == "active" and a.get("enabled"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _agent_judge_resumed_at(agent_key, context_ref):
+    try:
+        return _resonance_store().resumed_at(agent_key, context_ref)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _agent_judge_history(context_ref):
+    """Tin gần đây CHỈ của ngữ cảnh `context_ref` (nhóm: phiên nhóm; chat riêng: phiên chat riêng mới nhất của agent)."""
+    try:
+        if str(context_ref).startswith("team:"):
+            if not _TEAM_API.exists():
+                return []
+            team = _TEAM_API.teams().get(context_ref.split(":", 1)[1])
+            return _TEAM_API.runner()._judge_history(team) if team else []
+        key = str(context_ref).split(":", 1)[1]
+        a = _resonance_store().agent_any(key) or {}
+        if not a.get("slug"):
+            return []
+        ss = get_store()
+        rows = ss.list_sessions(limit=20, channel=f"agent:{a['slug']}")
+        pins = _resonance_store().session_pins([r["id"] for r in rows]) if rows else {}
+        mine = [r for r in rows if (not pins.get(r["id"]) or pins.get(r["id"]) == key) and int(r.get("msg_count") or 0)]
+        if not mine:
+            return []
+        page = ss.get_messages_page(mine[0]["id"], limit=12)
+        return [{"who": "Chủ" if m.get("role") == "user" else (a["slug"]), "text": m.get("content") or ""}
+                for m in (page.get("messages") or [])]
+    except Exception as _e:  # noqa: BLE001
+        print(f"[agent judge history] {type(_e).__name__}: {_e}", file=sys.stderr)
+        return []
+
+
+def _agent_judge_meta(agent_key):
+    try:
+        a = _resonance_store().agent_any(agent_key) or {}
+        path = _agent_md_path(a.get("brain_id") or "", a.get("slug") or "") if a.get("slug") else None
+        meta, _b = _read_md(path) if path else ({}, "")
+        return {"name": str((meta or {}).get("name") or a.get("slug") or agent_key),
+                "role_text": str((meta or {}).get("role") or "")}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _agent_judge():
+    """Bộ phán xử dùng chung (một lần mỗi tiến trình), nối vào `agent_judge.default()` để phần P và L gọi được."""
+    if _AGENT_JUDGE[0] is None:
+        _AGENT_JUDGE[0] = agent_judge.wire(agent_judge.Judge(
+            store=_agent_judge_store, ledger=lambda: agent_ledger.CallLedger(_resonance_store()),
+            wake=lambda: agent_ledger.WakeReasons(_resonance_store()), ask=_agent_judge_ask,
+            engine_label=_agent_judge_engine_label, resonance_on=_agent_judge_resonance_on,
+            resumed_at=_agent_judge_resumed_at, history=_agent_judge_history, agent_meta=_agent_judge_meta))
+        _register_judge_view_part()
+        _wire_judge_with_pulse()
+    return _AGENT_JUDGE[0]
+
+
+def _judge_send(decision, payload, mode):
+    """Hàm gửi của bộ phán xử (điểm nối P và J): một tin chủ động đang chờ được xét lại thành "nói", hay một câu hỏi
+    làm rõ khi hết chờ, đi đúng đường gửi tin chủ động của nhịp (`_pulse_send`: tin có `proactive`, `decision_id`)."""
+    if str((payload or {}).get("origin") or "") == "reaction_review":
+        # Tin của lượt xem xét reaction (phần L) do bộ gửi riêng của L gửi (`agent_review.ReviewHost.on_judge_send`, ghi
+        # trạng thái lên reaction); gửi cả ở đây là gửi hai lần.
+        return None
+    key = decision.get("agent_key") or (payload or {}).get("agent_key") or ""
+    ctx = decision.get("context_ref") or (payload or {}).get("context_ref") or ""
+    text = (payload or {}).get("ask_clarify") if mode == "ask_clarify" else (payload or {}).get("draft")
+    if not key or not ctx or not str(text or "").strip():
+        return None
+    return _pulse_send(key, ctx, str(text), {"source_ref": (payload or {}).get("source_ref") or
+                                             decision.get("source_event") or "",
+                                             "decision_id": decision.get("decision_id")})
+
+
+def _wire_judge_with_pulse():
+    """Nối bộ phán xử vào nhịp lớp 3 (hợp đồng T3 mục 1b, 2): vòng pulse giao lý do `related_review` và `wait_unblocked`
+    cho `agent_judge.serve_reason` (bộ phán xử tự xét, không mở lượt riêng), và bộ phán xử gửi tin qua `_judge_send`."""
+    try:
+        agent_judge.register_sender(_judge_send)
+        for code in ("related_review", "wait_unblocked"):
+            agent_pulse_host.register_reason_handler(code, lambda _host, r: agent_judge.serve_reason(int(r["id"])))
+    except Exception as _e:  # noqa: BLE001
+        print(f"[agent judge wire pulse] {type(_e).__name__}: {_e}", file=sys.stderr)
+
+
+def _judge_contexts(root, agent_key):
+    """Nơi bộ phán xử áp dụng cho trợ lý: các nhóm đang tham gia trong brain này và chat riêng."""
+    out = []
+    try:
+        if _TEAM_API.exists():
+            teams = _TEAM_API.teams()
+            for t in teams.teams_of_agent(agent_key):
+                if t.get("brain_id") == root and teams.is_active_member(t["team_id"], agent_key):
+                    out.append({"context_ref": f"team:{t['team_id']}", "label": t.get("name") or ""})
+    except Exception:  # noqa: BLE001
+        pass
+    out.append({"context_ref": f"dm:{agent_key}", "label": ""})
+    return out
+
+
+def _judge_view_for(agent_key, root=None):
+    a = _resonance_store().agent_any(agent_key) or {}
+    return _agent_judge().view(agent_key, _judge_contexts(root or a.get("brain_id") or "", agent_key))
+
+
+def _register_judge_view_part():
+    """Góp phần "judge" vào `GET /agents/{slug}/pulse` của phần P (`agent_pulse_host.register_view_part`). Nhánh chưa có
+    phần P thì không làm gì; `GET /agents/{slug}/judge` vẫn trả đúng phần này. Đăng ký một lần."""
+    if _JUDGE_VIEW_REGISTERED[0]:
+        return True
+    try:
+        import agent_pulse_host  # type: ignore
+    except ImportError:
+        return False
+    reg = getattr(agent_pulse_host, "register_view_part", None)
+    if reg is None:
+        return False
+    try:
+        # Sổ của phần P gọi `fn(store, agent_key)` (agent_pulse_host.view): nhận đúng chữ ký đó, vẫn gọi được bằng
+        # `fn(agent_key)` như test của phần J.
+        reg("judge", lambda *args, **kw: _judge_view_for(kw.get("agent_key") or args[-1]))
+        _JUDGE_VIEW_REGISTERED[0] = True
+        return True
+    except Exception as _e:  # noqa: BLE001
+        print(f"[agent judge view part] {type(_e).__name__}: {_e}", file=sys.stderr)
+        return False
+
+
+def _judge_dm_owner_message(brain, slug, conv_sid):
+    """Chủ nhắn trong chat riêng với trợ lý: gỡ các lần chờ "tin mới của chủ" của ngữ cảnh `dm:<agent_key>` (7.4)."""
+    try:
+        if _agent_judge_store(create=False) is None:
+            return
+        rs = _resonance_store()
+        pin = rs.session_pin(conv_sid) if conv_sid else None
+        key = pin["agent_key"] if pin else ((rs.agent(_brain_key(brain), slug) or {}).get("agent_key") or "")
+        if not key:
+            return
+        judge = _agent_judge()
+        items = judge.release_waits(f"dm:{key}", {"kind": "owner_message"})
+        if items:
+            asyncio.ensure_future(judge.process_released(items))
+    except Exception as _e:  # noqa: BLE001 - gỡ chờ hỏng không được làm hỏng lượt chat
+        print(f"[agent judge dm release] {type(_e).__name__}: {_e}", file=sys.stderr)
+
 
 
 def _team_ceiling():
@@ -22578,7 +22797,10 @@ _TEAM_API = team_api.register(app, team_api.TeamApiDeps(
     agents_meta=_resonance_agents_meta, agent_info=_team_agent_info, engine_for=_team_engine_for,
     broadcast=lambda ev: _CHAT_RUNTIME.publish(ev), notify=_team_notify, admin=_TeamAdmin(),
     owner_name=lambda: ((cfgmod.read_settings().get("auth") or {}).get("username") or ""),
-    ceiling=_team_ceiling, projector=_feedback_projector, learning=_team_learning))
+    ceiling=_team_ceiling, projector=_feedback_projector, judge=lambda: _agent_judge(),
+    learning=_team_learning))
+# T3 phần J: góp phần "judge" vào khung nhịp của phần P ngay lúc nạp (không có phần P thì không làm gì).
+_register_judge_view_part()
 
 
 # ── Reaction chat riêng (T2, 0.154.0; hợp đồng docs/dev/team-chat-t2-contract.md mục 4) ──
@@ -23184,7 +23406,44 @@ def _pulse_propose(key, ctx, item, src):
         got = _pulse_post(key, ctx, localefmt.chu(f"Đề xuất: {item['title']}\n{item.get('brief') or ''}\n(Nguồn: {src})",
                                                   f"Proposal: {item['title']}\n{item.get('brief') or ''}\n(Source: {src})"),
                           {"pulse_source": src})
-    return f"msg:{got['message_id']}" if got else None
+    return got
+
+
+def _pulse_proposal_action(prop, decision):
+    """Chủ quyết một đề xuất của lượt quét từ bảng Nhịp. Nhóm: đi đúng thẻ đề xuất của nhóm (Tạo việc xếp vào hàng đợi
+    chung của nhóm; Bỏ qua là bác), tín hiệu do bộ chạy nhóm ghi. Chat riêng: chấp nhận thành việc giao cho trợ lý như nút
+    Giao việc (Kanban, báo về chat riêng, khoá chống trùng theo đề xuất), rồi ghi tín hiệu +0.6; bác thì -0.4."""
+    ctx = str(prop["context_ref"])
+    team = _pulse_team(ctx)
+    if team is not None:
+        runner = _TEAM_API.runner()
+        if prop.get("message_id") is None:
+            raise ValueError("đề xuất không gắn tin của nhóm")
+        try:
+            if decision == "accepted":
+                tid = runner.accept_proposal(team["team_id"], int(prop["message_id"]))
+                _TEAM_API.kick()
+                return {"task_id": tid}
+            runner.reject_proposal(team["team_id"], int(prop["message_id"]))
+        except team_api.TeamError as ex:
+            raise ValueError(str(ex))
+        return {"rejected": True}
+    st = _pulse_store()
+    if decision == "rejected":
+        return agent_pulse.decide_proposal(st, prop["id"], "rejected", by="owner") and {"rejected": True}
+    reg = _pulse_sql("SELECT brain_id, slug FROM resonance_agents WHERE agent_key=?", (prop["agent_key"],))
+    if not reg:
+        raise ValueError("trợ lý không còn")
+    root, slug = reg[0]["brain_id"], reg[0]["slug"]
+    sid = prop.get("session_id") or _pulse_dm_session(prop["agent_key"])[0]
+    name = (_team_agent_info(root, prop["agent_key"]) or {}).get("name") or slug
+    tid = tasks_feature.enqueue(root, agent_jobs.assign_title(name, prop["title"]),
+                                agent_jobs.brief(f"{prop['title']}\n{prop.get('brief') or ''}".strip()),
+                                chat_id=f"{WEB_CHAT_PREFIX}{sid}",
+                                idempotency_key=agent_jobs.assign_key(prop["agent_key"], slug, f"pp{prop['id']}"),
+                                dedupe_title=False)
+    agent_pulse.decide_proposal(st, prop["id"], "accepted", by="owner", task_id=str(tid or ""))
+    return {"task_id": tid}
 
 
 def _pulse_send(key, ctx, text, meta):
@@ -23222,6 +23481,12 @@ def _pulse_host():
             can_enqueue=_pulse_can_enqueue, enqueue=_pulse_enqueue, propose=_pulse_propose, send=_pulse_send,
             notify=_pulse_notify, interacted=_pulse_interacted, project_pending=_feedback_pulse_tick,
             brain_of=_pulse_brain_of))
+        # Dựng bộ phán xử cùng lúc (đăng ký hàm phục vụ lý do related_review/wait_unblocked và hàm gửi), để sau khởi động
+        # lại các lý do còn chờ có người phục vụ ngay, không phải đợi tới tin nhóm đầu tiên.
+        try:
+            _agent_judge()
+        except Exception as _e:  # noqa: BLE001
+            print(f"[pulse host judge] {type(_e).__name__}: {_e}", file=sys.stderr)
     return _PULSE_HOST[0]
 
 
@@ -23295,7 +23560,68 @@ def _pulse_seen_resolve(ctx, ids, session_id):
 # Route của nhịp: đăng ký SAU route cuối để bảng route cũ giữ nguyên thứ tự.
 agent_pulse_host.register(app, agent_pulse_host.PulseRouteDeps(
     brain_key=lambda b: _brain_key(b), agent_exists=lambda root, slug: _agent_md_path(root, slug) is not None,
-    agent_key=lambda root, slug: _agent_jobs_key(root, slug), store=_pulse_store, seen_resolve=_pulse_seen_resolve))
+    agent_key=lambda root, slug: _agent_jobs_key(root, slug), store=_pulse_store, seen_resolve=_pulse_seen_resolve,
+    proposal_action=lambda prop, decision: _pulse_proposal_action(prop, decision)))
+
+# ── Bộ phán xử theo agent: lịch sử quyết định và nút sửa (T3 phần J, 0.156.0) ──
+def _judge_agent_key(root, slug):
+    if _agent_md_path(root, slug) is None:
+        return None
+    if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+        return None
+    row = _resonance_store().agent(root, slug)
+    return row["agent_key"] if row and row.get("status") == "active" else None
+
+
+@app.get("/agents/{slug}/judge")
+async def agent_judge_view(slug: str, brain: str = "brain", context_ref: str = ""):
+    """Phần "judge" của thẻ trợ lý (cũng góp vào `GET /agents/{slug}/pulse` của phần P): nơi áp dụng, ngưỡng theo ngữ
+    cảnh, quyết định nói/chờ/im gần đây (cả ca im không có tin). `context_ref` lọc một ngữ cảnh (hàng thành viên nhóm)."""
+    root = _brain_key(brain)
+
+    def _do():
+        key = _judge_agent_key(root, slug)
+        if not key:
+            return {"ok": True, "judge": {"name": "judge", "agent_key": "", "contexts": [], "waits": [], "changes": []}}
+        v = _judge_view_for(key, root)
+        if context_ref:
+            v["contexts"] = [c for c in v["contexts"] if c["context_ref"] == context_ref]
+        return {"ok": True, "judge": v}
+    return await asyncio.to_thread(_do)
+
+
+@app.post("/agents/{slug}/judge/label")
+async def agent_judge_label(slug: str, request: Request, brain: str = "brain"):
+    """Nút sửa trong lịch sử quyết định: "Đáng lẽ nên nói" (`should_speak`) / "Nên im (chen ngang)" (`should_silent`), hay
+    `label` rỗng để bỏ nhãn. Chỉ quyết định của ĐÚNG trợ lý này. Không cấp quyền gì; trang chỉ báo thành công khi 200."""
+    root = _brain_key(brain)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    body = body if isinstance(body, dict) else {}
+    try:
+        did = int(body.get("decision_id"))
+    except (TypeError, ValueError):
+        return JSONResponse({"ok": False, "error": localefmt.chu("Thiếu mã quyết định", "Missing decision id")},
+                            status_code=400)
+    lab = str(body.get("label") or "")
+    if lab and lab not in agent_judge_store.LABELS:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Nhãn không hợp lệ", "Invalid label")}, status_code=400)
+
+    def _do():
+        key = _judge_agent_key(root, slug)
+        st = _agent_judge_store(create=False)
+        d = st.get_decision(did) if (key and st is not None) else None
+        if d is None or d.get("agent_key") != key:
+            return JSONResponse({"ok": False, "error": localefmt.chu("Không có quyết định này", "No such decision")},
+                                status_code=404)
+        got = _agent_judge().label(did, lab or None, "owner", source="history")
+        if not got.get("ok"):
+            return JSONResponse({"ok": False, "error": localefmt.chu("Không ghi được nhãn", "Could not save the label")},
+                                status_code=409)
+        return {"ok": True, "effect": got.get("effect") or "", "decision": got.get("decision")}
+    return await asyncio.to_thread(_do)
 
 
 # ── Học trong đội (T3 phần L, 0.156.0; thiết kế 2026-10-15 mục 4.4, 6.4, 8, 9; docs/dev/team-chat-t3-learn.md) ──

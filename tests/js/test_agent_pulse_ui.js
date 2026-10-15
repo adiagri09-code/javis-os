@@ -186,6 +186,27 @@ function fakeTimers() {
     === "session:s9");
   check("contextOf: phần tử khác không theo dõi", SEEN.contextOf(el("msg-user", { "data-mid": 4, "data-sid": "s9" })) === null);
 
+  // ═════ đề xuất: bảng Nhịp và thẻ trong nhóm ═════
+  const pv = Object.assign({}, view, { proposals: [
+    { id: 5, context_ref: "dm:ag_1", title: "Hỏi lại <mục tiêu>", brief: "chờ hai ngày", status: "pending" },
+    { id: 4, context_ref: "team:tm_a", title: "Cập nhật việc", brief: "", status: "rejected" }] });
+  const ph = P.panelHtml(pv, { teamNames: names, registry: [] });
+  check("bảng: đề xuất chờ có nút Nhận thành việc và Bác, escape tiêu đề",
+    /data-pulse-act="proposal_accept" data-pid="5"/.test(ph) && /data-pulse-act="proposal_reject" data-pid="5"/.test(ph)
+    && ph.includes("Hỏi lại &lt;mục tiêu&gt;") && ph.includes(vi["pulse.btn.accept"]), ph);
+  check("bảng: đề xuất đã bác chỉ còn trạng thái, không nút", !/data-pid="4"/.test(ph) && ph.includes(vi["pulse.prop.status.rejected"]));
+  const TM = require(path.join(ROOT, "dashboard", "teams.js"));
+  const mem = [{ agent_key: "ag_lan", slug: "lan", name: "Lan", role: "leader", status: "active" }];
+  const cx = { members: mem, leaderKey: "ag_lan", taskTitles: {} };
+  const card = (st) => TM.messageHtml({ id: 8, author_kind: "agent", author_ref: "ag_lan", content: "Đề xuất",
+    meta: { role: "leader_reply", status: "done", proposal: { title: "Bản tin" }, proposal_status: st } }, cx);
+  check("thẻ đề xuất nhóm còn chờ: Tạo việc và Bỏ qua", /data-accept="8"/.test(card(undefined)) && /data-skip="8"/.test(card(undefined)));
+  check("thẻ đã bác: hết nút, nói rõ đã bác", !/data-skip="8"/.test(card("rejected")) && card("rejected").includes(vi["teams.proposal_rejected"]));
+  check("thẻ đã thành việc: hết nút, nói rõ", !/data-accept="8"/.test(card("accepted")) && card("accepted").includes(vi["teams.proposal_accepted"]));
+  const tsrc = read("teams.js");
+  check("Bỏ qua gọi máy chủ bác đề xuất và chỉ vẽ lại sau 200", /if \(d\.skip\) \{\s*return call\("POST", teamUrl\("\/messages\/" \+ q\(d\.skip\) \+ "\/reject"\)\)\.then\(function \(r\) \{\s*if \(r\.code !== 200\) return fail\(r\);/.test(tsrc));
+  check("bảng Nhịp: nút đề xuất gọi proposals/<id>/accept|reject", read("agent-pulse.js").includes('"proposals/" + encodeURIComponent(pid)'));
+
   // ═════ chỗ nối ═════
   const idx = read("index.html"), ws = read("workspace.js"), tm = read("teams.js"), css = read("console.css");
   check("index.html nạp agent-pulse.js và pulse-seen.js", idx.includes("/static/agent-pulse.js?v=") &&
@@ -211,8 +232,8 @@ function fakeTimers() {
   check("mọi khoá i18n dùng tới có ở cả vi và en", miss.length === 0, miss.join(", "));
   check("chữ tiếng Việt có dấu (không chữ không dấu)", vi["pulse.btn.wake"] === "Đánh thức" && vi["pulse.state.slowed"] === "Giảm nhịp");
   const dashes = Object.entries(vi).concat(Object.entries(en)).filter(([k, v]) => k.startsWith("pulse.") &&
-    /[–—]/.test(v));
-  check("không em dash, en dash trong chữ mới", dashes.length === 0 && !/[–—]/.test(pulseSrc));
+    /[\u2013\u2014]/.test(v));
+  check("không em dash, en dash trong chữ mới", dashes.length === 0 && !/[\u2013\u2014]/.test(pulseSrc));
 
   console.log(fails ? `\n${fails} FAIL` : "\nALL OK");
   process.exit(fails ? 1 : 0);

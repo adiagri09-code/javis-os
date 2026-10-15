@@ -8,7 +8,15 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.156.0] - 2026-10-15
 ### Thêm mới
-- **Trợ lý tự điều nhịp và tự biết lúc nên nói** (đang làm).
+- **Trợ lý tự điều nhịp:** trợ lý bật Auto tự xem lại việc của mình theo nhịp, từ 15 phút tới 1 tháng. Được khen, được dùng kết quả thì nhanh dần (mặc định tối đa 1 giờ, chỉ bạn nâng được), ít ai cần thì chậm dần rồi ngủ. Gọi trực tiếp là thức ngay.
+- **Việc được giao không bao giờ bị chậm:** nhịp chỉ áp cho phần tự làm. Việc nhóm, hạn chót, mục tiêu và lời gọi trực tiếp vẫn chạy kể cả khi trợ lý đang ngủ hay tạm dừng.
+- **Bảng Nhịp trên thẻ trợ lý và dòng thành viên nhóm:** trạng thái từng nơi, lần xem xét gần nhất và tiếp theo, vì sao đổi nhịp, phản hồi đã tính. Có nút Đánh thức, Tạm dừng, Đặt lại, Quay lại.
+- **Lần tự thức chỉ gọi AI khi có việc thật:** việc nhóm cũ, việc bị chặn có tin mới, mục tiêu chờ bạn. Không có quyền thì chỉ đề xuất; tin tự nhắn luôn qua bộ phán xử trước.
+- **Đề xuất của trợ lý có Nhận và Bác:** nhận là xếp việc ngay, bác thì trợ lý không đề xuất lại chuyện cũ khi chưa có gì mới. Nút Bỏ qua trên thẻ đề xuất của nhóm nay là bác thật, tab khác cũng thấy.
+- **Ghi công đúng người:** khen bản tổng hợp thì phần lớn về người làm các phần, không dồn hết cho trưởng nhóm.
+- **Trợ lý tự biết lúc nên lên tiếng trong nhóm:** khi không ai gọi, mỗi trợ lý tự cân nhắc nói, chờ hay im; mỗi tin tối đa một người tự lên tiếng (chỉnh được). Lời gọi @ và việc giao vẫn luôn được trả lời; trợ lý nhờ được đồng đội xem tin mà không gọi nhau vòng tròn.
+- **Sửa quyết định nói hay im:** mở một thành viên trong ngăn Nhóm để xem các lần nói, chờ, im (cả lúc im lặng) và bấm "Đáng lẽ nên nói" hay "Nên im (chen ngang)". Bật Auto thì trợ lý học theo đúng nhóm đó.
+- **Giới hạn mới cho nhóm:** lượt phán xử mỗi ngày (mặc định 40, có Không giới hạn), số người tự lên tiếng mỗi tin, và cách phán xử khi Auto của trợ lý tắt.
 - **Trợ lý xem lại phản hồi của bạn thật sự:** với Auto bật, cảm xúc và góp ý trên tin của trợ lý được xem xét trong một lượt, rồi trợ lý giữ cách làm, hỏi lại, gửi bản sửa (tin mới, qua bộ phán xử) hay rút bài học. Trạng thái dưới cảm xúc nói đúng điều đã xảy ra.
 - **Bài học có phạm vi:** bài học trong một nhóm chỉ dùng ở nhóm đó, bài học ở chat riêng chỉ dùng ở chat riêng; bạn thu hồi hay cho dùng ở mọi nơi ngay trên thẻ trợ lý. Bài học cũ trong bộ nhớ được ghi "chưa có phạm vi".
 - **Trợ lý tự rà soát có quay lại:** khi đủ phản hồi mới, trợ lý tự chỉnh tối đa 3 điều (nói/im, độ hăng hái, bài học), ghi trước/sau và tự quay lại nếu kết quả kém đi; không đụng thiết lập bạn đang giữ. Đồng đội góp ý được cho nhau, chỉ là tham khảo.

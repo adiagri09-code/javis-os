@@ -274,7 +274,7 @@ check("Quyền giới hạn: nói rõ trưởng nhóm chỉ đề xuất, có n�
       ah.includes(vi["teams.auth.off"]) && ah.includes(vi["teams.auth.grant"]) && !ah.includes("tm-auth-revoke"), ah);
 check("hộp cấp quyền đủ dòng của 13.1: phạm vi, agent do nhóm quản lý, provider, thanh toán, trần, ngắt việc, trần không bỏ được",
       ah.includes(vi["teams.auth.scope"]) && ah.includes(vi["teams.auth.managed_none"]) && ah.includes(vi["teams.auth.providers"])
-      && ah.includes(vi["teams.auth.billing"]) && (ah.match(/name="tm-auth-ceil-[a-z_]+" value/g) || []).length === 4
+      && ah.includes(vi["teams.auth.billing"]) && (ah.match(/name="tm-auth-ceil-[a-z_]+" value/g) || []).length === 6  // T3 J: + judge_daily, volunteer_k
       && ah.includes(vi["teams.auth.interrupt"]) && ["teams.auth.fixed_server", "teams.auth.fixed_provider",
         "teams.auth.fixed_account", "teams.auth.fixed_technical"].every(function (k) { return ah.includes(vi[k]); }), ah);
 const fullTeam = Object.assign({}, team, { members: [Object.assign({}, members[0]), Object.assign({}, members[1], { managed: true })],

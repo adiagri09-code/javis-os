@@ -233,7 +233,9 @@ Mỗi **kỳ đánh giá** (tới lịch chủ động hoặc khi phục vụ l�
 5. Ngược lại giữ.
 6. Hysteresis: đổi chiều chỉ sau ít nhất một kỳ giữ nguyên.
 
-Bằng chứng cũ không thể tự đẩy bậc mãi: bước 2-3 cần bằng chứng mới; bước 4 kéo nhịp chậm lại khi im lâu. Mọi lần đổi bậc ghi
+Bằng chứng cũ không thể tự đẩy bậc mãi: bước 2-3 cần bằng chứng mới; bước 4 kéo nhịp chậm lại khi im lâu.
+Bổ sung khi làm T3 (độ lệch đã chấp nhận, xem mục 15): bước 4 còn xuống bậc (`low_demand`) khi tín hiệu tương tác gần nhất và
+cơ hội gần nhất đều cũ hơn `max(4 x khoảng, 3 ngày)`, để một reaction ngay sau lần đổi bậc không giữ nhịp nhanh mãi mãi. Mọi lần đổi bậc ghi
 `agent_pulse_events` (trước/sau, nguồn, `u`, `new`, lý do, `policy_version`). Chủ có thể quay lại một thay đổi hoặc đặt lại ngữ cảnh.
 
 **Vectơ test đồng hồ giả bắt buộc** (từ B3, Cộng hưởng bật, giá trị tính theo 6.3, có kèm số trong test):
@@ -601,3 +603,8 @@ Sửa sau review T1 (trần chung, 2026-10-15): bản trước loại dòng `age
 chỗ trước engine, dự trữ 20% thực thi bằng `floor(trần * 0.8)`, quy tắc thử lại, hoàn và đối soát: 3.1, 9, 9.1. Review bản sửa đó
 (vòng 2): dòng sổ của lượt nhóm chỉ đối soát theo trạng thái lượt nhóm, không theo tuổi, có khoảng ân hạn 120 giây; trần tính trọn
 đời; cách hiển thị `server_ceiling`: 9.1.
+
+Sửa khi làm T3 phần nhịp (2026-10-15, độ lệch được điều phối chấp nhận): luật `low_demand` (5.3 bước 4) thêm điều kiện "im
+lâu hơn `max(4 x khoảng, 3 ngày)`" bên cạnh cách đọc nguyên chữ, vì đọc nguyên chữ thì một reaction ngay sau lần đổi bậc giữ
+nhịp nhanh mãi mãi; ngưỡng 4 lần khoảng giữ đúng các vectơ 5.3 ("5 ❤️ rải 2 tuần" giữ B3, "10 ❤️ mỗi 1,4 ngày" tới B1).
+Chi tiết và test: `docs/dev/team-chat-t3-pulse.md` mục 6.

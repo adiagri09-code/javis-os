@@ -35,7 +35,9 @@ REASON_STATUSES = ("pending", "claimed", "served", "superseded", "failed")
 MAX_ATTEMPTS = 3                  # quá 3 lần thử thì `failed` (hiển thị, chủ bấm thử lại)
 # Mục đích của lượt nhóm theo vai (sổ chung). Lượt nhóm là nghĩa vụ (trả lời tin nhóm, bước việc nhóm).
 TEAM_PURPOSE = {"leader_reply": "reply", "member_reply": "reply", "plan": "step", "work": "step", "help": "step",
-                "synthesize": "step"}
+                "synthesize": "step", "member_volunteer": "reply"}
+# T3 phần J (0.156.0): lượt tự lên tiếng (`member_volunteer`, không ai gọi) là lượt TỰ PHÁT, chỉ dùng tới 80% trần chung.
+SPONTANEOUS_ROLES = ("member_volunteer",)
 
 
 class ReasonBusy(Exception):
@@ -186,12 +188,13 @@ class TeamCeiling:
 
     def reserve(self, turn: dict, now: Optional[float] = None) -> bool:
         """Giữ chỗ dòng phản chiếu cho lượt nhóm `turn` ({turn_id, team_id, agent_key, role, brain_id?}). False khi
-        trần chung đầy (không ghi gì). Lượt nhóm là nghĩa vụ: dùng được cả trần."""
+        trần chung đầy (không ghi gì). Lượt nhóm là nghĩa vụ (dùng được cả trần), trừ lượt tự lên tiếng (T3 J)."""
         tid = str(turn["turn_id"])
         cid = self.ledger.reserve(purpose=TEAM_PURPOSE.get(str(turn.get("role") or ""), "reply"),
                                   reason_ref=self.mirror(tid), agent_key=str(turn.get("agent_key") or ""),
                                   brain_id=str(turn.get("brain_id") or ""),
-                                  context_ref=f"team:{turn.get('team_id') or ''}", obligation=True, counted=True,
+                                  context_ref=f"team:{turn.get('team_id') or ''}",
+                                  obligation=str(turn.get("role") or "") not in SPONTANEOUS_ROLES, counted=True,
                                   mirror_ref=self.mirror(tid), now=now)
         return cid is not None
 

@@ -31,22 +31,42 @@ Chỗ nối vào `main.py`, `team_runner.py`, `resonance_heartbeat.py` giữ ng�
 - Lần thức (P sở hữu): bước code, danh sách cơ hội, lượt `scan` với đầu ra `{"action": "none"|"propose"|"enqueue"|"say", ...}`. Hành
   động `say` gọi `agent_judge.judge_proactive(...)` (J) trước khi gửi.
 
+### 1b. Chỗ cắm đã có ở phần P (chi tiết: `docs/dev/team-chat-t3-pulse.md` mục 7)
+
+- `agent_pulse_host.register_view_part(name, fn(store, agent_key))`: mục của J/L trong `GET /agents/{slug}/pulse` (khoá `parts`);
+  phía trang `window.JavisPulseParts.push({name, render(view)})`.
+- `agent_pulse_host.register_reason_handler(code, fn(host, reason))`: phục vụ `reaction_review` (L), `related_review` và
+  `wait_unblocked` (J); hàm tự `WakeReasons.claim(..., try_busy, release_busy)` với `host.busy_pair(agent_key)`.
+- `judge_proactive(..., engine)`: `engine` là hàm không đối số trả `(engine, model, run)`. Host gọi
+  `agent_budget.try_spend(agent_key, "scan", at)` trước khi giữ chỗ lượt quét.
+- Bộ chiếu: `FeedbackProjector.record_task_event(event, context_ref=, agents={key: share}, source_ref_=)`, `pulse_wake`,
+  `void_task_event`.
+
 ## 2. Phán xử (J) cung cấp
 
-- `agent_judge.judge_team_message(ctx) -> list[Decision]`: lọc bằng code rồi một lô (purpose `judge_batch`), `K` người tự lên tiếng.
-  `team_runner` gọi sau khi định tuyến tin chủ nhóm và sau `_accept` (lượt xem xét liên quan 7.5).
-- `agent_judge.judge_proactive(*, agent_key, context_ref, draft, source_event, engine) -> Decision`: nói/chờ/im cho tin chủ động ở
-  chat riêng và nhóm. Lỗi, hết giờ, sai cấu trúc: `silent` có lý do, không gửi.
-- `Decision = {"decision_id", "verdict": "speak"|"wait"|"silent", "score", "threshold", "reason", "wait_until", "ask_clarify"}`.
-- `agent_judge.record_direct(agent_key, context_ref, source_event)`: ghi quyết định `address=certain` cho lời gọi trực tiếp (không model).
-- `agent_judge.label(decision_id or message_ref, label, by)` với `label` là `should_speak`/`should_silent`: dịch độ lệch theo ngữ cảnh
-  (±0.25, nửa đời 14 ngày), thêm ca; chỉ khi Cộng hưởng bật và nhãn sau `resumed_at` mới đổi ngưỡng. Trục `axis` của reaction T2 gọi
-  hàm này (qua bộ chiếu).
+Chi tiết và lý do: [team-chat-t3-judge.md](team-chat-t3-judge.md). Ba hàm gọi model là coroutine (`async`).
+
+- `await agent_judge.judge_team_message(ctx) -> list[Decision]`: lọc bằng code rồi một lô (purpose `judge_batch`), `K` người tự lên
+  tiếng. `team_runner` gọi sau các lượt trả lời của tin chủ nhóm (`run_message`) và sau `_accept` (lượt xem xét liên quan 7.5).
+- `await agent_judge.judge_proactive(*, agent_key, context_ref, draft, source_event, engine=None, origin="", payload=None) ->
+  Decision`: nói/chờ/im cho tin chủ động ở chat riêng và nhóm. Lỗi, hết giờ, sai cấu trúc: `silent` có lý do, không gửi. Trong
+  nhóm truyền `payload={"judge_daily": <trần>}`. `engine`: `async (prompt, purpose, started) -> str`, mặc định model việc nền.
+- `Decision = {"decision_id", "verdict": "speak"|"wait"|"silent", "score", "threshold", "reason", "wait_until", "ask_clarify",
+  "silence_code", "kind", "volunteer", ...}`.
+- `agent_judge.record_direct(agent_key, context_ref, source_event, *, root_ref="", excerpt="", message_ref="")`: ghi quyết định
+  `address=certain` cho lời gọi trực tiếp (không model).
+- `agent_judge.label(decision_id or "msg:<id>", label, by, *, at=None, source="history")` với `label` là `should_speak`/
+  `should_silent` (rỗng là bỏ): dịch độ lệch theo ngữ cảnh (±0.25, nửa đời 14 ngày), thêm ca; chỉ khi Cộng hưởng bật và nhãn sau
+  `resumed_at` mới đổi ngưỡng. Trục `axis` của reaction T2 gọi hàm này qua bộ chiếu (`source="reaction"`).
 - `agent_judge.set_offset(agent_key, context_ref, value, source)`, `set_eagerness(agent_key, value, source)`, `get_profile(agent_key)`:
   bộ học L gọi khi tự rà soát áp `offset_set`/`eagerness_set`.
-- `agent_judge.release_waits(context_ref, event)`: gỡ chờ, tạo lý do `wait_unblocked`; gọi từ `_settle_reply_out`, chuyển trạng thái
-  việc, vòng 5 giây của nhóm.
-- `agent_judge.decisions(agent_key, context_ref=None, limit=50)` cho lịch sử quyết định và nút sửa.
+- `agent_judge.release_waits(context_ref, event) -> list`: gỡ chờ, tạo lý do `wait_unblocked`; gọi từ `_settle_reply_out`, chuyển
+  trạng thái việc, vòng 5 giây của nhóm (`event.kind` = `owner_message`|`speaker_done`|`job_change`|`tick`).
+- `agent_judge.decisions(agent_key, context_ref=None, limit=50)` cho lịch sử quyết định và nút sửa; `agent_judge.view(agent_key,
+  contexts)` cho phần "judge" của khung nhịp.
+- `await agent_judge.serve_reason(reason_id)`: P chuyển lý do `related_review`/`wait_unblocked` cho J (không tự chạy lượt).
+- `agent_judge.register_sender(fn)`: P/L đăng ký cách gửi tin chủ động khi một lần chờ được gỡ và xét lại thành `speak`,
+  `fn(decision, payload, mode)` với `mode` = "send"|"ask_clarify".
 
 ## 3. Học (L) cung cấp
 

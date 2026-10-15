@@ -4412,6 +4412,16 @@
  {
   "order": 443,
   "type": "APIRoute",
+  "path": "/teams/{team_id}/messages/{message_id}/reject",
+  "name": "teams_reject",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 444,
+  "type": "APIRoute",
   "path": "/teams/{team_id}/messages/{message_id}/decision",
   "name": "teams_decision",
   "methods": [
@@ -4420,7 +4430,7 @@
   "trong": null
  },
  {
-  "order": 444,
+  "order": 445,
   "type": "APIRoute",
   "path": "/teams/{team_id}/turns",
   "name": "teams_turns",
@@ -4430,7 +4440,7 @@
   "trong": null
  },
  {
-  "order": 445,
+  "order": 446,
   "type": "APIRoute",
   "path": "/teams/{team_id}/authority",
   "name": "teams_authority",
@@ -4440,7 +4450,7 @@
   "trong": null
  },
  {
-  "order": 446,
+  "order": 447,
   "type": "APIRoute",
   "path": "/teams/{team_id}/members/{agent_key}/managed",
   "name": "teams_member_managed",
@@ -4450,7 +4460,7 @@
   "trong": null
  },
  {
-  "order": 447,
+  "order": 448,
   "type": "APIRoute",
   "path": "/teams/{team_id}/search",
   "name": "teams_search",
@@ -4460,7 +4470,7 @@
   "trong": null
  },
  {
-  "order": 448,
+  "order": 449,
   "type": "APIRoute",
   "path": "/sessions/{session_id}/messages/{message_id}/reaction",
   "name": "sessions_message_reaction",
@@ -4470,7 +4480,7 @@
   "trong": null
  },
  {
-  "order": 449,
+  "order": 450,
   "type": "APIRoute",
   "path": "/agents/jobs/counts",
   "name": "agent_jobs_counts",
@@ -4480,7 +4490,7 @@
   "trong": null
  },
  {
-  "order": 450,
+  "order": 451,
   "type": "APIRoute",
   "path": "/agents/{slug}/jobs/verify-targets",
   "name": "agent_jobs_verify_targets",
@@ -4490,7 +4500,7 @@
   "trong": null
  },
  {
-  "order": 451,
+  "order": 452,
   "type": "APIRoute",
   "path": "/agents/{slug}/jobs",
   "name": "agent_jobs_list",
@@ -4500,7 +4510,7 @@
   "trong": null
  },
  {
-  "order": 452,
+  "order": 453,
   "type": "APIRoute",
   "path": "/agents/{slug}/jobs",
   "name": "agent_jobs_assign",
@@ -4510,7 +4520,7 @@
   "trong": null
  },
  {
-  "order": 453,
+  "order": 454,
   "type": "APIRoute",
   "path": "/agents/{slug}/pulse",
   "name": "agent_pulse_view",
@@ -4520,7 +4530,7 @@
   "trong": null
  },
  {
-  "order": 454,
+  "order": 455,
   "type": "APIRoute",
   "path": "/agents/{slug}/pulse/wake",
   "name": "agent_pulse_wake",
@@ -4530,7 +4540,7 @@
   "trong": null
  },
  {
-  "order": 455,
+  "order": 456,
   "type": "APIRoute",
   "path": "/agents/{slug}/pulse/pause",
   "name": "agent_pulse_pause",
@@ -4540,7 +4550,7 @@
   "trong": null
  },
  {
-  "order": 456,
+  "order": 457,
   "type": "APIRoute",
   "path": "/agents/{slug}/pulse/resume",
   "name": "agent_pulse_resume",
@@ -4550,7 +4560,7 @@
   "trong": null
  },
  {
-  "order": 457,
+  "order": 458,
   "type": "APIRoute",
   "path": "/agents/{slug}/pulse/reset",
   "name": "agent_pulse_reset",
@@ -4560,7 +4570,7 @@
   "trong": null
  },
  {
-  "order": 458,
+  "order": 459,
   "type": "APIRoute",
   "path": "/agents/{slug}/pulse/revert",
   "name": "agent_pulse_revert",
@@ -4570,7 +4580,27 @@
   "trong": null
  },
  {
-  "order": 459,
+  "order": 460,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/pulse/proposals/{pid}/accept",
+  "name": "agent_pulse_proposal_accept",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 461,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/pulse/proposals/{pid}/reject",
+  "name": "agent_pulse_proposal_reject",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 462,
   "type": "APIRoute",
   "path": "/agents/{slug}/pulse/max_tier",
   "name": "agent_pulse_max_tier",
@@ -4580,7 +4610,7 @@
   "trong": null
  },
  {
-  "order": 460,
+  "order": 463,
   "type": "APIRoute",
   "path": "/seen",
   "name": "pulse_seen",
@@ -4590,7 +4620,27 @@
   "trong": null
  },
  {
-  "order": 461,
+  "order": 464,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/judge",
+  "name": "agent_judge_view",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 465,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/judge/label",
+  "name": "agent_judge_label",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 466,
   "type": "APIRoute",
   "path": "/agents/{slug}/lessons/{lesson_id}/revoke",
   "name": "agent_lesson_revoke",
@@ -4600,7 +4650,7 @@
   "trong": null
  },
  {
-  "order": 462,
+  "order": 467,
   "type": "APIRoute",
   "path": "/agents/{slug}/lessons/{lesson_id}/promote",
   "name": "agent_lesson_promote",
@@ -4610,7 +4660,7 @@
   "trong": null
  },
  {
-  "order": 463,
+  "order": 468,
   "type": "APIRoute",
   "path": "/agents/{slug}/budget",
   "name": "agent_budget_set",

@@ -235,13 +235,24 @@ clock.t += D + 1
 due_now(st, k, ctx, clock.t - 1)
 run(tick_all(host))
 check("cơ hội đã tiêu thụ không mở lượt quét lần hai (cùng phiên bản)", len(eng.calls) == 1, len(eng.calls))
+props = AP.proposals(st, k)
+check("đề xuất của lượt quét vào sổ đề xuất: nguồn, phiên bản, chờ chủ", len(props) == 1 and props[0]["source_ref"]
+      == "task:t1" and props[0]["version"] == "1" and props[0]["status"] == "pending", props)
+with st._Tx(st) as c:   # mô phỏng cơ hội hiện lại cùng phiên bản (vd. sổ cơ hội mất): đề xuất vẫn không mở lại
+    c.execute("DELETE FROM pulse_opportunities")
+clock.t += D + 1
+due_now(st, k, ctx, clock.t - 1)
+run(tick_all(host))
+res = AP.events(st, k, ctx, kinds=("scan",))[0]["payload"]["result"]
+check("không mở lại đề xuất khi không có dữ kiện mới (cùng nguồn, cùng phiên bản)", res.get("reason") == "already_proposed"
+      and len(box["proposed"]) == 1, res)
 box["opps"][(k, ctx)] = [opp("task:t1", ver="2")]
 box["can_enqueue"] = True
 clock.t += D + 1
 due_now(st, k, ctx, clock.t - 1)
 run(tick_all(host))
 check("nguồn có phiên bản mới: quét lại; có quyền thì enqueue qua hàng đợi chung, có nguồn",
-      len(eng.calls) == 2 and len(box["enqueued"]) == 1 and box["enqueued"][0][3] == "task:t1", box["enqueued"])
+      len(eng.calls) == 3 and len(box["enqueued"]) == 1 and box["enqueued"][0][3] == "task:t1", box["enqueued"])
 st, (k,), clock, eng, box, host = world(text='{"action": "none"}')
 ctx = f"dm:{k}"
 AP.ensure_row(st, k, ctx, at=T0)
@@ -279,15 +290,35 @@ for j in range(3):
 check("quét giới hạn tối đa một lần mỗi ngày mỗi ngữ cảnh", len(eng.calls) == 1, len(eng.calls))
 
 # ═════ say: luôn qua bộ phán xử; thiếu bộ phán xử thì silent, không gửi ═════
-st, (k,), clock, eng, box, host = world(text='{"action": "say", "source_ref": "goal:g1", "text": "Anh xem giúp mục tiêu"}')
-ctx = f"dm:{k}"
-AP.ensure_row(st, k, ctx, at=T0)
-box["opps"][(k, ctx)] = [opp("goal:g1", kind="goal_waiting")]
-clock.t = T0 + D + 1
-run(tick_all(host))
-res = AP.events(st, k, ctx, kinds=("scan",))[0]["payload"]["result"]
+import sys as _sys  # noqa: E402
+
+
+def say_world():
+    st_, (k_,), clock_, eng_, box_, host_ = world(
+        text='{"action": "say", "source_ref": "goal:g1", "text": "Anh xem giúp mục tiêu"}')
+    ctx_ = f"dm:{k_}"
+    AP.ensure_row(st_, k_, ctx_, at=T0)
+    box_["opps"][(k_, ctx_)] = [opp("goal:g1", kind="goal_waiting")]
+    clock_.t = T0 + D + 1
+    run(tick_all(host_))
+    return AP.events(st_, k_, ctx_, kinds=("scan",))[0]["payload"]["result"], box_
+
+
+# Thiếu hẳn module phán xử (bản P đứng một mình): giả lập bằng cách chặn import.
+_saved_judge = _sys.modules.get("agent_judge")
+_sys.modules["agent_judge"] = None
+res, box = say_world()
+if _saved_judge is not None:
+    _sys.modules["agent_judge"] = _saved_judge
+else:
+    _sys.modules.pop("agent_judge", None)
 check("chưa có agent_judge: say thành silent (judge_unavailable), không gửi gì",
       res == {"action": "say", "verdict": "silent", "reason": "judge_unavailable", "decision_id": None}
+      and box["sent"] == [], res)
+# Có module (sau khi ghép phần J) nhưng chưa được main.py nối: lỗi phán xử cũng là silent có lý do, không gửi gì.
+res, box = say_world()
+check("có agent_judge mà chưa nối (lỗi phán xử): say thành silent có lý do, không gửi gì",
+      res.get("verdict") == "silent" and str(res.get("reason", "")).startswith(("judge_error", "judge_unavailable"))
       and box["sent"] == [], res)
 judged = []
 
@@ -565,6 +596,23 @@ check("POST /seen thân sai: 400", client.post("/seen", json={"context_ref": "",
 check("POST /seen ngữ cảnh chat riêng của agent khác: không ghi",
       client.post("/seen", json={"context_ref": "dm:ag_khac", "message_ids": [mid_a], "session_id": sid})
       .json()["recorded"] == 0)
+pdm = AP.record_proposal(mst, agent_key=key, context_ref=mctx, source_ref="goal:gx", version="1", title="Hỏi lại mục tiêu",
+                         brief="Mục tiêu chờ bạn đã hai ngày", session_id=sid)
+ra = client.post(f"/agents/viet/pulse/proposals/{pdm}/accept", params={"brain": B})
+tasks_now = [t_ for t_ in main.tasks_feature.store.list_tasks(B) if f"pp{pdm}" in str(t_.get("idempotency_key") or "")]
+check("POST proposals/<id>/accept (chat riêng): 200 sau khi việc đã xếp qua hàng đợi chung, việc gắn trợ lý, báo về chat riêng",
+      ra.status_code == 200 and ra.json()["result"]["task_id"] and len(tasks_now) == 1
+      and tasks_now[0]["chat_id"] == f"web:{sid}" and AP.proposal(mst, pdm)["status"] == "accepted", (ra.text, tasks_now))
+check("chấp nhận đề xuất: +0.6 cho trợ lý", [s_["value"] for s_ in AP.signals(mst, key)
+                                             if s_["source_ref"] == f"accept:pp:{pdm}"] == [0.6])
+check("quyết lại đề xuất đã quyết: 409, không xếp thêm việc",
+      client.post(f"/agents/viet/pulse/proposals/{pdm}/reject", params={"brain": B}).status_code == 409)
+pdr = AP.record_proposal(mst, agent_key=key, context_ref=mctx, source_ref="goal:gy", version="1", title="Đề xuất khác")
+rr2 = client.post(f"/agents/viet/pulse/proposals/{pdr}/reject", params={"brain": B})
+check("POST proposals/<id>/reject: 200, -0.4, khung mới có trạng thái Đã bác",
+      rr2.status_code == 200 and [s_["value"] for s_ in AP.signals(mst, key) if s_["source_ref"] == f"reject:pp:{pdr}"]
+      == [-0.4] and any(p_["id"] == pdr and p_["status"] == "rejected" for p_ in rr2.json()["view"]["proposals"]),
+      rr2.text)
 check("không engine thật nào được dựng trong cả phần main.py", len(built) == 1, built)
 
 print(f"\n{len(fails)} FAIL" if fails else "\nALL OK")

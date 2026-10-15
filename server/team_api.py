@@ -52,6 +52,7 @@ class TeamApiDeps:
     owner_name: Optional[Callable[[], str]] = None     # tên đăng nhập của chủ máy (người tạo nhóm, 0.142.0)
     ceiling: Optional[Callable[[], Any]] = None        # () -> agent_ledger.TeamCeiling (T2, trần lượt chung) | None
     projector: Optional[Callable[[], Any]] = None      # () -> feedback_projector.FeedbackProjector (T2) | None
+    judge: Optional[Callable[[], Any]] = None          # () -> agent_judge.Judge (T3 phần J) | None
     learning: Optional[Callable[[], Any]] = None       # () -> agent_lessons.TeamLearning (T3 phần L) | None
 
 
@@ -141,6 +142,7 @@ class TeamApi:
                 publish=publish, notify=notify, worker_id="team-runner", admin=self.deps.admin,
                 ceiling=self.deps.ceiling() if self.deps.ceiling is not None else None,
                 projector=self.deps.projector() if self.deps.projector is not None else None,
+                judge=self.deps.judge() if self.deps.judge is not None else None,
                 learning=self.deps.learning() if self.deps.learning is not None else None)
             if self._loop is not None:
                 self._runner._loop, self._runner._loop_thread = self._loop, self._loop_thread
@@ -274,6 +276,7 @@ class TeamApi:
         if not hasattr(self, "_recovered"):
             self.prime()
         if not self.exists():
+            await self._judge_tick_without_teams()
             return
         r = self.runner()
         if not self._recovered:
@@ -283,6 +286,8 @@ class TeamApi:
             if rep["resumed"]:
                 self._spawn(r.resume_jobs(rep["resumed"]))
         await r.dispatch_once(wait=False)
+        # T3 phần J: lần chờ của bộ phán xử quá 30 phút thì hết hạn (nhóm và chat riêng), xử lý nền.
+        await r._io(r.judge_tick)
         now = asyncio.get_running_loop().time()
         if r.ceiling is not None and now - getattr(self, "_last_reconcile", 0.0) >= RECONCILE_EVERY_S:
             self._last_reconcile = now
@@ -290,6 +295,17 @@ class TeamApi:
         if now - self._last_remind >= REMIND_EVERY_S:
             self._last_remind = now
             await r._io(r.remind_blocked)
+
+    async def _judge_tick_without_teams(self) -> None:
+        """Chưa có kho nhóm (chỉ dùng chat riêng): vẫn cho lần chờ của tin chủ động ở chat riêng hết hạn đúng giờ."""
+        if self.deps.judge is None:
+            return
+        judge = self.deps.judge()
+        if judge is None:
+            return
+        items = await asyncio.to_thread(judge.tick)
+        if items:
+            self._spawn(judge.process_released(items))
 
     async def loop(self) -> None:
         """Vòng điều phối mỗi 5 giây (spec 8.3)."""
@@ -721,8 +737,9 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                                     client_msg_id=str(body.get("client_msg_id") or ""))
             except TeamError as ex:
                 return _team_err(ex)
-            if sub["replies"]:
-                runner._on_loop(lambda: api._spawn(runner.run_replies(sub)))
+            if sub["replies"] or sub.get("judge"):
+                # Lượt trả lời theo @ (như cũ), rồi bộ phán xử cho người không được gọi (T3 phần J), đều chạy nền.
+                runner._on_loop(lambda: api._spawn(runner.run_message(sub)))
             if sub.get("task_id") and sub["created"]:
                 api.kick()
             return dict(sub, ok=True)
@@ -760,6 +777,20 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 return _team_err(ex)
             api.kick()
             return {"ok": True, "task_id": tid}
+        return await api.io(_do)
+
+    @app.post("/teams/{team_id}/messages/{message_id}/reject")
+    async def teams_reject(team_id: str, message_id: int, brain: str = "brain"):
+        """Bác thẻ đề xuất việc (T3, nút Bỏ qua): -0.4 cho agent đề xuất, thẻ đổi trạng thái ở mọi tab."""
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            try:
+                changed = api.runner().reject_proposal(team_id, message_id)
+            except TeamError as ex:
+                return _team_err(ex, 409)
+            return {"ok": True, "rejected": True, "changed": changed}
         return await api.io(_do)
 
     @app.post("/teams/{team_id}/messages/{message_id}/decision")

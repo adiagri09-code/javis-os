@@ -48,6 +48,27 @@
   var FB_STATUS_KEY = { live: "pulse.fb.status.live", superseded: "pulse.fb.status.superseded",
     void: "pulse.fb.status.void" };
 
+  var PROP_STATUS_KEY = { pending: "pulse.prop.status.pending", accepted: "pulse.prop.status.accepted",
+    rejected: "pulse.prop.status.rejected" };
+
+  /* Đề xuất của lượt quét: chờ thì có Nhận thành việc / Bác; đã quyết thì chỉ trạng thái. */
+  function proposalsHtml(list, o) {
+    var items = (list || []).filter(function (p) { return !o.only || p.context_ref === o.only; });
+    if (!items.length) return "";
+    return '<div class="pulse-sub">' + esc(tw("pulse.proposals_title")) + '</div><ul class="pulse-list">' +
+      items.slice(0, 8).map(function (p) {
+        var busy = o.busy && o.busy["pp" + p.id] ? " disabled" : "";
+        var acts = p.status === "pending" ? '<div class="pulse-acts">' +
+          '<button type="button" class="ws-btn pulse-act" data-pulse-act="proposal_accept" data-pid="' + esc(p.id) + '"' +
+            busy + ">" + esc(tw("pulse.btn.accept")) + "</button>" +
+          '<button type="button" class="ws-btn pulse-act" data-pulse-act="proposal_reject" data-pid="' + esc(p.id) + '"' +
+            busy + ">" + esc(tw("pulse.btn.reject")) + "</button></div>" : "";
+        return "<li><strong>" + esc(p.title) + "</strong>" + (p.brief ? " · " + esc(p.brief) : "") + " · " +
+          esc(contextLabel(p.context_ref, o.teamNames)) + " · " +
+          esc(tw(pick(PROP_STATUS_KEY, p.status, "pulse.prop.status.pending"))) + acts + "</li>";
+      }).join("") + "</ul>";
+  }
+
   function pick(map, v, dflt) { return Object.prototype.hasOwnProperty.call(map, v) ? map[v] : dflt; }
 
   function tierLabel(tier) {
@@ -179,6 +200,7 @@
       html += '<div class="pulse-sub">' + esc(tw("pulse.feedback_title")) + '</div><ul class="pulse-list">' +
         fb.slice(0, 8).map(function (f) { return "<li>" + esc(feedbackLine(f)) + "</li>"; }).join("") + "</ul>";
     }
+    html += proposalsHtml(v.proposals, o);
     html += partsHtml(v, o.registry);
     if (o.err) html += '<div class="pulse-line pulse-err" role="alert">' + esc(tw("pulse.error", { e: o.err })) + "</div>";
     else if (o.msg) html += '<div class="pulse-line pulse-ok" role="status">' + esc(o.msg) + "</div>";
@@ -229,6 +251,10 @@
       if (!b || b.disabled || !host.contains(b)) return;
       var name = b.getAttribute("data-pulse-act");
       if (name === "revert") return act("revert", { event_id: Number(b.getAttribute("data-ev")) }, "ev" + b.getAttribute("data-ev"));
+      if (name === "proposal_accept" || name === "proposal_reject") {
+        var pid = b.getAttribute("data-pid");
+        return act("proposals/" + encodeURIComponent(pid) + (name === "proposal_accept" ? "/accept" : "/reject"), {}, "pp" + pid);
+      }
       var ctx = b.getAttribute("data-ctx");
       act(name, { context_ref: ctx }, ctx);
     });
@@ -251,7 +277,7 @@
 
   if (typeof window !== "undefined" && !window.JavisPulseParts) window.JavisPulseParts = [];
   var apiOut = { panelHtml: panelHtml, contextLabel: contextLabel, changeLine: changeLine, feedbackLine: feedbackLine,
-    partsHtml: partsHtml, tierLabel: tierLabel, stateLabel: stateLabel, mount: mount };
+    partsHtml: partsHtml, proposalsHtml: proposalsHtml, tierLabel: tierLabel, stateLabel: stateLabel, mount: mount };
   if (typeof window !== "undefined") window.JavisPulse = apiOut;
   if (typeof module !== "undefined" && module.exports) module.exports = apiOut;
 })();
