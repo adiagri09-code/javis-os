@@ -115,6 +115,7 @@ def _no_real(*a, **k):
 
 main.team_engine.build = _no_real
 main._reply_policy_sandbox_engine = _no_real
+ORIG_ASK = main._agent_judge_ask
 main._agent_judge_ask = _no_real
 root = main._brain_key(str(BR))
 rs = main._resonance_store()
@@ -149,6 +150,23 @@ r = c.post(f"/agents/lan/judge/label{Q}", json={"label": "should_speak"})
 check("POST label thiếu mã: 400", r.status_code == 400)
 r = c.post(f"/agents/lan/judge/label{Q}", json={"decision_id": sil, "label": ""})
 check("POST label rỗng: bỏ nhãn", r.status_code == 200 and st.get_decision(sil)["label"] == "")
+
+# ═════ chốt chung: engine phán xử thật không bao giờ được dựng trong test ═════
+import asyncio as _asyncio  # noqa: E402
+
+check("_paths đặt JAVIS_NO_REAL_JUDGE_ENGINE cho mọi test Python", os.environ.get("JAVIS_NO_REAL_JUDGE_ENGINE") == "1")
+built = []
+main._reply_policy_sandbox_engine = lambda *a, **k: built.append(1) or _no_real()
+src_main = (Path(main.__file__)).read_text(encoding="utf-8")
+ask_src = src_main[src_main.index("async def _agent_judge_ask"):src_main.index("def _agent_judge_engine_label")]
+check("_agent_judge_ask kiểm chốt TRƯỚC khi dựng engine", ask_src.index("JAVIS_NO_REAL_JUDGE_ENGINE")
+      < ask_src.index("_reply_policy_sandbox_engine("))
+try:
+    _asyncio.run(ORIG_ASK("x", "agent_judge", None))
+    stopped = False
+except main.agent_judge.EngineUnavailable:
+    stopped = True
+check("có chốt: lượt phán xử dừng bằng EngineUnavailable (hoàn lượt), không dựng engine", stopped and built == [])
 
 # ═════ bộ chuyển đăng ký phần "judge" vào khung nhịp của phần P ═════
 import sys as _sys  # noqa: E402

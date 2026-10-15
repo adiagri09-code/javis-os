@@ -198,6 +198,10 @@ async def run_io(fn: Callable, *args, undo: Optional[Callable[[Any], Any]] = Non
             res = await asyncio.shield(fut)
             break
         except asyncio.CancelledError:
+            if fut.cancelled():
+                # Chính tác vụ luồng phụ đã bị huỷ (event loop đang đóng huỷ MỌI tác vụ): không còn gì để chờ. Trước đây
+                # vòng lặp này quay mãi ở đó (shield một tương lai đã huỷ ném lại ngay).
+                raise
             if fut.done() and not fut.cancelled():
                 try:
                     res = fut.result()
@@ -2733,7 +2737,9 @@ class TeamRunner:
                 self._pool.pop(task_id, None)
 
     async def wait_jobs(self) -> None:
-        """Chờ mọi việc đang chạy trong tiến trình này. Việc nào văng lỗi thì ném lại lỗi đầu tiên (không nuốt)."""
+        """Chờ mọi việc đang chạy trong tiến trình này. Việc nào văng lỗi thì ném lại lỗi đầu tiên (không nuốt). Cũng chờ
+        việc nền của bộ phán xử (T3 J: lô phán xử, lượt tự lên tiếng) để không còn tác vụ dở lúc event loop đóng."""
+        await self.wait_background()
         errors = []
         while True:
             pending = [t for t in self._jobs.values() if not t.done()]
@@ -2744,6 +2750,7 @@ class TeamRunner:
                 if isinstance(res, BaseException) and not isinstance(res, asyncio.CancelledError):
                     errors.append(res)
         self._jobs = {}
+        await self.wait_background()
         if errors:
             raise errors[0]
 
