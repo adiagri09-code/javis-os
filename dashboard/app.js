@@ -1094,6 +1094,13 @@ function handleMessage(data) {
   if (sid && _luotDaDung[sid] != null && data.type !== "turn_done" && KHUNG_LUOT.includes(data.type)
       && t && t.id && t.id !== _luotDaDung[sid]) delete _luotDaDung[sid];
 
+  if (data.type === "turn_saved" || data.type === "chat_reaction") {
+    // T2 (0.154.0): turn_saved mang mã tin của câu trả lời vừa lưu (bong bóng vừa chốt nhận data-mid, hiện nút thả cảm xúc);
+    // chat_reaction vẽ lại reaction của tin đó ở mọi bong bóng đang mở, kể cả khi đổi ở tab khác. Không đụng lượt đang chạy
+    // (cả hai gói nằm ngoài KHUNG_LUOT nên không dựng lại turns[sid]).
+    try { if (window.JavisChatReactions) window.JavisChatReactions.onFrame(data, { bubble: t && t.bubble }); } catch (e) {}
+    return;
+  }
   if (data.type === "push") {
     // Tin do việc chạy NỀN đẩy vào (việc Kanban / loop / nhắc hẹn xong), không thuộc lượt
     // hỏi-đáp nào. KHÔNG đụng turns[sid]: lượt đang chạy (nếu có) vẫn stream bình thường,
@@ -1230,6 +1237,10 @@ function handleMessage(data) {
         _ghi = finalText + "\n\n<!-- JAVIS_VIEC: " + JSON.stringify(_v) + " -->";
       }
       if (finalText.trim()) recordTurn("javis", _ghi, null, ask, t && t.buoc);
+      // T2: bong bóng vừa chốt chờ gói turn_saved mang mã tin; có mã mới hiện nút thả cảm xúc.
+      try {
+        if (window.JavisChatReactions) window.JavisChatReactions.expect(sid, msgEl, finalText.trim() ? convo[convo.length - 1] : null);
+      } catch (e) {}
       // Có câu trả lời thật thì linh vật vui một nhịp. Đang đọc thành tiếng thì nó tự đợi đọc
       // xong mới nhảy (pet.js giữ cờ choXong), nên gọi ngay ở đây là đủ.
       if (finalText.trim()) petReact("xong");
@@ -1794,9 +1805,16 @@ function restoreSession() {
     if (t.buoc && window.JavisSteps && window.JavisSteps.tomTat(t.buoc).hien)
       chatAppend(window.JavisSteps.ve(null, t.buoc, false));
     const el = appendJavisMessage(t.text, t.ts || 0, t.brain || s.brain);
+    // T2: tin đã có mã (lịch sử hay gói turn_saved) mang lại hàng reaction; tin lưu trước bản này không có mã thì không có nút.
+    try {
+      if (t.mid != null && window.JavisChatReactions) window.JavisChatReactions.attach(el, { sid: savedSessionId, mid: t.mid,
+        sha: t.sha || "", brain: t.brain || s.brain, reaction: t.reaction || null, entry: t });
+    } catch (e) {}
     // Chip chỉ sống lại ở tin CUỐI: có tin sau nó nghĩa là câu hỏi đã được trả lời rồi.
     if (t.ask) window.JavisAsk.render(el, t.ask, i === convo.length - 1);
   });
+  // Bản lưu cục bộ có thể giữ reaction cũ (đổi ở máy khác): hỏi lại khúc tin cuối của phiên.
+  try { if (window.JavisChatReactions && savedSessionId) window.JavisChatReactions.refresh(savedSessionId); } catch (e) {}
   if (convo.length) { scrollBottom(true); ghimDay(sessionOpenSeq); }
   // Con trỏ tin cũ sống sót qua F5 → vẫn cuộn lên đọc tiếp được, không phải bấm lại vào
   // hội thoại trong danh sách mới có.
@@ -1820,7 +1838,7 @@ let _moiTinCu = null, _quanSatMoi = null;
 
 // Dựng lại MỘT tin đã lưu thành bong bóng, trả về mục tương ứng cho convo (null nếu bỏ qua).
 // Dùng chung cho lượt mở hội thoại và lượt chèn ngược, để hai đường không trôi lệch nhau.
-function veTinDaLuu(m, brainCua) {
+function veTinDaLuu(m, brainCua, sidCua) {
   const ts = m.ts ? Math.round(m.ts * 1000) : 0;   // server lưu epoch giây (sessions.py)
   // convo là thứ được ghi xuống localStorage rồi dựng lại ở lần F5 sau. Nhét bản CÒN khối
   // vào đây là lỗi sống dai qua mọi lần tải lại, dù bong bóng lượt này đã sạch.
@@ -1838,8 +1856,15 @@ function veTinDaLuu(m, brainCua) {
   // vứt đi nên ảnh trong hội thoại cũ luôn ghép với brain đang chọn - mở hội thoại của
   // brain khác là ảnh hỏng hết. Giữ luôn vào convo để lần khôi phục sau còn dùng.
   if (m.role === "assistant") {
-    appendJavisMessage(m.content || "", ts, brainCua);
-    return { role: "javis", text: m.content || "", atts: [], ts, brain: brainCua };
+    const el = appendJavisMessage(m.content || "", ts, brainCua);
+    // T2 (0.154.0): mã tin, content_sha và reaction đi theo bong bóng lẫn convo, để thả cảm xúc được và F5 vẫn còn.
+    const entry = { role: "javis", text: m.content || "", atts: [], ts, brain: brainCua,
+                    mid: m.id, sha: m.content_sha || "", reaction: m.reaction || null };
+    try {
+      if (window.JavisChatReactions) window.JavisChatReactions.attach(el, { sid: sidCua, mid: m.id, sha: m.content_sha || "",
+        brain: brainCua, reaction: m.reaction || null, entry });
+    } catch (e) {}
+    return entry;
   }
   return null;
 }
@@ -1922,7 +1947,7 @@ async function taiTinCu() {
     _dangChenCu = true;
     _neoChenCu = _moiTinCu ? _moiTinCu.nextSibling : dauKhungChat();
     const them = [];
-    ds.forEach(m => { const t = veTinDaLuu(m, st.brain); if (t) them.push(t); });
+    ds.forEach(m => { const t = veTinDaLuu(m, st.brain, st.sid); if (t) them.push(t); });
     _neoChenCu = null; _dangChenCu = false;
     convo = them.concat(convo);
     st.ts = ds[0].ts; st.id = ds[0].id; st.con = !!d.has_more;
@@ -1954,7 +1979,7 @@ async function openStoredSession(id, stillCurrent) {
     goMoiTinCu();
     chatArea.innerHTML = "";
     const ds = sess.messages || [];
-    ds.forEach(m => { const t = veTinDaLuu(m, sess.brain); if (t) convo.push(t); });
+    ds.forEach(m => { const t = veTinDaLuu(m, sess.brain, id); if (t) convo.push(t); });
     _tinCu = ds.length
       ? { sid: id, brain: sess.brain, ts: ds[0].ts, id: ds[0].id, con: !!sess.has_more, dangTai: false }
       : null;
@@ -2456,10 +2481,16 @@ chatArea.addEventListener("click", (e) => {
   try { if (!window.matchMedia("(hover: none)").matches) return; } catch (err) { return; }
   if (!e.target.closest) return;
   if (e.target.closest(".msg-acts")) return;   // bấm chính nút thì đừng đóng hàng nút
+  if (e.target.closest(".jr-chat")) return;    // hàng reaction (T2) tự lo nút của nó
   const msgEl = e.target.closest(".msg");
   chatArea.querySelectorAll(".msg.acts-on").forEach(m => { if (m !== msgEl) m.classList.remove("acts-on"); });
   if (msgEl) msgEl.classList.toggle("acts-on");
 });
+// Sáu reaction trên câu trả lời (T2 0.154.0, chat-reactions.js): bấm, đổi, bỏ, nhấn giữ trên điện thoại. Đổi reaction thì
+// lưu lại convo để F5 còn đúng.
+try {
+  if (window.JavisChatReactions) window.JavisChatReactions.init({ root: chatArea, brain: currentBrainPath, onChange: persistSession });
+} catch (e) {}
 function compactToolLabel(toolName) {
   const raw = String(toolName || "").trim();
   let label = raw || "Tool", cat = "Tool";

@@ -10,7 +10,8 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.154.0] - 2026-10-15
 ### Added
-- **React to an agent's messages** in private and team chat (in progress).
+- **React to replies in private chat:** the same six emoji as team chat, on the Chat and Partners pages, available as soon as a reply is saved, kept after a reload and shown in other tabs.
+- **Clearer feedback:** besides reasons, pick "Should have spoken" or "Should stay quiet (interrupted)" and add an optional comment. A status such as Received, Waiting for review or Adjusted shows under the reaction; in teams you also see the coordinator's and members' reactions.
 
 ## [0.152.0] - 2026-10-15
 ### Fixed

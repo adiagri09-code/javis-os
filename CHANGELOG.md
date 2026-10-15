@@ -8,7 +8,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.154.0] - 2026-10-15
 ### Thêm mới
-- **Thả cảm xúc cho tin của trợ lý** ở cả chat riêng lẫn nhóm (đang làm).
+- **Thả cảm xúc lên câu trả lời ở chat riêng:** sáu emoji như chat nhóm, có ở trang Trò chuyện và trang Cộng sự, hiện ngay khi câu trả lời vừa lưu, F5 vẫn còn, tab khác cũng thấy.
+- **Góp ý rõ hơn:** ngoài lý do, chọn thêm "Đáng lẽ nên nói" hay "Nên im (chen ngang)", kèm góp ý tuỳ chọn. Dưới cảm xúc hiện trạng thái như Đã nhận, Chờ xem xét, Đã điều chỉnh; ở nhóm còn thấy cảm xúc của trưởng nhóm và thành viên.
 
 ## [0.152.0] - 2026-10-15
 ### Sửa lỗi
