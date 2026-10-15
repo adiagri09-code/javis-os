@@ -2732,6 +2732,7 @@ class GoalStore:
         if status not in ("succeeded", "failed"):
             raise ValueError("status kết thúc phải là succeeded hoặc failed")
         now = time.time()
+        closed = False
         with self._Tx(self) as c:
             team = self._team_row(c, goal_id)
             if status == "succeeded" and team is not None:
@@ -2744,6 +2745,7 @@ class GoalStore:
                             (status, now, goal_id, p.brain_id, int(expected_revision)))
             if cur.rowcount != 1:
                 return False
+            closed = True
             self._close_goal_holds(c, goal_id, "goal_closed", now)
             c.execute("DELETE FROM wakeups WHERE goal_id=? AND kind!='settle'", (goal_id,))
             # Mục tiêu kết thúc không nhận sự kiện nữa: bỏ lý do thức (A2 mục 6). Sổ thức giữ để xem lại.
@@ -2754,7 +2756,28 @@ class GoalStore:
             c.execute("INSERT OR IGNORE INTO outbox(goal_id,kind,payload_json,created_at,idem) VALUES(?,?,?,?,?)",
                       (goal_id, f"goal.{status}", _j({"revision": int(expected_revision), **(payload or {})}), now,
                        f"{status}:{int(expected_revision)}"))
-            return True
+        if closed:
+            # T3 (6.1): kết luận CUỐI của kiểm khách quan cho revision này (succeeded = đạt mọi tiêu chí host kiểm, guard
+            # clear, review A5 nếu có đội; failed = đóng là không đạt). Ngoài giao dịch: kho nhịp mở giao dịch riêng.
+            self.pulse_objective(goal_id, int(expected_revision), status == "succeeded")
+        return True
+
+    def pulse_objective(self, goal_id: str, revision: int, passed: bool) -> Optional[str]:
+        """Tín hiệu kiểm khách quan (6.1) cho agent của mục tiêu ở ngữ cảnh chat riêng `dm:<agent_key>` (mục tiêu A2 có
+        một tác giả sản phẩm, không có bước tổng hợp nên luật 6.5 thu về tác giả). Chỉ khi agent bật Cộng hưởng. Lỗi kho
+        nhịp không bao giờ làm hỏng việc kết thúc mục tiêu (nuốt, ghi log)."""
+        try:
+            with closing(self._conn()) as c:
+                r = c.execute("SELECT a.agent_key, g.enabled, g.status FROM goal_agents a JOIN resonance_agents g ON "
+                              "g.agent_key=a.agent_key WHERE a.goal_id=?", (str(goal_id),)).fetchone()
+            if r is None or not r["enabled"] or r["status"] != "active":
+                return None
+            import agent_pulse
+            return agent_pulse.record_objective(self, goal_id=str(goal_id), revision=int(revision), passed=bool(passed),
+                                                agents={r["agent_key"]: 1.0}, context_ref=f"dm:{r['agent_key']}")
+        except Exception as ex:  # noqa: BLE001
+            print(f"[pulse objective] {goal_id}: {type(ex).__name__}: {ex}", file=__import__("sys").stderr)
+            return None
 
     def notice(self, p: Principal, goal_id: str, kind: str, payload: dict, idem: Optional[str] = None) -> None:
         """Ghi một tin báo vào outbox (idem chống báo lặp). drain_outbox gửi cho người dùng."""

@@ -198,5 +198,57 @@ pj.void_task_event(f"decision:{tid}:2")
 check("bỏ chốt quyết định: tín hiệu void", [s["status"] for s in AP.signals(gs, K["minh"])
                                             if s["source_ref"] == f"decision:{tid}:2"] == ["void"])
 
+# ═════ kiểm khách quan: chỉ kết luận CUỐI của mỗi (mục tiêu, revision) ═════
+import inspect  # noqa: E402
+import time as _t  # noqa: E402
+import resonance as R  # noqa: E402
+
+go = TEMP / "goal"
+go.mkdir()
+G = RS.GoalStore(go / "resonance.sqlite3")
+gown = RS.Principal("owner", "owner", str(go))
+gk = G.agent_set_enabled(gown, "viet", True)["agent_key"]
+gk2 = G.agent_set_enabled(gown, "lan", True)["agent_key"]
+
+
+def mk_goal(gid, key):
+    now = _t.time()
+    with G._Tx(G) as c:
+        c.execute("INSERT INTO goals(id,brain_id,owner,revision,status,idempotency_key,output_root,created_at,updated_at) "
+                  "VALUES(?,?,?,?,?,?,?,?,?)", (gid, str(go), "owner", 1, "active", gid, str(go), now, now))
+        c.execute("INSERT INTO goal_agents(goal_id,brain_id,agent_key,created_at) VALUES(?,?,?,?)", (gid, str(go), key, now))
+
+
+mk_goal("g1", gk)
+for v in ("not_met", "not_met", "unknown"):
+    G.add_assessment(gown, {"goal_id": "g1", "revision": 1, "verdict": v})
+check("đánh giá trung gian trong vòng làm việc không tạo tín hiệu nào",
+      [s for s in AP.signals(G, gk) if s["source_ref"].startswith("obj:")] == [])
+check("kết thúc succeeded (kiểm khách quan cuối đạt): một tín hiệu +0.5 w0.8 cho agent của mục tiêu, nguồn obj:<goal>:<rev>",
+      G.finish(gown, "g1", 1, "succeeded") is True)
+obj = [s for s in AP.signals(G, gk) if s["source_ref"] == "obj:g1:1"]
+check("tín hiệu kiểm khách quan đúng giá trị, ngữ cảnh chat riêng của agent", len(obj) == 1 and obj[0]["value"] == 0.5
+      and obj[0]["w"] == 0.8 and obj[0]["context_ref"] == f"dm:{gk}" and obj[0]["status"] == "live", obj)
+check("kết thúc lại (không còn active): không thêm tín hiệu", G.finish(gown, "g1", 1, "succeeded") is False
+      and len([s for s in AP.signals(G, gk) if s["source_ref"] == "obj:g1:1"]) == 1)
+mk_goal("g2", gk)
+check("revision bị gác vì hết hạn mức với kiểm cuối không đạt: -0.5", G.pulse_objective("g2", 1, False) == "recorded"
+      and [s["value"] for s in AP.signals(G, gk) if s["source_ref"] == "obj:g2:1"] == [-0.5])
+check("gọi lại cùng kết luận: không đổi", G.pulse_objective("g2", 1, False) == "unchanged")
+check("chủ nới hạn mức rồi chính revision đó đạt: sửa ĐÚNG tín hiệu đó thành +0.5, vẫn một dòng",
+      G.finish(gown, "g2", 1, "succeeded") and [s["value"] for s in AP.signals(G, gk) if s["source_ref"] == "obj:g2:1"]
+      == [0.5])
+mk_goal("g3", gk2)
+G.agent_set_enabled(gown, "lan", False)
+G.finish(gown, "g3", 1, "succeeded")
+check("agent tắt Cộng hưởng: kết luận cuối không thành tín hiệu", [s for s in AP.signals(G, gk2)
+                                                                  if s["source_ref"].startswith("obj:")] == [])
+src = inspect.getsource(R._settle)
+i = src.index('"blocked", "budget"')
+check("đường hết hạn mức trong _settle chỉ ghi kiểm khách quan khi kết luận là not_met (không ghi cho unknown)",
+      'if a.verdict == "not_met"' in src[i:i + 900] and "pulse_objective" in src[i:i + 900])
+check("finish chỉ là nơi kết luận cuối đạt/không đạt; add_assessment không gọi kho nhịp",
+      "pulse_objective" not in inspect.getsource(RS.GoalStore.add_assessment))
+
 print(f"\n{len(fails)} FAIL" if fails else "\nALL OK")
 raise SystemExit(1 if fails else 0)

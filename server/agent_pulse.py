@@ -537,6 +537,34 @@ def record_host_event(store, *, event: str, source_ref: str, agents: dict, conte
     return done
 
 
+def record_objective(store, *, goal_id: str, revision: int, passed: bool, agents: dict, context_ref: str,
+                     at: Optional[float] = None) -> str:
+    """Kiểm khách quan (6.1, ±0.5 w 0.8): MỘT tín hiệu cho kết luận CUỐI của mỗi (mục tiêu, revision), nguồn
+    `obj:<goal_id>:<revision>`. Không bao giờ gọi cho đánh giá trung gian trong vòng làm việc. Kết luận cuối đổi chiều (vd.
+    revision bị gác vì hết hạn mức rồi chủ nới hạn mức và nó đạt) thì SỬA giá trị của chính tín hiệu đó, không thêm dòng.
+    Trả "recorded" | "unchanged" | "changed" | "none"."""
+    ensure(store)
+    src = f"obj:{goal_id}:{int(revision)}"
+    event = "objective_pass" if passed else "objective_fail"
+    v0, _w = HOST_EVENT[event]
+    t = _now(at)
+    with store._Tx(store) as c:
+        live = [dict(r) for r in c.execute("SELECT * FROM pulse_signals WHERE source_ref=? AND status='live'",
+                                           (src,)).fetchall()]
+        if live:
+            if all(abs(float(r["value"]) - v0) < 1e-12 for r in live):
+                return "unchanged"
+            c.execute("UPDATE pulse_signals SET value=?, emoji=?, at=?, updated_at=? WHERE source_ref=? AND status='live'",
+                      (v0, event, t, time.time(), src))
+            for r in live:
+                _event(c, r["agent_key"], r["context_ref"], "objective_changed", before={"value": r["value"]},
+                       after={"value": v0}, source="host", reason=event, payload={"source_ref": src}, at=t)
+            return "changed"
+    done = record_host_event(store, event=event, source_ref=src, agents=agents, context_ref=context_ref, at=t,
+                             subject_ref=f"goal:{goal_id}:{int(revision)}")
+    return "recorded" if done else "none"
+
+
 def supersede_signal(store, source_ref: str, by_ref: str) -> int:
     """Thay reaction: dòng cũ `superseded_by` dòng mới (6.3), mọi agent của nguồn đó. Không cộng dồn."""
     ensure(store)
