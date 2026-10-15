@@ -130,5 +130,16 @@ giờ. `pulse_signals` UNIQUE `(source_ref, agent_key)`; thay reaction thì dòn
 
 ## 8. Kiểm
 
-`test_agent_pulse_policy.py` 100 kiểm, `test_agent_pulse_host.py`, `test_pulse_contrib.py`, `tests/js/test_agent_pulse_ui.js`;
-số đo và kết quả chạy bộ lọc ở `exports/reviews/team-adaptive/t3-pulse-evidence.txt` (ngoài repo).
+Engine giả ở mọi nơi; không lời gọi model thật. (Phiên làm việc không ghi được ra `exports/reviews/`, nên bằng chứng nằm ở đây.)
+
+- `test_agent_pulse_policy.py` 100 kiểm, `test_agent_pulse_host.py` 60 kiểm (gồm chặn engine thật qua `main.py`, route,
+  `POST /seen`), `test_pulse_contrib.py` 31 kiểm, `tests/js/test_agent_pulse_ui.js` 38 kiểm: đều xanh.
+- `tests/run.py pulse team resonance feedback agent_calls i18n icons route_table`: 88/89, cái đỏ là `test_resonance_perf.py`
+  (trễ event loop 0,114 giây > 0,1). So với `origin/claude/team-adaptive-t3` trong worktree sạch: bản gốc 4/4 xanh, nhánh 3/4 đỏ,
+  nên là lỗi thật của nhánh: `GoalStore` dựng trong event loop ở GET đầu tiên và `agent_pulse.ensure` ghi nhiều lần. Sửa ở
+  `865758bf` (kho đã đủ bảng thì không ghi gì; lần đầu tạo bảng trong một giao dịch): 4/4 xanh. Chạy lại `pulse feedback
+  agent_calls team_adaptive rollback resonance_a1`: 20/20 xanh.
+- `tests/run.py --js`: 193/193 xanh.
+- Soi giao diện (khung tĩnh dùng đúng `console.css`, `style.css`, `agent-pulse.js`, i18n; phục vụ cục bộ; 375x812): tối và
+  sáng, vi và en, không cuộn ngang (scrollWidth 375), chữ nhỏ nhất 16px, nút và ô chọn cao 44px. Chưa soi trên dashboard thật
+  (sandbox cổng 7788) và chưa soi trên điện thoại thật.
