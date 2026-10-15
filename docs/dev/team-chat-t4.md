@@ -2,7 +2,7 @@
 
 Spec: [2026-10-13-team-chat-design.md](../superpowers/specs/2026-10-13-team-chat-design.md) mục 12.5, 17, 19 (dòng T4); ca TC38. Chồng trên T3 (PR #640).
 
-Bản 0.157.0 (nhóm chat thích nghi T4) thêm phần "Luôn giữ dù lịch sử dài", kiểm vận hành, số đo bằng engine giả và chuỗi quay
+Bản 0.170.0 (nhóm chat thích nghi T4) thêm phần "Luôn giữ dù lịch sử dài", kiểm vận hành, số đo bằng engine giả và chuỗi quay
 về bản cũ: [team-chat-t4-ops.md](team-chat-t4-ops.md), [team-chat-t4-bench.md](team-chat-t4-bench.md).
 
 ## Luồng

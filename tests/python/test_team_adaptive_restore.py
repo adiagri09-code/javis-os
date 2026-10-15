@@ -542,12 +542,12 @@ def section_real_upgrade():
 
 
 def section_t4_index_only():
-    """T4 (0.157.0) chỉ thêm chỉ mục: --to 0.157.0 không ghi gì và nói rõ không có gì để khôi phục."""
+    """T4 (0.170.0) chỉ thêm chỉ mục: --to 0.170.0 không ghi gì và nói rõ không có gì để khôi phục."""
     d = fixture("t4", judge=True, pre156=True)
     before = live(d)
-    r = RT.restore(str(d), "0.157.0")
-    check("--to 0.157.0: không ghi gì, nói rõ mốc chỉ thêm chỉ mục", not r["ok"] and "chỉ thêm chỉ mục" in r["error"]
-          and live(d) == before and not names_with(d, ".post-0.157.0-"), r)
+    r = RT.restore(str(d), "0.170.0")
+    check("--to 0.170.0: không ghi gì, nói rõ mốc chỉ thêm chỉ mục", not r["ok"] and "chỉ thêm chỉ mục" in r["error"]
+          and live(d) == before and not names_with(d, ".post-0.170.0-"), r)
 
 
 for _name, _fn in (("T4 chỉ mục", section_t4_index_only), ("chạy đúng", section_happy), ("thiếu/hỏng", section_missing_invalid),

@@ -1,4 +1,4 @@
-"""T4 (0.157.0): hồi quy hiệu năng bằng engine GIẢ (tools/team_adaptive_bench.py, tools/team_adaptive_ui_bench.js).
+"""T4 (0.170.0): hồi quy hiệu năng bằng engine GIẢ (tools/team_adaptive_bench.py, tools/team_adaptive_ui_bench.js).
 
     python tests/run.py team_t4_perf -v
 

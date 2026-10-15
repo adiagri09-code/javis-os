@@ -1,4 +1,4 @@
-// Đo chi phí vẽ thuần của trang Nhóm dưới node (T4, 0.157.0). KHÔNG phải số đo trình duyệt: không có layout, paint hay
+// Đo chi phí vẽ thuần của trang Nhóm dưới node (T4, 0.170.0). KHÔNG phải số đo trình duyệt: không có layout, paint hay
 // DOM thật; chỉ là thời gian dựng chuỗi HTML của các hàm vẽ trong dashboard/teams.js và dashboard/reactions.js.
 // Playwright cho Python không có trong .venv nên bench Python gọi script này thay thế và ghi rõ giới hạn.
 //

@@ -1,4 +1,4 @@
-# Số đo T4 nhóm chat thích nghi (0.157.0) - máy local, engine GIẢ, KHÔNG phải VPS
+# Số đo T4 nhóm chat thích nghi (0.170.0) - máy local, engine GIẢ, KHÔNG phải VPS
 
 Công cụ: `tools/team_adaptive_bench.py` (host thật `main.app` trong tiến trình qua httpx ASGITransport, engine giả có bộ đếm,
 chốt chặn mọi lối dựng engine thật) và `tools/team_adaptive_ui_bench.js` (hàm vẽ thuần dưới node). Kết quả gốc:

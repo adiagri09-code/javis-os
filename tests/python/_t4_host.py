@@ -1,4 +1,4 @@
-"""Host thật cho test T4 (0.157.0): `main.app` qua TestClient, state và brain tạm, engine GIẢ cho mọi loại lượt.
+"""Host thật cho test T4 (0.170.0): `main.app` qua TestClient, state và brain tạm, engine GIẢ cho mọi loại lượt.
 
 Chốt chặn engine thật dùng chung với tools/team_adaptive_bench.py (`install_guards`): engine nhóm, Claude, Codex, engine
 Cộng hưởng, engine phán xử (`_agent_judge_ask`, chốt `JAVIS_NO_REAL_JUDGE_ENGINE` trong `Judge._run_engine`: engine giả

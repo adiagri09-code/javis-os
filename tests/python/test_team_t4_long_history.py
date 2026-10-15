@@ -1,4 +1,4 @@
-"""T4 (0.157.0): lịch sử dài trong đúng nhóm giữ yêu cầu, quyết định, nguồn đóng góp và phản hồi (thiết kế 2026-10-15 mục 11).
+"""T4 (0.170.0): lịch sử dài trong đúng nhóm giữ yêu cầu, quyết định, nguồn đóng góp và phản hồi (thiết kế 2026-10-15 mục 11).
 
     python tests/run.py team_t4_long_history -v
 

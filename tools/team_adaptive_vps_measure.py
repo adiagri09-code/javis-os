@@ -1,4 +1,4 @@
-"""CHƯA CHẠY. Kịch bản đo nhóm chat thích nghi TRÊN VPS (T4, 0.157.0), chỉ ĐỌC, chuẩn bị sẵn để chạy khi chủ dự án cho phép.
+"""CHƯA CHẠY. Kịch bản đo nhóm chat thích nghi TRÊN VPS (T4, 0.170.0), chỉ ĐỌC, chuẩn bị sẵn để chạy khi chủ dự án cho phép.
 
 TRẠNG THÁI: chưa chạy lần nào. Không ai được chạy script này khi chưa có lệnh duyệt trực tiếp của chủ dự án (GOAL mục 10, 13).
 Script KHÔNG tự kết nối tới VPS nào: người vận hành đăng nhập VPS theo cách thường lệ, chép script vào trong container Javis

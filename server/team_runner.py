@@ -284,7 +284,7 @@ class TeamRunner:
                  ceiling: Any = None, projector: Any = None, judge: Any = None,
                  learning: Any = None, contrib_reader: Any = None):
         self.teams = teams
-        # T4 (0.157.0): đọc tỷ lệ ghi nhận đóng góp của một bản tổng hợp (`pulse_contrib` của phần nhịp T3), dùng ở khối
+        # T4 (0.170.0): đọc tỷ lệ ghi nhận đóng góp của một bản tổng hợp (`pulse_contrib` của phần nhịp T3), dùng ở khối
         # lịch sử dài. `contrib_reader(result_ref) -> [{agent_key, share, role}]`. None: chỉ liệt kê đầu vào do host ghi.
         self.contrib_reader = contrib_reader
         # T3 phần J (0.156.0): bộ phán xử theo agent (`agent_judge.Judge`). None: hành vi T2 (không ai tự lên tiếng, tin
@@ -1533,7 +1533,7 @@ class TeamRunner:
     def _older_summary(self, team: dict, shown: int, agent_key: str = "", current_task: str = "",
                        feedback_shown: Optional[set] = None) -> list:
         """Khối "Tóm tắt phần cũ" do CODE dựng (không gọi model): số tin cũ hơn cửa sổ lịch sử, các việc đã xong gần đây
-        kèm trích kết quả, và (T4 0.157.0) phần luôn giữ: việc đang mở với yêu cầu gốc, nguồn đóng góp của kết quả gần
+        kèm trích kết quả, và (T4 0.170.0) phần luôn giữ: việc đang mở với yêu cầu gốc, nguồn đóng góp của kết quả gần
         nhất, phản hồi chưa xem xét (`team_long_memory`). Chỉ dữ liệu của chính nhóm này; mỗi mục một truy vấn có chỉ mục
         và trần dòng, có trần ký tự. Rỗng khi cửa sổ đã phủ hết phiên."""
         older = self.sessions.team_message_count(team["session_id"]) - int(shown)

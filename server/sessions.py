@@ -57,7 +57,7 @@ KENH_TEAM = ("team:", "teammate:")
 # T2 (0.154.0, thiết kế 2026-10-15 mục 4.1): reaction trên câu trả lời của chat riêng. Kho có từ trước được chụp một bản
 # `conversations.db.pre-0.154.0` trước khi tạo bảng (khôi phục khi hạ phiên bản; bản cũ bỏ qua hai bảng mới).
 DM_REACTION_SNAPSHOT_SUFFIX = ".pre-0.154.0"
-# Tin nhóm được ghim làm quyết định: `meta_json` do json.dumps mặc định ghi `"decision": true` (T4, 0.157.0).
+# Tin nhóm được ghim làm quyết định: `meta_json` do json.dumps mặc định ghi `"decision": true` (T4, 0.170.0).
 TEAM_DECISION_LIKE = '%"decision": true%'
 _DM_REACTION_SQL = """
 CREATE TABLE IF NOT EXISTS dm_reactions (
@@ -530,7 +530,7 @@ class SessionStore:
             self._conn.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client "
                 "ON messages(session_id, client_msg_id) WHERE client_msg_id IS NOT NULL")
-            # Lịch sử dài của nhóm (T4, 0.157.0): sổ quyết định ghim và "tin mới nhất của agent X" là truy vấn theo chỉ
+            # Lịch sử dài của nhóm (T4, 0.170.0): sổ quyết định ghim và "tin mới nhất của agent X" là truy vấn theo chỉ
             # mục, không quét cả phiên nhóm hàng nghìn tin mỗi lượt. Chỉ mục từng phần: chat thường (author_ref NULL,
             # không có quyết định ghim) không vào chỉ mục. Chỉ thêm chỉ mục, bản cũ bỏ qua.
             self._conn.execute(

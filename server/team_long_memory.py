@@ -1,4 +1,4 @@
-"""Các mục LUÔN GIỮ của khối lịch sử dài trong một lượt nhóm (T4, 0.157.0; thiết kế 2026-10-15 mục 11).
+"""Các mục LUÔN GIỮ của khối lịch sử dài trong một lượt nhóm (T4, 0.170.0; thiết kế 2026-10-15 mục 11).
 
 Khối "Tóm tắt phần cũ" của T4 0.124.0 chỉ nói số tin cũ và vài việc đã xong. Nhóm có hàng nghìn tin thì yêu cầu gốc của
 việc còn mở, nguồn đóng góp của kết quả gần nhất và phản hồi chưa được xem xét rơi khỏi cửa sổ 20 tin gần nhất. Module này

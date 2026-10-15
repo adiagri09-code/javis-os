@@ -1,4 +1,4 @@
-"""T4 (0.157.0): kịch bản đo VPS `tools/team_adaptive_vps_measure.py` chạy đúng đường trên một máy chủ HTTP GIẢ ở 127.0.0.1.
+"""T4 (0.170.0): kịch bản đo VPS `tools/team_adaptive_vps_measure.py` chạy đúng đường trên một máy chủ HTTP GIẢ ở 127.0.0.1.
 
     python tests/run.py team_t4_vps_script -v
 

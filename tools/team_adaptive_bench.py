@@ -1,4 +1,4 @@
-"""Đo hiệu năng nhóm chat thích nghi (T4, 0.157.0; thiết kế 2026-10-15 mục 11, GOAL mục 10) bằng ENGINE GIẢ.
+"""Đo hiệu năng nhóm chat thích nghi (T4, 0.170.0; thiết kế 2026-10-15 mục 11, GOAL mục 10) bằng ENGINE GIẢ.
 
     python tools/team_adaptive_bench.py                       # mặc định: 12 nhóm, 1.500 tin mỗi nhóm
     python tools/team_adaptive_bench.py --teams 12 --messages 1500 --reactions 1500 --runs 30 \\

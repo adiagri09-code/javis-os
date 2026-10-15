@@ -1,4 +1,4 @@
-"""T4 (0.157.0): kiểm vận hành xuyên T1-T3 qua host thật (thiết kế 2026-10-15 mục 11, GOAL mục 10).
+"""T4 (0.170.0): kiểm vận hành xuyên T1-T3 qua host thật (thiết kế 2026-10-15 mục 11, GOAL mục 10).
 
     python tests/run.py team_t4_ops -v
 

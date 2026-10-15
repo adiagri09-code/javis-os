@@ -22950,7 +22950,7 @@ _TEAM_API = team_api.register(app, team_api.TeamApiDeps(
 
 
 def _team_contrib_reader(result_ref):
-    """Lịch sử dài của nhóm (T4, 0.157.0): phân bổ ghi nhận còn hiệu lực của một bản tổng hợp `step:<id>` từ
+    """Lịch sử dài của nhóm (T4, 0.170.0): phân bổ ghi nhận còn hiệu lực của một bản tổng hợp `step:<id>` từ
     `pulse_contrib` (phần nhịp T3). Chưa có kho resonance thì không tạo kho chỉ để đọc. Một truy vấn theo chỉ mục
     `pulse_contrib_result` (tạo một lần mỗi tiến trình), có trần dòng."""
     st = _pulse_store()

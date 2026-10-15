@@ -187,7 +187,7 @@ class TeamStore:
                 if col not in {r[1] for r in c.execute(f"PRAGMA table_info({table})").fetchall()}:
                     c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
             c.execute("CREATE INDEX IF NOT EXISTS team_reaction_log_effect ON team_reaction_log(effect_state)")
-            # T4 (0.157.0): phản hồi chưa xem xét của một nhóm cho khối lịch sử dài. Chỉ thêm chỉ mục, bản cũ bỏ qua.
+            # T4 (0.170.0): phản hồi chưa xem xét của một nhóm cho khối lịch sử dài. Chỉ thêm chỉ mục, bản cũ bỏ qua.
             c.execute("CREATE INDEX IF NOT EXISTS team_reactions_status ON team_reactions(team_id, status, updated_at)")
             c.execute("CREATE INDEX IF NOT EXISTS team_reaction_log_pair ON team_reaction_log(session_id, message_id, "
                       "reactor, id)")
@@ -1062,7 +1062,7 @@ class TeamStore:
                                                          args + [int(limit)]).fetchall()]
 
     def unconsumed_feedback(self, team_id: str, statuses, limit: int = 12) -> list:
-        """Phản hồi của CHỦ trong nhóm `team_id` còn ở một trạng thái chưa xem xét xong (T4, 0.157.0), mới nhất trước.
+        """Phản hồi của CHỦ trong nhóm `team_id` còn ở một trạng thái chưa xem xét xong (T4, 0.170.0), mới nhất trước.
         Một truy vấn theo chỉ mục `team_reactions_status`, có trần dòng."""
         st = [str(s) for s in statuses or ()]
         if not st:

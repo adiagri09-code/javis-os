@@ -1,4 +1,4 @@
-# Nhóm chat thích nghi T4: lịch sử dài, vận hành, quay về bản cũ (0.157.0)
+# Nhóm chat thích nghi T4: lịch sử dài, vận hành, quay về bản cũ (0.170.0)
 
 Thiết kế: [2026-10-15-team-adaptive-design.md](../superpowers/specs/2026-10-15-team-adaptive-design.md) mục 11, 12, 13. Chồng
 trên T2 (0.154.0) và T3 (0.156.0: phần P nhịp, phần J phán xử, phần L học trong đội; nhánh T3 cuối `054975b3`). Số đo:
@@ -90,16 +90,20 @@ Mục 1, 2, 3 đã được nhánh T3 sửa (từ `7e8b96f5`, nhánh cuối `054
 T4 **không** tạo kho, bảng hay cột. Chỉ thêm bốn chỉ mục (`CREATE INDEX IF NOT EXISTS`), bản cũ bỏ qua:
 `team_reactions_status` (team.sqlite3), `idx_messages_team_author` và `idx_messages_team_decision` (conversations.db),
 `pulse_contrib_result` (resonance.sqlite3, tạo lần đầu khi đọc nguồn đóng góp). `tools/team_adaptive_restore_pre.py --to
-0.157.0` báo rõ không có gì để khôi phục và không ghi gì (kiểm ở `test_team_adaptive_restore.py`).
+0.170.0` báo rõ không có gì để khôi phục và không ghi gì (kiểm ở `test_team_adaptive_restore.py`).
 
 Chạy công cụ khi Javis ĐÃ TẮT. Không có `--yes` thì chỉ in kế hoạch. Mọi bước giữ bản sao `.post-<mốc>-<thời điểm>`.
 
+Chuỗi đã được đánh số lại khi ghép với main: T1 phát hành 0.167.0, T2 0.168.0, T3 0.169.0, T4 0.170.0. Tên mốc
+của công cụ khôi phục và đuôi snapshot giữ tên nội bộ cũ (`--to 0.154.0` là T2, `--to 0.156.0` là T3, file
+`.pre-0.154.0`, `.pre-0.156.0`), vì mã đã ghi đúng các tên đó lên đĩa.
+
 | Hạ từ | Về | Cần làm | Mất gì |
 |---|---|---|---|
-| 0.157.0 | 0.156.x | Chỉ chạy bản cũ. | Không mất gì (chỉ mục thừa vô hại). |
-| 0.156.x | 0.154.x | Không bắt buộc (di trú chỉ thêm, bản cũ bỏ qua `agent_judge.sqlite3` và bảng nhịp mới). Muốn về đúng trước lúc nâng: `python tools/team_adaptive_restore_pre.py --to 0.156.0 --state-dir <state> --yes` (gỡ `agent_judge.sqlite3`, `resonance.sqlite3` về `.pre-0.156.0` nếu có). | Có công cụ: lịch sử phán xử, nhịp, tín hiệu, mọi thay đổi resonance sau lúc nâng. |
-| 0.154.x | 0.152.x | Không bắt buộc (như trên). Muốn về đúng: `--to 0.154.0` (team.sqlite3, conversations.db, resonance.sqlite3 về `.pre-0.154.0`; gỡ kho phán xử nếu đã lên 0.156.0). | Có công cụ: mọi tin, phiên, reaction, nhóm, sổ lượt, mục tiêu sau lúc nâng 0.154.0. Kanban không đổi. |
-| 0.152.x | trước 0.140.0 | `tools/team_chat_restore_pre.py` (T1, xem team-chat-t1.md). | Nhóm chat. |
+| 0.170.0 (T4) | 0.169.x (T3) | Chỉ chạy bản cũ. | Không mất gì (chỉ mục thừa vô hại). |
+| 0.169.x (T3) | 0.168.x (T2) | Không bắt buộc (di trú chỉ thêm, bản cũ bỏ qua `agent_judge.sqlite3` và bảng nhịp mới). Muốn về đúng trước lúc nâng: `python tools/team_adaptive_restore_pre.py --to 0.156.0 --state-dir <state> --yes` (gỡ `agent_judge.sqlite3`, `resonance.sqlite3` về `.pre-0.156.0` nếu có). | Có công cụ: lịch sử phán xử, nhịp, tín hiệu, mọi thay đổi resonance sau lúc nâng. |
+| 0.168.x (T2) | 0.167.x (T1) | Không bắt buộc (như trên). Muốn về đúng: `--to 0.154.0` (team.sqlite3, conversations.db, resonance.sqlite3 về `.pre-0.154.0`; gỡ kho phán xử nếu đã lên 0.156.0). | Có công cụ: mọi tin, phiên, reaction, nhóm, sổ lượt, mục tiêu sau lúc nâng 0.154.0. Kanban không đổi. |
+| 0.167.x (T1) | trước nhóm chat (0.140.0) | `tools/team_chat_restore_pre.py` (T1, xem team-chat-t1.md). | Nhóm chat. |
 
 Ảnh hưởng đã biết khi hạ không khôi phục: reaction của trưởng nhóm/thành viên (`reactor = agent:...`) hiện như reaction thường
 ở bản trước 0.154.0; quyết định phán xử và nhịp không hiện ở bản trước 0.156.0. Không mất dữ liệu.
