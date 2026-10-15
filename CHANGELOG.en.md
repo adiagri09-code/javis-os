@@ -11,8 +11,8 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 ## [0.156.0] - 2026-10-15
 ### Added
 - **Assistants know when to speak up in a team:** when nobody calls them, each assistant weighs speaking, waiting or staying silent; at most one speaks up per message (adjustable). @ calls and assigned jobs are always answered; an assistant can ask a teammate to look at its message without looping back and forth.
-- **Correct speak or silence decisions:** open a member in the Team panel to see when it spoke, waited or stayed silent (silences too) and tap "Should have spoken" or "Should stay silent (interrupting)". With Resonance on, the assistant learns for that team only.
-- **New team limits:** judge calls per day (default 40, Unlimited available), people who may speak up per message, and how judging works when an assistant's Resonance is off.
+- **Correct speak or silence decisions:** open a member in the Team panel to see when it spoke, waited or stayed silent (silences too) and tap "Should have spoken" or "Should stay silent (interrupting)". With Auto on, the assistant learns for that team only.
+- **New team limits:** judge calls per day (default 40, Unlimited available), people who may speak up per message, and how judging works when an assistant's Auto is off.
 
 ## [0.154.0] - 2026-10-15
 ### Added
