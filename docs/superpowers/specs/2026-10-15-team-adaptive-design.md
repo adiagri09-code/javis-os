@@ -161,7 +161,7 @@ thị trên reaction cũng do bộ chiếu ghi ngược sau khi lý do đổi tr
   buộc gì để thả emoji.
 - Nhiều tab: gói WS `chat_reaction` (chat riêng) và `team_message` (đã có); khung lọc theo việc của nhóm cũng nhận gói.
 - Trạng thái dưới chip theo host: Đã nhận; Chờ xem xét; Đang xem xét; Đã điều chỉnh; Không cần đổi; Chờ hạn mức (mỗi trạng thái có
-  lý do ngắn). Agent tắt Cộng hưởng: "Đã nhận, Cộng hưởng tắt nên chỉ lưu".
+  lý do ngắn). Agent tắt Cộng hưởng (hay phản hồi có trước lúc bật lại): "Đã nhận, chỉ lưu" kèm lý do đúng trường hợp.
 - Điện thoại: nút luôn hiện, vùng chạm 44px, chữ 16px.
 
 ### 4.3 Hiệu lực
@@ -464,11 +464,29 @@ Sửa sau review T1: bản trước chỉ cộng `goals.calls_used` và `call_le
   cuối, còn nghĩa vụ vẫn dùng được phần đó.
 - **Thử lại, lỗi, hoàn:** mỗi lần thử là một dòng mới (`attempt + 1`) và giữ chỗ lại từ đầu (kiểm trần lại). Lỗi sau mốc gọi engine
   (`error`, `interrupted`) vẫn tính, không hoàn. Hoàn chỉ khi chắc chắn chưa gọi model (mốc `engine_started` chưa ghi).
-- **Khởi động lại và đối soát** (chạy lúc khởi động và mỗi nhịp pulse, idempotent): dòng `reserved` mà lượt nhóm tương ứng đã hoàn
-  hay không có thì `refunded`; dòng `reserved`/`running` mà lượt nhóm đã chốt thì chốt theo; dòng `reserved` không có mốc engine, quá
-  hạn một lượt (10 phút) thì `refunded`, có mốc engine thì `interrupted` (tính). Lượt nhóm đã tới mốc engine mà **thiếu** dòng sổ (tiến
-  trình chết giữa hai kho, hay bản trước nâng cấp) thì dựng lại dòng `counted = 1` (có thể tạm vượt trần: không làm mất lượt đã tính);
-  lượt nhóm `reserved` chưa tới mốc engine mà thiếu dòng sổ thì hoàn lượt nhóm (chưa gọi model).
+- **Khởi động lại và đối soát** (chạy lúc khởi động và mỗi nhịp pulse, idempotent):
+  - Dòng `team_turn:*` **chỉ** đối soát theo trạng thái của chính lượt nhóm, **không bao giờ theo tuổi**: lượt nhóm có thể đứng
+    `reserved` chưa có mốc engine suốt lúc chờ khoá bận (tới `busy_wait_s`, mặc định 1800 giây) và một bước chạy tới
+    `STEP_TIMEOUT_S` (3600 giây). Lượt nhóm đã hoàn hay không còn thì dòng `refunded`; lượt nhóm đã chốt thì dòng chốt theo
+    (`ok`/`error`/`interrupted`); lượt nhóm còn `reserved` hay đang chạy thì để nguyên. Lúc khởi động (mọi lượt của tiến trình cũ đã
+    chết) dòng `reserved`/`running` của lượt nhóm chưa chốt theo đúng đường hoàn/ngắt mà `team_store` áp cho lượt đó.
+  - Có **khoảng ân hạn** 120 giây tính từ `created_at` của dòng sổ: đối soát không đụng dòng mới hơn, để nhịp pulse không bắt gặp
+    một lượt đang ở giữa hai bước giữ chỗ của hai kho.
+  - Dòng chỉ có ở sổ mới (`mirror_ref = ''`: phán xử, xem xét, chủ động, quét) không có kho thứ hai nên mới dùng hạn tuổi: `reserved`
+    không mốc engine quá 10 phút (dài hơn mọi lượt loại này) thì `refunded`, có mốc engine thì `interrupted` (tính).
+  - Lượt nhóm đã tới mốc engine mà **thiếu** dòng sổ (tiến trình chết giữa hai kho, hay kho chung lỗi lúc giữ chỗ) thì dựng lại
+    dòng `counted = 1` (có thể tạm vượt trần: không làm mất lượt đã tính), **chỉ với lượt tạo sau mốc nâng lên T2**
+    (`t2_migrated_at`, ghi một lần lúc tạo bảng) hay lượt còn mở lúc nâng. Lượt nhóm đã chốt trước khi nâng là lịch sử, không bao
+    giờ tính vào trần (quyết định của chủ sau review T2: nâng cấp không được chặn ngay máy pilot đang đặt trần). Lượt nhóm thiếu
+    dòng sổ mà chưa tới mốc engine thì để nguyên (có thể đang chờ khoá bận sau một lần kho chung lỗi); khi nó tới mốc engine thì
+    được dựng dòng như trên. Quét theo con trỏ bền `(created_at, turn_id)` có trần số dòng mỗi lần, cộng nhóm nhỏ: lượt còn mở,
+    lượt mở lúc nâng, lượt vừa chốt gần đây.
+- **Trần tính trọn đời, không theo ngày:** phép đếm cộng mọi dòng còn hiệu lực từ trước tới nay (như `goals.calls_used` hiện có), nên
+  khi chạm trần thì mọi lượt trong phạm vi bị chặn (kể cả trả lời tin nhóm và bước việc) tới khi chủ nâng biến môi trường. Đây là
+  trần của pilot có hạn mức, không phải hạn mức hằng ngày; trần theo ngày vẫn là `daily_turns` của nhóm và `agent_daily_calls`.
+- **Hiển thị khi chạm trần chung:** lượt trả lời mang lý do `server_ceiling` (khoá `teams.reply.why.server_ceiling`: "Đã chạm
+  trần lượt chung của máy chủ"), việc bị chặn với loại `server_ceiling` (khoá `teams.block.server_ceiling`). Nút "Cho thêm lượt" của
+  nhóm **không** nâng được trần này (chỉ biến môi trường của máy chủ); giao diện nói rõ điều đó thay vì mở hộp giới hạn của nhóm.
 - **Thứ tự hai kho:** giữ chỗ `team_turns` (kho nhóm) rồi mới giữ chỗ sổ chung; sổ chung từ chối thì hoàn `team_turns` ngay. Mọi lần
   hoàn hay chốt của lượt nhóm đi qua một hàm gọi cả hai kho; lỗi kho chung lúc chốt không làm hỏng lượt nhóm (đối soát sửa sau).
 - **Test bắt buộc:** trần sát giới hạn (trần N: lượt thứ N được, N+1 bị chặn trước engine), nhiều lượt đồng thời (luồng và hai kết
@@ -580,4 +598,6 @@ chat riêng theo agent (`dm:<agent_key>`), không theo phiên: 2, 8.1; (nhỏ) g
 
 Sửa sau review T1 (trần chung, 2026-10-15): bản trước loại dòng `agent_calls` có `mirror_ref` khỏi trần mà phép đếm cũ chỉ có
 `goals.calls_used` và `call_ledger`, nên lượt nhóm nằm ngoài trần. Nay: một sổ duy nhất, cột `counted` và `obligation`, lượt nhóm giữ
-chỗ trước engine, dự trữ 20% thực thi bằng `floor(trần * 0.8)`, quy tắc thử lại, hoàn và đối soát: 3.1, 9, 9.1.
+chỗ trước engine, dự trữ 20% thực thi bằng `floor(trần * 0.8)`, quy tắc thử lại, hoàn và đối soát: 3.1, 9, 9.1. Review bản sửa đó
+(vòng 2): dòng sổ của lượt nhóm chỉ đối soát theo trạng thái lượt nhóm, không theo tuổi, có khoảng ân hạn 120 giây; trần tính trọn
+đời; cách hiển thị `server_ceiling`: 9.1.

@@ -32,6 +32,7 @@ from team_store import TeamError
 
 LOOP_EVERY_S = 5.0          # nhịp điều phối (spec 8.3: cùng nhịp 5 giây của Kanban)
 REMIND_EVERY_S = 3600.0     # nhịp nhắc việc bị chặn quá 24 giờ
+RECONCILE_EVERY_S = 60.0    # nhịp đối soát sổ lượt chung với team_turns (T2, thiết kế 9.1)
 
 
 @dataclass
@@ -49,6 +50,8 @@ class TeamApiDeps:
     store_path: Optional[Path] = None                  # mặc định STATE_DIR/team.sqlite3
     admin: Any = None                                  # thao tác host cho lệnh quản trị Toàn quyền (T3)
     owner_name: Optional[Callable[[], str]] = None     # tên đăng nhập của chủ máy (người tạo nhóm, 0.142.0)
+    ceiling: Optional[Callable[[], Any]] = None        # () -> agent_ledger.TeamCeiling (T2, trần lượt chung) | None
+    projector: Optional[Callable[[], Any]] = None      # () -> feedback_projector.FeedbackProjector (T2) | None
 
 
 async def _body(request: Request) -> dict:
@@ -134,7 +137,9 @@ class TeamApi:
                 teams=self.teams(), tasks=self.deps.task_store(), sessions=self.deps.session_store(),
                 engine_for=lambda team, key, role: self.deps.engine_for(team, key, role),
                 agent_info=lambda root, key: self.deps.agent_info(root, key),
-                publish=publish, notify=notify, worker_id="team-runner", admin=self.deps.admin)
+                publish=publish, notify=notify, worker_id="team-runner", admin=self.deps.admin,
+                ceiling=self.deps.ceiling() if self.deps.ceiling is not None else None,
+                projector=self.deps.projector() if self.deps.projector is not None else None)
             if self._loop is not None:
                 self._runner._loop, self._runner._loop_thread = self._loop, self._loop_thread
         return self._runner
@@ -260,6 +265,7 @@ class TeamApi:
         hồi; nếu để phục hồi chạy lúc kho vừa được tạo, nó sẽ chặn nhầm việc đang chạy và hoàn nhầm lượt đang giữ chỗ."""
         self._recovered = not self.exists()
         self._last_remind = 0.0
+        self._last_reconcile = 0.0
 
     async def tick(self) -> None:
         """Một vòng: phục hồi (một lần, nếu cần), nhận việc đầu hàng, mỗi giờ nhắc việc chặn quá 24 giờ."""
@@ -276,6 +282,9 @@ class TeamApi:
                 self._spawn(r.resume_jobs(rep["resumed"]))
         await r.dispatch_once(wait=False)
         now = asyncio.get_running_loop().time()
+        if r.ceiling is not None and now - getattr(self, "_last_reconcile", 0.0) >= RECONCILE_EVERY_S:
+            self._last_reconcile = now
+            await r._io(r.reconcile_ceiling)
         if now - self._last_remind >= REMIND_EVERY_S:
             self._last_remind = now
             await r._io(r.remind_blocked)
@@ -543,8 +552,10 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             msgs = deps.session_store().team_messages_of_task(team["session_id"], task_id)
             # Khung lọc theo việc dùng danh sách này: thiếu phản hồi thì bấm emoji ở đây sẽ xoá lý do, góp ý (review T2).
             got = api.teams().reactions_for(team["session_id"], [m["id"] for m in msgs])
+            agents = api.teams().agent_reactions_for(team["session_id"], [m["id"] for m in msgs])
             for m in msgs:
                 m["reaction"] = got.get(int(m["id"]))
+                m["agent_reactions"] = api.runner().agent_reactions_view(team, agents.get(int(m["id"])))
             return {"ok": True, "task": task, "steps": api.teams().steps(task_id), "messages": msgs}
         return await api.io(_do)
 
@@ -643,6 +654,7 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             # Phản hồi của chủ (T2) đi kèm từng tin, đọc một lần cho cả trang.
             ids = [m["id"] for m in page["messages"]]
             got = api.teams().reactions_for(team["session_id"], ids)
+            agents = api.teams().agent_reactions_for(team["session_id"], ids)
             # Kết cục lượt trả lời (0.142.0) đi kèm tin của chủ nhóm: tải lại trang vẫn thấy chờ, đang trả lời, lỗi.
             replies = api.teams().replies_for(team_id, ids)
             # Tên việc của các tin gắn việc (0.142.0): việc đã xong không còn trong hàng đợi, tải lại trang thì nhãn chỉ
@@ -656,6 +668,7 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 if m.get("task_id") in titles:
                     m["task_title"] = titles[m["task_id"]]
                 m["reaction"] = got.get(int(m["id"]))
+                m["agent_reactions"] = api.runner().agent_reactions_view(team, agents.get(int(m["id"])))
                 if replies.get(int(m["id"])):
                     m["replies"] = replies[int(m["id"])]
             return dict(page, ok=True)
@@ -663,7 +676,8 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
 
     @app.post("/teams/{team_id}/messages/{message_id}/reaction")
     async def teams_reaction(team_id: str, message_id: int, request: Request, brain: str = "brain"):
-        """Thả cảm xúc, lý do, góp ý (spec 14). Không mở lượt, không gọi model."""
+        """Thả cảm xúc, lý do, trục nói/im, góp ý (spec 14; hợp đồng T2 mục 5). Không mở lượt, không gọi model. Gửi lại cùng
+        `nonce` trả trạng thái hiện tại (200); `nonce` đã dùng cho tin khác: 409."""
         body = await _body(request)
 
         def _do():
@@ -675,7 +689,10 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 return _err(400, "Lý do phải là danh sách", "Reasons must be a list")
             try:
                 state = api.runner().react(team_id, message_id, body.get("value"), reasons=reasons,
-                                           comment=str(body.get("comment") or ""), nonce=str(body.get("nonce") or ""))
+                                           comment=str(body.get("comment") or ""), nonce=str(body.get("nonce") or ""),
+                                           axis=str(body.get("axis") or ""), seen_sha=body.get("seen_sha") or None)
+            except team_store.NonceConflict as ex:
+                return _team_err(ex, 409)
             except TeamError as ex:
                 return _team_err(ex)
             return {"ok": True, "reaction": state}
