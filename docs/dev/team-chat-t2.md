@@ -60,7 +60,7 @@ Kết luận "Ready with fixes": 1 Important, 6 Minor. Xếp lại theo tác đ�
 - Đang soạn góp ý mà có tin mới tới thì mất con trỏ, bị kéo xuống cuối: giữ con trỏ, chỗ cuộn.
 - Mở bộ chọn không đưa focus vào bảng (Escape không đóng được với bàn phím): focus emoji đầu, đóng thì trả focus về nút mặt cười.
 - Nhấn giữ chuột cũng mở bộ chọn, và đè menu nhấn giữ của máy chạm: chỉ chạm và bút; chặn menu ngữ cảnh của lần giữ đó; `-webkit-touch-callout: none` trên máy chạm.
-- Nonce đã dùng cho tin khác trả 200 "đã lưu": nay 400; nonce dài quá 100 ký tự bị từ chối.
+- Nonce đã dùng cho tin khác trả 200 "đã lưu": nay từ chối (0.120.0 trả 400; từ 0.154.0 trả 409 cho khớp hợp đồng T2); nonce dài quá 100 ký tự bị từ chối.
 
 Bốn lỗi phía server có test đỏ trước rồi xanh (`test_team_reactions.py`, `test_team_api.py`). Ba lỗi giao diện kiểm bằng test nguồn trong `test_teams_ui.js` viết sau khi sửa (hành vi DOM chưa chạy được dưới node; chưa soi lại trên trình duyệt).
 
