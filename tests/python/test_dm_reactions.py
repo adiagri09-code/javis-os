@@ -285,5 +285,16 @@ check("review T2 vòng 2: dòng lỗi mãi bị bỏ qua, dòng sau vẫn đư�
       and store.dm_reaction_log(S_TU, at_)[-1]["effect_state"] == "pending"
       and store.dm_reaction_log(S_BAD, ab_)[-1]["effect_state"] == "pending_author", n_fix2)
 
+# Quyết định của chủ (0.168.0): tin đẩy về (tin báo goal, kết quả việc nền) mang mã tin để có ngay hàng sáu cảm xúc.
+n_before = len(sent)
+ok_push = asyncio.run(main.push_to_chat(S_LAN, "Báo cáo mục tiêu: đã xong bản nháp"))
+push_ev = [e for e in sent[n_before:] if e.get("type") == "push"]
+stored = store.get_messages(S_LAN)[-1]
+check("tin đẩy về mang message_id và content_sha khớp tin đã lưu (có nút cảm xúc không cần F5)",
+      ok_push and push_ev and push_ev[-1].get("message_id") == stored["id"]
+      and push_ev[-1].get("content_sha") == sessions.content_sha(stored["content"]), (push_ev[-1:], stored.get("id")))
+r = post(S_LAN, stored["id"], {"value": "love", "nonce": "push-1"})
+check("thả cảm xúc lên tin đẩy về: 200", r.status_code == 200 and r.json()["reaction"]["value"] == "love", r.text)
+
 print(f"\n{'FAIL' if fails else 'PASS'} - test_dm_reactions: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)
