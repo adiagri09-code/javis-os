@@ -5890,7 +5890,7 @@ def _khoi_coding(row, brain: str = "") -> str:
     thôi chưa đủ: model vẫn đoán đường dẫn từ trí nhớ của nó, và ở chế độ Plan thì còn phải
     NÓI cho nó biết là hãy lập kế hoạch rồi dừng.
 
-    Since 0.154.0 any other session with a folder pinned from the composer gets the short
+    Since 0.158.0 any other session with a folder pinned from the composer gets the short
     pinned-folder block (no permission line: a normal chat keeps running at `full`).
     """
     try:

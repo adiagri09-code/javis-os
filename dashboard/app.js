@@ -1531,7 +1531,7 @@ function sendMessage(text, opts) {
     try { if (window.JavisProjects) window.JavisProjects.claim(savedSessionId); } catch (e) {}
     // Model đã chọn khi khung chat còn trống -> ghim luôn cho phiên vừa sinh (model-picker.js).
     try { if (window.JavisModelBar) window.JavisModelBar.claimPending(savedSessionId); } catch (e) {}
-    // A working folder pinned on the empty chat follows the session that was just minted (0.154.0).
+    // A working folder pinned on the empty chat follows the session that was just minted (0.158.0).
     try { if (window.JavisPinnedFolder) window.JavisPinnedFolder.claimPending(savedSessionId); } catch (e) {}
   }
   const sid = savedSessionId;

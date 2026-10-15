@@ -1,4 +1,4 @@
-"""Pinned working folder for normal chats (0.154.0).
+"""Pinned working folder for normal chats (0.158.0).
 
     python tests/run.py pinned_folder
 """

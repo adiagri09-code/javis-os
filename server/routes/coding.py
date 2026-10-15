@@ -38,7 +38,7 @@ router = APIRouter()
 @dataclass
 class CodingDeps:
     brain_keys: Callable[[str], list]
-    # 0.154.0, composer pinned folder: resolve a browse-relative path (raises ValueError when it
+    # 0.158.0, composer pinned folder: resolve a browse-relative path (raises ValueError when it
     # leaves the ceiling) and give the brain root, both owned by main.
     resolve_path: Callable[[str, str], str] = None
     brain_root: Callable[[str], str] = None
@@ -79,7 +79,7 @@ def _ve_thu_muc(r: dict) -> dict:
 
 
 def _folder_view(r):
-    """English view of a registered folder for the composer chip (0.154.0)."""
+    """English view of a registered folder for the composer chip (0.158.0)."""
     if not r:
         return None
     v = _ve_thu_muc(r)
@@ -177,7 +177,7 @@ def _make_router() -> APIRouter:
             # Chưa gắn thư mục thì KHÔNG chạy git ở đâu cả. Suy biến về "." là chạy `git status`
             # trong thư mục của tiến trình server - trả lời về một cây người dùng không hỏi.
             "cay_sach": coding_store.cay_sach(cwd) if cwd else None,
-            # 0.154.0: English fields for the composer chip (old fields above stay as they are).
+            # 0.158.0: English fields for the composer chip (old fields above stay as they are).
             "folder": _folder_view(tm),
             **_brain_fields(sid, brain),
         }

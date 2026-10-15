@@ -1,6 +1,6 @@
 /* composer-plus.js - the composer's "+" menu (0.153.0).
  * One registry: a new feature only calls JavisComposerMenu.register({...}), the composer is not touched.
- * Items are `run` (click and close), `submenu` (returns rows) or `panel` (draws its own body, 0.154.0).
+ * Items are `run` (click and close), `submenu` (returns rows) or `panel` (draws its own body, 0.158.0).
  * Pure parts are exported for node tests.
  */
 (function () {

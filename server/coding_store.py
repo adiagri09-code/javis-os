@@ -613,7 +613,7 @@ def khoi_prompt(sid: str) -> str:
 
 
 def pinned_folder_prompt(sid: str, brain_root: str) -> str:
-    """Prompt block for a NORMAL chat that has a pinned working folder (0.154.0).
+    """Prompt block for a NORMAL chat that has a pinned working folder (0.158.0).
 
     Unlike `khoi_prompt` it never states a permission level: a normal chat keeps running at
     `full`, and a line about Plan or Auto would contradict what the hub actually allows. The

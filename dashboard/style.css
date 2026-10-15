@@ -1399,7 +1399,7 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 @media (prefers-reduced-motion: reduce) {
   .cp-fast[aria-pressed="true"], .cp-fast[aria-pressed="true"] svg { animation: none; }
 }
-/* Pinned working folder chip, right after the bolt (composer-folder.js, 0.154.0). */
+/* Pinned working folder chip, right after the bolt (composer-folder.js, 0.158.0). */
 .cp-pin { display: inline-flex; align-items: center; gap: 5px; height: 30px; max-width: 190px; padding: 0 10px;
   border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text2);
   font: inherit; font-size: 12.5px; cursor: pointer; flex: 0 1 auto; min-width: 0; }

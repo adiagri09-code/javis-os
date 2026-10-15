@@ -1,4 +1,4 @@
-/* composer-folder.js - pin a working folder for the open conversation (0.154.0).
+/* composer-folder.js - pin a working folder for the open conversation (0.158.0).
  *
  * The server runs the conversation's turns inside the pinned folder (coding_store binding,
  * POST /coding/session/{sid}/pin). The "+" menu gets a "Pin working folder" panel: brain

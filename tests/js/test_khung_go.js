@@ -28,7 +28,7 @@ check("button row: + before the chips, mic and send at the end",
   && row.indexOf('id="voiceBtn"') < row.indexOf('id="sendBtn"'));
 check("#attachBtn is gone from the page", html.indexOf('id="attachBtn"') === -1);
 check("#modelBar stays, empty, right before the card", /<div class="model-bar" id="modelBar"><\/div>\s*(<!--[\s\S]*?-->\s*)*<div class="hud-voice" id="hudVoice">/.test(html));
-check("no folder upload input (0.154.0: a folder is pinned, not uploaded)", card.indexOf('id="folderInput"') === -1);
+check("no folder upload input (0.158.0: a folder is pinned, not uploaded)", card.indexOf('id="folderInput"') === -1);
 check("the textarea keeps id first and rows=1", /<textarea id="chatInput"[^>]*rows="1"/.test(card));
 check("no disabled attribute on #voiceBtn", !/id="voiceBtn"[^>]*disabled/.test(card));
 

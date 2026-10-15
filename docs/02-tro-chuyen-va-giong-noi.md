@@ -34,7 +34,7 @@ Rail điều hướng bên trái, nhóm **Trợ lý** → mục **Javis**. Đây
 | VAULT | Cột trái | Cây thư mục của brain đang chọn, ô **Tìm note...**, hai chế độ lọc **Tên** / **Nội dung**, ba nút **＋** (tạo file), **📁** (tạo thư mục), **⟳** (làm mới cây) |
 | Đồ thị tri thức + trạng thái | Chính giữa | Mạng ghi chú, dòng chữ trạng thái (SẴN SÀNG, ĐANG NGHE...), dải số **AGENTS** / **SKILLS** / **WORKFLOWS** ở đáy |
 | HỘI THOẠI | Cột phải | Lịch sử chat, badge engine, nút **⛶** sang trang Trò chuyện |
-| Khung nhập | Dưới cùng | Một thẻ bo tròn: file đính kèm, ô gõ chữ, rồi hàng nút **＋**, chip model, chip Effort, tia sét Fast mode, mic và nút gửi (đang chạy thì thành nút dừng) |
+| Khung nhập | Dưới cùng | Một thẻ bo tròn: file đính kèm, ô gõ chữ, rồi hàng nút **＋**, chip model, chip Effort, tia sét Fast mode, chip thư mục đang ghim (nếu có), mic và nút gửi (đang chạy thì thành nút dừng) |
 
 Cột trái **không còn** bảng thẻ số liệu kinh doanh; đó là Vault explorer, bấm một note là mở ra sửa ngay trên màn hình (xem [Quản lý tệp tin](05-quan-ly-tep-tin.md)). Bấm vào số AGENTS / SKILLS / WORKFLOWS thì nhảy thẳng sang trang tương ứng trong nhóm **Năng lực**.
 
@@ -343,6 +343,15 @@ Badge cạnh chữ **HỘI THOẠI** (và ở góc phải trang Trò chuyện) h
 
 Trên điện thoại, chip model dời lên header và bảng chọn mở ra giữa màn hình.
 
+### Ghim thư mục làm việc
+
+Mục **Ghim thư mục làm việc** trong menu **＋** cho một hội thoại làm việc ngay trong một thư mục, ví dụ thư mục dự án code. Danh sách mở ra là các thư mục trong brain, có ô tìm; dòng cuối **Duyệt thư mục khác...** để chọn thư mục ngoài brain.
+
+- Ghim xong, cạnh tia sét hiện chip 📁 kèm tên thư mục. Rê chuột thấy đường dẫn đầy đủ; bấm vào để đổi hoặc **Bỏ ghim**.
+- Ghim theo **từng hội thoại**: hội thoại mới bắt đầu trong brain như thường. Ghim khi khung chat còn trống thì thư mục đi theo hội thoại ngay từ tin đầu.
+- Bộ não CLI (Claude Code, ChatGPT qua Codex, Grok Build, Antigravity) chạy lệnh ngay trong thư mục đó. Bộ não API đọc sửa file qua công cụ của brain, nên làm được với thư mục **trong** brain; thư mục ngoài brain thì chỉ bộ não CLI làm được.
+- Trang Coding dùng chung chip này thay cho nút chọn thư mục riêng. Các chip nhánh, worktree, điểm hồi và mức quyền vẫn ở trang Coding.
+
 ## Javis trình bày câu trả lời thế nào
 
 Từ bản 0.26.9, câu trả lời trên khung chat web được viết cho **mắt đọc**, không phải cho tai nghe:
@@ -496,7 +505,7 @@ Nút quanh khung chat:
 
 | Nút | Ở đâu | Làm gì |
 |---|---|---|
-| ＋ | Đầu hàng nút | Mở menu: đính kèm file hoặc ảnh, đính kèm cả thư mục, chọn file trong brain, lệnh và skill "/", **Kết nối** (kèm tình trạng), **Trợ lý và quy trình** |
+| ＋ | Đầu hàng nút | Mở menu: đính kèm file hoặc ảnh, **ghim thư mục làm việc**, chọn file trong brain, lệnh và skill "/", **Kết nối** (kèm tình trạng), **Trợ lý và quy trình** |
 | Mic | Cạnh nút gửi | Gọi Javis; trong cuộc gọi nút thành **Cúp máy** |
 | Mũi tên | Cuối hàng nút | Gửi tin nhắn |
 | Ô vuông | Thay nút gửi khi đang chạy | Dừng lượt đang trả lời + dừng đọc |
@@ -506,6 +515,7 @@ Nút quanh khung chat:
 | Chip model | Hàng nút dưới ô gõ | Đổi nhà cung cấp và model |
 | Chip Effort | Cạnh chip model | Thanh trượt độ sâu suy nghĩ |
 | Tia sét | Cạnh chip Effort | Bật/tắt Fast mode |
+| 📁 Chip thư mục | Cạnh tia sét, chỉ hiện khi đã ghim | Thư mục hội thoại này đang làm việc bên trong. Bấm để đổi thư mục hoặc bỏ ghim |
 
 Phím tắt:
 

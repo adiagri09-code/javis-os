@@ -34,7 +34,7 @@ Left navigation rail, group **Assistant** → item **Javis**. This is also the d
 | VAULT | Left column | The folder tree of the selected brain, a **Find note...** box, two filter modes **Name** / **Content**, and three buttons **＋** (new file), **📁** (new folder), **⟳** (refresh the tree) |
 | Knowledge graph + status | Centre | The note network, the status line (READY, LISTENING...), and the **AGENTS** / **SKILLS** / **WORKFLOWS** counters at the bottom |
 | CONVERSATION | Right column | Chat history, the engine badge, and the **⛶** button that opens the Chat page |
-| Composer | Bottom | One rounded card: attachments, the text box, then a row with **＋**, the model chip, the Effort chip, the Fast mode bolt, the mic and the send button (which becomes a stop button while a turn runs) |
+| Composer | Bottom | One rounded card: attachments, the text box, then a row with **＋**, the model chip, the Effort chip, the Fast mode bolt, the pinned folder chip (when there is one), the mic and the send button (which becomes a stop button while a turn runs) |
 
 The left column **no longer** holds a grid of business metric cards; it is the vault explorer, and clicking a note opens it for editing right there (see [File manager](05-file-manager.md)). Clicking the AGENTS / SKILLS / WORKFLOWS numbers jumps straight to the matching page in the **Capabilities** group.
 
@@ -327,6 +327,15 @@ The badge next to **CONVERSATION** (and in the top right of the Chat page) shows
 
 On phones, the model chip moves into the header and the picker opens in the middle of the screen.
 
+### Pin a working folder
+
+**Pin working folder** in the **＋** menu lets a conversation work right inside a folder, for example a code project. The list shows the folders in the brain with a search box; the last row, **Browse another folder...**, picks a folder outside the brain.
+
+- Once pinned, a 📁 chip with the folder name appears next to the bolt. Hover for the full path; click to change it or **Unpin**.
+- The pin is **per conversation**: a new conversation starts in the brain as usual. Pinning on an empty chat carries the folder into the conversation from its first message.
+- CLI brains (Claude Code, ChatGPT via Codex, Grok Build, Antigravity) run commands right inside that folder. API brains read and write files through the brain's tools, so they work with folders **inside** the brain; a folder outside the brain only works with CLI brains.
+- The Coding page uses the same chip instead of its own folder button. The branch, worktree, restore point and permission chips stay on the Coding page.
+
 ## How Javis formats answers
 
 Since version 0.26.9, answers in the web chat are written for **eyes**, not for ears:
@@ -474,7 +483,7 @@ Buttons around the chat frame:
 
 | Button | Where | What it does |
 |---|---|---|
-| ＋ | Start of the button row | Open the menu: attach a file or photo, attach a whole folder, pick a file from the brain, commands and skills "/", **Connections** (with health), **Assistants and workflows** |
+| ＋ | Start of the button row | Open the menu: attach a file or photo, **pin a working folder**, pick a file from the brain, commands and skills "/", **Connections** (with health), **Assistants and workflows** |
 | Mic | Next to send | Call Javis; during a call it becomes **Hang up** |
 | Arrow | End of the button row | Send the message |
 | Square | Replaces send while running | Stop the running turn and stop speaking |
@@ -484,6 +493,7 @@ Buttons around the chat frame:
 | Model chip | Button row under the text box | Change provider and model |
 | Effort chip | Next to the model chip | Thinking depth slider |
 | Bolt | Next to the Effort chip | Turn Fast mode on or off |
+| 📁 Folder chip | Next to the bolt, only when pinned | The folder this conversation works inside. Click to change it or unpin |
 
 Keyboard shortcuts:
 

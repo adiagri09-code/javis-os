@@ -113,7 +113,7 @@
     var chipQuyen = function () {
       return chip("quyen", ic("shield") + " " + esc(nhanQuyen(mq)), " cd-mq-" + esc(mq));
     };
-    // 0.154.0: the folder itself is shown and changed by the composer chip (composer-folder.js),
+    // 0.158.0: the folder itself is shown and changed by the composer chip (composer-folder.js),
     // so this row only carries the git chips and the permission level.
     if (!tm) return chipQuyen();
     var ra = "";
@@ -198,7 +198,7 @@
       _mqChip.addEventListener("change", _mqChipFn);
     } catch (e) { _mqChip = null; }
 
-    // The composer chip pins or unpins the working folder (0.154.0): reload the git chips.
+    // The composer chip pins or unpins the working folder (0.158.0): reload the git chips.
     W.addEventListener("javis:pinned-folder-changed", onPinned);
 
     bocMoPhien();

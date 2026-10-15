@@ -1,5 +1,5 @@
 /* Composer "+" menu (0.153.0): registry, keyboard, brain files. The folder item moved to
-   composer-folder.js in 0.154.0 (pin a working folder), see test_pinned_folder.js.
+   composer-folder.js in 0.158.0 (pin a working folder), see test_pinned_folder.js.
 
        node tests/js/test_menu_cong.js
 */

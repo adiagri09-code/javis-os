@@ -144,7 +144,7 @@ function btn(cls, dataset) {
 }
 function field(cls, value) { return { classList: { contains: (c) => c === cls }, value }; }
 
-// Compact toolbar (0.154.0): two native selects instead of two scrolling chip rows.
+// Compact toolbar (0.158.0): two native selects instead of two scrolling chip rows.
 {
   const data = { counts: { running: 1, waiting: 2, needs_you: 3, done: 4 }, source_counts: { team: 1, chat: 2, auto: 0 } };
   const tb = AJ.toolbarHtml(data, { source: "", filter: "" });
@@ -188,7 +188,7 @@ function field(cls, value) { return { classList: { contains: (c) => c === cls },
   check("nhịp hỏi thưa cho Kanban (không giữ tiến trình node)", intervals.length === 1 && intervals[0].ms >= 10000 && intervals[0].unrefd);
 
   // Lọc nguồn: tải lại ở server với source=team, từ trang đầu.
-  // Source filter is a select since 0.154.0: a select fires input AND change, it must load once.
+  // Source filter is a select since 0.158.0: a select fires input AND change, it must load once.
   calls = [];
   host.fire("input", field("aj-src-sel", "team"));
   host.fire("change", field("aj-src-sel", "team"));

@@ -61,11 +61,11 @@ check("server không đòi thư mục khi mở phiên coding", (() => {
   return /loai == "coding"[\s\S]{0,700}create_session/.test(MAIN)
     && !/loai == "coding"[\s\S]{0,400}status_code=404/.test(MAIN);
 })());
-check("the Coding page has no in-brain line any more (the composer chip shows the folder, 0.154.0)",
+check("the Coding page has no in-brain line any more (the composer chip shows the folder, 0.158.0)",
   !/coding\.in_brain/.test(CD) && !VI["coding.in_brain"] && !EN["coding.in_brain"]);
 
 // ---- 2. Thư mục, không phải repo ----
-check("the page's own folder picker is gone (the composer pins the folder, 0.154.0)",
+check("the page's own folder picker is gone (the composer pins the folder, 0.158.0)",
   !/moKhungThemThuMuc|menuThuMuc|boThuMuc|chip_pick_folder/.test(CD)
   && ["coding.add_folder", "coding.chip_pick_folder", "coding.detach_folder", "coding.forget_folder", "coding.forget_confirm"]
     .every((k) => !VI[k] && !EN[k]));
@@ -193,7 +193,7 @@ const STYLE = D("style.css");
 check("KHÔNG gọi window.prompt", !/\bprompt\s*\(/.test(CD_MA));
 check("KHÔNG gọi window.alert", !/\balert\s*\(/.test(CD_MA));
 const CF = fs.readFileSync(path.join(ROOT, "dashboard", "composer-folder.js"), "utf8");
-check("browsing for a folder opens the shared folder picker (from the composer since 0.154.0)", /JavisFolderPicker\.open\(/.test(CF));
+check("browsing for a folder opens the shared folder picker (from the composer since 0.158.0)", /JavisFolderPicker\.open\(/.test(CF));
 check("KHÔNG còn ô gõ đường dẫn làm đường chính",
   !/cd-tam-nen|id="cdPath"/.test(CD) && !VI["coding.path_ph"] && !EN["coding.path_ph"]);
 check("hộp duyệt đứng trên chính endpoint /browse đã có, không đẻ endpoint mới",

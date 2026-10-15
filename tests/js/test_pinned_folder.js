@@ -1,4 +1,4 @@
-/* Pinned working folder in the composer (0.154.0).
+/* Pinned working folder in the composer (0.158.0).
 
        node tests/js/test_pinned_folder.js
 */

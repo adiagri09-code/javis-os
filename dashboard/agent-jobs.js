@@ -156,7 +156,7 @@
       "</button>";
   }
 
-  // One compact row of two native selects (0.154.0). They work with the keyboard and screen readers,
+  // One compact row of two native selects (0.158.0). They work with the keyboard and screen readers,
   // phones open their own picker, and nothing scrolls sideways in the narrow column.
   function toolbarHtml(data, ui) {
     ui = ui || {};
