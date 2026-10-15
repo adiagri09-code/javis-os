@@ -3169,3 +3169,28 @@ span.tmp-lead { cursor: default; }
 body.col-resizing { cursor: col-resize; user-select: none; }
 .col-resize-right::after { right: 0; }
 .col-resize-left::after { left: 0; }
+
+/* ── Nhịp chủ động của trợ lý (T3, agent-pulse.js): một cột, chữ 16px, vùng chạm 44px, màu theo token sáng/tối ── */
+.pulse-panel { font-size: 16px; }
+.pulse-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pulse-title { font-weight: 600; color: var(--text); }
+.pulse-line { font-size: 16px; color: var(--text2); margin-top: 4px; line-height: 1.45; overflow-wrap: anywhere; }
+.pulse-ctx { border: 1px solid var(--border); background: var(--surface-1); border-radius: 10px; padding: 10px;
+  margin-top: 10px; }
+.pulse-ctx-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 600; color: var(--text); }
+.pulse-badge { font-size: 16px; font-weight: 500; color: var(--warn-ink); background: var(--warn-wash);
+  border: 1px solid var(--warn-line); border-radius: 999px; padding: 0 10px; }
+.pulse-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pulse-acts .ws-btn, .pulse-list .ws-btn { min-height: 44px; font-size: 16px; }
+.pulse-max { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; color: var(--text); }
+.pulse-max select { min-height: 44px; font-size: 16px; max-width: 100%; background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; }
+.pulse-sub { font-weight: 600; margin-top: 12px; color: var(--text); }
+.pulse-list { margin: 6px 0 0; padding-left: 20px; font-size: 16px; line-height: 1.5; color: var(--text2);
+  overflow-wrap: anywhere; }
+.pulse-err { color: var(--red); }
+.pulse-ok { color: var(--green); }
+.tm-pulse { flex-basis: 100%; margin-top: 8px; min-width: 0; }
+@media (max-width: 480px) {
+  .pulse-acts .ws-btn { flex: 1 1 auto; }
+}

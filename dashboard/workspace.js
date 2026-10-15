@@ -1586,7 +1586,7 @@
     if (!item) { host.innerHTML = ""; veLichSu(null); chonTabPhai(tabTheoLoai()); return; }
     if (S.loai === "agent") {
       // Khối Cộng hưởng (A1) đứng ĐẦU cột phải: công tắc của trợ lý này và các mục tiêu nó đang theo đuổi.
-      host.innerHTML = '<div class="rsa-panel" id="wsResonance"></div>' +
+      host.innerHTML = '<div class="rsa-panel" id="wsResonance"></div><div class="rsa-panel pulse-panel" id="wsPulse"></div>' +
         '<div class="ws-rtitle">' + esc(t("ws.agent_settings")) + '</div><div class="ws-form" id="wsAgentForm"></div>' +
         '<div class="ws-acts"><button type="button" class="ws-btn" id="wsExport">' + esc(t("studio.export")) + '</button>' +
         '<button type="button" class="ws-btn danger" id="wsDel">' + esc(t("common.delete")) + '</button></div>';
@@ -1634,6 +1634,9 @@
     window.JavisResonanceAgent.mount(host, { slug: item.slug,
       sessionId: sid || (window.JavisSessions && window.JavisSessions.current && window.JavisSessions.current()) || "",
       onNewSession: function () { var x = dangChon(); return x ? moPhien(x, true) : false; } });
+    // T3: bảng Nhịp chủ động (agent-pulse.js) ngay dưới Cộng hưởng: mọi ngữ cảnh của trợ lý, nút chỉ báo xong sau 200.
+    var ph = S.el && S.el.querySelector("#wsPulse");
+    if (ph && window.JavisPulse) window.JavisPulse.mount(ph, { slug: item.slug, brain: brain() });
   }
   function tenAgent(slug) { var a = S.agents.find(function (x) { return x.slug === slug; }); return a ? a.name : (slug || ""); }
   // Tiến độ ĐANG XEM: lần chạy sống của phiên đang mở nếu có, không thì khung rỗng dựng từ

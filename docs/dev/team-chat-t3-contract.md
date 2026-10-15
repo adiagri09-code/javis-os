@@ -31,6 +31,17 @@ Chỗ nối vào `main.py`, `team_runner.py`, `resonance_heartbeat.py` giữ ng�
 - Lần thức (P sở hữu): bước code, danh sách cơ hội, lượt `scan` với đầu ra `{"action": "none"|"propose"|"enqueue"|"say", ...}`. Hành
   động `say` gọi `agent_judge.judge_proactive(...)` (J) trước khi gửi.
 
+### 1b. Chỗ cắm đã có ở phần P (chi tiết: `docs/dev/team-chat-t3-pulse.md` mục 7)
+
+- `agent_pulse_host.register_view_part(name, fn(store, agent_key))`: mục của J/L trong `GET /agents/{slug}/pulse` (khoá `parts`);
+  phía trang `window.JavisPulseParts.push({name, render(view)})`.
+- `agent_pulse_host.register_reason_handler(code, fn(host, reason))`: phục vụ `reaction_review` (L), `related_review` và
+  `wait_unblocked` (J); hàm tự `WakeReasons.claim(..., try_busy, release_busy)` với `host.busy_pair(agent_key)`.
+- `judge_proactive(..., engine)`: `engine` là hàm không đối số trả `(engine, model, run)`. Host gọi
+  `agent_budget.try_spend(agent_key, "scan", at)` trước khi giữ chỗ lượt quét.
+- Bộ chiếu: `FeedbackProjector.record_task_event(event, context_ref=, agents={key: share}, source_ref_=)`, `pulse_wake`,
+  `void_task_event`.
+
 ## 2. Phán xử (J) cung cấp
 
 - `agent_judge.judge_team_message(ctx) -> list[Decision]`: lọc bằng code rồi một lô (purpose `judge_batch`), `K` người tự lên tiếng.

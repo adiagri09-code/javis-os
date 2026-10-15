@@ -8,7 +8,11 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.156.0] - 2026-10-15
 ### Thêm mới
-- **Trợ lý tự điều nhịp và tự biết lúc nên nói** (đang làm).
+- **Trợ lý tự điều nhịp:** trợ lý bật Auto tự xem lại việc của mình theo nhịp, từ 15 phút tới 1 tháng. Được khen, được dùng kết quả thì nhanh dần (mặc định tối đa 1 giờ, chỉ bạn nâng được), ít ai cần thì chậm dần rồi ngủ. Gọi trực tiếp là thức ngay.
+- **Việc được giao không bao giờ bị chậm:** nhịp chỉ áp cho phần tự làm. Việc nhóm, hạn chót, mục tiêu và lời gọi trực tiếp vẫn chạy kể cả khi trợ lý đang ngủ hay tạm dừng.
+- **Bảng Nhịp trên thẻ trợ lý và dòng thành viên nhóm:** trạng thái từng nơi, lần xem xét gần nhất và tiếp theo, vì sao đổi nhịp, phản hồi đã tính. Có nút Đánh thức, Tạm dừng, Đặt lại, Quay lại.
+- **Lần tự thức chỉ gọi AI khi có việc thật:** việc nhóm cũ, việc bị chặn có tin mới, mục tiêu chờ bạn. Không có quyền thì chỉ đề xuất; tin tự nhắn luôn qua bộ phán xử trước.
+- **Ghi công đúng người:** khen bản tổng hợp thì phần lớn về người làm các phần, không dồn hết cho trưởng nhóm.
 
 ## [0.154.0] - 2026-10-15
 ### Thêm mới
