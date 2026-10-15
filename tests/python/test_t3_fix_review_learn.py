@@ -284,6 +284,57 @@ row_c = next((c for c in vp["changes"] if c["id"] == stale), None)
 check("tiến trình chết giữa applying và applied: thay đổi hiện trong mục Bài học với trạng thái interrupted",
       row_c is not None and row_c["status"] == "interrupted" and not row_c["can_revert"], row_c)
 
+# ═════ vòng 2 P2-2: trần phán xử của nhóm không làm lượt xem xét gọi model lặp lại ═════
+CLK = [time.time()]
+TCTX = "team:tcap"
+
+
+class CapJudge(QuotaJudge):
+    async def proactive(self, **kw):
+        self.calls += 1
+        return {"verdict": "silent", "silence_code": "judge_cap", "decision_id": 8, "reason": ""}
+
+
+# (a) trần judge_daily của nhóm đã hết TRƯỚC khi nhận lý do: không lời gọi model nào, dù thử lại nhiều lần
+w8 = world()
+w8["host"].deps.clock = lambda: CLK[0]
+w8["host"].deps.judge_payload = lambda ctx: {"judge_daily": 1} if ctx.startswith("team:") else {}
+k8 = w8["key"]
+led8 = ALG.CallLedger(w8["gs"])
+c8 = led8.reserve(purpose="judge_batch", reason_ref="judge:tcap:used", agent_key="", context_ref=TCTX, obligation=False)
+led8.settle(c8, "ok")
+r8 = w8["W"].add_source(k8, TCTX, "reaction_review", "rx:team:881", now=CLK[0])
+w8["eng"].text = out("revise", ["rx:team:881"], message="Bản sửa")
+outs8 = []
+for i in range(4):
+    CLK[0] += 3600
+    outs8.append(run(w8["host"].serve_reaction_review(w8["W"].get(r8)))["outcome"])
+check("trần phán xử của nhóm đã hết: 4 lần thử lại, KHÔNG lời gọi model nào của lượt xem xét",
+      w8["eng"].calls == [] and all(o in ("quota", "backoff") for o in outs8), (len(w8["eng"].calls), outs8))
+check("trần phán xử của nhóm đã hết: lý do giữ pending, nguồn chưa tiêu thụ",
+      w8["W"].get(r8)["status"] == "pending", w8["W"].get(r8))
+
+# (b) bộ phán xử báo judge_cap SAU lượt xem xét: lùi tới ngày mới, thử lại trong ngày không gọi model lần nữa
+w9 = world(judge=CapJudge())
+CLK[0] = AB.day_start(time.time()) + 10 * 3600   # 10 giờ sáng
+w9["host"].deps.clock = lambda: CLK[0]
+k9 = w9["key"]
+r9 = w9["W"].add_source(k9, TCTX, "reaction_review", "rx:team:991", now=CLK[0])
+w9["eng"].text = out("revise", ["rx:team:991"], message="Bản sửa")
+run(w9["host"].serve_reaction_review(w9["W"].get(r9)))
+check("chuẩn bị: một lượt xem xét chạy, phán xử báo judge_cap, nguồn về lý do chờ",
+      len(w9["eng"].calls) == 1 and len(pending(w9)) == 1, (len(w9["eng"].calls), pending(w9)))
+for i in range(5):
+    CLK[0] += 3600
+    for rr in pending(w9):
+        run(w9["host"].serve_reaction_review(rr))
+check("judge_cap: thử lại trong cùng ngày (5 giờ) không thêm lời gọi model nào", len(w9["eng"].calls) == 1,
+      len(w9["eng"].calls))
+CLK[0] = AB.day_start(CLK[0]) + 86400 + 3600 * 2   # 2 giờ sáng hôm sau
+for rr in pending(w9):
+    run(w9["host"].serve_reaction_review(rr))
+check("judge_cap: sang ngày mới thì xem lại đúng một lần", len(w9["eng"].calls) == 2, len(w9["eng"].calls))
+
 if fails:
     print(f"\n{len(fails)} FAIL")
     raise SystemExit(1)
