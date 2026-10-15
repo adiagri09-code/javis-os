@@ -17,6 +17,7 @@ from pathlib import Path
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-t4-host-")
 os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"   # chốt trung tâm (tests/run.py, _paths.py đặt sẵn; đặt lại cho chắc)
 os.environ["JAVIS_NO_REAL_REVIEW_ENGINE"] = "1"
+os.environ["JAVIS_NO_REAL_TEAM_ENGINE"] = "1"
 os.environ["JAVIS_PULSE_TICK_PAUSED"] = "1"
 os.environ["JAVIS_RESONANCE_TICK_PAUSED"] = "1"
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)

@@ -184,6 +184,7 @@ def install_guards(main, fakes: FakeModels | None = None) -> FakeModels:
     # dấu giả, main dừng engine phán xử và engine lượt học trước khi dựng. Bench chạy ngoài tests/run.py nên tự đặt.
     os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
     os.environ["JAVIS_NO_REAL_REVIEW_ENGINE"] = "1"
+    os.environ["JAVIS_NO_REAL_TEAM_ENGINE"] = "1"
     import agent_judge  # noqa: WPS433
     judge_fake = agent_judge.mark_test_fake(fakes.judge_ask)
     main.team_engine.build = _no_real_engine
@@ -211,7 +212,7 @@ def guards_hold(main) -> list:
             bad.append(name)
     if main.team_engine.build is not _no_real_engine:
         bad.append("team_engine.build")
-    for env in ("JAVIS_NO_REAL_JUDGE_ENGINE", "JAVIS_NO_REAL_REVIEW_ENGINE"):
+    for env in ("JAVIS_NO_REAL_JUDGE_ENGINE", "JAVIS_NO_REAL_REVIEW_ENGINE", "JAVIS_NO_REAL_TEAM_ENGINE"):
         if os.environ.get(env) != "1":
             bad.append(env)
     judge = main._agent_judge()
@@ -340,6 +341,7 @@ def main_bench(argv=None) -> dict:
     os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
     os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"   # chốt trung tâm, như tests/run.py
     os.environ["JAVIS_NO_REAL_REVIEW_ENGINE"] = "1"
+    os.environ["JAVIS_NO_REAL_TEAM_ENGINE"] = "1"
     os.environ["JAVIS_PULSE_TICK_PAUSED"] = "1"       # nhịp nền của scheduler không chạy; bench gọi tick trực tiếp
     os.environ["JAVIS_RESONANCE_TICK_PAUSED"] = "1"
     (base / "state").mkdir()
