@@ -15,6 +15,7 @@ from _paths import ROOT, SERVER  # noqa: E402,F401
 import datetime
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -24,6 +25,8 @@ PY = Path(ROOT) / "tests" / "python"
 JS = Path(ROOT) / "tests" / "js"
 DOC = Path(ROOT) / "docs" / "dev" / "team-chat-acceptance-matrix.md"
 WRITE = "--write" in sys.argv
+# Môi trường gốc, chụp TRƯỚC khi kịch bản host đặt state tạm và cờ dừng nhịp: test con chạy như `tests/run.py` chạy nó.
+BASE_ENV = dict(os.environ, PYTHONIOENCODING="utf-8")
 
 # Phần T3 nào đã ghép: phát hiện bằng module có mặt (không đoán).
 PARTS = {
@@ -285,7 +288,8 @@ def run_tests_for_results():
     for n in names:
         cmd = (["node", str(test_path(n))] if n.endswith(".js") else [sys.executable, "-X", "utf8", str(test_path(n))])
         try:
-            p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=1200)
+            p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=1200, env=BASE_ENV,
+                               cwd=str(ROOT))
             res[n] = "ok" if p.returncode == 0 else "ĐỎ"
         except subprocess.TimeoutExpired:
             res[n] = "quá giờ"

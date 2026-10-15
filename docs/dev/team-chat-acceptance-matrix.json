@@ -1,5 +1,5 @@
 {
- "sha": "89a0acd1",
+ "sha": "6b92bcb5",
  "results": {
   "test_agent_calls_ledger.py": "ok",
   "test_agent_judge_dm.py": "ok",
@@ -8,7 +8,7 @@
   "test_agent_judge_team.py": "ok",
   "test_agent_judge_ui.js": "ok",
   "test_agent_judge_waits.py": "ok",
-  "test_agent_pulse_host.py": "ĐỎ",
+  "test_agent_pulse_host.py": "ok",
   "test_agent_pulse_policy.py": "ok",
   "test_dm_reactions.py": "ok",
   "test_feedback_projector.py": "ok",
