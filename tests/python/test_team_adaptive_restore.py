@@ -541,7 +541,16 @@ def section_real_upgrade():
     check("nâng lại: không chép đè snapshot .pre-0.154.0", all((st / n).stat().st_mtime_ns == mt[n] for n in snaps))
 
 
-for _name, _fn in (("chạy đúng", section_happy), ("thiếu/hỏng", section_missing_invalid),
+def section_t4_index_only():
+    """T4 (0.157.0) chỉ thêm chỉ mục: --to 0.157.0 không ghi gì và nói rõ không có gì để khôi phục."""
+    d = fixture("t4", judge=True, pre156=True)
+    before = live(d)
+    r = RT.restore(str(d), "0.157.0")
+    check("--to 0.157.0: không ghi gì, nói rõ mốc chỉ thêm chỉ mục", not r["ok"] and "chỉ thêm chỉ mục" in r["error"]
+          and live(d) == before and not names_with(d, ".post-0.157.0-"), r)
+
+
+for _name, _fn in (("T4 chỉ mục", section_t4_index_only), ("chạy đúng", section_happy), ("thiếu/hỏng", section_missing_invalid),
                    ("lỗi giữa chừng", section_failures), ("chạy lại/CLI", section_rerun_cli),
                    ("dấu khớp mã", section_markers_match_code), ("nâng thật", section_real_upgrade)):
     try:

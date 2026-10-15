@@ -86,6 +86,11 @@ MILESTONES = {
         Entry("resonance.sqlite3", IF_PRESENT, Marker(base="goals"),
               "mục tiêu Cộng hưởng và dữ liệu T3 trong kho này"),
     ),
+    # T4 (0.157.0) không tạo kho, bảng hay cột nào: chỉ thêm chỉ mục (`team_reactions_status` ở team.sqlite3,
+    # `idx_messages_team_author`, `idx_messages_team_decision` ở conversations.db, `pulse_contrib_result` ở
+    # resonance.sqlite3). Bản 0.156.x bỏ qua chỉ mục lạ, nên `--to 0.157.0` không có gì để khôi phục; hạ thẳng về 0.156.x
+    # không cần công cụ. Xem docs/dev/team-chat-t4-ops.md.
+    "0.157.0": (),
 }
 
 
@@ -208,6 +213,9 @@ def plan(state_dir: str, to: str) -> dict:
                                 "đi thì không có bản trước nâng để về)")
     if problems:
         return {**empty, "error": "; ".join(problems)}
+    if not restore and not remove and not chosen:
+        return {**empty, "error": f"mốc {to} không nâng kho, bảng hay cột nào (chỉ thêm chỉ mục, bản cũ bỏ qua): không "
+                                  "có gì để khôi phục, hạ thẳng về bản trước là đủ"}
     if not restore and not remove:
         return {**empty, "error": f"không có snapshot nào của mốc {to} trở đi và không có kho nào cần gỡ: kho chưa từng "
                                   f"được {to} nâng lên, không có gì để khôi phục"}
