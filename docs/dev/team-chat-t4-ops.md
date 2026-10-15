@@ -53,9 +53,10 @@ dùng chung `install_guards` với bench):
    `cases`, `add_decision`) và `agent_ledger.reserve/mark_engine`. Ở pha chỉ lô phán xử, độ trễ event loop lớn nhất khoảng
    15 ms trên máy này, nhưng tăng theo số thành viên và độ chậm đĩa (VPS). Hướng sửa: chạy phần kho của lô trong luồng phụ
    (`asyncio.to_thread`) như `team_runner` làm (R5). Thuộc phần J.
-2. **Nhịp pulse lần đầu chậm.** Tick đầu tiên sau khi có nhiều phản hồi seed sẵn mất vài giây (chiếu outbox), các tick sau vài
-   trăm ms; phần chạy trong luồng phụ, nhưng độ trễ event loop lớn nhất ở pha chỉ nhịp có lúc 80 tới 125 ms. Cần đo lại sau
-   khi sửa mục 1 (cùng luồng loop), và trên VPS.
+2. **Nhịp pulse nặng khi còn nhiều phản hồi chờ.** Một tick tốn 0,5 tới 3,4 s (luồng phụ), độ trễ event loop lớn nhất ở pha
+   chỉ nhịp khoảng 0,2 s, nhiều khả năng do luồng đối soát của bộ chiếu tranh GIL (khoảng 4,7 ms mỗi reaction "Chờ xem xét",
+   trần 200 dòng mỗi nhịp). Phần L chưa ghép thì các reaction đó không bao giờ được phục vụ nên chi phí lặp mỗi 30 giây. Cần
+   đo lại khi L ghép và trên VPS. Số đo: [team-chat-t4-bench.md](team-chat-t4-bench.md).
 3. **Test của phần P giả định chưa có phần J:** `test_agent_pulse_host.py` ca "chưa có agent_judge: say thành silent
   (judge_unavailable)" đỏ khi đã ghép J (nhận `judge_error`). Đây là lỗi ghép T3, không phải T4.
 4. **Mỗi gói `team_message` vẽ lại cả khung tin của mỗi tab** (`teams.js onTeamEvent -> drawMsgs`) và hẹn một lần đọc lại danh
