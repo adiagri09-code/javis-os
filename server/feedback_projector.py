@@ -47,19 +47,35 @@ def _chu(vi: str, en: str) -> str:
         return vi
 
 
-_LOCKS: dict = {}
+_LOCKS: dict = {}   # khoá cặp -> [Lock, số người đang dùng]
 _LOCKS_GUARD = threading.Lock()
 
 
-def _pair_lock(key: str) -> threading.Lock:
-    with _LOCKS_GUARD:
-        lk = _LOCKS.get(key)
-        if lk is None:
-            if len(_LOCKS) > 5000:
-                for k in [k for k, v in _LOCKS.items() if not v.locked()][:2500]:
-                    _LOCKS.pop(k, None)
-            lk = _LOCKS[key] = threading.Lock()
-        return lk
+class _pair_lock:
+    """Khoá theo cặp (tin, người phản hồi) trong tiến trình, có đếm người dùng: chỉ dọn khoá không ai đang giữ HAY đang chờ,
+    nên không có khe "lấy khoá rồi bị dọn trước khi acquire" làm hai lần chiếu cùng cặp chạy song song (review T2 vòng 2)."""
+
+    def __init__(self, key: str):
+        self.key = key
+
+    def __enter__(self):
+        with _LOCKS_GUARD:
+            ent = _LOCKS.get(self.key)
+            if ent is None:
+                if len(_LOCKS) > 5000:
+                    for k in [k for k, v in _LOCKS.items() if v[1] == 0][:2500]:
+                        _LOCKS.pop(k, None)
+                ent = _LOCKS[self.key] = [threading.Lock(), 0]
+            ent[1] += 1
+        ent[0].acquire()
+        self._ent = ent
+        return self
+
+    def __exit__(self, *exc):
+        self._ent[0].release()
+        with _LOCKS_GUARD:
+            self._ent[1] -= 1
+        return False
 
 
 def source_ref(kind: str, log_id: int) -> str:

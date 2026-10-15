@@ -1372,6 +1372,12 @@ class GoalStore:
             n = c.execute(f"UPDATE wake_reasons SET state='superseded', settled_at=?, settled_by='reaction_changed' "
                           f"WHERE goal_id=? AND code=? AND state='pending' AND origin='event' AND source_ref IN "
                           f"({','.join('?' * len(refs))})", [now, str(goal_id), str(code)] + refs).rowcount
+            # Nguồn cũ đang thuộc một lượt goal CHƯA chốt (`served` bởi lượt đang chạy): đánh dấu để lượt đó bị huỷ thì
+            # nguồn cũ KHÔNG trở về `pending` cạnh nguồn mới (review T2 vòng 2, cùng lỗi với P2-1 ở lớp 3). Giữ `served`
+            # làm bằng chứng lượt đã đọc nó.
+            c.execute(f"UPDATE wake_reasons SET settled_by='reaction_changed:' || settled_by WHERE goal_id=? AND code=? "
+                      f"AND state='served' AND origin='event' AND settled_by NOT LIKE 'reaction_changed%' AND source_ref IN "
+                      f"({','.join('?' * len(refs))})", [str(goal_id), str(code)] + refs)
             if n:
                 self._recompute_wake(c, str(goal_id))
             return n

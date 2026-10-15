@@ -259,5 +259,29 @@ r = post(S_HOA, ah, {"value": "love", "nonce": "hoa-down"})
 check("review T2 P3: gửi lại cùng nonce sau đó vẫn 200, không ghi thêm dòng", r.status_code == 200
       and len(store.dm_reaction_log(S_HOA, ah)) == 1, r.text)
 
+# Review T2 vòng 2: một dòng chờ tác giả lỗi mãi không chặn các dòng sau.
+(BR / "agents" / "tu.md").write_text("---\nname: Tu\nrole: Trợ lý\n---\nBạn là Tu.\n", encoding="utf-8", newline="\n")
+S_TU = store.create_session(brain=str(BR), channel="agent:tu")
+at_ = store.append_message(S_TU, "assistant", "Câu trả lời của Tu")
+S_BAD = store.create_session(brain=str(BR), channel="agent:hoa")
+ab_ = store.append_message(S_BAD, "assistant", "Câu của phiên lỗi mãi")
+main._dm_reaction_author = _author_down
+post(S_BAD, ab_, {"value": "like", "nonce": "bad-1"})
+post(S_TU, at_, {"value": "like", "nonce": "tu-1"})
+
+
+def _author_bad_only(sess):
+    if sess.get("id") == S_BAD:
+        raise RuntimeError("phiên này lỗi mãi")
+    return _orig_author(sess)
+
+
+main._dm_reaction_author = _author_bad_only
+n_fix2 = main._dm_resolve_pending_authors()
+main._dm_reaction_author = _orig_author
+check("review T2 vòng 2: dòng lỗi mãi bị bỏ qua, dòng sau vẫn được tra tác giả", n_fix2 == 1
+      and store.dm_reaction_log(S_TU, at_)[-1]["effect_state"] == "pending"
+      and store.dm_reaction_log(S_BAD, ab_)[-1]["effect_state"] == "pending_author", n_fix2)
+
 print(f"\n{'FAIL' if fails else 'PASS'} - test_dm_reactions: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)
