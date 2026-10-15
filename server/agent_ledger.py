@@ -26,7 +26,10 @@ CALL_STATUSES = ("reserved", "running", "ok", "error", "refunded", "interrupted"
 LIVE_STATUSES = ("reserved", "running", "ok")
 OPEN_STATUSES = ("reserved", "running")
 PURPOSES = ("reply", "step", "judge_batch", "review", "proactive", "scan", "reaction_review", "goal")
-STALE_RESERVED_S = 600.0          # một lượt tối đa 10 phút (thiết kế 3.4, 9.1)
+STALE_RESERVED_S = 600.0          # một lượt tối đa 10 phút (thiết kế 3.4, 9.1), chỉ cho dòng `mirror_ref = ''`
+# Cửa sổ ân hạn của đối soát (thiết kế 9.1, sửa sau review T1 vòng 2): dòng sổ và lượt nhóm mới hơn mốc này bị bỏ qua, để
+# một nhịp đối soát không bắt gặp lượt nhóm đang ở giữa hai bước giữ chỗ của hai kho.
+RECONCILE_GRACE_S = 120.0
 REASON_CODES = ("reaction_review", "related_review", "proactive_due", "scan_due", "wait_unblocked")
 REASON_STATUSES = ("pending", "claimed", "served", "superseded", "failed")
 MAX_ATTEMPTS = 3                  # quá 3 lần thử thì `failed` (hiển thị, chủ bấm thử lại)
@@ -141,14 +144,15 @@ class CallLedger:
     # ───────────── đối soát lượt không gắn lượt nhóm ─────────────
 
     def reconcile_stale(self, now: Optional[float] = None, stale_s: float = STALE_RESERVED_S) -> dict:
-        """Dòng không phản chiếu lượt nhóm (`mirror_ref` không bắt đầu bằng `team_turn:`) còn mở quá một lượt (10
+        """Dòng KHÔNG phản chiếu gì (`mirror_ref = ''`: phán xử theo lô, xem xét, chủ động, quét) còn mở quá một lượt (10
         phút): chưa có mốc engine thì `refunded` (chắc chắn chưa gọi model), có mốc thì `interrupted` (vẫn tính).
-        Idempotent. Lượt nhóm do `TeamCeiling.reconcile` lo (theo trạng thái thật của `team_turns`)."""
+        Idempotent. Dòng `team_turn:*` KHÔNG BAO GIỜ xử lý theo tuổi (lượt nhóm có thể chờ khoá bận tới busy_wait_s và
+        một bước chạy tới STEP_TIMEOUT_S): `TeamCeiling.reconcile` lo theo trạng thái thật của `team_turns`."""
         t = _now(now)
         out = {"refunded": 0, "interrupted": 0}
         with self._tx() as c:
             rows = c.execute("SELECT id, engine_at FROM agent_calls WHERE status IN ('reserved','running') "
-                             "AND created_at < ? AND mirror_ref NOT LIKE 'team_turn:%'", (t - stale_s,)).fetchall()
+                             "AND created_at < ? AND mirror_ref = ''", (t - stale_s,)).fetchall()
             for r in rows:
                 if r["engine_at"] is None:
                     out["refunded"] += self._refund_in(c, r["id"], t)
@@ -236,22 +240,26 @@ class TeamCeiling:
                 self.ledger._refund_in(c, r["id"], _now(now))
 
     def reconcile(self, teams: Any, startup: bool = False, now: Optional[float] = None,
-                  stale_s: float = STALE_RESERVED_S) -> dict:
-        """Đối soát hai kho (thiết kế 9.1), idempotent:
-        - dòng phản chiếu còn mở: lượt nhóm đã hoàn hay không còn thì `refunded`; lượt nhóm đã tới mốc engine thì
-          `running`; lượt nhóm đã chốt thì chốt theo.
-        - lúc khởi động (`startup`): dòng `reserved` không mốc engine quá 10 phút thì `refunded` (lượt nhóm có mốc engine
-          thì `interrupted`); lượt nhóm `reserved` chưa tới mốc engine mà THIẾU dòng sổ thì hoàn lượt nhóm.
-        - lượt nhóm đã tới mốc engine mà thiếu dòng sổ thì dựng lại dòng `counted = 1` theo kết cục của lượt nhóm.
-        - dòng không gắn lượt nhóm: quy tắc 10 phút (`CallLedger.reconcile_stale`)."""
+                  stale_s: float = STALE_RESERVED_S, grace_s: float = RECONCILE_GRACE_S) -> dict:
+        """Đối soát hai kho (thiết kế 9.1, bản sửa sau review T1 vòng 2), idempotent. Dòng `team_turn:*` chỉ theo trạng
+        thái của CHÍNH lượt nhóm đó, KHÔNG BAO GIỜ theo tuổi (lượt nhóm có thể nằm `reserved` không mốc engine trong lúc
+        chờ khoá bận tới busy_wait_s, mặc định 1800 giây, và một bước chạy tới STEP_TIMEOUT_S):
+        - lượt nhóm đã hoàn hay không còn: dòng `refunded` (đã có mốc engine thì `interrupted`, vẫn tính);
+        - lượt nhóm đã chốt: dòng chốt theo; lượt nhóm đã tới mốc engine: dòng `running`;
+        - lượt nhóm còn `reserved`/`running`: để nguyên;
+        - lượt nhóm đã tới mốc engine mà THIẾU dòng sổ: dựng lại dòng `counted = 1` theo kết cục (có thể tạm vượt trần).
+        Dòng sổ và lượt nhóm mới hơn `grace_s` (120 giây) bị bỏ qua: không bắt gặp lượt đang ở giữa hai bước giữ chỗ.
+        Lúc khởi động (`startup`) mọi lượt của tiến trình cũ đã được `TeamRunner.recover` hoàn hay chốt `interrupted`,
+        nên dòng sổ của chúng đi đúng đường đó. Dòng `mirror_ref = ''` theo quy tắc 10 phút (`reconcile_stale`)."""
         t = _now(now)
-        out = {"refunded": 0, "settled": 0, "marked": 0, "rebuilt": 0, "team_refunded": 0, "stale": {}}
+        cutoff = t - float(grace_s)
+        out = {"refunded": 0, "settled": 0, "marked": 0, "rebuilt": 0, "stale": {}}
         with closing(self.store._conn()) as c:
             open_rows = [dict(r) for r in c.execute(
-                "SELECT * FROM agent_calls WHERE status IN ('reserved','running') AND mirror_ref LIKE 'team_turn:%'"
-            ).fetchall()]
+                "SELECT * FROM agent_calls WHERE status IN ('reserved','running') AND mirror_ref LIKE 'team_turn:%' "
+                "AND created_at <= ?", (cutoff,)).fetchall()]
             mark = c.execute("SELECT value FROM ceiling_state WHERE name='team_scan_at'").fetchone()
-        scan_from = float(mark["value"]) - 86400.0 if mark else 0.0
+        scan_from = float(mark["value"]) - 86400.0 - float(grace_s) if mark else 0.0
         for r in open_rows:
             tid = r["mirror_ref"][len("team_turn:"):]
             turn = teams.turn(tid)
@@ -275,38 +283,29 @@ class TeamCeiling:
                     out["marked"] += c.execute(
                         "UPDATE agent_calls SET status='running', engine=?, model=?, engine_at=? WHERE id=?",
                         (turn.get("engine") or "", turn.get("model") or "", turn["engine_at"], r["id"])).rowcount
-                elif startup and cur["status"] == "reserved" and float(r["created_at"]) < t - stale_s:
-                    out["refunded"] += self.ledger._refund_in(c, r["id"], t)
-        # Lượt nhóm thiếu dòng sổ.
+                # Lượt nhóm còn reserved/running (đang chờ khoá bận hay đang chạy): để nguyên, dù lâu bao nhiêu.
         turns = teams.turns_since(scan_from) if hasattr(teams, "turns_since") else []
         with closing(self.store._conn()) as c:
             have = {row[0] for row in c.execute("SELECT DISTINCT mirror_ref FROM agent_calls "
                                                 "WHERE mirror_ref LIKE 'team_turn:%'").fetchall()}
         for turn in turns:
             ref = self.mirror(turn["turn_id"])
-            if ref in have:
+            if ref in have or turn.get("engine_at") is None or float(turn.get("created_at") or 0) > cutoff:
                 continue
-            if turn.get("engine_at") is not None:
-                status = turn["status"] if turn["status"] in ("running", "ok", "error", "interrupted") else "running"
-                with self.ledger._tx() as c:
-                    if c.execute("SELECT 1 FROM agent_calls WHERE mirror_ref=?", (ref,)).fetchone():
-                        continue
-                    c.execute("INSERT INTO agent_calls(agent_key,context_ref,purpose,reason_ref,attempt,engine,model,"
-                              "status,counted,obligation,mirror_ref,tokens_in,tokens_out,cost_usd,engine_at,created_at,"
-                              "settled_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                              (turn.get("agent_key") or "", f"team:{turn.get('team_id') or ''}",
-                               TEAM_PURPOSE.get(turn.get("role") or "", "reply"), ref, 1, turn.get("engine") or "",
-                               turn.get("model") or "", status, 1, 1, ref, turn.get("tokens_in"),
-                               turn.get("tokens_out"), turn.get("cost_usd"), turn["engine_at"],
-                               float(turn.get("created_at") or t),
-                               None if status == "running" else (turn.get("settled_at") or t)))
-                    out["rebuilt"] += 1
-            elif startup and turn.get("status") == "reserved" and float(turn.get("created_at") or 0) < t - 60:
-                try:
-                    teams.refund_turn(turn["turn_id"])
-                    out["team_refunded"] += 1
-                except Exception:  # noqa: BLE001 - lượt đã qua mốc giữa chừng: để lần sau
-                    pass
+            status = turn["status"] if turn["status"] in ("running", "ok", "error", "interrupted") else "running"
+            with self.ledger._tx() as c:
+                if c.execute("SELECT 1 FROM agent_calls WHERE mirror_ref=?", (ref,)).fetchone():
+                    continue
+                c.execute("INSERT INTO agent_calls(agent_key,context_ref,purpose,reason_ref,attempt,engine,model,"
+                          "status,counted,obligation,mirror_ref,tokens_in,tokens_out,cost_usd,engine_at,created_at,"
+                          "settled_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                          (turn.get("agent_key") or "", f"team:{turn.get('team_id') or ''}",
+                           TEAM_PURPOSE.get(turn.get("role") or "", "reply"), ref, 1, turn.get("engine") or "",
+                           turn.get("model") or "", status, 1, 1, ref, turn.get("tokens_in"),
+                           turn.get("tokens_out"), turn.get("cost_usd"), turn["engine_at"],
+                           float(turn.get("created_at") or t),
+                           None if status == "running" else (turn.get("settled_at") or t)))
+                out["rebuilt"] += 1
         with self.ledger._tx() as c:
             c.execute("INSERT INTO ceiling_state(name, value) VALUES('team_scan_at', ?) "
                       "ON CONFLICT(name) DO UPDATE SET value=excluded.value", (t,))

@@ -4142,7 +4142,7 @@
   "teams.head_people": "You + {n} assistants",
   "teams.head_leader": "{name} coordinates",
   "teams.reply.why.timeout": "No answer after {n} minutes",
-  "teams.reply.why.server_ceiling": "The server's shared turn ceiling set by the machine owner is used up",
+  "teams.reply.why.server_ceiling": "Reached the server's shared turn ceiling",
   "teams.block.server_ceiling": "The server's shared turn ceiling is used up",
   "teams.reply.why.auth": "The assistant's model needs you to sign in again",
   "teams.reply.why.no_leader": "The team has no coordinator to answer general messages",

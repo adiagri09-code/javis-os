@@ -150,7 +150,11 @@ class FeedbackProjector:
             self._mark(kind, older_pending, "superseded", {"superseded_by": source_ref(kind, newest["id"])})
         if newest.get("effect_state") != "pending":
             return []
-        refs = self._apply(kind, newest, [x["id"] for x in pair[:-1]])
+        older = [x["id"] for x in pair[:-1]]
+        refs = self._apply(kind, newest, older)
+        # Đổi hay bỏ: nguồn cũ của cùng cặp trong lý do còn chờ bị gỡ SAU khi nguồn mới đã vào (lý do không bị chốt
+        # `superseded` giữa chừng chỉ vì đang thay nguồn).
+        self._drop_old(kind, newest, older)
         self._mark(kind, [newest["id"]], "done", refs)
         ev = self._event(kind, newest)
         return [ev] if ev else []
@@ -180,12 +184,6 @@ class FeedbackProjector:
         agent_key = str(row.get("agent_key") or "")
         goal_id = str(row.get("goal_id") or "") if kind == "dm" else ""
         res = self._resonance() if (agent_key or goal_id) else None
-        # Đổi hay bỏ: nguồn cũ của cùng cặp trong lý do còn chờ bị gỡ (lớp 3 và A2).
-        if res is not None and old_refs:
-            from agent_ledger import WakeReasons
-            WakeReasons(res).remove_group(grp, keep=[src])
-            if goal_id:
-                res.supersede_reason_events(goal_id, A2_CODE, old_refs)
         nxt = self._next_state(kind, row)
         if nxt is None:
             return {"route": "cleared", "source_ref": src, "removed": old_refs}
@@ -224,6 +222,25 @@ class FeedbackProjector:
         refs = {"route": "l3", "source_ref": src, "reason_id": rid, "context_ref": ctx, "agent_key": agent_key}
         self._sync_one(kind, row, refs)
         return refs
+
+    def _drop_old(self, kind: str, row: dict, older_ids: list) -> list:
+        """Gỡ nguồn của các lần đổi cũ hơn của cùng cặp khỏi lý do còn chờ (lớp 3) và lý do `feedback` còn chờ (A2)."""
+        if not older_ids:
+            return []
+        agent_key = str(row.get("agent_key") or "")
+        goal_id = str(row.get("goal_id") or "") if kind == "dm" else ""
+        if not (agent_key or goal_id):
+            return []
+        res = self._resonance()
+        if res is None:
+            return []
+        from agent_ledger import WakeReasons
+        src = source_ref(kind, row["id"])
+        removed = WakeReasons(res).remove_group(group_ref(kind, row["session_id"], row["message_id"], row["reactor"]),
+                                                keep=[src])
+        if goal_id:
+            res.supersede_reason_events(goal_id, A2_CODE, [source_ref(kind, i) for i in older_ids])
+        return removed
 
     # ───────────── trạng thái hiển thị ─────────────
 

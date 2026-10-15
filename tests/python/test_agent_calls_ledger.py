@@ -261,7 +261,7 @@ run(r.run_replies(sub))
 rep = tm.replies_of(T["team_id"], sub["message_id"])
 check("lỗi kho chung lúc mốc/chốt: lượt vẫn xong, có tin trả lời", rep and rep[0]["status"] == "done"
       and [t["status"] for t in tm.turns(T["team_id"])] == ["ok"], rep)
-out = r.reconcile_ceiling()
+out = r.ceiling.reconcile(tm, now=time.time() + AL.RECONCILE_GRACE_S + 60)
 row = AL.CallLedger(gs).rows()[0]
 check("đối soát sau đó sửa dòng sổ theo lượt nhóm (ok)", row["status"] == "ok", (out, row))
 
@@ -281,7 +281,7 @@ check("kho chung lỗi lúc giữ chỗ (có trần): không gọi engine, lư�
 ceiling(None)
 gs, ss, ts, tm, fake, r, T = world("bad-reserve-nocap", BadReserve)
 run(r.run_replies(r.submit(T["team_id"], "Chào", client_msg_id="m1")))
-r.reconcile_ceiling()
+r.ceiling.reconcile(tm, now=time.time() + AL.RECONCILE_GRACE_S + 60)
 check("kho chung lỗi lúc giữ chỗ (không đặt trần): lượt chạy, đối soát dựng lại dòng counted",
       len(fake.calls) == 1 and [x["status"] for x in AL.CallLedger(gs).rows()] == ["ok"])
 
@@ -305,7 +305,7 @@ stale = L.reserve(purpose="scan", reason_ref="scan:old", now=time.time() - 3600)
 stale_e = L.reserve(purpose="proactive", reason_ref="pro:old", now=time.time() - 3600)
 L.mark_engine(stale_e)
 fresh_row = L.reserve(purpose="scan", reason_ref="scan:new")
-rep1 = TC.reconcile(tm)
+rep1 = TC.reconcile(tm, now=time.time() + AL.RECONCILE_GRACE_S + 60)
 
 
 def st_of(tid):
@@ -320,14 +320,55 @@ check("lượt nhóm đã chốt thì dòng sổ chốt theo (error, vẫn tính
 check("lượt nhóm đang chạy thì dòng sổ running", st_of(t_run) == ["running"], st_of(t_run))
 check("dòng tự phát quá 10 phút: chưa mốc engine thì refunded, có mốc thì interrupted",
       L.get(stale)["status"] == "refunded" and L.get(stale_e)["status"] == "interrupted", rep1)
-check("dòng mới (chưa quá hạn) giữ nguyên", L.get(fresh_row)["status"] == "reserved")
-rep2 = TC.reconcile(tm)
+check("dòng tự phát mới (chưa quá 10 phút) giữ nguyên", L.get(fresh_row)["status"] == "reserved")
+rep2 = TC.reconcile(tm, now=time.time() + AL.RECONCILE_GRACE_S + 60)
 check("đối soát idempotent: lần hai không đổi gì", rep2["refunded"] == 0 and rep2["rebuilt"] == 0
       and rep2["settled"] == 0 and rep2["marked"] == 0, rep2)
 used_before = L.used()
 tm.settle_turn(t_miss, "ok")
-TC.reconcile(tm)
+TC.reconcile(tm, now=time.time() + AL.RECONCILE_GRACE_S + 60)
 check("dòng dựng lại chốt theo lượt nhóm, không đếm hai lần", st_of(t_miss) == ["ok"] and L.used() == used_before)
+
+# ═════ 6b. không hoàn lượt nhóm theo tuổi; cửa sổ ân hạn 120 giây (thiết kế 9.1 sửa sau review T1 vòng 2) ═════
+gs, ss, ts, tm, fake, r, T = world("no-age")
+TC = r.ceiling
+L = AL.CallLedger(gs)
+wait = tm.reserve_turn(T["team_id"], None, None, "lan", "leader_reply")
+TC.reserve({"turn_id": wait, "team_id": T["team_id"], "agent_key": "lan", "role": "leader_reply"},
+           now=time.time() - 3000)             # lượt đang chờ khoá bận đã 50 phút, chưa có mốc engine
+for startup in (False, True):
+    TC.reconcile(tm, startup=startup, now=time.time() + 4000)
+check("lượt nhóm đang chờ khoá bận lâu: dòng sổ KHÔNG bị hoàn theo tuổi (thường và lúc khởi động)",
+      [x["status"] for x in L.rows(mirror_ref=f"team_turn:{wait}")] == ["reserved"])
+step_run = tm.reserve_turn(T["team_id"], None, None, "minh", "work")
+TC.reserve({"turn_id": step_run, "team_id": T["team_id"], "agent_key": "minh", "role": "work"},
+           now=time.time() - 3500)
+tm.mark_engine(step_run, "fake", "m")
+TC.mark(step_run, "fake", "m")
+TC.reconcile(tm, now=time.time() + 4000)
+check("bước đang chạy rất lâu (tới STEP_TIMEOUT_S): dòng sổ giữ running",
+      [x["status"] for x in L.rows(mirror_ref=f"team_turn:{step_run}")] == ["running"])
+young = tm.reserve_turn(T["team_id"], None, None, "lan", "leader_reply")
+TC.reserve({"turn_id": young, "team_id": T["team_id"], "agent_key": "lan", "role": "leader_reply"})
+tm.refund_turn(young)
+TC.reconcile(tm)
+check("cửa sổ ân hạn: dòng sổ mới hơn 120 giây không bị đụng", [x["status"] for x in
+                                                                L.rows(mirror_ref=f"team_turn:{young}")] == ["reserved"])
+TC.reconcile(tm, now=time.time() + AL.RECONCILE_GRACE_S + 5)
+check("qua cửa sổ ân hạn: theo lượt nhóm đã hoàn thì refunded",
+      [x["status"] for x in L.rows(mirror_ref=f"team_turn:{young}")] == ["refunded"])
+half = tm.reserve_turn(T["team_id"], None, None, "minh", "member_reply")   # giữa hai bước giữ chỗ
+tm.mark_engine(half, "fake", "m")
+TC.reconcile(tm)
+check("cửa sổ ân hạn: lượt nhóm mới chưa có dòng sổ không bị dựng lại vội", L.rows(mirror_ref=f"team_turn:{half}") == [])
+TC.reconcile(tm, now=time.time() + AL.RECONCILE_GRACE_S + 5)
+check("qua cửa sổ: lượt nhóm đã tới mốc engine mà thiếu dòng sổ thì dựng lại",
+      [x["status"] for x in L.rows(mirror_ref=f"team_turn:{half}")] == ["running"])
+lost = r._reserve_both(T, None, None, "lan", "leader_reply")
+r._refund_if_unmarked(lost)
+check("đường hoàn trước engine (lease_lost lúc chờ khoá, busy_long, lỗi dựng engine): hoàn cả hai kho",
+      tm.turn(lost)["status"] == "refunded"
+      and [x["status"] for x in L.rows(mirror_ref=f"team_turn:{lost}")] == ["refunded"])
 
 # ═════ 7. khởi động lại giữa giữ chỗ và chốt ═════
 gs, ss, ts, tm, fake, r, T = world("restart")
