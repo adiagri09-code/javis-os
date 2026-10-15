@@ -705,6 +705,10 @@ class Judge:
 
         outcome, raw = await self._ask(prompt, ask, marker, on_cancel)
         await marker.wait()
+        if outcome == "policy_error" and not marker.marked:
+            # Lỗi ném TRƯỚC `started()` (engine sai chữ ký, dựng engine hỏng): model chưa được gọi, nên lượt được hoàn như
+            # engine chưa sẵn sàng (review T3 J P1), không tính vào trần nào.
+            outcome = "engine_unavailable"
         if outcome in ("judge_busy", "engine_unavailable"):
             if has and not marker.marked:
                 await run_io(ledger.refund, cid)

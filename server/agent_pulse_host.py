@@ -81,9 +81,14 @@ async def _maybe(v: Any) -> Any:
     return await v if inspect.isawaitable(v) else v
 
 
-async def _judge_proactive(*, agent_key: str, context_ref: str, draft: str, source_event: str, engine: Any) -> dict:
+async def _judge_proactive(*, agent_key: str, context_ref: str, draft: str, source_event: str, origin: str = "pulse",
+                           payload: Optional[dict] = None, engine: Any = None) -> dict:
     """Bộ chuyển tới `agent_judge.judge_proactive` (phần J), import lười. Thiếu module, lỗi, sai cấu trúc: `silent` có lý do,
-    KHÔNG BAO GIỜ gửi khi chưa được phán xử."""
+    KHÔNG BAO GIỜ gửi khi chưa được phán xử.
+
+    Host KHÔNG truyền `engine`: bộ phán xử dùng đường hỏi model của chính nó (`async (prompt, purpose, started) -> str`,
+    model việc nền, có chốt test). Trước bản sửa review T3 J P1, host truyền một lambda không đối số trả (engine, model,
+    run), sai chữ ký, nên mọi `say` thành im và tốn một lượt. `payload` mang `judge_daily` của nhóm (hợp đồng mục 2)."""
     try:
         import agent_judge  # noqa: WPS433
     except ImportError:
@@ -91,9 +96,12 @@ async def _judge_proactive(*, agent_key: str, context_ref: str, draft: str, sour
     fn = getattr(agent_judge, "judge_proactive", None)
     if fn is None:
         return {"verdict": "silent", "reason": "judge_unavailable", "decision_id": None}
+    kw = {"agent_key": agent_key, "context_ref": context_ref, "draft": draft, "source_event": source_event,
+          "origin": origin, "payload": payload}
+    if engine is not None:
+        kw["engine"] = engine
     try:
-        d = await _maybe(fn(agent_key=agent_key, context_ref=context_ref, draft=draft, source_event=source_event,
-                            engine=engine))
+        d = await _maybe(fn(**kw))
     except Exception as ex:  # noqa: BLE001
         return {"verdict": "silent", "reason": f"judge_error: {type(ex).__name__}", "decision_id": None}
     if not isinstance(d, dict) or d.get("verdict") not in ("speak", "wait", "silent"):
@@ -164,6 +172,8 @@ class PulseHostDeps:
     send: Optional[Callable[[str, str, str, dict], Any]] = None     # -> {"session_id", "message_id"} | None
     notify: Optional[Callable[[str, str, str], Any]] = None
     interacted: Callable[[dict], bool] = lambda p: False
+    # ctx -> {"judge_daily": ...} cho lượt phán xử tin chủ động trong nhóm (trần của nhóm, kể cả Toàn quyền đè); {} ở chat riêng.
+    judge_payload: Callable[[str], dict] = lambda ctx: {}
     project_pending: Optional[Callable[[], Any]] = None
     brain_of: Callable[[str], str] = lambda key: ""
     clock: Callable[[], float] = time.time
@@ -534,6 +544,15 @@ class PulseHost:
         await asyncio.to_thread(scanned)
         return {"outcome": "scanned", "call_id": cid, "result": result}
 
+    def _judge_payload(self, ctx: str) -> dict:
+        """Dữ liệu cho bộ phán xử (luồng phụ): `judge_daily` của nhóm. Lỗi thì rỗng (bộ phán xử dùng mặc định 40)."""
+        try:
+            got = self.deps.judge_payload(ctx)
+            return dict(got) if isinstance(got, dict) else {}
+        except Exception as ex:  # noqa: BLE001
+            print(f"[pulse judge payload] {type(ex).__name__}: {ex}", file=sys.stderr)
+            return {}
+
     async def _act(self, store, cl, act: Optional[dict], fresh: list, bounded: bool, due_ref: str, now: float) -> dict:
         key, ctx = cl["agent_key"], cl["context_ref"]
         if act is None:
@@ -583,9 +602,9 @@ class PulseHost:
             text = str(act.get("text") or "").strip()[:4000]
             if not text:
                 return {"action": "none", "reason": "empty_say"}
-            dec = await self.judge(agent_key=key, context_ref=ctx, draft=text, source_event=due_ref,
-                                   engine=(lambda: self.deps.engine_for(key, ctx, "judge")) if self.deps.engine_for
-                                   else None)
+            payload = dict(await asyncio.to_thread(self._judge_payload, ctx), source_ref=src or due_ref)
+            dec = await self.judge(agent_key=key, context_ref=ctx, draft=text, source_event=due_ref, origin="pulse",
+                                   payload=payload)
             verdict = dec.get("verdict")
             if verdict != "speak":
                 return {"action": "say", "verdict": verdict, "reason": dec.get("reason") or "",

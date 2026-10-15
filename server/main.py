@@ -23531,7 +23531,7 @@ def _pulse_host():
             persona=_pulse_persona, engine_for=lambda k, c, p: _pulse_engine_for(k, c, p),
             can_enqueue=_pulse_can_enqueue, enqueue=_pulse_enqueue, propose=_pulse_propose, send=_pulse_send,
             notify=_pulse_notify, interacted=_pulse_interacted, project_pending=_feedback_pulse_tick,
-            brain_of=_pulse_brain_of))
+            brain_of=_pulse_brain_of, judge_payload=lambda c: _judge_team_payload(c)))
         # Dựng bộ phán xử cùng lúc (đăng ký hàm phục vụ lý do related_review/wait_unblocked và hàm gửi), để sau khởi động
         # lại các lý do còn chờ có người phục vụ ngay, không phải đợi tới tin nhóm đầu tiên.
         try:
@@ -23700,11 +23700,22 @@ def _learn_send(key, ctx, text, meta):
                                         "decision_id": meta.get("decision_id")})
 
 
-def _learn_judge_payload(ctx):
+def _judge_team_payload(ctx):
+    """`judge_daily` của nhóm cho lượt phán xử tin chủ động (lượt quét `say` của P, `ask_back`/`revise` của L). Lấy qua
+    `runner._judge_caps` để Toàn quyền đè đúng như lô phán xử của nhóm (None = Không giới hạn). Chat riêng: {}."""
     team = _pulse_team(ctx)
     if team is None:
         return {}
-    return {"judge_daily": (team.get("caps") or {}).get("judge_daily", 40)}
+    try:
+        caps = _TEAM_API.runner()._judge_caps(team)
+    except Exception as _e:  # noqa: BLE001
+        print(f"[judge team payload] {type(_e).__name__}: {_e}", file=sys.stderr)
+        caps = {"judge_daily": (team.get("caps") or {}).get("judge_daily", 40)}
+    return {"judge_daily": caps.get("judge_daily")}
+
+
+def _learn_judge_payload(ctx):
+    return _judge_team_payload(ctx)
 
 
 def _learn_legacy(key):

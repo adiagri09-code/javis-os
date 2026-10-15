@@ -55,6 +55,8 @@ handlers = dict(agent_pulse_host._REASON_HANDLERS)
 check("lý do related_review và wait_unblocked có hàm phục vụ của bộ phán xử",
       "related_review" in handlers and "wait_unblocked" in handlers)
 check("bộ phán xử có hàm gửi tin (không còn 'no_sender')", main._judge_send in main._AGENT_JUDGE[0]._senders)
+check("host nhịp nối payload phán xử của nhóm (judge_daily qua runner._judge_caps, review T3 J P1); chat riêng rỗng",
+      host.deps.judge_payload(f"dm:{lan['agent_key']}") == {} and main._learn_judge_payload(f"dm:{lan['agent_key']}") == {})
 
 view = agent_pulse_host.view(rs, lan["agent_key"])
 check("trang nhịp có mục 'judge' của bộ phán xử, không lỗi chữ ký", "judge" in view["parts"]

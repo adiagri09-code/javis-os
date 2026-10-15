@@ -334,9 +334,12 @@ AP.ensure_row(st, k, ctx, at=T0)
 box["opps"][(k, ctx)] = [opp("goal:g1", kind="goal_waiting")]
 clock.t = T0 + D + 1
 run(tick_all(host))
-check("bộ phán xử chọn nói: gửi đúng một tin, nhận nháp, ngữ cảnh, nguồn và engine",
+check("bộ phán xử chọn nói: gửi đúng một tin, nhận nháp, ngữ cảnh, nguồn; KHÔNG truyền engine (bộ phán xử dùng đường hỏi "
+      "của chính nó, review T3 J P1)",
       len(box["sent"]) == 1 and judged and judged[0]["draft"] == "Anh xem giúp" and judged[0]["context_ref"] == ctx
-      and judged[0]["source_event"].startswith("pulse:") and callable(judged[0]["engine"]), (box["sent"], judged))
+      and judged[0]["source_event"].startswith("pulse:") and "engine" not in judged[0]
+      and judged[0].get("origin") == "pulse" and (judged[0].get("payload") or {}).get("source_ref") == "goal:g1",
+      (box["sent"], judged))
 with closing(st._conn()) as c:
     pro = [dict(r) for r in c.execute("SELECT * FROM pulse_proactive").fetchall()]
 check("tin chủ động được ghi để đo 'đã xem nhưng bỏ qua'", len(pro) == 1 and pro[0]["message_id"] == 77, pro)
