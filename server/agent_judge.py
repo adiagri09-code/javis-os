@@ -129,6 +129,18 @@ def tokens(text: Any) -> set:
     return {w for w in re.findall(r"[a-z0-9]+", fold(text)) if len(w) >= 3 and w not in _STOP}
 
 
+def name_called(text: Any, name: Any) -> bool:
+    """Tin gọi đúng TÊN thành viên (không @), so cả dấu, nguyên từ, không phân biệt hoa thường (0.171.4).
+
+    Không đi qua `tokens()`: tên bỏ dấu có thể trùng từ dừng (pilot 2026-10-16: "Minh" thành "minh" = "mình", nên trợ lý tên
+    Minh không bao giờ qua cổng nhờ tên). Giữ dấu để "nhóm mình" không bị hiểu là gọi Minh."""
+    n = unicodedata.normalize("NFC", str(name or "")).strip().lower()
+    if len(n) < 2:
+        return False
+    t = unicodedata.normalize("NFC", str(text or "")).lower()
+    return re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)", t) is not None
+
+
 def overlap(a: set, b: set) -> float:
     if not a or not b:
         return 0.0
@@ -168,7 +180,7 @@ def prefilter(message_text: str, member: dict, *, mentions: Iterable[str] = ()) 
     """Cổng thô bằng code cho MỘT thành viên không được gọi (mục 7.2 bước 2). Trả (qua cổng, tín hiệu, mã).
 
     Tín hiệu: quan hệ việc mở (việc mở của thành viên có chữ trùng tin), câu hỏi chung cho nhóm (câu hỏi không @ ai, hay
-    gọi cả nhóm), từ khoá vai (chữ của tin trùng vai/tên), đóng góp liên quan gần đây (tin của thành viên trong 30 phút trùng
+    gọi cả nhóm), từ khoá vai (chữ của tin trùng vai/tên), gọi đúng tên có dấu (`name_called`), đóng góp liên quan gần đây (tin của thành viên trong 30 phút trùng
     chữ). Không tín hiệu nào: `silent`/`no_signal`, không model."""
     toks = tokens(message_text)
     feats: dict = {}
@@ -182,6 +194,8 @@ def prefilter(message_text: str, member: dict, *, mentions: Iterable[str] = ()) 
     hits = sorted(toks & role_toks)
     if hits:
         feats["role_keywords"] = hits[:5]
+    if name_called(message_text, member.get("name")):
+        feats["name_called"] = True
     for t in member.get("recent_texts") or []:
         if overlap(toks, tokens(t)) >= 0.34:
             feats["recent_contribution"] = True
