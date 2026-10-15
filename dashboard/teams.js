@@ -706,7 +706,7 @@
         (open && m.slug ? '<div class="tm-pulse" data-pulse-slug="' + esc(m.slug) + '" data-pulse-ctx="team:' +
           esc(team.team_id) + '"></div>' : "") +
         // Quyết định nói / chờ / im của trợ lý trong ĐÚNG nhóm này, có nút sửa (agent-judge-ui.js vẽ khi hàng mở).
-        (open && m.slug ? '<div class="ajd-host" data-judge-slug="' + esc(m.slug) + '" data-judge-ctx="team:' +
+        (open && m.slug ? '<div class="agj-host" data-judge-slug="' + esc(m.slug) + '" data-judge-ctx="team:' +
           esc(team.team_id || "") + '"></div>' : "") + "</div></div>";
     }).join("");
     // Thêm người: mở hộp chọn kiểu Zalo (tìm không dấu, lọc tag, chọn nhiều người một lần), 0.142.0.
