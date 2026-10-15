@@ -14739,9 +14739,11 @@ async def websocket_endpoint(ws: WebSocket):
                 nonlocal sysprompt
                 if sysprompt is None:
                     if _persona and _persona[0] == "agent":
-                        # T2: cùng cách ghép với _agent_turn_system_prompt (prompt trợ lý, khối phiên, khối phản hồi).
+                        # T2/T3: cùng cách ghép với _agent_turn_system_prompt (prompt trợ lý, khối phiên, khối phản
+                        # hồi, bài học phạm vi chat riêng + chung).
                         sysprompt = (_agent_chat_prompt(brain, _persona[1]) + _session_block(conv_sid)
-                                     + _dm_feedback_prompt(brain, _persona[1], conv_sid))
+                                     + _dm_feedback_prompt(brain, _persona[1], conv_sid)
+                                     + _dm_lessons_prompt(brain, _persona[1], conv_sid))
                     else:
                         sysprompt = build_system_prompt(
                             brain, lang=_lang_qd, project_id=_row0.get("project_id") or "",
