@@ -4620,7 +4620,7 @@
   "trong": null
  },
  {
-  "order": 461,
+  "order": 464,
   "type": "APIRoute",
   "path": "/agents/{slug}/judge",
   "name": "agent_judge_view",
@@ -4630,7 +4630,7 @@
   "trong": null
  },
  {
-  "order": 462,
+  "order": 465,
   "type": "APIRoute",
   "path": "/agents/{slug}/judge/label",
   "name": "agent_judge_label",
