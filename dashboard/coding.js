@@ -113,16 +113,10 @@
     var chipQuyen = function () {
       return chip("quyen", ic("shield") + " " + esc(nhanQuyen(mq)), " cd-mq-" + esc(mq));
     };
-    if (!tm) {
-      return chip("thumuc", ic("folder-plus") + " " + esc(t("coding.chip_pick_folder")),
-                  " cd-chip-mo") + chipQuyen();
-    }
-    // Gắn nhiều thư mục thì chip mang tên thư mục CHÍNH kèm "+N": tên chính là thứ người
-    // dùng cần thấy (engine đứng đó, git chạy đó), còn con số chỉ để biết còn thư mục khác.
-    var them = Math.max(0, (Number(rb.so_thu_muc) || 1) - 1);
-    var ra = '<button type="button" class="cd-chip cd-chip-tm" data-cd="thumuc" title="' +
-      esc(tm.duong_dan || "") + '">' + ic("folder-open") + " " + esc(nhanHienThi(tm)) +
-      (them ? ' <span class="cd-chip-them">+' + them + "</span>" : "") + "</button>";
+    // 0.154.0: the folder itself is shown and changed by the composer chip (composer-folder.js),
+    // so this row only carries the git chips and the permission level.
+    if (!tm) return chipQuyen();
+    var ra = "";
     if (tm.la_git) {
       var wt = !!(rb.worktree || "").trim();
       ra += chip("nhanh", ic("git-branch") + " " + esc(rb.nhanh || tm.nhanh || t("coding.branch_unknown")));
@@ -149,7 +143,6 @@
           '<div class="chatpage-bar">' +
             '<button class="cp-ico-btn cp-side-toggle" type="button" id="cdLeftBtn" title="' +
               esc(t("coding.toggle_list")) + '">' + ic("history") + "</button>" +
-            '<div class="cd-id" id="cdIdentity"></div>' +
             // Chip gom nhóm hội thoại của trang Trò chuyện đậu vào đây, y như thanh tiêu đề
             // của trang đó. Thiếu ô này thì JavisChatSide.chip() không có chỗ để vẽ.
             '<span class="proj-chip-host"></span>' +
@@ -205,10 +198,17 @@
       _mqChip.addEventListener("change", _mqChipFn);
     } catch (e) { _mqChip = null; }
 
+    // The composer chip pins or unpins the working folder (0.154.0): reload the git chips.
+    W.addEventListener("javis:pinned-folder-changed", onPinned);
+
     bocMoPhien();
     await moPhienDau();
   }
   var _mqChip = null, _mqChipFn = null;
+  function onPinned(e) {
+    var d = (e && e.detail) || {};
+    if (active && d.sid && d.sid === sid()) taiRangBuoc(d.sid);
+  }
 
   /** Bọc `JavisSessions.open` trong lúc ở trang này.
    *
@@ -238,6 +238,7 @@
     // không còn tồn tại, và mỗi lần vào lại trang là chồng thêm một người nghe nữa.
     try { if (_mqChip && _mqChipFn) _mqChip.removeEventListener("change", _mqChipFn); } catch (e) {}
     _mqChip = null; _mqChipFn = null;
+    W.removeEventListener("javis:pinned-folder-changed", onPinned);
   }
 
   // ============================================================
@@ -246,7 +247,6 @@
   async function taiThuMuc() {
     var r = await api("/coding/folders?brain=" + encodeURIComponent(brain()));
     if (!active) return;
-    S.thuMuc = (r && r.thu_muc) || [];
     if (r && r.kenh) S.kenh = r.kenh;
   }
 
@@ -322,9 +322,13 @@
     }
   }
 
+  // Errors show at the start of the chip row (the page bar no longer has an identity line).
   function veLoi(msg) {
-    var el = S.el && S.el.querySelector("#cdIdentity");
-    if (el) el.innerHTML = '<small class="ws-err">' + esc(msg) + "</small>";
+    var row = document.getElementById("cdChips");
+    if (!row) return;
+    var old = row.querySelector(".ws-err");
+    if (old) old.remove();
+    row.insertAdjacentHTML("afterbegin", '<small class="ws-err">' + esc(msg) + "</small>");
   }
 
   function sid() { return W.JavisSessions ? W.JavisSessions.current() : ""; }
@@ -338,12 +342,6 @@
     S.cwd = (r && r.cwd) || "";
     S.diemHoi = (r && r.diem_hoi) || [];
     veChip();
-    var idn = S.el && S.el.querySelector("#cdIdentity");
-    if (idn) {
-      idn.innerHTML = S.cwd
-        ? '<span class="cd-cwd" title="' + esc(S.cwd) + '">' + esc(S.cwd) + "</span>"
-        : '<span class="cd-cwd dim">' + esc(t("coding.in_brain")) + "</span>";
-    }
   }
 
   // ============================================================
@@ -401,7 +399,6 @@
   }
 
   function bamChip(loai, node) {
-    if (loai === "thumuc") return menuThuMuc(node);
     if (loai === "nhanh") {
       var ds = (S.tm && S.tm.nhanh_ds) || [];
       if (!ds.length) return;
@@ -422,102 +419,6 @@
     if (loai === "diemhoi") return menuDiemHoi(node);
   }
 
-  /** Menu thư mục: chọn cái đã khai, thêm cái mới, gỡ khỏi phiên, bỏ khỏi Javis.
-   *
-   *  Quản lý thư mục nằm TRONG menu này chứ không thành một cột riêng: cả trang chỉ có một
-   *  chỗ nói về thư mục, và nó nằm đúng chỗ người dùng đang nhìn khi cần đổi. */
-  /** Menu thư mục: TÍCH CHỌN, gắn được nhiều thư mục vào một việc (0.63.8).
-   *
-   *  Một việc thật hay đụng nhiều thư mục cùng lúc (mã nguồn với tài liệu, app với thư viện
-   *  dùng chung), nên bắt chọn đúng một cái là bắt người dùng đổi qua đổi lại giữa chừng.
-   *
-   *  Thư mục ĐẦU danh sách là CHÍNH: engine đứng ở đó và mọi thao tác git chạy ở đó, vì một
-   *  tiến trình chỉ đứng được ở một chỗ. Các thư mục còn lại đi vào prompt bằng đường dẫn
-   *  tuyệt đối. Bỏ tích cái chính thì cái kế tiếp lên thay.
-   *
-   *  Menu KHÔNG đóng sau mỗi lần tích: chọn ba thư mục mà phải mở menu ba lần thì thà quay
-   *  lại kiểu cũ. */
-  function idDangGan() { return (S.tmDs || []).map(function (x) { return x.id; }); }
-
-  function menuThuMuc(node) {
-    var dang = idDangGan();
-    var muc = S.thuMuc.map(function (x) {
-      var co = dang.indexOf(x.id) >= 0;
-      var laChinh = co && dang[0] === x.id;
-      return {
-        nhan: x.ten + (x.co_that ? "" : "  (" + t("coding.folder_gone") + ")"),
-        phu: (laChinh ? t("coding.folder_main") + " · " : "") + x.duong_dan,
-        chon: co,
-        tich: true,
-        giuMo: true,
-        bam: async function () {
-          var ids = idDangGan();
-          var i = ids.indexOf(x.id);
-          if (i >= 0) ids.splice(i, 1); else ids.push(x.id);
-          await datRangBuoc({ thu_mucs: ids.join(",") });
-        },
-      };
-    });
-    muc.push({ nhan: t("coding.add_folder"), nhanMoi: true, bam: function () { moKhungThemThuMuc(); } });
-    if (S.tm) {
-      muc.push({ nhan: t("coding.detach_folder"), bam: function () { datRangBuoc({ thu_mucs: "" }); } });
-      muc.push({ nhan: t("coding.forget_folder"), nguyHiem: true, bam: function () { boThuMuc(S.tm); } });
-    }
-    menu(node, muc, menuThuMuc);
-  }
-
-  async function boThuMuc(tm) {
-    if (!W.confirm(t("coding.forget_confirm", { ten: tm.ten }))) return;
-    await api("/coding/folders/" + encodeURIComponent(tm.id) + "/delete", { method: "POST" });
-    await taiThuMuc();
-    await datRangBuoc({ thu_muc: "" });
-  }
-
-  /** Thêm thư mục: MỞ HỘP DUYỆT để bấm chọn, không bắt gõ đường dẫn.
-   *
-   *  Bản 0.63.2 chỉ có một ô chữ trống. Trên máy để bàn thì còn dán được, nhưng trên điện
-   *  thoại thì phải gõ tay một đường dẫn tuyệt đối không dấu gợi ý nào, gõ sai một ký tự là
-   *  nhận câu "không phải thư mục" mà không biết sai ở đâu. Chọn thư mục là việc DUYỆT, nên
-   *  phải bày ra cái cây để bấm.
-   *
-   *  Hộp duyệt là JavisFolderPicker, dùng chung với các trang khác, chạy trên chính endpoint
-   *  GET /browse mà hộp chọn brain của app vẫn dùng. Truyền demMd=false: người chọn thư mục
-   *  code không cần biết trong đó có bao nhiêu file .md, mà đếm nó là quét cả node_modules.
-   *  Ô đường dẫn trong hộp vẫn gõ và dán được, nên ai đã có sẵn đường dẫn không mất gì. */
-  function moKhungThemThuMuc() {
-    dongMenu();
-    if (!W.JavisFolderPicker) return;
-    W.JavisFolderPicker.open({
-      tieuDe: t("coding.add_folder"),
-      nhanDung: t("coding.add_folder"),
-      demMd: false,
-      brain: brain(),
-      // Mở sẵn ở thư mục cha của thư mục đang gắn: mấy dự án thường nằm cạnh nhau, nên đó là
-      // chỗ gần đích nhất mà Javis biết chắc. Chưa gắn gì thì để rỗng, và hộp mở ra ở màn
-      // ĐIỂM XUẤT PHÁT (bộ não đang mở, thư mục chứa các bộ não, thư mục nhà) chứ không đổ
-      // thẳng vào thư mục nhà - trên VPS chỗ đó thường rỗng trơn.
-      batDau: chaCuaThuMucDangGan(),
-      chon: async function (duongDan) {
-        var r = await api("/coding/folders", { method: "POST", body: fd({ duong_dan: duongDan, brain: brain() }) });
-        // Trả về câu lỗi là hộp GIỮ NGUYÊN và in câu đó: người dùng đang đứng đúng chỗ vừa
-        // chọn, chỉ cần bấm sang thư mục khác. Đóng hộp rồi báo lỗi ở đâu đó là bắt họ mở lại
-        // và duyệt lại từ đầu.
-        if (!r || r.error) return (r && r.error) || t("coding.add_err");
-        await taiThuMuc();
-        await datRangBuoc({ thu_muc: r.thu_muc.id });
-        return "";
-      },
-    });
-  }
-
-  /** Thư mục mở sẵn khi bật hộp duyệt: cha của thư mục đang gắn, rỗng nếu chưa gắn gì. */
-  function chaCuaThuMucDangGan() {
-    var p = (S.tm && S.tm.duong_dan) || "";
-    if (!p) return "";
-    var cat = p.replace(/[\\/]+$/, "").split(/[\\/]/);
-    cat.pop();
-    return cat.length > 1 ? cat.join("/") : "";
-  }
 
   function menuDiemHoi(node) {
     var muc = [{

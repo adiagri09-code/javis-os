@@ -61,11 +61,15 @@ check("server không đòi thư mục khi mở phiên coding", (() => {
   return /loai == "coding"[\s\S]{0,700}create_session/.test(MAIN)
     && !/loai == "coding"[\s\S]{0,400}status_code=404/.test(MAIN);
 })());
-check("chưa gắn thư mục thì nói rõ đang làm trong bộ não",
-  /coding\.in_brain/.test(CD) && tu("coding.in_brain", "bộ não"));
+check("the Coding page has no in-brain line any more (the composer chip shows the folder, 0.154.0)",
+  !/coding\.in_brain/.test(CD) && !VI["coding.in_brain"] && !EN["coding.in_brain"]);
 
 // ---- 2. Thư mục, không phải repo ----
-check("chữ trên giao diện nói THƯ MỤC", tu("coding.add_folder", "thư mục") && !!EN["coding.add_folder"]);
+check("the page's own folder picker is gone (the composer pins the folder, 0.154.0)",
+  !/moKhungThemThuMuc|menuThuMuc|boThuMuc|chip_pick_folder/.test(CD)
+  && ["coding.add_folder", "coding.chip_pick_folder", "coding.detach_folder", "coding.forget_folder", "coding.forget_confirm"]
+    .every((k) => !VI[k] && !EN[k]));
+check("the page refreshes its git chips when the composer pins or unpins", CD.indexOf('"javis:pinned-folder-changed"') !== -1);
 check("khoá cũ nói 'repo' đã bỏ hẳn",
   ["coding.add_repo", "coding.remove_repo", "coding.chip_pick_repo", "coding.ask_path"]
     .every((k) => !VI[k] && !EN[k]));
@@ -83,10 +87,11 @@ check("thư mục KHÔNG git thì ẩn ba chip phụ thuộc git, vẫn còn m�
 // Chưa gắn thư mục vẫn phải thấy mức quyền: server đã áp mức đó cho MỌI phiên kênh coding
 // ngay từ lượt chat đầu (xem `_muc_quyen_luot_chat`), nên giấu chip đi là bắt người dùng chạy
 // ở một mức quyền họ không nhìn thấy và không đổi được. Chủ dự án báo lỗi này ở 0.63.4.
-check("chưa gắn thư mục thì có chip mời chọn VÀ chip mức quyền",
+check("no folder: only the permission chip, no folder chip",
   (() => { const c = M.chipHtml({}, null);
-    return c.includes('data-cd="thumuc"') && c.includes('data-cd="quyen"')
+    return !c.includes('data-cd="thumuc"') && c.includes('data-cd="quyen"')
       && !/data-cd="(nhanh|worktree|diemhoi)"/.test(c); })());
+check("with a folder: still no folder chip (the composer chip owns it)", !chipGit.includes('data-cd="thumuc"'));
 check("chip mức quyền nói đúng mức đang chạy, cả khi chưa có thư mục",
   M.chipHtml({ muc_quyen: "suggest" }, null).includes("cd-mq-suggest")
   && M.chipHtml({}, null).includes("cd-mq-auto"));
@@ -94,7 +99,7 @@ check("server thật sự áp mức quyền cho phiên chưa gắn thư mục", 
   const ST = fs.readFileSync(path.join(ROOT, "server", "coding_store.py"), "utf8");
   return /def muc_quyen_cua_phien[\s\S]{0,160}MUC_QUYEN_MAC_DINH/.test(ST);
 })());
-check("tên thư mục trên chip là TÊN, không phải cả đường dẫn",
+check("the folder label helper returns the NAME, not the whole path",
   M.nhanHienThi({ ten: "du-an", duong_dan: "/home/u/du-an" }) === "du-an" && !chipGit.includes(">/x<"));
 
 // ---- 3. Icon ----
@@ -162,8 +167,6 @@ check("dải chip nhét vào chính #modelBar đã mượn", /getElementById\("m
 // ---- 6. Hành động phá huỷ phải hỏi lại, và nói rõ cái gì mất ----
 check("rollback hỏi lại", /confirm\(t\("coding\.ckpt_confirm"/.test(CD));
 check("câu hỏi rollback nói rõ không hoàn tác", tu("coding.ckpt_confirm", "không hoàn tác"));
-check("bỏ thư mục hỏi lại", /confirm\(t\("coding\.forget_confirm"/.test(CD));
-check("câu hỏi bỏ thư mục nói rõ THƯ MỤC TRÊN ĐĨA VẪN CÒN", tu("coding.forget_confirm", "vẫn còn nguyên"));
 // Chốt cũ ghim `var(--warn)`, mà bảng màu KHÔNG có token tên đó: trình duyệt bỏ cả dòng khai
 // báo nên chip Toàn quyền bấy lâu trông y hệt chip thường, còn test thì vẫn xanh vì nó chỉ soi
 // mã nguồn chứ không soi token có thật. Nay đòi màu CHỮ và màu NỀN riêng, và đòi chúng khác
@@ -189,13 +192,14 @@ const FP_MA = FP.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const STYLE = D("style.css");
 check("KHÔNG gọi window.prompt", !/\bprompt\s*\(/.test(CD_MA));
 check("KHÔNG gọi window.alert", !/\balert\s*\(/.test(CD_MA));
-check("thêm thư mục thì MỞ HỘP DUYỆT", /JavisFolderPicker\.open\(/.test(CD_MA));
+const CF = fs.readFileSync(path.join(ROOT, "dashboard", "composer-folder.js"), "utf8");
+check("browsing for a folder opens the shared folder picker (from the composer since 0.154.0)", /JavisFolderPicker\.open\(/.test(CF));
 check("KHÔNG còn ô gõ đường dẫn làm đường chính",
   !/cd-tam-nen|id="cdPath"/.test(CD) && !VI["coding.path_ph"] && !EN["coding.path_ph"]);
 check("hộp duyệt đứng trên chính endpoint /browse đã có, không đẻ endpoint mới",
   /fetch\("\/browse\?/.test(FP_MA));
-check("và gọi đường md=0: chọn thư mục CODE thì đừng quét đếm .md",
-  /md=" \+ \(o\.demMd \? "1" : "0"\)/.test(FP_MA) && /demMd: false/.test(CD_MA));
+check("and asks for md=0: picking a code folder must not count .md files",
+  /md=" \+ \(o\.demMd \? "1" : "0"\)/.test(FP_MA) && /demMd: false/.test(CF));
 check("server có đường md=0 và báo thư mục nào là repo git", (() => {
   const MAIN = fs.readFileSync(path.join(ROOT, "server", "main.py"), "utf8");
   return /def _browse_sync\(path: str, dem_md: bool = True\)/.test(MAIN)
@@ -207,8 +211,8 @@ check("hộp duyệt MẶC lại bộ lớp .folder-modal/.fm-* có sẵn, khôn
 check("bấm lên trên và bấm vào thư mục con đều duyệt tiếp",
   /duyet\(d\.parent\)/.test(FP_MA) && /duyet\(x\.path\)/.test(FP_MA));
 check("vẫn dán được đường dẫn dài rồi Enter", /fp-go/.test(FP_MA) && /key !== "Enter"/.test(FP_MA));
-check("lỗi thêm thư mục hiện TẠI CHỖ và giữ hộp mở",
-  /return \(r && r\.error\) \|\| t\("coding\.add_err"\)/.test(CD_MA)
+check("a pin error shows IN the picker and keeps it open",
+  /chon: function \(p\) \{ return pin\(p\); \}/.test(CF) && /return \(d && d\.error\) \|\| tw\("cp\.pin_failed"\)/.test(CF)
   && /if \(loi\) \{ mach\(loi, true\); return; \}/.test(FP_MA));
 check("chữ của hộp duyệt có ở cả hai từ điển",
   ["fp.title", "fp.use", "fp.up", "fp.pick", "fp.path_ph"].every((k) => !!VI[k] && !!EN[k]));
@@ -241,15 +245,6 @@ check("index.html nạp folder-picker.js TRƯỚC coding.js",
 // ---- 7a. Gắn NHIỀU thư mục vào một việc (0.63.8) ----
 // Một việc thật hay đụng nhiều thư mục cùng lúc, nên bắt chọn đúng một cái là bắt người dùng
 // đổi qua đổi lại giữa chừng (chủ dự án yêu cầu 22/09).
-check("menu thư mục là TÍCH CHỌN, bấm vào là thêm/bớt chứ không thay",
-  /tich: true/.test(CD_MA) && /ids\.splice\(i, 1\); else ids\.push\(x\.id\)/.test(CD_MA));
-check("menu KHÔNG đóng sau mỗi lần tích", /giuMo: true/.test(CD_MA)
-  && /if \(x && x\.giuMo && veLai\)/.test(CD_MA));
-check("có ô vuông để đọc ra là đang gắn hay không",
-  /class="cd-tich"/.test(CD_MA) && /\.cd-tich \{/.test(CSS));
-check("gắn nhiều thì chip nói rõ còn mấy thư mục nữa",
-  M.chipHtml({ muc_quyen: "auto", so_thu_muc: 3 }, { id: "1", ten: "du-an", duong_dan: "/x" }).includes("+2")
-  && !M.chipHtml({ muc_quyen: "auto", so_thu_muc: 1 }, { id: "1", ten: "du-an", duong_dan: "/x" }).includes("+"));
 check("server nhận cả DANH SÁCH thư mục cho một phiên", (() => {
   const ST = fs.readFileSync(path.join(ROOT, "server", "coding_store.py"), "utf8");
   const RT = fs.readFileSync(path.join(ROOT, "server", "routes", "coding.py"), "utf8");
