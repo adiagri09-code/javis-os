@@ -405,4 +405,14 @@ check("bỏ hết reaction: chip biến mất, nút còn", !hist.row().includes(
   check("không em dash, en dash trong file mới và chuỗi mới", [reactJs, chatJs].every((s) => s.indexOf(EM) < 0 && s.indexOf(EN) < 0)
         && added.every((k) => (vi[k] + en[k]).indexOf(EM) < 0 && (vi[k] + en[k]).indexOf(EN) < 0));
   process.exit(fails ? 1 : 0);
+
+// Quyết định của chủ (0.168.0): bong bóng tin đẩy về có mã tin thì gắn ngay hàng sáu cảm xúc (tin báo goal không còn hàng A3).
+{
+  const appSrc = require("fs").readFileSync(require("path").join(__dirname, "..", "..", "dashboard", "app.js"), "latin1");
+  const pushAt = appSrc.indexOf('if (data.type === "push") {');
+  const seg = pushAt >= 0 ? appSrc.slice(pushAt, pushAt + 4000) : "";
+  check("app.js: tin đẩy về có message_id thì gắn hàng cảm xúc qua JavisChatReactions.attach",
+    seg.includes("data.message_id != null") && seg.includes("window.JavisChatReactions.attach(el, { sid: data.session_id, mid: data.message_id"));
+}
+
 })().catch(function (e) { console.log("FAIL ném lỗi: " + (e && e.stack)); process.exit(1); });

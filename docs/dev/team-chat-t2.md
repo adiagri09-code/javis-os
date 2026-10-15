@@ -214,9 +214,9 @@ mới chạy bản cũ.
 19. **Route chat riêng** kiểm thân, tin và nonce gửi lại TRƯỚC khi tra tác giả; kho resonance lỗi lúc tra thì reaction vẫn lưu
     (`effect_state = 'pending_author'`, trạng thái Đã nhận kèm lý do) và nhịp phản hồi tra lại rồi chiếu. Bộ chiếu khoá theo cặp
     (tin, người phản hồi) trong tiến trình để request và nhịp không chiếu xen nhau.
-20. **Hạn chế đã biết:** tin báo cáo của goal hiện cả hàng Hữu ích / Chưa ổn của A3 lẫn sáu emoji của T2. Hai hàng ghi hai kho
-    khác nhau (A3 dạy bài học trình bày, không đánh thức; T2 đánh thức goal qua lý do `feedback` của A2). Gộp hai hàng là quyết
-    định sản phẩm, để lại cho chủ. Route reaction chat riêng không kiểm `brain` (giống `GET /sessions/{id}`): phiên là khoá.
+20. **Tin báo goal chỉ còn sáu emoji** (chủ quyết định 2026-10-15): hàng Hữu ích / Chưa ổn của A3 không vẽ nữa (cờ
+    `A3_REACT_ROW = false` trong `chat-resonance.js`); cảm xúc trên tin báo goal đánh thức goal qua lý do `feedback` của A2. API và
+    kho của A3 giữ nguyên, dữ liệu cũ vẫn đọc được. Route reaction chat riêng không kiểm `brain` (giống `GET /sessions/{id}`): phiên là khoá.
 
 ### 6. Còn mở
 
