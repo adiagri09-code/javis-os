@@ -22524,6 +22524,9 @@ async def _agent_judge_ask(prompt: str, purpose: str = "", started=None) -> str:
     """Lượt phán xử: model việc nền người dùng chọn (trang Models), CHỈ CHỮ, thư mục trống, không MCP, cổng từ chối mọi
     công cụ (prompt chứa chữ của chat). Không tự chọn model. Engine chưa sẵn sàng thì ném `EngineUnavailable` TRƯỚC khi gọi
     model (lượt được hoàn); `started()` ghi mốc engine ngay trước lời gọi model."""
+    if os.environ.get("JAVIS_NO_REAL_JUDGE_ENGINE"):
+        # Chốt của bộ test (tests/python/_paths.py): không dựng model thật; lượt được hoàn, ứng viên im có lý do.
+        raise agent_judge.EngineUnavailable("JAVIS_NO_REAL_JUDGE_ENGINE: không dựng engine phán xử thật")
     cli = _reply_policy_sandbox_engine("Bạn là bộ phán xử nói/chờ/im của một nhóm trợ lý. Chỉ trả về đúng khuôn JSON "
                                        "được yêu cầu, không thêm lời dẫn.", "agent-judge", cwd_name="agent_judge_cwd")
     base = cli
