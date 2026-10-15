@@ -1,5 +1,5 @@
 {
- "sha": "90381457",
+ "sha": "d62c77e4",
  "results": {
   "test_agent_calls_ledger.py": "ok",
   "test_agent_judge_dm.py": "ok",
@@ -28,7 +28,7 @@
   "test_t3_fix_pulse_main.py": "ok",
   "test_t3_fix_pulse_p3.py": "ok",
   "test_t3_fix_pulse_scope.py": "ok",
-  "test_t3_fix_review_learn.py": "ok",
+  "test_t3_fix_review_learn.py": "ĐỎ",
   "test_t3_integration.py": "ok",
   "test_team_adaptive_restore.py": "ok",
   "test_team_authority.py": "ok",
