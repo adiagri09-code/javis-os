@@ -285,7 +285,9 @@ check("tiến trình chết giữa applying và applied: thay đổi hiện tron
       row_c is not None and row_c["status"] == "interrupted" and not row_c["can_revert"], row_c)
 
 # ═════ vòng 2 P2-2: trần phán xử của nhóm không làm lượt xem xét gọi model lặp lại ═════
-CLK = [time.time()]
+# Neo 10 giờ sáng hôm nay (giờ máy): bốn lần thử lại cách nhau một giờ vẫn trong cùng ngày, chạy lúc nào cũng vậy.
+# Trước đây lấy giờ thật, chạy sau 20 giờ thì lần thử thứ tư sang ngày mới (trần judge_daily làm mới) và test đỏ giả.
+CLK = [AB.day_start(time.time()) + 10 * 3600]
 TCTX = "team:tcap"
 
 

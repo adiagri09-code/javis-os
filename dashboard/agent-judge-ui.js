@@ -5,7 +5,7 @@
    Hai chỗ hiện:
    - Thẻ trợ lý: phần "judge" của khung nhịp (phần P dựng `GET /agents/{slug}/pulse`, mỗi phần tự vẽ):
      `window.JavisPulseParts.push({name: "judge", render})`. Phần P chưa có thì mảng chỉ nằm chờ, không lỗi.
-   - Hàng thành viên trong ngăn Nhóm (teams.js): ô `.ajd-host[data-judge-slug][data-judge-ctx]`, `hydrate(root)` tải
+   - Hàng thành viên trong ngăn Nhóm (teams.js): ô `.agj-host[data-judge-slug][data-judge-ctx]`, `hydrate(root)` tải
      `GET /agents/{slug}/judge?context_ref=team:<id>` và vẽ đúng ngữ cảnh nhóm đó.
 
    Nút "Đáng lẽ nên nói" / "Nên im (chen ngang)" gọi `POST /agents/{slug}/judge/label`; chỉ báo thành công SAU khi máy chủ trả
@@ -70,42 +70,42 @@
     var why = d.reason || (CODE_KEY[d.silence_code] ? tw(CODE_KEY[d.silence_code]) : "");
     var score = d.score !== null && d.score !== undefined && d.threshold !== null && d.threshold !== undefined
       ? tw("judge.score", { score: num(d.score), threshold: num(d.threshold) }) : "";
-    var head = '<div class="ajd-dhead"><span class="ajd-verdict ajd-v-' + esc(d.verdict) + '">' + esc(verdict) + "</span>" +
-      (kind ? '<span class="ajd-kind">' + esc(kind) + "</span>" : "") +
-      (d.volunteer ? '<span class="ajd-kind">' + esc(tw("judge.volunteer")) + "</span>" : "") +
-      '<span class="ajd-when">' + esc(when(d.created_at)) + "</span></div>";
-    var body = (d.excerpt ? '<div class="ajd-excerpt">' + esc(d.excerpt) + "</div>" : "") +
-      (why ? '<div class="ajd-why">' + esc(why) + "</div>" : "") +
-      (score ? '<div class="ajd-score">' + esc(score) + "</div>" : "") +
-      (d.message_ref ? "" : (d.verdict !== "speak" ? '<div class="ajd-sub">' + esc(tw("judge.no_message")) + "</div>" : ""));
+    var head = '<div class="agj-dhead"><span class="agj-verdict agj-v-' + esc(d.verdict) + '">' + esc(verdict) + "</span>" +
+      (kind ? '<span class="agj-kind">' + esc(kind) + "</span>" : "") +
+      (d.volunteer ? '<span class="agj-kind">' + esc(tw("judge.volunteer")) + "</span>" : "") +
+      '<span class="agj-when">' + esc(when(d.created_at)) + "</span></div>";
+    var body = (d.excerpt ? '<div class="agj-excerpt">' + esc(d.excerpt) + "</div>" : "") +
+      (why ? '<div class="agj-why">' + esc(why) + "</div>" : "") +
+      (score ? '<div class="agj-score">' + esc(score) + "</div>" : "") +
+      (d.message_ref ? "" : (d.verdict !== "speak" ? '<div class="agj-sub">' + esc(tw("judge.no_message")) + "</div>" : ""));
     var lab = "";
     if (d.label) {
-      lab = '<div class="ajd-labeled">' + esc(tw("judge.labeled", { label: tw(LABEL_KEY[d.label] || d.label) })) +
+      lab = '<div class="agj-labeled">' + esc(tw("judge.labeled", { label: tw(LABEL_KEY[d.label] || d.label) })) +
         (EFFECT_KEY[d.label_effect] ? " · " + esc(tw(EFFECT_KEY[d.label_effect])) : "") + "</div>";
     }
     var actions = "";
     if (d.address === "certain") {
-      actions = '<div class="ajd-sub">' + esc(tw("judge.direct_note")) + "</div>";
+      actions = '<div class="agj-sub">' + esc(tw("judge.direct_note")) + "</div>";
     } else {
       var busy = String(opts.busy || "") === id;
-      actions = '<div class="ajd-actions" role="group" aria-label="' + esc(tw("judge.fix")) + '">' + LABELS.map(function (L) {
+      actions = '<div class="agj-actions" role="group" aria-label="' + esc(tw("judge.fix")) + '">' + LABELS.map(function (L) {
         var on = d.label === L;
-        return '<button type="button" class="ws-btn ajd-btn" data-ajd-label="' + L + '" data-ajd-id="' + esc(id) + '"' +
+        return '<button type="button" class="ws-btn agj-btn" data-agj-label="' + L + '" data-agj-id="' + esc(id) + '"' +
           ' aria-pressed="' + (on ? "true" : "false") + '"' + (busy ? " disabled" : "") + ">" + esc(tw(LABEL_KEY[L])) + "</button>";
-      }).join("") + (d.label ? '<button type="button" class="ws-btn ajd-btn" data-ajd-label="" data-ajd-id="' + esc(id) + '"' +
+      }).join("") + (d.label ? '<button type="button" class="ws-btn agj-btn" data-agj-label="" data-agj-id="' + esc(id) + '"' +
         (busy ? " disabled" : "") + ">" + esc(tw("judge.label.clear")) + "</button>" : "") + "</div>";
     }
-    var note = opts.note && opts.note[id] ? '<div class="ajd-note" role="status">' + esc(opts.note[id]) + "</div>" : "";
-    return '<li class="ajd-dec" data-ajd-row="' + esc(id) + '">' + head + body + lab + actions + note + "</li>";
+    var note = opts.note && opts.note[id] ? '<div class="agj-note" role="status">' + esc(opts.note[id]) + "</div>" : "";
+    return '<li class="agj-dec" data-agj-row="' + esc(id) + '">' + head + body + lab + actions + note + "</li>";
   }
 
   function contextHtml(c, opts) {
     var decs = c.decisions || [];
     var meta = tw("judge.threshold", { threshold: num(c.threshold), offset: (Number(c.offset) >= 0 ? "+" : "") + num(c.offset) });
-    return '<section class="ajd-ctx" aria-label="' + esc(ctxTitle(c)) + '"><div class="ajd-ctx-head">' + esc(ctxTitle(c)) +
-      '</div><div class="ajd-sub">' + esc(meta) + "</div>" +
-      (decs.length ? '<ul class="ajd-list">' + decs.map(function (d) { return decisionHtml(d, opts); }).join("") + "</ul>"
-        : '<div class="ajd-sub">' + esc(tw("judge.empty")) + "</div>") + "</section>";
+    return '<section class="agj-ctx" aria-label="' + esc(ctxTitle(c)) + '"><div class="agj-ctx-head">' + esc(ctxTitle(c)) +
+      '</div><div class="agj-sub">' + esc(meta) + "</div>" +
+      (decs.length ? '<ul class="agj-list">' + decs.map(function (d) { return decisionHtml(d, opts); }).join("") + "</ul>"
+        : '<div class="agj-sub">' + esc(tw("judge.empty")) + "</div>") + "</section>";
   }
 
   // Cả phần "judge" (thẻ trợ lý) hay một ngữ cảnh (hàng thành viên nhóm, `opts.compact`).
@@ -113,11 +113,11 @@
     opts = opts || {};
     if (!view) return "";
     var ctxs = view.contexts || [];
-    var head = opts.compact ? "" : '<div class="ajd-head">' + esc(tw("judge.title")) + '</div><div class="ajd-sub">' +
-      esc(tw("judge.intro")) + "</div>" + '<div class="ajd-sub">' + esc(tw(view.resonance_on ? "judge.learn_on" : "judge.learn_off")) +
+    var head = opts.compact ? "" : '<div class="agj-head">' + esc(tw("judge.title")) + '</div><div class="agj-sub">' +
+      esc(tw("judge.intro")) + "</div>" + '<div class="agj-sub">' + esc(tw(view.resonance_on ? "judge.learn_on" : "judge.learn_off")) +
       "</div>";
-    return '<div class="ajd">' + head + (ctxs.length ? ctxs.map(function (c) { return contextHtml(c, opts); }).join("")
-      : '<div class="ajd-sub">' + esc(tw("judge.empty")) + "</div>") + "</div>";
+    return '<div class="agj">' + head + (ctxs.length ? ctxs.map(function (c) { return contextHtml(c, opts); }).join("")
+      : '<div class="agj-sub">' + esc(tw("judge.empty")) + "</div>") + "</div>";
   }
 
   function labelUrl(slug, brain) {
@@ -181,14 +181,14 @@
   }
 
   function bind(host, slug, key, getView, compact) {
-    if (host.getAttribute("data-ajd-bound") === "1") return;
-    host.setAttribute("data-ajd-bound", "1");
+    if (host.getAttribute("data-agj-bound") === "1") return;
+    host.setAttribute("data-agj-bound", "1");
     host.addEventListener("click", function (e) {
-      var b = e.target.closest ? e.target.closest("[data-ajd-id]") : null;
+      var b = e.target.closest ? e.target.closest("[data-agj-id]") : null;
       if (!b || !host.contains(b)) return;
       e.preventDefault();
       e.stopPropagation();
-      var id = b.getAttribute("data-ajd-id"), label = b.getAttribute("data-ajd-label") || "";
+      var id = b.getAttribute("data-agj-id"), label = b.getAttribute("data-agj-label") || "";
       var st = state[key] = state[key] || { note: {} };
       if (st.busy) return;
       st.busy = id;
@@ -205,24 +205,24 @@
     });
   }
 
-  // Vẽ vào mọi `.ajd-host[data-judge-slug]` trong `root` (hàng thành viên đang mở).
+  // Vẽ vào mọi `.agj-host[data-judge-slug]` trong `root` (hàng thành viên đang mở).
   function hydrate(root) {
     if (!root || !root.querySelectorAll) return;
-    Array.prototype.forEach.call(root.querySelectorAll(".ajd-host[data-judge-slug]"), function (host) {
+    Array.prototype.forEach.call(root.querySelectorAll(".agj-host[data-judge-slug]"), function (host) {
       var slug = host.getAttribute("data-judge-slug"), ctx = host.getAttribute("data-judge-ctx") || "";
       var key = slug + "|" + ctx;
       var hit = cache[key];
       var getView = function () { return (cache[key] || {}).view; };
       bind(host, slug, key, getView, true);
       if (hit && Date.now() - hit.at < CACHE_MS) { paint(host, key, hit.view, true); return; }
-      host.innerHTML = '<div class="ajd-sub">' + esc(tw("judge.loading")) + "</div>";
+      host.innerHTML = '<div class="agj-sub">' + esc(tw("judge.loading")) + "</div>";
       window.fetch(viewUrl(slug, brain(), ctx), { credentials: "same-origin" }).then(function (r) {
         return r.json().then(function (j) { return { code: r.status, j: j || {} }; });
       }).then(function (r) {
-        if (r.code !== 200 || !r.j.judge) { host.innerHTML = '<div class="ajd-sub">' + esc(tw("judge.load_failed")) + "</div>"; return; }
+        if (r.code !== 200 || !r.j.judge) { host.innerHTML = '<div class="agj-sub">' + esc(tw("judge.load_failed")) + "</div>"; return; }
         cache[key] = { at: Date.now(), view: r.j.judge };
         paint(host, key, r.j.judge, true);
-      }).catch(function () { host.innerHTML = '<div class="ajd-sub">' + esc(tw("judge.load_failed")) + "</div>"; });
+      }).catch(function () { host.innerHTML = '<div class="agj-sub">' + esc(tw("judge.load_failed")) + "</div>"; });
     });
   }
 
@@ -245,13 +245,13 @@
     // Gắn nút sửa sau khi trang nhịp đã chèn chuỗi vào DOM (một lần mỗi ô).
     if (slug && typeof setTimeout === "function" && typeof document !== "undefined") {
       setTimeout(function () {
-        Array.prototype.forEach.call(document.querySelectorAll(".ajd-host.ajd-pulse"), function (h) {
+        Array.prototype.forEach.call(document.querySelectorAll(".agj-host.agj-pulse"), function (h) {
           if (h.getAttribute("data-judge-slug") !== slug) return;
           bind(h, slug, key, function () { return (cache[key] || {}).view; }, false);
         });
       }, 0);
     }
-    return '<div class="ajd-host ajd-pulse" data-judge-slug="' + esc(slug) + '" data-judge-ctx="">' +
+    return '<div class="agj-host agj-pulse" data-judge-slug="' + esc(slug) + '" data-judge-ctx="">' +
       viewHtml(part, { compact: false }) + "</div>";
   }
 

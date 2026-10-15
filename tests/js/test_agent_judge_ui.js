@@ -34,18 +34,18 @@ const view = { name: "judge", agent_key: "ag_1", resonance_on: true, eagerness: 
 const html = UI.viewHtml(view);
 check("vẽ cả hai ngữ cảnh: nhóm và chat riêng", html.includes(vi["judge.ctx_team"].replace("{name}", "Vận hành"))
   && html.includes(vi["judge.ctx_dm"]), html);
-check("ca im không có tin vẫn có dòng và nút sửa", html.includes('data-ajd-row="7"') && html.includes(vi["judge.no_message"])
-  && html.includes('data-ajd-id="7"'), html);
+check("ca im không có tin vẫn có dòng và nút sửa", html.includes('data-agj-row="7"') && html.includes(vi["judge.no_message"])
+  && html.includes('data-agj-id="7"'), html);
 check("lý do im theo mã được dịch", html.includes(vi["judge.code.below_threshold"]));
 check("hai nút sửa có đúng nhãn của chủ", html.includes(vi["judge.label.should_speak"]) && html.includes(vi["judge.label.should_silent"]));
-check("nhãn đang có: nút được đánh dấu và có nút bỏ nhãn", /data-ajd-label="should_silent" data-ajd-id="8" aria-pressed="true"/.test(html)
+check("nhãn đang có: nút được đánh dấu và có nút bỏ nhãn", /data-agj-label="should_silent" data-agj-id="8" aria-pressed="true"/.test(html)
   && html.includes(vi["judge.label.clear"]));
 check("hiệu lực nhãn hiện rõ (đã dịch ngưỡng)", html.includes(vi["judge.effect.applied"]));
-check("lời gọi trực tiếp: không nút sửa, có câu giải thích", !html.includes('data-ajd-id="9"') && html.includes(vi["judge.direct_note"]));
+check("lời gọi trực tiếp: không nút sửa, có câu giải thích", !html.includes('data-agj-id="9"') && html.includes(vi["judge.direct_note"]));
 check("điểm và ngưỡng hiện ra", html.includes("0.90") && html.includes("0.72"));
 check("thoát HTML", !UI.viewHtml({ contexts: [{ context_ref: "team:x", label: "<b>x</b>", decisions: [] }] }).includes("<b>x</b>"));
 check("bản gọn (hàng thành viên) không có tiêu đề lớn", !UI.viewHtml(view, { compact: true }).includes(vi["judge.title"]));
-check("đang lưu: nút của dòng đó bị khoá", /data-ajd-id="7" aria-pressed="false" disabled/.test(UI.viewHtml(view, { busy: "7" })));
+check("đang lưu: nút của dòng đó bị khoá", /data-agj-id="7" aria-pressed="false" disabled/.test(UI.viewHtml(view, { busy: "7" })));
 
 // postLabel: thành công chỉ sau 200.
 function fakeFetch(status, body, seen) {
@@ -80,7 +80,7 @@ function fakeFetch(status, body, seen) {
   check("không em dash hay en dash", !/[\u2013\u2014]/.test(src));
   check("đăng ký phần judge với khung nhịp của phần P", src.includes('window.JavisPulseParts.push({ name: "judge", render: render })'));
   const css = fs.readFileSync(path.join(ROOT, "dashboard", "console.css"), "utf8");
-  check("CSS phán xử: chữ 16px, nút 44px", /\.ajd \{[^}]*font-size: 16px/.test(css) && /\.ajd-btn \{[^}]*min-height: 44px/.test(css));
+  check("CSS phán xử: chữ 16px, nút 44px", /\.agj \{[^}]*font-size: 16px/.test(css) && /\.agj-btn \{[^}]*min-height: 44px/.test(css));
   const idx = fs.readFileSync(path.join(ROOT, "dashboard", "index.html"), "utf8");
   check("index.html nạp agent-judge-ui.js có ?v= và TRƯỚC teams.js",
     /agent-judge-ui\.js\?v=\d+/.test(idx) && idx.indexOf("agent-judge-ui.js") < idx.indexOf("/static/teams.js"));
@@ -88,8 +88,8 @@ function fakeFetch(status, body, seen) {
   // teams.js: ô trong hàng thành viên, gợi ý, bảng giới hạn.
   const team = { team_id: "t1", leader_key: "ag_1", members: [{ agent_key: "ag_2", slug: "minh", name: "Minh" }] };
   const mh = TM.membersHtml(team, [], "ag_2");
-  check("hàng thành viên đang mở có ô phán xử theo đúng nhóm", mh.includes('class="ajd-host" data-judge-slug="minh" data-judge-ctx="team:t1"'), mh);
-  check("hàng thành viên đóng thì không tải", !TM.membersHtml(team, [], null).includes("ajd-host"));
+  check("hàng thành viên đang mở có ô phán xử theo đúng nhóm", mh.includes('class="agj-host" data-judge-slug="minh" data-judge-ctx="team:t1"'), mh);
+  check("hàng thành viên đóng thì không tải", !TM.membersHtml(team, [], null).includes("agj-host"));
   const lim = TM.limitsHtml({ authority: { limits: [
     { key: "judge_daily", category: "owner", value: 40, unit: "count", unlimited_ok: true },
     { key: "volunteer_k", category: "owner", value: 1, unit: "count", unlimited_ok: false },
@@ -117,7 +117,7 @@ function fakeFetch(status, body, seen) {
   const pulseView = { slug: "lan", parts: { judge: view } };
   const viaPulse = PULSE.partsHtml(pulseView, [{ name: "judge", render: UI.render }], { slug: "lan" });
   check("trang nhịp vẽ được mục phán xử (render(view, null, {slug}) trả HTML có lịch sử và nút sửa)",
-    viaPulse.includes('data-part="judge"') && viaPulse.includes('data-judge-slug="lan"') && viaPulse.includes('data-ajd-id="7"'),
+    viaPulse.includes('data-part="judge"') && viaPulse.includes('data-judge-slug="lan"') && viaPulse.includes('data-agj-id="7"'),
     viaPulse);
   check("mục phán xử lỗi hay rỗng thì trang nhịp không vẽ gì", UI.render({ parts: { judge: { error: "x" } } }, null,
     { slug: "lan" }) === "" && UI.render({ parts: {} }, null, { slug: "lan" }) === "");
