@@ -489,5 +489,83 @@ check("view: mục của phần đăng ký có mặt; mục lỗi không làm h�
       and v["contexts"][0]["context_ref"] == ctx, v["parts"])
 del H._VIEW_PARTS["judge"], H._VIEW_PARTS["broken"]
 
+# ═════ đường thật qua main.py: engine thật bị chặn (fail fast), route nhịp, POST /seen ═════
+BR = (TEMP / "brain-main").resolve()
+(BR / "agents").mkdir(parents=True)
+(BR / "agents" / "viet.md").write_text("---\nname: Viết\nrole: Viết bài\n---\nBạn là Viết.\n", encoding="utf-8",
+                                       newline="\n")
+import main  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+built = []
+
+
+def boom(*a, **kw):
+    built.append(a)
+    raise AssertionError("test không được dựng engine thật")
+
+
+main._pulse_engine_for = boom
+main._team_engine_for = boom
+main._resonance_engine = boom
+main._TEAM_API.deps.spawn = lambda coro: coro.close()
+client = TestClient(main.app, base_url="http://127.0.0.1:8080")
+B = str(BR)
+r0 = client.get("/agents/viet/pulse", params={"brain": B})
+check("GET pulse: trợ lý chưa có mã thì khung rỗng, không tạo kho", r0.status_code == 200 and r0.json()["agent_key"]
+      is None, r0.text)
+check("GET pulse: trợ lý không có thì 404", client.get("/agents/khong-co/pulse", params={"brain": B}).status_code == 404)
+rt = client.post("/resonance/agents/toggle", params={"brain": B}, json={"slug": "viet", "enabled": True})
+key = rt.json()["agent"]["agent_key"]
+mst = main._resonance_store()
+mctx = f"dm:{key}"
+main._pulse_opportunities = lambda k_, c_, iv: ([opp("goal:gx", kind="goal_waiting")] if c_ == mctx else [])
+main._PULSE_HOST[0] = None
+AP.ensure_row(mst, key, mctx)
+due_now(mst, key, mctx, 1.0)
+
+
+async def main_tick():
+    await main._pulse_tick()
+    await main._pulse_host().wait_idle()
+
+run(main_tick())
+calls_rows = AL.CallLedger(mst).rows()
+check("main.py: lượt quét tới chỗ dựng engine thì engine thật bị chặn ngay (fail fast), không lời gọi model nào",
+      len(built) == 1 and all(r_["status"] == "refunded" for r_ in calls_rows) and len(calls_rows) == 1, calls_rows)
+check("main.py: lỗi dựng engine ghi scan_error, lịch tính lại", AP.events(mst, key, mctx, kinds=("scan_error",))
+      and AP.row(mst, key, mctx)["next_due_at"] > 1.0)
+v = client.get("/agents/viet/pulse", params={"brain": B}).json()
+check("GET pulse: trạng thái và bậc theo từng ngữ cảnh, Cộng hưởng bật", v["ok"] and v["resonance"] is True
+      and any(c_["context_ref"] == mctx and c_["tier"] == 3 for c_ in v["contexts"]) and "parts" in v, v)
+rp = client.post("/agents/viet/pulse/pause", params={"brain": B}, json={"context_ref": mctx})
+check("POST pause: 200 sau khi kho đã ghi, khung mới trả kèm", rp.status_code == 200
+      and next(c_ for c_ in rp.json()["view"]["contexts"] if c_["context_ref"] == mctx)["state"] == "paused", rp.text)
+check("POST wake khi tạm dừng: 409 (không có gì để đổi), không báo thành công giả",
+      client.post("/agents/viet/pulse/wake", params={"brain": B}, json={"context_ref": mctx}).status_code == 409)
+rr = client.post("/agents/viet/pulse/resume", params={"brain": B}, json={"context_ref": mctx})
+check("POST resume: về trạng thái theo bậc", rr.status_code == 200 and AP.row(mst, key, mctx)["state"] == "awake")
+check("POST reset thiếu ngữ cảnh: 400", client.post("/agents/viet/pulse/reset", params={"brain": B},
+                                                     json={}).status_code == 400)
+check("POST reset: 200", client.post("/agents/viet/pulse/reset", params={"brain": B},
+                                      json={"context_ref": mctx}).status_code == 200)
+check("POST max_tier B0 từ route của chủ: 200", client.post("/agents/viet/pulse/max_tier", params={"brain": B},
+                                                             json={"tier": 0}).status_code == 200
+      and AP.row(mst, key, mctx)["max_tier"] == 0)
+ss = main.get_store()
+sid = ss.create_session(brain=B, channel="agent:viet")
+mid_a = ss.append_message(sid, "assistant", "Tin của Viết")
+mid_u = ss.append_message(sid, "user", "Tin của chủ")
+rs = client.post("/seen", json={"context_ref": f"session:{sid}", "message_ids": [mid_a, mid_u]})
+check("POST /seen: chỉ tin của agent được ghi, lần đầu", rs.status_code == 200 and rs.json()["recorded"] == 1
+      and AP.seen_at(mst, mctx, mid_a) is not None and AP.seen_at(mst, mctx, mid_u) is None, rs.text)
+rs2 = client.post("/seen", json={"context_ref": f"session:{sid}", "message_ids": [mid_a]})
+check("POST /seen lần hai: không ghi lại", rs2.json()["recorded"] == 0)
+check("POST /seen thân sai: 400", client.post("/seen", json={"context_ref": "", "message_ids": []}).status_code == 400)
+check("POST /seen ngữ cảnh chat riêng của agent khác: không ghi",
+      client.post("/seen", json={"context_ref": "dm:ag_khac", "message_ids": [mid_a], "session_id": sid})
+      .json()["recorded"] == 0)
+check("không engine thật nào được dựng trong cả phần main.py", len(built) == 1, built)
+
 print(f"\n{len(fails)} FAIL" if fails else "\nALL OK")
 raise SystemExit(1 if fails else 0)

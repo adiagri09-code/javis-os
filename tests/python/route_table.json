@@ -4508,5 +4508,85 @@
    "POST"
   ],
   "trong": null
+ },
+ {
+  "order": 453,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/pulse",
+  "name": "agent_pulse_view",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 454,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/pulse/wake",
+  "name": "agent_pulse_wake",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 455,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/pulse/pause",
+  "name": "agent_pulse_pause",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 456,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/pulse/resume",
+  "name": "agent_pulse_resume",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 457,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/pulse/reset",
+  "name": "agent_pulse_reset",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 458,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/pulse/revert",
+  "name": "agent_pulse_revert",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 459,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/pulse/max_tier",
+  "name": "agent_pulse_max_tier",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 460,
+  "type": "APIRoute",
+  "path": "/seen",
+  "name": "pulse_seen",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
  }
 ]

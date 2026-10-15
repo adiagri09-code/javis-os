@@ -31,6 +31,8 @@ from contextlib import closing
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
+from fastapi import Request
+
 import agent_pulse as AP
 
 TICK_S = 30.0
@@ -580,7 +582,6 @@ class PulseRouteDeps:
 def register(app, deps: PulseRouteDeps) -> None:
     """Route của nhịp. Middleware auth + CSRF của main chặn trước (route chỉ của chủ). Hành động chỉ báo thành công sau
     khi kho đã ghi (trả 200 kèm khung mới)."""
-    from fastapi import Request
     from fastapi.responses import JSONResponse
     import localefmt
 
