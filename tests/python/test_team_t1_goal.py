@@ -419,7 +419,8 @@ owner_rows = {x["key"]: x for x in rows if x["category"] == "owner"}
 check("G5 bảng có đủ bốn nhóm: chủ, trưởng nhóm (Toàn quyền), máy chủ, nhà cung cấp",
       cats == {"owner", "leader", "server", "provider"}, cats)
 check("G5 trần của chủ: bốn trần có Không giới hạn, @ mỗi tin và thời gian chờ thì không",
-      bool(owner_rows) and {k for k, x in owner_rows.items() if x["unlimited_ok"]} == {"task_turns", "task_steps", "help_depth", "daily_turns"}
+      bool(owner_rows) and {k for k, x in owner_rows.items() if x["unlimited_ok"]} == {"task_turns", "task_steps", "help_depth", "daily_turns",
+                                                                       "judge_daily"}  # T3 J: judge_daily có Không giới hạn
       and not owner_rows["mentions"]["unlimited_ok"] and not owner_rows["busy_wait_s"]["unlimited_ok"], owner_rows)
 check("G5 không dòng máy chủ hay nhà cung cấp nào có Không giới hạn (không quảng cáo bỏ mọi giới hạn)",
       rows and not [x for x in rows if x["category"] in ("server", "provider") and x["unlimited_ok"]])
