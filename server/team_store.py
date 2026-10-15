@@ -37,6 +37,11 @@ DEFAULT_CAPS = {
     "daily_turns": 100,        # lượt mỗi nhóm mỗi ngày
     "running_jobs": 1,         # việc chạy cùng lúc mỗi nhóm
     "busy_wait_s": 1800,       # chờ khoá bận trước khi báo chặn
+    # T3 phần J (0.156.0, thiết kế mục 9): lượt phán xử theo lô mỗi nhóm mỗi ngày (tách khỏi daily_turns), số người tự lên
+    # tiếng mỗi tin (`K`, 0 = tắt), chế độ phán xử khi Cộng hưởng của agent tắt (1 = lọc code + lô, 0 = chỉ lọc code).
+    "judge_daily": 40,
+    "volunteer_k": 1,
+    "judge_off_batch": 1,
 }
 # Trần chủ nhóm đổi được (POST /teams/{id}/caps). GOAL T1 mục 9 (bảng giới hạn): `running_jobs` và `no_progress` vẫn nằm
 # trong DEFAULT_CAPS để hiện và để đọc dòng cũ, nhưng do MÁY CHỦ cố định:
@@ -44,13 +49,16 @@ DEFAULT_CAPS = {
 #   số > 1 trước đây nhận được mà không bao giờ có tác dụng. Chọn thay đổi nhỏ và an toàn: bỏ khỏi trần chỉnh được, hiện là
 #   giới hạn kỹ thuật, thay vì mở song song trong một nhóm (đụng khoá bận theo agent, thứ tự hàng đợi, ngữ cảnh chung).
 # - no_progress: bộ chạy dừng ở hai kết quả GIỐNG HỆT liên tiếp (so sha), con số không được đọc ở đâu.
-OWNER_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns", "mentions", "busy_wait_s")
+OWNER_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns", "mentions", "busy_wait_s", "judge_daily",
+              "volunteer_k", "judge_off_batch")
 # Trần có lựa chọn "Không giới hạn" (lưu `None`, không thay bằng số lớn). Bộ chạy đọc `None` là không chặn.
-UNLIMITED_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns")
+UNLIMITED_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns", "judge_daily")
+# Giá trị lớn nhất của các ô không phải trần lượt (T3 J): K tối đa 5 người, chế độ phán xử là 0 hay 1.
+CAP_MAX = {"volunteer_k": 5, "judge_off_batch": 1}
 FIXED_CAPS = {"running_jobs": 1, "no_progress": 2}
 TEAM_STATUS = ("active", "paused", "archived")
 STEP_KINDS = ("plan", "work", "help", "synthesize", "reply")
-TURN_ROLES = ("leader_reply", "member_reply", "plan", "work", "help", "synthesize")
+TURN_ROLES = ("leader_reply", "member_reply", "plan", "work", "help", "synthesize", "member_volunteer")
 # Kết cục của một lượt trả lời trò chuyện (0.142.0), lưu bền để tải lại trang hay khởi động lại máy chủ không mất dấu:
 # queued (đang chờ) -> running (đang trả lời) -> done (xong) | error (lỗi, kèm lý do, có Thử lại).
 REPLY_STATUS = ("queued", "running", "done", "error")
@@ -377,6 +385,8 @@ class TeamStore:
                 raise TeamError(f"trần {k} phải là số hữu hạn")
             if num < 0:
                 raise TeamError(f"trần {k} không được âm")
+            if k in CAP_MAX and num > CAP_MAX[k]:
+                raise TeamError(f"trần {k} tối đa là {CAP_MAX[k]}")
             clean[k] = num if k == "busy_wait_s" else int(num)
         with self._Tx(self) as c:
             r = c.execute("SELECT caps_json FROM teams WHERE team_id=?", (team_id,)).fetchone()
