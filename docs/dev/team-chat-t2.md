@@ -180,4 +180,12 @@ tắt Javis, chép ba file `.pre-0.154.0` đè lên kho tương ứng trong `JAV
 
 ### Bằng chứng
 
-Xem mục cuối của file này sau lần chạy test (được cập nhật khi đẩy nhánh).
+Bản đầy đủ: `exports/reviews/team-adaptive/t2-be-evidence.txt` (ngoài repo). Tóm tắt, engine giả, không model thật:
+
+- `test_agent_calls_ledger.py` 67 kiểm, `test_feedback_projector.py` 23, `test_feedback_wake.py` 22, `test_dm_reactions.py`
+  49, `test_team_reactions.py` 55 (mở rộng), `test_team_api.py` 83: đều xanh.
+- Bộ lọc `team route_table i18n resonance dm_reactions feedback agent_calls sessions`: 85/86, cái đỏ duy nhất (canary nguồn
+  của `test_resonance_a1_transport`) đã sửa và xanh ở lần chạy đầy đủ.
+- Cả bộ (Python và JS): 698/712. 14 cái đỏ đều đỏ y hệt trên `origin/claude/team-adaptive-t2` (46ae9471) trong một worktree
+  sạch (cùng mã thoát, cùng số FAIL): antigravity, grok, cài Windows, ollama máy nhà, terminal, khởi động nhẹ, bản dịch máy...
+  `test_link_file_uri` khác số FAIL chỉ vì ổ đĩa (thư mục tạm ở C:, worktree ở D:); đặt TEMP cùng ổ thì giống hệt bản gốc.
