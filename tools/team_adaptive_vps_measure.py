@@ -84,6 +84,45 @@ def store_counts(state: Path) -> dict:
     return out
 
 
+def message_counts(state: Path, session_ids: list) -> dict:
+    """Số tin của từng phiên nhóm, đọc `conversations.db` ở chế độ chỉ đọc (một truy vấn GROUP BY theo chỉ mục phiên)."""
+    p = state / "conversations.db"
+    ids = [str(x) for x in session_ids if x]
+    if not p.is_file() or not ids:
+        return {}
+    con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True, timeout=5)
+    try:
+        q = ",".join("?" * len(ids))
+        return {str(r[0]): int(r[1]) for r in con.execute(
+            f"SELECT session_id, COUNT(*) FROM messages WHERE session_id IN ({q}) GROUP BY session_id", ids)}
+    finally:
+        con.close()
+
+
+def pick_biggest(teams: list, counts: dict) -> tuple:
+    """(nhóm nhiều tin nhất, cách đếm). Có số đếm từ kho thì theo đó; không thì theo trang tin đầu (gần đúng)."""
+    if not teams:
+        return None, ""
+    if counts:
+        return max(teams, key=lambda t: counts.get(str(t.get("session_id") or ""), 0)), "conversations.db (chỉ đọc)"
+    return None, ""
+
+
+def page_size(base, team, q, cookie) -> int:
+    """Gần đúng khi không có kho: số tin của trang 200 tin mới nhất, cộng 1 nếu còn trang trước."""
+    _, _, body = get(base, f"/teams/{team['team_id']}/messages", dict(q, limit=200), cookie)
+    d = json.loads(body)
+    return len(d.get("messages") or []) + (1 if d.get("has_more") else 0)
+
+
+def first_slug(team: dict) -> str:
+    """Slug của gương mặt đầu (trưởng nhóm trước) trong dòng danh sách nhóm (`faces`)."""
+    for f in team.get("faces") or []:
+        if f.get("slug"):
+            return str(f["slug"])
+    return ""
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="CHƯA CHẠY: đo chỉ đọc trên VPS, cần chủ dự án duyệt")
     ap.add_argument("--owner-approved", default="", help="mã hay link tin duyệt của chủ dự án (bắt buộc)")
@@ -113,14 +152,22 @@ def main(argv=None) -> int:
     _, _, body = get(a.base_url, "/teams", q, cookie)
     teams = json.loads(body).get("teams") or []
     report["teams_seen"] = len(teams)
-    biggest = max(teams, key=lambda t: int((t.get("counts") or {}).get("messages") or 0), default=None)
+    counts = message_counts(Path(a.state_dir), [t.get("session_id") for t in teams]) if a.state_dir else {}
+    biggest, how = pick_biggest(teams, counts)
+    if biggest is None and teams:
+        sized = [(page_size(a.base_url, t, q, cookie), t) for t in teams[:30]]
+        biggest = max(sized, key=lambda x: x[0])[1]
+        how = "trang 200 tin mới nhất qua GET (gần đúng, tối đa 30 nhóm)"
     routes = {"GET /health": ("/health", {}), "GET /teams": ("/teams", q)}
     if biggest:
         tid = biggest["team_id"]
+        report["measured_team"] = {"team_id": tid, "how": how,
+                                   "messages": counts.get(str(biggest.get("session_id") or "")) if counts else None}
         routes["GET /teams/{id}"] = (f"/teams/{tid}", q)
         routes["GET /teams/{id}/messages"] = (f"/teams/{tid}/messages", q)
-        slug = next((m.get("slug") for m in biggest.get("members") or [] if m.get("slug")), None)
+        slug = first_slug(biggest)
         if slug:
+            report["measured_team"]["pulse_slug"] = slug
             routes["GET /agents/{slug}/pulse"] = (f"/agents/{slug}/pulse", q)
     res = {}
     for name, (path, params) in routes.items():
