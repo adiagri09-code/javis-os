@@ -21,6 +21,10 @@ const rows = F.folderRows([
 check("folder rows keep only real, visible folders", rows.map(r => r.name).join(",") === "projects,shop", JSON.stringify(rows));
 check("folder rows build a path from the listing path when items have none",
   F.folderRows([{ name: "a", type: "dir" }], "brain/x")[0].path === "brain/x/a");
+check("row hint is the path inside the brain, not from the drive root",
+  F.displayPath("Project/Brain/projects/shop", "Project/Brain") === "projects/shop" && F.displayPath("Other/x", "Project/Brain") === "Other/x"
+  && F.displayPath("Project/Brain/projects", "") === "Project/Brain/projects");
+check("the + menu marks panel items with a chevron like submenus", /sub: !!\(it\.submenu \|\| it\.panel\)/.test(plus));
 check("chip label keeps short names", F.chipLabel("shop", 18) === "shop");
 check("chip label cuts long names with an ellipsis", F.chipLabel("a-very-long-project-folder-name", 18) === "a-very-long-proje…");
 check("chip label phone width is 10 characters", F.chipLabel("a-very-long-project", 10).length === 10);
@@ -37,6 +41,8 @@ check("composer-folder.js loads after composer-plus.js", html.indexOf("composer-
 check("folder upload input is gone", html.indexOf('id="folderInput"') === -1 && plus.indexOf("folderInput") === -1);
 check("folder upload helpers are gone",
   ["handleFolder", "pickFolderFiles", "runQueue"].every(n => plus.indexOf(n) === -1) && app.indexOf("queue: (files") === -1 && app.indexOf("_hangDoi") === -1);
+check("claiming without a session id keeps the held pin (found in the sandbox check)",
+  /function claimPending\(newSid\) \{\s*if \(!newSid\) return Promise\.resolve\(\);[^\n]*\n\s*var p = state\.takePending\(\);/.test(src));
 check("pin uses the one-call endpoint", src.indexOf('"/pin"') !== -1);
 check("pin fires javis:pinned-folder-changed", src.indexOf('"javis:pinned-folder-changed"') !== -1);
 check("browse row opens the shared folder picker", src.indexOf("JavisFolderPicker.open(") !== -1);

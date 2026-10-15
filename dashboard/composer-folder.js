@@ -14,6 +14,11 @@
     return (items || []).filter(function (x) { return x && x.type === "dir" && !HIDDEN.test(String(x.name || "")); })
       .map(function (x) { return { name: x.name, path: x.path || ((listPath ? listPath + "/" : "") + x.name) }; });
   }
+  // Row hint: the path inside the brain ("home" from /files/list), not from the browse ceiling.
+  function displayPath(path, home) {
+    var p = String(path || ""), h = String(home || "");
+    return h && p.indexOf(h + "/") === 0 ? p.slice(h.length + 1) : p;
+  }
   function chipLabel(name, max) {
     var s = String(name || "");
     return s.length <= max ? s : s.slice(0, max - 1) + "…";
@@ -29,7 +34,7 @@
     };
   }
 
-  var pure = { folderRows: folderRows, chipLabel: chipLabel, createPinState: createPinState };
+  var pure = { folderRows: folderRows, displayPath: displayPath, chipLabel: chipLabel, createPinState: createPinState };
   if (typeof module !== "undefined" && module.exports) module.exports = pure;
   if (typeof document === "undefined") return;
 
@@ -110,9 +115,10 @@
     });
   }
   function claimPending(newSid) {
+    if (!newSid) return Promise.resolve();         // keep the held pin until a real session id exists
     var p = state.takePending();
     held = null;
-    if (!p || !newSid) return Promise.resolve();
+    if (!p) return Promise.resolve();
     var n = state.request(newSid);
     return getJson(pinUrl(newSid), { method: "POST", body: pinBody(p) }).then(function (d) {
       if (d && d.ok !== false && state.accept(n, newSid)) apply(d);
@@ -127,19 +133,24 @@
       '<button type="button" class="cp-mi" data-browse="1">' + icon() + '<span class="cp-mi-lbl">' + esc(tw("cp.pin_browse")) + "</span></button>" +
       '<div class="cp-pin-err" role="status"></div>';
     var input = box.querySelector(".cp-search"), out = box.querySelector(".cp-results"), err = box.querySelector(".cp-pin-err");
-    var list = [], timer = 0, seq = 0;
-    function show(items) {
+    var list = [], timer = 0, seq = 0, home = "";
+    // Top-level rows need no hint; search results show where they sit inside the brain.
+    function show(items, withHint) {
       list = items;
       out.innerHTML = items.length ? items.map(function (r, i) {
+        var hint = withHint ? displayPath(r.path, home) : "";
         return '<button type="button" class="cp-mi" data-pin="' + i + '">' + icon() + '<span class="cp-mi-lbl">' + esc(r.name) +
-          '</span><span class="cp-mi-hint">' + esc(r.path) + "</span></button>";
+          "</span>" + (hint && hint !== r.name ? '<span class="cp-mi-hint">' + esc(hint) + "</span>" : "") + "</button>";
       }).join("") : '<div class="cp-empty">' + esc(tw("cp.pin_empty")) + "</div>";
     }
     function load() {
       var q = input.value.trim(), n = ++seq;
       var url = q ? "/files/search?mode=name&include_dirs=true&limit=30&brain=" + encodeURIComponent(brain()) + "&q=" + encodeURIComponent(q)
         : "/files/list?brain=" + encodeURIComponent(brain());
-      getJson(url).then(function (d) { if (n === seq) show(folderRows((d && d.items) || [], (d && d.path) || "")); });
+      getJson(url).then(function (d) {
+        if (!q && d && d.home) home = d.home;
+        if (n === seq) show(folderRows((d && d.items) || [], (d && d.path) || ""), !!q);
+      });
     }
     function done(msg) {
       if (msg) { err.textContent = msg; return; }

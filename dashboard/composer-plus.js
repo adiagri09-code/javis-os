@@ -83,7 +83,7 @@
   function focusRow(i) { var els = rowsEls(); if (!els.length) return; active = (i + els.length) % els.length; els[active].focus(); }
   function topRows() {
     return reg.list().map(function (it) {
-      return { icon: it.icon, label: tw(it.label), hint: it.hint ? it.hint() : "", warn: !!it.warn, sub: !!it.submenu, item: it };
+      return { icon: it.icon, label: tw(it.label), hint: it.hint ? it.hint() : "", warn: !!it.warn, sub: !!(it.submenu || it.panel), item: it };
     });
   }
   function open() {
