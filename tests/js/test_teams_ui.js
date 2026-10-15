@@ -210,7 +210,11 @@ check("bản nháp đang soạn giữ qua lần vẽ lại", /value="missing" ch
 check("chỉ có lý do/góp ý (bỏ emoji): chip vẫn hiện", TM.reactionChipHtml(am, { value: null, reasons: ["missing"], comment: "" })
       .includes(vi["teams.react_reasons_n"].replace("{n}", "1")));
 check("không có phản hồi: không chip", TM.reactionChipHtml(am, null) === "");
-check("thả cảm xúc gửi nonce mới mỗi lần, không mở lượt", /\/reaction"\)[\s\S]{0,120}nonce: newClientId\(\)/.test(teamsJs));
+check("thả cảm xúc: nonce giữ theo thao tác (thử lại sau lỗi mạng dùng lại), kèm axis và seen_sha, không mở lượt",
+      /var reactNonces = JR\.nonceKeeper\(newClientId\)/.test(teamsJs)
+      && /body\.nonce = reactNonces\.take\(key, body\)/.test(teamsJs) && /reactNonces\.settle\(key, r\.code\)/.test(teamsJs)
+      && /reactNonces\.settle\(key, 0\);\s*setNote\(tw\("teams\.err_network"\), retry\)/.test(teamsJs)
+      && /JR\.payload\(value, reasons, axis, comment, m0 && m0\.content_sha\)/.test(teamsJs));
 check("điện thoại: nhấn giữ tin mở bộ chọn, có ngưỡng rung tay", teamsJs.includes('"pointerdown"') && /> 10/.test(teamsJs));
 check("gói WS không mang phản hồi thì giữ phản hồi đang có", teamsJs.includes('!("reaction" in nm)'));
 check("CSS: nút mặt cười hiện khi rê chuột, luôn hiện trên máy chạm, tắt menu nhấn giữ của máy",
@@ -230,6 +234,37 @@ check("CSS: điện thoại hàng ngang lớn, vùng chạm >= 44px", /\.tm-reac
 check("CSS 375px: sáu nút 44px lọt bề ngang (khe 4px, đệm 6px; smoke T2 thấy 😡 tràn mép)",
       /\.tm-react-panel \{ padding: 8px 6px; \}/.test(css) && /\.tm-react-row \{ flex-wrap: nowrap; justify-content: space-between; gap: 4px; \}/.test(css));
 check("CSS: bảng chọn display:flex có luật [hidden] riêng", /\.tm-react-panel\[hidden\] \{ display: none; \}/.test(css));
+
+// ───────────── T2 0.154.0: bảng dùng chung, trạng thái, trục nói/im, chip agent, khung lọc theo việc ─────────────
+const JR = require(path.join(ROOT, "dashboard", "reactions.js"));
+check("teams.js không còn bảng emoji riêng: REACTIONS là bảng của reactions.js", TM.REACTIONS === JR.EMOJI
+      && !/var REACTIONS = \[/.test(teamsJs) && teamsJs.includes("window.JavisReactions"));
+mh = TM.messageHtml(am, { members: members, picker: 7 });
+check("bộ chọn có nhóm trục nói/im chọn một, tách khỏi lý do", (mh.match(/type="radio" name="tm-axis-7"/g) || []).length === 3
+      && mh.includes('role="radiogroup"') && mh.includes(vi["react.axis.should_speak"]) && mh.includes(vi["react.axis.should_silent"]), mh);
+const withS = Object.assign({}, am, { reaction: { value: "like", reasons: [], axis: "should_silent", comment: "",
+  status: "pending_review", status_reason: "Chờ <lượt> xem xét" } });
+mh = TM.messageHtml(withS, { members: members });
+check("trạng thái host ghi hiện dưới chip, kèm lý do đã escape", mh.includes('class="tm-react-status" data-status="pending_review"')
+      && mh.includes(vi["react.status.pending_review"]) && mh.includes("Chờ &lt;lượt&gt; xem xét")
+      && mh.indexOf("tm-react-chip") < mh.indexOf("tm-react-status"), mh);
+check("chip của chủ nhắc trục nói/im đã chọn", mh.includes(vi["react.axis.should_silent"]), mh);
+const withA = Object.assign({}, am, { agent_reactions: [{ agent_key: "ag_minh", name: "Minh <b>", source_kind: "member",
+  value: "wow", reasons: [], comment: "" }] });
+mh = TM.messageHtml(withA, { members: members });
+check("reaction của agent: chip chỉ đọc có tên agent, không phải nút", mh.includes('class="tm-react-agent"')
+      && mh.includes("Minh &lt;b&gt;") && !/<button[^>]*tm-react-agent/.test(mh), mh);
+check("tin của chủ cũng hiện chip reaction của agent", TM.messageHtml({ id: 8, author_kind: "owner", content: "x", meta: {},
+  agent_reactions: [{ agent_key: "ag_lan", name: "Lan", value: "like", reasons: [], comment: "" }] }, { members: members })
+  .includes("tm-react-agent"));
+check("khung lọc theo việc nhận gói team_message: vẽ lại tin đang hiện, không chèn tin mới",
+      !teamsJs.includes('d.message && !S.filterTask)') && teamsJs.includes("S.msgs[i] = S.filterTask ? Object.assign({}, S.msgs[i], nm) : nm;")
+      && teamsJs.includes("if (i >= 0 || !S.filterTask) drawMsgs(false);"));
+check("gói WS không mang reaction của agent thì giữ cái đang có", teamsJs.includes('!("agent_reactions" in nm)'));
+check("bảng chọn giữ trục nói/im đang soạn qua lần vẽ lại", /S\.draft = \{ mid: S\.picker, reasons: pv\.reasons, axis: pv\.axis/.test(teamsJs)
+      && /\/\^tm-axis-\//.test(teamsJs));
+check("lý do server_ceiling có nhãn ở lượt trả lời và ở việc bị chặn",
+      teamsJs.includes('server_ceiling: "teams.reply.why.server_ceiling"') && teamsJs.includes('server_ceiling: "teams.block.server_ceiling"'));
 
 // ───────────── T3: hộp cấp Toàn quyền, công tắc Nhóm quản lý (spec mục 13) ─────────────
 const limitedTeam = Object.assign({}, team, { authority: { authority: null,
@@ -278,7 +313,7 @@ check("tin được nhảy tới được tô sáng", TM.messageHtml(am, { membe
 check("nhảy tới tin: tải trang kết thúc ở đúng tin đó, có nút về tin mới nhất",
       /before_ts=" \+ q\(ts\) \+ "&before_id=" \+ q\(Number\(mid\) \+ 1\)/.test(teamsJs) && teamsJs.includes("tm-jump-back"));
 check("đang xem tin cũ: tin mới tới không chèn vào giữa khúc cũ",
-      teamsJs.includes("else if (S.jumped === null || S.jumped === undefined) S.msgs.push(nm);"));
+      teamsJs.includes("else if (!S.filterTask && (S.jumped === null || S.jumped === undefined)) S.msgs.push(nm);"));
 check("CSS: lớp flex mới của tìm có [hidden], vùng chạm 44px trên điện thoại",
       /\.tm-search\[hidden\]/.test(css) && /\.tm-search-row\[hidden\]/.test(css) && /\.tm-jumped\[hidden\]/.test(css)
       && /\.tm-search-btn, \.tm-search-go, \.tm-search-input, \.tm-search-hit, \.tm-jump-back \{ min-height: 44px; \}/.test(css));

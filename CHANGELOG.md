@@ -8,7 +8,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.154.0] - 2026-10-15
 ### Thêm mới
-- **Thả cảm xúc cho câu trả lời ở chat riêng:** sáu cảm xúc, lý do, "nên nói / nên im" và góp ý được lưu bền, giữ qua F5 và khởi động lại, đồng bộ mọi tab.
+- **Thả cảm xúc lên câu trả lời ở chat riêng:** sáu emoji như chat nhóm, có ở trang Trò chuyện và trang Cộng sự, hiện ngay khi câu trả lời vừa lưu, F5 vẫn còn, tab khác cũng thấy.
+- **Góp ý rõ hơn:** ngoài lý do, chọn thêm "Đáng lẽ nên nói" hay "Nên im (chen ngang)", kèm góp ý tuỳ chọn. Dưới cảm xúc hiện trạng thái như Đã nhận, Chờ xem xét, Đã điều chỉnh; ở nhóm còn thấy cảm xúc của trưởng nhóm và thành viên.
 - **Trợ lý bật Cộng hưởng nhận phản hồi để xem xét:** nhiều lần bấm gom thành một lần xem xét, không tốn lượt model nào; trợ lý tắt Cộng hưởng thì chỉ lưu. Bật lại không phát lại phản hồi cũ.
 - **Trợ lý trong nhóm thả cảm xúc cho nhau** (trưởng nhóm, thành viên), hiện riêng với cảm xúc của bạn; không ai tự thả cho mình.
 ### Sửa lỗi

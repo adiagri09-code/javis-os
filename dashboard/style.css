@@ -1081,6 +1081,58 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 /* Đang chạy một lượt thì không cho bấm gửi lại (app.js gắn .busy vào #chatArea) */
 .transcript.busy .msg-act[data-act="retry"] { opacity: 0.35; pointer-events: none; }
 
+/* T2 0.154.0: sáu reaction dưới câu trả lời (chat-reactions.js + reactions.js). Máy tính: nút mặt cười hiện khi rê chuột,
+   chip đã chọn luôn hiện; máy chạm: nút luôn hiện, vùng chạm 44px. Chữ 16px, lọt bề ngang 375px không cuộn ngang. */
+.jr-chat { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; max-width: min(72ch, 100%); min-width: 0; }
+.jr-chat[hidden] { display: none; }
+.jr-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.jr-row[hidden] { display: none; }
+.jr-react-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px;
+  border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text3); cursor: pointer; padding: 4px;
+  opacity: 0; transition: opacity 0.15s; }
+.msg-javis:hover .jr-react-btn, .jr-react-btn:focus-visible, .jr-react-btn[aria-expanded="true"] { opacity: 1; }
+.jr-react-btn:hover { color: var(--text-hi); border-color: var(--border); }
+.jr-react-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); border-radius: 999px; padding: 2px 12px; font: inherit; font-size: 16px;
+  line-height: 1.4; cursor: pointer; overflow-wrap: anywhere; text-align: left; }
+.jr-react-emoji { font-size: 18px; margin-right: 4px; }
+.jr-react-status, .jr-react-busy { font-size: 16px; line-height: 1.4; color: var(--text3); overflow-wrap: anywhere; }
+.jr-react-why { margin-left: 6px; }
+.jr-react-why::before { content: "\00B7"; margin-right: 6px; }
+.jr-react-panel { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border);
+  border-radius: 12px; background: var(--bg); min-width: 0; box-sizing: border-box; max-width: 100%; }
+.jr-react-panel[hidden] { display: none; }
+.jr-react-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.jr-react-pick { min-width: 44px; min-height: 44px; font-size: 24px; line-height: 1; border: 1px solid var(--border);
+  border-radius: 12px; background: var(--surface-1); cursor: pointer; }
+.jr-react-pick[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-wash); }
+.jr-react-sub { font-size: 16px; color: var(--text2); }
+.jr-react-reasons { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 16px; color: var(--text); }
+.jr-react-reasons[hidden] { display: none; }
+.jr-react-reason { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; }
+.jr-react-comment { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; font-size: 16px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1); color: var(--text); }
+.jr-react-note { font-size: 16px; color: var(--text3); }
+.jr-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.jr-actions[hidden] { display: none; }
+.jr-actions .ws-btn, .jr-react-err .ws-btn { font-size: 16px; }
+.jr-react-err { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: 16px; color: var(--danger, var(--text2)); }
+.jr-react-err[hidden] { display: none; }
+.jr-react-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap; }
+@media (hover: none) {
+  .jr-react-btn { opacity: 1; min-width: 44px; min-height: 44px; }
+  /* Nhấn giữ bong bóng trả lời mở bộ chọn: tắt menu chạm giữ mặc định của iOS cho bong bóng đã có mã tin. */
+  .msg-javis[data-mid] { -webkit-touch-callout: none; }
+  .jr-react-chip, .jr-react-reason, .jr-actions .ws-btn, .jr-react-err .ws-btn { min-height: 44px; }
+}
+@media (max-width: 480px) {
+  /* 375px: sáu nút 44px và năm khe phải lọt bề ngang bong bóng. */
+  .jr-react-panel { padding: 8px 6px; }
+  .jr-react-row { flex-wrap: nowrap; justify-content: space-between; gap: 4px; }
+  .jr-react-pick { flex: 1 1 0; min-width: 44px; min-height: 48px; padding: 0; }
+}
+
 /* Copy code block (nút nổi góc phải khối code) */
 .code-wrap { position: relative; }
 .code-copy { position: absolute; top: 6px; right: 6px; z-index: 2;

@@ -10,7 +10,8 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.154.0] - 2026-10-15
 ### Added
-- **React to replies in private chat:** six emoji, reasons, "should have spoken / should stay quiet" and a comment are stored, survive refresh and restarts, and sync across tabs.
+- **React to replies in private chat:** the same six emoji as team chat, on the Chat and Partners pages, available as soon as a reply is saved, kept after a reload and shown in other tabs.
+- **Clearer feedback:** besides reasons, pick "Should have spoken" or "Should stay quiet (interrupted)" and add an optional comment. A status such as Received, Waiting for review or Adjusted shows under the reaction; in teams you also see the coordinator's and members' reactions.
 - **Assistants with Resonance on get your feedback for review:** many taps fold into one review and cost no model turn; with Resonance off it is only stored. Turning it back on does not replay old feedback.
 - **Assistants in a team can react to each other** (coordinator and members), shown apart from your own reactions; nobody can react to their own message.
 ### Fixed
