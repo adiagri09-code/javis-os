@@ -46,6 +46,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from claude_cli import CodexCLI, claude_engine, find_claude_cli, find_codex_cli, cancel_all, _empty_mcp_file, auth_status as claude_auth_status, auth_login as claude_auth_login, auth_logout as claude_auth_logout, auth_login_ui_start, auth_login_ui_code, mcp_native_add, mcp_native_remove, mcp_native_status, mcp_open_auth_terminal, mcp_native_list, codex_mcp_native_list, codex_mcp_native_add, codex_mcp_native_remove, codex_mcp_native_status, codex_mcp_open_login_terminal
 import claude_cli   # binary `claude`: tìm đường, auth, và danh mục model nhúng sẵn trong CLI
 import codex_models   # thang effort mà CHÍNH Codex khai cho từng model (model/list)
+import fast_mode   # composer Fast mode bolt: per-turn choice and per-brain parameters (0.164.0)
 import config as cfgmod
 import update_state
 _ver_tuple = update_state.ver_tuple
@@ -3892,6 +3893,31 @@ def _cli_do_sau_khac(cli, mod, reasoning, message):
     return _nhac_suy_nghi(reasoning, message)
 
 
+def _cli_fast(cli):
+    """Fast mode for Claude Code (0.164.0): `settings='{"fastMode": true}'` on the SDK options
+    when this turn has the bolt on and the model supports it (Opus 5.5, Opus 5, Opus 4.8)."""
+    try:
+        cli.fast_settings = fast_mode.claude_sdk_settings(getattr(cli, "model", "") or "", fast_mode.current())
+    except Exception:  # noqa: BLE001 - an engine without this attribute just runs at the normal tier
+        pass
+
+
+def _codex_fast(cli):
+    """Fast mode for Codex CLI (0.164.0): `-c service_tier=...`, replacing any earlier tier entry.
+
+    On asks for `priority` when the model declares it. Off forces `default`, because some Codex
+    models default to `priority` and the user's config.toml may set it (owner approved)."""
+    try:
+        model = getattr(cli, "model", "") or ""
+        override = fast_mode.codex_override(model, fast_mode.current(), codex_models.tiers_for(model))
+        extra = [x for x in (cli.extra_config or []) if not str(x).startswith("service_tier=")]
+        if override:
+            extra.append(override)
+        cli.extra_config[:] = extra
+    except Exception:  # noqa: BLE001 - never break a turn over the speed tier
+        pass
+
+
 def _codex_do_sau(cli, reasoning, message):
     """Độ sâu suy nghĩ cho Codex CLI: `-c model_reasoning_effort=<mức>`.
 
@@ -5132,6 +5158,9 @@ async def settings_set(section: str = Form(...), data: str = Form("{}")):
         if "reasoning" in patch:
             r = patch["reasoning"]
             m["reasoning"] = r if r in engine.REASONING_LEVELS else "off"
+        # Fast mode (composer bolt, 0.153.0). This POST drops unknown keys, so it needs its own branch.
+        if "fast" in patch:
+            m["fast"] = patch["fast"] is True
         # Legacy trực tiếp (tương thích ngược)
         for k in ("engine", "claude_model", "openrouter_model"):
             if k in patch:
@@ -5883,20 +5912,25 @@ def _cwd_luot_chat(row, brain: str) -> str:
     return _brain_root(brain)
 
 
-def _khoi_coding(row) -> str:
+def _khoi_coding(row, brain: str = "") -> str:
     """Khối prompt của phiên Coding (thư mục làm việc, nhánh, và mức quyền nghĩa là gì).
 
     Trả "" cho mọi phiên khác, nên nối vào prompt là vô hại ở đường chat thường. Đặt `cwd`
     thôi chưa đủ: model vẫn đoán đường dẫn từ trí nhớ của nó, và ở chế độ Plan thì còn phải
     NÓI cho nó biết là hãy lập kế hoạch rồi dừng.
+
+    Since 0.158.0 any other session with a folder pinned from the composer gets the short
+    pinned-folder block (no permission line: a normal chat keeps running at `full`).
     """
     try:
         sid = (row or {}).get("id") or ""
-        if sid and str((row or {}).get("channel") or "").startswith("coding:"):
+        if not sid:
+            return ""
+        if str((row or {}).get("channel") or "").startswith("coding:"):
             return coding_store.khoi_prompt(sid)
+        return coding_store.pinned_folder_prompt(sid, _brain_root(brain) if brain else "")
     except Exception:
-        pass
-    return ""
+        return ""
 
 
 def _muc_quyen_luot_chat(row, user_message="") -> str:
@@ -7369,7 +7403,7 @@ def _fold_accents(s: str) -> str:
 
 @app.get("/files/search")
 async def files_search(brain: str = Query("brain"), q: str = Query(""), limit: int = Query(50),
-                       mode: str = Query("all"), include_dirs: bool = False):
+                       mode: str = Query("all"), include_dirs: bool = False, only_dirs: bool = False):
     """Tìm note trong GỐC BRAIN (KHÔNG phải trần duyệt - tránh quét cả ổ đĩa trên localhost).
     `mode=name` khớp TÊN file (mọi loại, không phân biệt dấu tiếng Việt), `mode=content` tìm
     trong NỘI DUNG file text, còn `mode=all` giữ hành vi cũ là tìm cả hai; bỏ file >1MB
@@ -7396,7 +7430,7 @@ async def files_search(brain: str = Query("brain"), q: str = Query(""), limit: i
         out = []
         for dirpath, dirnames, filenames in os.walk(broot):
             dirnames[:] = [dn for dn in dirnames if not dn.startswith(".") and dn not in SKIP_DIRS]
-            if include_dirs and mode in ("name", "all"):
+            if (include_dirs or only_dirs) and mode in ("name", "all"):
                 for dn in sorted(dirnames):
                     if len(out) >= limit:
                         return out
@@ -7408,6 +7442,8 @@ async def files_search(brain: str = Query("brain"), q: str = Query(""), limit: i
                         continue
                     out.append({"path": rel, "name": dn, "type": "dir", "ext": "",
                                 "snippet": "", "line": 0, "match": "name"})
+            if only_dirs:          # 0.159.0, folder picker: files must not use up the limit
+                continue
             for fn in sorted(filenames):
                 if len(out) >= limit:
                     return out
@@ -7508,6 +7544,26 @@ def _md_hong_ghi_sach(broot: str, sach: bool) -> None:
     except Exception as e:
         print(f"[md-hong] không ghi được dấu đã soi: {type(e).__name__}: {e}", file=sys.stderr)
 
+
+
+@app.get("/files/resolve")
+async def files_resolve(brain: str = Query("brain"), path: str = Query("")):
+    """ABSOLUTE path of a file already in the brain, for the composer "+" menu item "Pick a file from
+    the brain" (0.153.0). `path` is relative to the browse ceiling, as /files/search returns it. Only a
+    real file inside the brain root is accepted (blocks `..`, absolute paths, symlinks pointing out)."""
+    rel = (path or "").strip().replace("\\", "/")
+    if not rel or rel.startswith("/") or re.match(r"^[A-Za-z]:", rel):
+        return JSONResponse({"ok": False, "error": "path"}, status_code=400)
+    root = Path(_files_root(brain)).resolve()
+    broot = Path(_brain_root(brain)).resolve()
+    try:
+        p = (root / rel).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return JSONResponse({"ok": False, "error": "not_found"}, status_code=400)
+    if not p.is_file() or (p != broot and broot not in p.parents):
+        return JSONResponse({"ok": False, "error": "outside"}, status_code=400)
+    kind = "image" if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp") else "file"
+    return {"ok": True, "path": str(p), "name": p.name, "size": p.stat().st_size, "kind": kind}
 
 @app.get("/files/md-hong")
 async def files_md_hong(brain: str = Query("brain"), force: str = Query("")):
@@ -9594,6 +9650,9 @@ def _workflow_agent_helpers(brain, tools, mode=None):
             cc = CodexCLI(cwd=vault_root, tag="workflow", model=_codex_safe_model(model),
                           instructions=sysprompt)
             _apply_codex_hub(cc, vault_root)
+            # Fast mode (0.164.0): workflow steps run in the background, so force the normal tier.
+            cc.extra_config[:] = [x for x in cc.extra_config if not str(x).startswith("service_tier=")]
+            cc.extra_config.append('service_tier="default"')
             return cc
         allowed, natives = (_step_grant(extra_tools) if tools is not None else ([], []))
         gated_tools = (list(tools) + allowed) if tools is not None else None
@@ -11741,7 +11800,7 @@ def _render_javis_index(caps: dict) -> str:
             if p.get("loaded"):
                 stt = "chạy"
             elif p.get("gated"):
-                stt = "⚠ chờ env JAVIS_ENABLE_USER_PLUGINS"
+                stt = "⚠ tắt bằng env JAVIS_ENABLE_USER_PLUGINS=false"
             elif p.get("error"):
                 stt = "⚠ lỗi"
             else:
@@ -11772,7 +11831,7 @@ def _render_javis_index(caps: dict) -> str:
         flags.append(f"- Loop tự tạm dừng (cần xem): {', '.join(paused)}")
     p_gated = [p["slug"] for p in plugins if p.get("gated")]
     if p_gated:
-        flags.append(f"- Plugin bật nhưng bị chặn (đặt env JAVIS_ENABLE_USER_PLUGINS=true): {', '.join(p_gated)}")
+        flags.append(f"- Plugin bật nhưng máy này tắt plugin người dùng (JAVIS_ENABLE_USER_PLUGINS=false): {', '.join(p_gated)}")
     p_err = [p["slug"] for p in plugins if p.get("error")]
     if p_err:
         flags.append(f"- Plugin lỗi nạp: {', '.join(p_err)}")
@@ -11904,7 +11963,7 @@ async def javis_index(brain: str = Query("brain")):
 #   - bundled  <project>/system/plugins/<slug>/     (ship theo app, tin cậy)
 #   - user     <JAVIS_STATE_DIR>/plugins/<slug>/    (TOÀN CỤC - chung MỌI brain; nơi cài mặc định)
 #   - vault    <brain>/plugins/<slug>/              (riêng 1 brain)
-# user + vault chạy code thật → CHỈ nạp khi env JAVIS_ENABLE_USER_PLUGINS=true (alias cũ *_VAULT_*).
+# user + vault run real code: loaded by default since 0.161.0; JAVIS_ENABLE_USER_PLUGINS=false opts out (old alias *_VAULT_*).
 # ============================================================
 @app.post("/image/generate")
 async def image_generate(prompt: str = Form(...), aspect_ratio: str = Form("square"),
@@ -12213,7 +12272,10 @@ async def _start_scheduler():
         # khởi động (xem bước "Import thật main" trong CI).
         chatbot_runtime.wire(answer=_tg_answer, brain_root=_brain_root,
                              read_agent=lambda b, slug: _read_md(_agents_dir(b) / f"{slug}.md"),
-                             session_probe=_manual_session_probe, session_undo=_manual_session_undo)
+                             session_probe=_manual_session_probe, session_undo=_manual_session_undo,
+                             # Lượt bot hỏng: khách không nhận gì, chủ nghe ở chuông thông báo (chủ repo 15/10/2026).
+                             notify=lambda text: _bo_vao_hom_thu("", text, kind="system", source="chatbot",
+                                                                 label=localefmt.chu("Chatbot", "Chatbot")))
         chatbot_reply_policy.wire(ask=_reply_policy_ask)
         chatbot_reply_policy_review.wire(ask=_reply_policy_review_ask, notify=_reply_policy_notify,
                                          write_feedback=_reply_policy_write_feedback, get_bot=chatbot_store.get_bot)
@@ -14642,6 +14704,7 @@ async def websocket_endpoint(ws: WebSocket):
                 return ""
             prov, kind, api_key, api_model = _chat_provider_for_session(mcfg, _row0)
             reasoning = _reasoning_level(mcfg)
+            fast_mode.use(mcfg.get("fast") is True)
             _CONTEXT_RUNTIME.set_route(
                 runtime_trace,
                 "codex" if prov == "openai-oauth" else prov,
@@ -14696,7 +14759,7 @@ async def websocket_endpoint(ws: WebSocket):
                         ) + channel_context.build_channel_block(
                             "dashboard", {"session_id": conv_sid}, telegram_running=bool(_TG_BOT),
                             port=_javis_port(), brain_root=_brain_root(brain),
-                        ) + _khoi_coding(_row0)
+                        ) + _khoi_coding(_row0, brain)
                 return sysprompt
 
             async def _subscription_system_prompt(route_provider, route_model, route_kind):
@@ -14725,7 +14788,7 @@ async def websocket_endpoint(ws: WebSocket):
                     ) + channel_context.build_channel_block(
                         "dashboard", {"session_id": conv_sid}, telegram_running=bool(_TG_BOT),
                         port=_javis_port(), brain_root=_brain_root(brain),
-                    ) + _khoi_coding(_row0)
+                    ) + _khoi_coding(_row0, brain)
 
                 try:
                     plan = await asyncio.to_thread(
@@ -15046,6 +15109,7 @@ async def websocket_endpoint(ws: WebSocket):
                         "use Claude Code or OpenRouter for stability (change it on the Models page).")}))
                 else:
                     _codex_current = _codex_do_sau(ccli, reasoning, user_message)
+                    _codex_fast(ccli)
                     _codex_raw = [{"role": _m["role"], "content": _m["content"]}
                                   for _m in store.get_messages(conv_sid)[:-1]
                                   if _m["role"] in ("user", "assistant") and _m.get("content")]
@@ -15511,6 +15575,7 @@ async def websocket_endpoint(ws: WebSocket):
                 _cli_sid = None
                 _cost = None
                 _cli_prompt = _cli_do_sau(cli, reasoning, user_message)
+                _cli_fast(cli)
                 if not cli.session_id:
                     # Bỏ --resume là Claude Code mất sạch mạch cũ. Mở mạch mới mà không mang
                     # theo gì thì đó không phải tiết kiệm, đó là làm hỏng hội thoại: người
@@ -15732,8 +15797,8 @@ async def websocket_endpoint(ws: WebSocket):
                 if (not used_fast_path and kind == "api" and api_key and
                         prov in ("openrouter", "openai", "anthropic-api", "gemini", "groq", "deepseek")):
                     try:
-                        asyncio.create_task(compaction.maybe_compact(
-                            store, conv_sid, prov, api_key, api_model, _api_stream))
+                        asyncio.create_task(fast_mode.normal(compaction.maybe_compact(
+                            store, conv_sid, prov, api_key, api_model, _api_stream)))
                     except Exception as _e:
                         print(f"[compact hook] {_e}", file=__import__('sys').stderr)
             return final_text
@@ -19042,7 +19107,7 @@ def _tg_compact_bg(sess, prov, api_key, api_model):
             sess["dang_nen"] = False
 
     try:
-        asyncio.create_task(_chay())
+        asyncio.create_task(fast_mode.normal(_chay()))
     except Exception as _e:
         sess["dang_nen"] = False
         print(f"[compact_mem nền] {_e}", file=__import__('sys').stderr)
@@ -19915,6 +19980,8 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
     sess["last"] = text
     sess["sent"] = set()    # lượt mới → reset dedupe (endpoint /telegram/send-file add vào đây)
     reasoning = _reasoning_level(mcfg)
+    # The bolt is the owner's: customer chatbots answering strangers never inherit it.
+    fast_mode.use(mcfg.get("fast") is True and not bot)
     runtime_trace = context_runtime.current_trace()
 
     # NGÔN NGỮ cho lượt này. Dính theo TỪNG CUỘC CHAT (chat_id), không theo tiến trình: một
@@ -20306,6 +20373,7 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
             except Exception:
                 _raw = []
         _hien_tai = _codex_do_sau(ccli, reasoning, text)
+        _codex_fast(ccli)
         thread_cu = (getattr(ccli, "session_id", None) or "")
         # Chưa có thread (phiên mới, hoặc vừa bị xoá liên kết vì provider khác chen vào) thì
         # seed transcript đúng một lượt; có thread rồi thì resume native, khỏi gửi lại lịch sử.
@@ -20414,6 +20482,7 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
         loi = []
         _pinged = False
         _cli_prompt = _cli_do_sau(cli, reasoning, text)
+        _cli_fast(cli)
         if not getattr(cli, "session_id", None):
             # Chưa có mạch native (phiên mới, hoặc vừa restart nên object engine dựng lại từ
             # đầu) thì mồi transcript đã lưu vào ĐÚNG MỘT lượt, y như dashboard vẫn làm. Có mạch
@@ -21747,7 +21816,10 @@ conversations_routes.register(app, conversations_routes.ConversationsDeps(
 # `coding_store` đứng một mình, không cần gì từ main. Chiều phụ thuộc ngược lại thì có:
 # đường chat gọi `coding_store.cwd_cua_phien` để biết engine phải chạy ở thư mục nào.
 import routes.coding as coding_routes   # noqa: E402
-coding_routes.register(app, coding_routes.CodingDeps(brain_keys=_brain_keys))
+coding_routes.register(app, coding_routes.CodingDeps(
+    brain_keys=_brain_keys,
+    resolve_path=lambda b, rel: str(_safe_serve_path(b, rel)),
+    brain_root=lambda b: str(_brain_root(b))))
 
 
 @app.post("/telegram/test")
@@ -22882,6 +22954,12 @@ async def agent_jobs_assign(slug: str, request: Request, brain: str = "brain"):
         return {"ok": True, "task_id": tid, "session_id": sid, "kind": kind,
                 "board": tasks_feature.store.board_mode(root)}
     return await asyncio.to_thread(_do)
+
+
+@app.get("/model/fast-state")
+async def model_fast_state():
+    """Last Fast mode state each brain reported (on, cooldown, fallback), for the bolt tooltip (0.164.0)."""
+    return {"states": fast_mode.states()}
 
 
 if __name__ == "__main__":
