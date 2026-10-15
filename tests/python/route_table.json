@@ -4588,5 +4588,35 @@
    "POST"
   ],
   "trong": null
+ },
+ {
+  "order": 461,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/lessons/{lesson_id}/revoke",
+  "name": "agent_lesson_revoke",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 462,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/lessons/{lesson_id}/promote",
+  "name": "agent_lesson_promote",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 463,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/budget",
+  "name": "agent_budget_set",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
  }
 ]

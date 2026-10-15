@@ -52,6 +52,7 @@ class TeamApiDeps:
     owner_name: Optional[Callable[[], str]] = None     # tên đăng nhập của chủ máy (người tạo nhóm, 0.142.0)
     ceiling: Optional[Callable[[], Any]] = None        # () -> agent_ledger.TeamCeiling (T2, trần lượt chung) | None
     projector: Optional[Callable[[], Any]] = None      # () -> feedback_projector.FeedbackProjector (T2) | None
+    learning: Optional[Callable[[], Any]] = None       # () -> agent_lessons.TeamLearning (T3 phần L) | None
 
 
 async def _body(request: Request) -> dict:
@@ -139,7 +140,8 @@ class TeamApi:
                 agent_info=lambda root, key: self.deps.agent_info(root, key),
                 publish=publish, notify=notify, worker_id="team-runner", admin=self.deps.admin,
                 ceiling=self.deps.ceiling() if self.deps.ceiling is not None else None,
-                projector=self.deps.projector() if self.deps.projector is not None else None)
+                projector=self.deps.projector() if self.deps.projector is not None else None,
+                learning=self.deps.learning() if self.deps.learning is not None else None)
             if self._loop is not None:
                 self._runner._loop, self._runner._loop_thread = self._loop, self._loop_thread
         return self._runner

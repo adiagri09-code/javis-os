@@ -408,14 +408,18 @@ class ReviewHost:
         while self._tasks and time.time() < end:
             await asyncio.wait(list(self._tasks), timeout=max(0.01, end - time.time()))
 
-    def _status(self, refs: Iterable[str], status: str, reason: str = "") -> None:
+    def _status(self, refs: Iterable[str], status: str, reason: str = "") -> list:
+        """Ghi trạng thái lên reaction của các nguồn (luồng phụ). Trả gói WS; người gọi đẩy trên event loop."""
         events = []
         for ref in refs or []:
             try:
                 events.extend(self.deps.reactions.set_review_status(ref, status, reason) or [])
             except Exception as ex:  # noqa: BLE001
                 print(f"[learn status] {ref}: {type(ex).__name__}: {ex}", file=sys.stderr)
-        self._publish(events)
+        return events
+
+    async def _astatus(self, refs: Iterable[str], status: str, reason: str = "") -> None:
+        self._publish(await asyncio.to_thread(self._status, list(refs or []), status, reason))
 
     def _event(self, store, key, ctx, kind, reason="", payload=None, at=None) -> None:
         try:
@@ -520,7 +524,7 @@ class ReviewHost:
             ok, why = self._budget(store, key, "reaction_review", now, reason_ref=f"wr:{rid}")
             if not ok:
                 live = [s["source_ref"] for s in W.sources(rid, live_only=True)]
-                await asyncio.to_thread(self._status, live, "waiting_quota",
+                await self._astatus(live, "waiting_quota",
                                         _chu("Hết hạn mức lượt hôm nay của trợ lý", "The assistant's daily turns are used up"))
                 self._event(store, key, ctx, "quota", reason=why or "agent_daily_calls",
                             payload={"reason_id": rid, "purpose": "reaction_review"}, at=now)
@@ -529,7 +533,7 @@ class ReviewHost:
             if cl["outcome"] != "claimed":
                 if cl["outcome"] == "quota":
                     live = [s["source_ref"] for s in W.sources(rid, live_only=True)]
-                    await asyncio.to_thread(self._status, live, "waiting_quota",
+                    await self._astatus(live, "waiting_quota",
                                             _chu("Đã chạm trần lượt chung của máy chủ",
                                                  "The server-wide turn ceiling is reached"))
                 return {"outcome": cl["outcome"]}
@@ -540,19 +544,19 @@ class ReviewHost:
     async def _review_claimed(self, store, W, ledger, reason, cl, now) -> dict:
         rid, key, ctx = int(reason["id"]), reason["agent_key"], reason["context_ref"]
         refs, cid = list(cl["sources"]), int(cl["call_id"])
-        await asyncio.to_thread(self._status, refs, "reviewing", "")
+        await self._astatus(refs, "reviewing", "")
         sources = await asyncio.to_thread(self._sources, refs)
         try:
             prompt = await asyncio.to_thread(self.review_prompt, store, key, ctx, sources)
             system = (self.deps.persona(key) or "") + REVIEW_RULES
         except Exception as ex:  # noqa: BLE001
             await asyncio.to_thread(W.settle, rid, "refunded", now=now)
-            await asyncio.to_thread(self._status, refs, "pending_review", "")
+            await self._astatus(refs, "pending_review", "")
             return {"outcome": "error", "error": f"prompt: {type(ex).__name__}"}
         out, started, err = await self._run_engine(key, ctx, "reaction_review", system, prompt, ledger, cid, f"wr:{rid}")
         if err:
             st = await asyncio.to_thread(W.settle, rid, "error" if started else "refunded", now=now)
-            await asyncio.to_thread(self._status, refs, "pending_review",
+            await self._astatus(refs, "pending_review",
                                     _chu("Lượt xem xét lỗi, sẽ thử lại", "The review failed and will be retried")
                                     if started else "")
             self._event(store, key, ctx, "reaction_review_error", reason=err, payload={"reason_id": rid, "call_id": cid,
@@ -562,7 +566,7 @@ class ReviewHost:
         if res is None:
             st = await asyncio.to_thread(lambda: W.settle(rid, "error", tokens_in=out.get("tokens_in"),
                                                           tokens_out=out.get("tokens_out"), now=now))
-            await asyncio.to_thread(self._status, refs, "pending_review",
+            await self._astatus(refs, "pending_review",
                                     _chu("Lượt xem xét trả sai khuôn, sẽ thử lại",
                                          "The review returned an invalid format and will be retried"))
             self._event(store, key, ctx, "reaction_review_error", reason=perr,
@@ -573,14 +577,14 @@ class ReviewHost:
         consumed = res["consumed"]
         rest = [r for r in refs if r not in consumed]
         if rest:
-            await asyncio.to_thread(self._status, rest, "pending_review", "")
+            await self._astatus(rest, "pending_review", "")
         try:
             eff = await self._apply_review(store, key, ctx, rid, cid, res, sources, now)
         except Exception as ex:  # noqa: BLE001
             eff = {"status": "no_change", "status_reason": _chu("Không áp dụng được kết quả xem xét",
                                                                 "The review result could not be applied"),
                    "error": f"{type(ex).__name__}: {ex}"}
-        await asyncio.to_thread(self._status, consumed, eff["status"], eff.get("status_reason", ""))
+        await self._astatus(consumed, eff["status"], eff.get("status_reason", ""))
         payload = {"reason_id": rid, "call_id": cid, "outcome": res["outcome"], "consumed": consumed,
                    "moved_to": settled.get("moved_to"), "status": eff["status"], "reason": res["reason"]}
         for k in ("lesson_id", "decision_id", "verdict", "message_id", "error"):
@@ -644,7 +648,7 @@ class ReviewHost:
         sent = await asyncio.to_thread(self._send, key, ctx, str(payload.get("draft") or ""), rv.get("outcome"),
                                        rv.get("reply_to"), rv.get("reason_id"), (decision or {}).get("decision_id"))
         if sent and sent.get("message_id") is not None:
-            await asyncio.to_thread(self._status, list(rv.get("consumed") or []), "adjusted",
+            await self._astatus(list(rv.get("consumed") or []), "adjusted",
                                     _chu("Đã gửi tin mới sau khi chờ", "Sent the new message after waiting"))
             store = self._store()
             if store is not None:
@@ -1203,6 +1207,89 @@ def pending_reviews(limit: int = 20) -> list:
 def view(store, agent_key: str) -> dict:
     """Mục "lessons" của `GET /agents/{slug}/pulse` (sổ đăng ký của P)."""
     return _need().view_part(store, agent_key)
+
+
+@dataclass
+class LearnRouteDeps:
+    brain_key: Callable[[str], str]                         # brain trên dashboard -> đường dẫn đã resolve
+    agent_exists: Callable[[str, str], bool]                # (root, slug) -> file trợ lý có thật
+    agent_key: Callable[[str, str], Optional[str]]          # (root, slug) -> agent_key đang hoạt động | None
+    store: Callable[[], Any]                                # () -> GoalStore | None
+
+
+def register_routes(app, deps: LearnRouteDeps) -> None:
+    """Route của phần học (chỉ của chủ: middleware auth + CSRF của main chặn trước). Hành động chỉ báo thành công SAU khi
+    kho đã ghi (200 kèm mục "lessons" mới):
+    - `POST /agents/{slug}/lessons/{lesson_id}/revoke`: thu hồi một bài học (giữ lịch sử).
+    - `POST /agents/{slug}/lessons/{lesson_id}/promote`: chủ đưa một bài học nhóm/chat riêng lên dùng mọi nơi.
+    - `POST /agents/{slug}/budget` {daily_calls: số | "unlimited"}: hạn mức lượt tự phát mỗi ngày của trợ lý.
+    Quay lại một thay đổi của tự rà soát dùng route của P (`POST /agents/{slug}/pulse/revert` kèm `change_id`)."""
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+    import localefmt
+    import agent_budget as AB
+
+    def err(code, vi, en):
+        return JSONResponse({"ok": False, "error": localefmt.chu(vi, en)}, status_code=code)
+
+    async def body_of(request) -> dict:
+        try:
+            d = await request.json()
+            return d if isinstance(d, dict) else {}
+        except Exception:  # noqa: BLE001
+            return {}
+
+    def resolve(slug: str, brain: str):
+        root = deps.brain_key(brain)
+        if not deps.agent_exists(root, slug):
+            return None, err(404, "Không tìm thấy trợ lý", "Assistant not found")
+        key = deps.agent_key(root, slug)
+        store = deps.store()
+        if not key or store is None:
+            return None, err(409, "Trợ lý chưa có bài học hay hạn mức nào", "This assistant has no lessons or limits yet")
+        return (key, store), None
+
+    def view_of(store, key):
+        h = default()
+        return h.view_part(store, key) if h is not None else {"name": "lessons"}
+
+    async def act(slug, brain, fn):
+        got, e = await asyncio.to_thread(resolve, slug, brain)
+        if e:
+            return e
+        key, store = got
+        try:
+            res = await asyncio.to_thread(fn, store, key)
+        except PermissionError:
+            return err(403, "Chỉ chủ mới đổi được mục này", "Only the owner can change this")
+        except ValueError as ex:
+            return err(400, f"Yêu cầu không hợp lệ: {ex}", f"Invalid request: {ex}")
+        if res is None:
+            return err(409, "Không còn gì để đổi (đã đổi trước đó)", "Nothing to change (already done)")
+        return {"ok": True, "result": res, "view": await asyncio.to_thread(view_of, store, key)}
+
+    @app.post("/agents/{slug}/lessons/{lesson_id}/revoke")
+    async def agent_lesson_revoke(slug: str, lesson_id: int, brain: str = "brain"):
+        def fn(store, key):
+            r = AL.revoke(store, int(lesson_id), by="owner", reason="owner", agent_key=key)
+            return {"lesson_id": r["id"], "status": r["status"]} if r else None
+        return await act(slug, brain, fn)
+
+    @app.post("/agents/{slug}/lessons/{lesson_id}/promote")
+    async def agent_lesson_promote(slug: str, lesson_id: int, brain: str = "brain"):
+        def fn(store, key):
+            return {"lesson_id": AL.promote(store, int(lesson_id), by="owner", agent_key=key)}
+        return await act(slug, brain, fn)
+
+    @app.post("/agents/{slug}/budget")
+    async def agent_budget_set(slug: str, request: Request, brain: str = "brain"):
+        b = await body_of(request)
+        if "daily_calls" not in b:
+            return err(400, "Thiếu hạn mức", "Missing limit")
+
+        def fn(store, key):
+            return {"daily_calls": AB.set_cap(store, key, b.get("daily_calls"), by="owner")}
+        return await act(slug, brain, fn)
 
 
 _REGISTERED: list = [False]

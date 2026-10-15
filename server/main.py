@@ -162,6 +162,9 @@ import ollama_local             # dò/tải/gỡ model trên máy chạy Ollama
 import sessions                  # PROJECT_INSTRUCTIONS_MAX cho khối project trong system prompt
 import reaction_values           # T2: khuôn reaction R của hợp đồng (chat riêng)
 import feedback_projector        # T2: bộ chiếu phản hồi (outbox của reaction) và khối phản hồi chat riêng
+import agent_lessons             # T3 phần L: kho bài học có phạm vi (team:/dm:/*) và góp ý của đồng đội
+import agent_budget              # T3 phần L: hạn mức lượt tự phát mỗi trợ lý mỗi ngày (agent_daily_calls)
+import agent_review              # T3 phần L: lượt xem xét reaction, tự rà soát có tự áp và quay lại
 import agent_ledger              # T2: sổ lượt chung (trần máy chủ) và lý do thức theo agent
 from sessions import get_store   # kho phiên hội thoại (sqlite + fts5): list/resume/search
 import compaction   # nén hội thoại dài cho engine API (tóm tắt phần cũ thay vì cắt bỏ)
@@ -9775,13 +9778,47 @@ def _dm_feedback_prompt(brain, slug, conv_sid) -> str:
 
 def _agent_turn_system_prompt(brain, slug, conv_sid) -> str:
     """System prompt của một lượt chat riêng với trợ lý (`agent:<slug>`): prompt trợ lý, khối phiên, và khối phản hồi
-    reaction gần đây của chủ cho ĐÚNG trợ lý này (T2)."""
-    return _agent_chat_prompt(brain, slug) + _session_block(conv_sid) + _dm_feedback_prompt(brain, slug, conv_sid)
+    reaction gần đây của chủ cho ĐÚNG trợ lý này (T2), và bài học phạm vi chat riêng + chung (T3 phần L)."""
+    return (_agent_chat_prompt(brain, slug) + _session_block(conv_sid) + _dm_feedback_prompt(brain, slug, conv_sid)
+            + _dm_lessons_prompt(brain, slug, conv_sid))
 
 
-def _ket_luot_agent(brain, slug, user_message, final_text) -> str:
-    """Cuối một lượt chat với trợ lý: bóc JAVIS_LESSON vào bộ nhớ trợ lý, ghi nhật ký chạy của
-    trợ lý (memory/agents/<slug>/runs), trả về text SẠCH để lưu phiên và hiện lên chat."""
+def _dm_lessons_prompt(brain, slug, conv_sid) -> str:
+    """T3 phần L (thiết kế 8.1): bài học `dm:<agent_key>` và `*` của trợ lý cho lượt chat riêng (mọi phiên), kèm câu nói
+    JAVIS_LESSON giờ ghi vào kho chat riêng. Không bao giờ nạp bài học của nhóm. Lỗi thì chỉ còn câu luật."""
+    try:
+        key = _dm_agent_key(brain, slug, conv_sid)
+        block = agent_lessons.prompt_block(_resonance_store(), key, f"dm:{key}") if key else ""
+    except Exception as _e:   # noqa: BLE001
+        print(f"[dm lessons block] {type(_e).__name__}: {_e}", file=sys.stderr)
+        block = ""
+    return agent_lessons.DM_LESSON_RULE + (("\n" + block + "\n") if block else "")
+
+
+def _dm_agent_key(brain, slug, conv_sid="", register=False):
+    """Mã bền của trợ lý cho ngữ cảnh chat riêng `dm:<agent_key>`: ghim của phiên, không thì dòng sống của slug. `register`:
+    chưa có thì cấp mã (KHÔNG bật Auto), như reaction chat riêng. Không tra được: ""."""
+    try:
+        if not register and _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+            return ""
+        rs = _resonance_store()
+        pin = rs.session_pin(conv_sid) if conv_sid else None
+        if pin and pin.get("agent_key"):
+            return pin["agent_key"]
+        row = rs.agent(_brain_key(brain), slug)
+        if row and row.get("status") == "active":
+            return row["agent_key"]
+        if register and _agent_md_path(_brain_key(brain), slug) is not None:
+            return rs.agent_register(resonance_store.Principal("owner", "owner", _brain_key(brain)), slug)["agent_key"]
+    except Exception as _e:  # noqa: BLE001
+        print(f"[dm agent key] {slug}: {type(_e).__name__}: {_e}", file=sys.stderr)
+    return ""
+
+
+def _ket_luot_agent(brain, slug, user_message, final_text, conv_sid="") -> str:
+    """Cuối một lượt chat với trợ lý: bóc JAVIS_LESSON vào kho bài học PHẠM VI CHAT RIÊNG (`dm:<agent_key>`, T3 phần L,
+    thiết kế 8.1: không còn vào MEMORY.md để bài học riêng không rò vào lượt nhóm), ghi luật chủ dặn như cũ, ghi nhật ký
+    chạy của trợ lý (memory/agents/<slug>/runs), trả về text SẠCH để lưu phiên và hiện lên chat."""
     _mk, _agent_sysprompt, _log, _learn = _workflow_agent_helpers(brain, None)
     if (user_message or "").strip():
         _pulse_wake_dm(brain, slug)   # T3: chủ nhắn trực tiếp trợ lý thì thức lại nhịp chat riêng (5.2)
@@ -9790,7 +9827,18 @@ def _ket_luot_agent(brain, slug, user_message, final_text) -> str:
         _ghi_luat_chu(brain, slug, rules)
         rules = []
     # Không có câu của chủ trong lượt thì JAVIS_RULE không có căn cứ: hạ xuống bài học.
-    sach = _learn(slug, text + "".join(f"\nJAVIS_LESSON: {r}" for r in rules))
+    lessons, sach = _boc_bai_hoc(text + "".join(f"\nJAVIS_LESSON: {r}" for r in rules))
+    if lessons:
+        key = _dm_agent_key(brain, slug, conv_sid, register=True)
+        if key:
+            try:
+                agent_lessons.record_self_lessons(_resonance_store(), agent_key=key, context_ref=f"dm:{key}",
+                                                  lessons_=lessons,
+                                                  source_refs=[f"session:{conv_sid}"] if conv_sid else [])
+            except Exception as _e:  # noqa: BLE001
+                print(f"[dm lessons] {slug}: {type(_e).__name__}: {_e}", file=sys.stderr)
+        else:
+            print(f"[dm lessons] {slug}: không tra được mã trợ lý, bỏ {len(lessons)} bài học", file=sys.stderr)
     _log(slug, user_message or "", sach or "")
     return sach
 
@@ -15681,7 +15729,7 @@ async def websocket_endpoint(ws: WebSocket):
                 # nhớ Javis) và ghi nhật ký chạy của trợ lý, trước khi lượt được lưu như
                 # một lượt chat bình thường.
                 _final_truoc_boc = final_text
-                final_text = _ket_luot_agent(brain, _persona[1], user_message, final_text)
+                final_text = _ket_luot_agent(brain, _persona[1], user_message, final_text, conv_sid=conv_sid)
                 if final_text != _final_truoc_boc:
                     # Mọi nhánh engine ở trên (cli/grok-cli/antigravity-cli/codex/API) đã gửi
                     # khung "response" RAW còn dòng JAVIS_LESSON trước khi luồng chạy tới đây
@@ -22400,8 +22448,17 @@ def _team_engine_for(team, agent_key, role):
             now = _team_agent_info(root, agent_key) or {}
             if not slug or now.get("slug") != slug:
                 raise RuntimeError("agent đã đổi danh tính, không ghi bài học")
-            if lessons:
-                _ghi_bai_hoc(root, slug, lessons)
+            if lessons and team.get("session_id"):
+                # T3 phần L (thiết kế 8.1): bài học của lượt nhóm vào kho bài học phạm vi NHÓM NÀY (nguồn self, gắn lượt,
+                # việc, bước), không còn vào MEMORY.md (không rò sang nhóm khác hay chat riêng).
+                refs = [f"turn:{req.get('turn_id') or ''}"]
+                if req.get("task_id"):
+                    refs.append(f"task:{req['task_id']}")
+                if req.get("step_id"):
+                    refs.append(f"step:{req['step_id']}")
+                agent_lessons.record_self_lessons(_resonance_store(), agent_key=agent_key,
+                                                  context_ref=f"team:{team['team_id']}", lessons_=lessons,
+                                                  source_refs=refs)
             _log_agent_run(root, slug, "", clean)
 
         return {"text": clean, "tokens_in": res["tokens_in"], "tokens_out": res["tokens_out"],
@@ -22495,13 +22552,31 @@ def _team_ceiling():
     return agent_ledger.TeamCeiling(_resonance_store())
 
 
+_TEAM_LEARNING = [None]
+
+
+def _team_learning():
+    """T3 phần L: bài học phạm vi nhóm và góp ý của đồng đội cho bộ chạy nhóm. Không tạo kho resonance chỉ để đọc."""
+    if _TEAM_LEARNING[0] is None:
+        def _task_state(task_id):
+            t = tasks_feature.store.get_task(task_id)
+            return (t.get("status"), t.get("team_rev")) if t else None
+
+        def _store():
+            if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+                return None
+            return _resonance_store()
+        _TEAM_LEARNING[0] = agent_lessons.TeamLearning(_store, task_state=_task_state)
+    return _TEAM_LEARNING[0]
+
+
 _TEAM_API = team_api.register(app, team_api.TeamApiDeps(
     brain_key=lambda b: _brain_key(b), session_store=lambda: get_store(),
     task_store=lambda: tasks_feature.store, resonance_store=lambda: _resonance_store(),
     agents_meta=_resonance_agents_meta, agent_info=_team_agent_info, engine_for=_team_engine_for,
     broadcast=lambda ev: _CHAT_RUNTIME.publish(ev), notify=_team_notify, admin=_TeamAdmin(),
     owner_name=lambda: ((cfgmod.read_settings().get("auth") or {}).get("username") or ""),
-    ceiling=_team_ceiling, projector=_feedback_projector))
+    ceiling=_team_ceiling, projector=_feedback_projector, learning=_team_learning))
 
 
 # ── Reaction chat riêng (T2, 0.154.0; hợp đồng docs/dev/team-chat-t2-contract.md mục 4) ──
@@ -23160,6 +23235,7 @@ async def _pulse_tick():
         if "1" in (os.environ.get("JAVIS_PULSE_TICK_PAUSED"), os.environ.get("JAVIS_RESONANCE_TICK_PAUSED")):
             await _feedback_pulse_tick()
             return
+        await _learn_tick()
         await _pulse_host().tick()
     except Exception as e:  # noqa: BLE001
         print(f"[pulse tick] {type(e).__name__}: {e}", file=sys.stderr)
@@ -23218,6 +23294,89 @@ def _pulse_seen_resolve(ctx, ids, session_id):
 agent_pulse_host.register(app, agent_pulse_host.PulseRouteDeps(
     brain_key=lambda b: _brain_key(b), agent_exists=lambda root, slug: _agent_md_path(root, slug) is not None,
     agent_key=lambda root, slug: _agent_jobs_key(root, slug), store=_pulse_store, seen_resolve=_pulse_seen_resolve))
+
+
+# ── Học trong đội (T3 phần L, 0.156.0; thiết kế 2026-10-15 mục 4.4, 6.4, 8, 9; docs/dev/team-chat-t3-learn.md) ──
+_LEARN_SENDER = [False]
+
+
+def _learn_send(key, ctx, text, meta):
+    """Tin MỚI của lượt xem xét reaction (`ask_back`/`revise`), sau khi bộ phán xử nói `speak`. Nhóm: tin của trợ lý trả
+    lời tin bị phản hồi. Chat riêng: tin của trợ lý trong phiên chat riêng của nó (như tin chủ động của nhịp)."""
+    team = _pulse_team(ctx)
+    if team is not None:
+        ss = get_store()
+        mid, _ = ss.append_team_message(team["session_id"], "assistant", text, author_kind="agent", author_ref=key,
+                                        reply_to=meta.get("reply_to"),
+                                        meta={"proactive": True, "review": meta.get("review") or "",
+                                              "pulse_source": meta.get("source_ref") or "",
+                                              "decision_id": meta.get("decision_id")})
+        msg = ss.team_message(team["session_id"], mid)
+        if _TEAM_API.exists() and msg:
+            msg = _TEAM_API.runner().message_view(team, msg)
+        _pulse_on_loop(_CHAT_RUNTIME.publish({"type": "team_message", "team_id": team["team_id"], "message": msg}))
+        return {"session_id": team["session_id"], "message_id": mid}
+    return _pulse_post(key, ctx, text, {"proactive": True, "review": meta.get("review") or "",
+                                        "pulse_source": meta.get("source_ref") or "",
+                                        "decision_id": meta.get("decision_id")})
+
+
+def _learn_judge_payload(ctx):
+    team = _pulse_team(ctx)
+    if team is None:
+        return {}
+    return {"judge_daily": (team.get("caps") or {}).get("judge_daily", 40)}
+
+
+def _learn_legacy(key):
+    """Bài học cũ chưa có phạm vi trong MEMORY.md của trợ lý (chỉ hiển thị, không tự di trú)."""
+    rows = _pulse_sql("SELECT brain_id, slug FROM resonance_agents WHERE agent_key=?", (key,))
+    if not rows:
+        return []
+    return agent_lessons.legacy_lessons(_agent_memory(rows[0]["brain_id"], rows[0]["slug"]))
+
+
+agent_budget.wire(_pulse_store)
+agent_review.wire(agent_review.ReviewHost(agent_review.ReviewDeps(
+    store=_pulse_store, reactions=_feedback_projector(), engine_for=lambda k, c, p: _pulse_engine_for(k, c, p),
+    persona=_pulse_persona, try_busy=_pulse_try_busy, release_busy=_pulse_release_busy, send=_learn_send,
+    publish=lambda ev: _CHAT_RUNTIME.publish(ev), judge_payload=_learn_judge_payload, contexts=_pulse_contexts,
+    legacy=_learn_legacy)))
+agent_review.register_with_pulse()
+
+
+def _learn_register_sender():
+    """Bộ gửi của lượt xem xét reaction cho tin bị phán xử cho CHỜ rồi được gỡ (phần J, `register_sender`). Bộ phán xử
+    của J dựng lười nên thử lại mỗi nhịp tới khi nối được."""
+    if _LEARN_SENDER[0]:
+        return
+    try:
+        import agent_judge  # noqa: WPS433
+        if getattr(agent_judge, "default", None) and agent_judge.default() is not None:
+            agent_judge.register_sender(agent_review.default().on_judge_send)
+            _LEARN_SENDER[0] = True
+    except ImportError:
+        return
+    except Exception as e:  # noqa: BLE001
+        print(f"[learn sender] {type(e).__name__}: {e}", file=sys.stderr)
+
+
+async def _learn_tick():
+    """Trước nhịp của P: cập nhật nhãn cho cửa sổ quan sát (6.4), kiểm tự rà soát đến hạn (8.3). Chỉ code; lượt model
+    chạy ở tác vụ riêng."""
+    try:
+        _learn_register_sender()
+        h = agent_review.default()
+        if h is not None and _pulse_store() is not None:
+            await h.tick(agents=[a["agent_key"] for a in _pulse_agents()])
+    except Exception as e:  # noqa: BLE001
+        print(f"[learn tick] {type(e).__name__}: {e}", file=sys.stderr)
+
+
+# Route của phần học: đăng ký SAU route cuối để bảng route cũ giữ nguyên thứ tự.
+agent_review.register_routes(app, agent_review.LearnRouteDeps(
+    brain_key=lambda b: _brain_key(b), agent_exists=lambda root, slug: _agent_md_path(root, slug) is not None,
+    agent_key=lambda root, slug: _agent_jobs_key(root, slug), store=_pulse_store))
 
 
 if __name__ == "__main__":

@@ -52,6 +52,13 @@ OPS_BY_ROLE = {
 # do thức. Op này được bộ chạy xử lý riêng (không đi qua `OPS_BY_ROLE`).
 REACT_OP = "react"
 REACTS_PER_TURN = 5
+# T3 phần L (thiết kế 8.2): góp ý chữ của đồng đội. Host gán nguồn (leader/teammate) theo lượt và gắn tin, việc, bản; đầu ra
+# đến muộn (huỷ, sửa, bỏ thành viên, mất quyền giữ) chỉ là bằng chứng. Op này xử lý riêng như `react`.
+PEER_OP = "peer_feedback"
+PEERS_PER_TURN = 3
+PEER_HINT = ('Góp ý cho một tin của đồng đội (tuỳ chọn, tối đa 3 mỗi lượt): '
+             '<!-- JAVIS_TEAM: {"op": "peer_feedback", "message_id": <mã tin của đồng đội>, "note": "..."} -->. '
+             'Góp ý chỉ là tham khảo cho người nhận, không phải yêu cầu của chủ nhóm.')
 LEADER_ROLES = ("leader_reply", "plan", "synthesize")
 REPLY_ROLES = ("leader_reply", "member_reply")
 ROLE_LABEL = {
@@ -297,8 +304,12 @@ class TeamRunner:
                  agent_info: Callable[[str, str], Optional[dict]], publish: Optional[Callable[[dict], Any]] = None,
                  notify: Optional[Callable[[str, str], Any]] = None, worker_id: str = "team-runner",
                  max_parallel_teams: int = 2, clock: Callable[[], float] = time.time, admin: Any = None,
-                 ceiling: Any = None, projector: Any = None):
+                 ceiling: Any = None, projector: Any = None, learning: Any = None):
         self.teams = teams
+        # T3 phần L (thiết kế 8.1, 8.2): bài học có phạm vi và góp ý của đồng đội (`agent_lessons.TeamLearning`). None:
+        # lượt nhóm như trước (test cũ).
+        self.learning = learning
+        self._peer_shown: dict = {}
         # T2 (thiết kế 3.1, 9.1): sổ lượt chung của trần máy chủ (`agent_ledger.TeamCeiling`). None: không có (test cũ).
         # Mỗi lượt nhóm giữ chỗ một dòng ở đó ngay sau `team_turns`, trước khoá bận và engine.
         self.ceiling = ceiling
@@ -827,6 +838,10 @@ class TeamRunner:
         import agent_pulse
         rows.append({"key": "max_tier", "category": "owner", "value": agent_pulse.DEFAULT_MAX_TIER, "unit": "tier",
                      "unlimited_ok": False, "seconds": agent_pulse.TIERS[agent_pulse.DEFAULT_MAX_TIER]})
+        # T3 phần L (thiết kế 9): lượt tự phát mỗi trợ lý mỗi ngày (chủ động, xem xét, quét, tự rà soát). Chủ chỉnh từng trợ
+        # lý ở bảng Bài học và hạn mức, có "Không giới hạn"; Toàn quyền không chỉnh. Giá trị ở đây là mặc định.
+        import agent_budget
+        rows.append(agent_budget.limits_row())
         ceilings = ((auth or {}).get("grant") or {}).get("ceilings") or {}
         for k in AUTH_CAPS:
             ce = ceilings.get(k)
@@ -1256,6 +1271,67 @@ class TeamRunner:
             out.append(" · ".join(parts))
         return out
 
+    def _learning_lines(self, team: dict, agent_key: str) -> list:
+        """T3 phần L: bài học phạm vi NHÓM NÀY và chung (`team:<id>` + `*`, không bao giờ phạm vi khác) và góp ý chữ của
+        đồng đội chưa giao (8.2). Mã góp ý đã hiện được nhớ theo (nhóm, agent) để đánh dấu đã giao khi lượt được chấp
+        nhận. Lỗi kho không làm hỏng lượt."""
+        if self.learning is None:
+            return []
+        out: list = []
+        try:
+            import agent_lessons as ALS
+            les = self.learning.lesson_lines(team["team_id"], agent_key)
+            if les:
+                out.append("\n" + ALS.LESSON_HEADER_TEAM)
+                out.extend(les)
+                out.append(ALS.LESSON_NOTE)
+            out.append(ALS.TEAM_LESSON_RULE)
+            notes, ids = self.learning.peer_lines(team["team_id"], agent_key, lambda k: self._name(team, k))
+            self._peer_shown[(team["team_id"], agent_key)] = ids
+            if notes:
+                out.append("\n" + ALS.PEER_HEADER)
+                out.extend(notes)
+                out.append(ALS.PEER_NOTE)
+            out.append(PEER_HINT)
+        except Exception as ex:  # noqa: BLE001
+            log.warning("team learning block: %s: %s", type(ex).__name__, ex)
+        return out
+
+    def _peer_feedback_op(self, team_id: str, agent_key: str, role: str, op: dict, notes: list, nonce: str,
+                          turn_id: str, evidence: str) -> Optional[int]:
+        """Lệnh `peer_feedback` của một lượt: host gán nguồn (trưởng nhóm hay đồng đội) theo lượt, gắn tin, việc, bản.
+        `evidence` khác rỗng (đầu ra không còn hiệu lực): chỉ lưu làm bằng chứng, không vào lượt của người nhận."""
+        if self.learning is None:
+            notes.append("Lệnh 'peer_feedback' chưa dùng được, đã bỏ")
+            return None
+        team = self._team(team_id)
+        try:
+            mid = int(op.get("message_id"))
+        except (TypeError, ValueError):
+            notes.append("Lệnh 'peer_feedback' thiếu message_id hợp lệ, đã bỏ")
+            return None
+        msg = self.sessions.team_message(team["session_id"], mid)
+        if not msg or msg.get("author_kind") != "agent" or not msg.get("author_ref") or msg["author_ref"] == agent_key:
+            notes.append(f"Lệnh 'peer_feedback' trỏ tới tin #{mid} không phải tin của đồng đội trong nhóm này, đã bỏ")
+            return None
+        note = op.get("note")
+        if not isinstance(note, str) or not note.strip():
+            notes.append("Lệnh 'peer_feedback' thiếu góp ý, đã bỏ")
+            return None
+        receiver = msg["author_ref"]
+        if not evidence and not self.teams.is_active_member(team_id, receiver):
+            evidence = "receiver_left"
+        rev = (msg.get("meta") or {}).get("revision")
+        try:
+            return self.learning.peer_feedback(
+                team_id=team_id, receiver_key=receiver, author_key=agent_key,
+                author_role="leader" if team.get("leader_key") == agent_key else "teammate", message_id=mid, note=note,
+                nonce=nonce, task_id=str(msg.get("task_id") or ""), revision=int(rev) if rev is not None else None,
+                turn_ref=f"turn:{turn_id}", evidence_reason=evidence)
+        except Exception as ex:  # noqa: BLE001
+            notes.append(f"Lệnh 'peer_feedback' không ghi được ({type(ex).__name__}), đã bỏ")
+            return None
+
     # ───────────── một lượt ─────────────
 
     def _context(self, team: dict, agent_key: str, role: str, task: Optional[dict], step: Optional[dict],
@@ -1316,6 +1392,7 @@ class TeamRunner:
             lines.append("\n## Góp ý của đồng đội (reaction của trợ lý khác trên tin của bạn trong nhóm này)")
             lines.extend(peers)
             lines.append(PEER_FEEDBACK_NOTE)
+        lines.extend(self._learning_lines(team, agent_key))
         if task:
             lines.append(f"\n## Việc hiện tại: {task['title']} (bản {task['team_rev']})")
             lines.append(f"Yêu cầu: {task['intent']}")
@@ -1706,7 +1783,8 @@ class TeamRunner:
             # TRONG khoá này, cùng khoá với thu hồi, nên lệnh tới sau mốc thu hồi bị từ chối (13.5).
             admin_ops = [op for op in ops if op["op"] in ADMIN_OPS]
             react_ops = [op for op in ops if op["op"] == REACT_OP]
-            ops = [op for op in ops if op["op"] not in ADMIN_OPS and op["op"] != REACT_OP]
+            peer_ops = [op for op in ops if op["op"] == PEER_OP]
+            ops = [op for op in ops if op["op"] not in ADMIN_OPS and op["op"] not in (REACT_OP, PEER_OP)]
             # Quyền ghim lúc giữ chỗ lượt (GOAL T1 mục 9). Đọc trong khoá, cùng khoá với cấp và thu hồi.
             pin = (self.teams.turn(turn_id) or {}).get("authority_id") if admin_ops else None
             for i, op in enumerate(admin_ops):
@@ -1730,6 +1808,21 @@ class TeamRunner:
                 mid_r = self._agent_react(team_id, agent_key, op, notes, f"{turn_id}#rx{i}")
                 if mid_r is not None:
                     reacted.append(mid_r)
+            # Góp ý của đồng đội (T3 phần L, 8.2): ghi trong cùng khoá với kiểm hiệu lực. Đầu ra không còn hiệu lực thì góp ý
+            # chỉ là bằng chứng (không vào lượt của người nhận); nonce theo lượt nên xử lý lặp không ghi lần hai.
+            for i, op in enumerate(peer_ops):
+                if i >= PEERS_PER_TURN:
+                    notes.append(f"Mỗi lượt tối đa {PEERS_PER_TURN} góp ý cho đồng đội, đã bỏ phần thừa")
+                    break
+                self._peer_feedback_op(team_id, agent_key, role, op, notes, f"{turn_id}#pf{i}", turn_id,
+                                       "" if applied else str(status))
+            if applied and self.learning is not None:
+                shown = self._peer_shown.pop((team_id, agent_key), [])
+                if shown:
+                    try:
+                        self.learning.delivered(shown, f"turn:{turn_id}")
+                    except Exception as ex:  # noqa: BLE001
+                        log.warning("peer feedback delivered: %s: %s", type(ex).__name__, ex)
         allowed = OPS_BY_ROLE.get(role, set())
         kept = []
         for op in ops:
@@ -1759,6 +1852,12 @@ class TeamRunner:
         mid = self._post(self._team(team_id), clean or "(không có nội dung)", author_kind="agent", author_ref=agent_key,
                          reply_to=reply_to, task_id=task["id"] if task else None,
                          step_id=step["step_id"] if step else None, meta=meta)
+        if applied and self.learning is not None and res.get("lessons"):
+            # Bài học của lượt (phạm vi nhóm) gắn thêm mã tin vừa đăng (8.1: gắn lượt, tin, bản).
+            try:
+                self.learning.link(f"turn:{turn_id}", mid)
+            except Exception as ex:  # noqa: BLE001
+                log.warning("lesson link: %s: %s", type(ex).__name__, ex)
         if reacted:
             team_now = self._team(team_id)
             for mid_r in dict.fromkeys(reacted):
@@ -2101,6 +2200,11 @@ class TeamRunner:
                     out = dict(out, status=now, applied=False, ops=[], commit=None)
                 else:
                     self._commit_once(out.get("turn_id") or "", out.get("commit"), out.setdefault("notes", []))
+                    if self.learning is not None and out.get("lessons") and out.get("message_id"):
+                        try:
+                            self.learning.link(f"turn:{out.get('turn_id') or ''}", int(out["message_id"]))
+                        except Exception as ex:  # noqa: BLE001
+                            log.warning("lesson link: %s: %s", type(ex).__name__, ex)
             return self._apply_step_locked(team, task, step, out)
 
     def _apply_step_locked(self, team: dict, task: dict, step: dict, out: dict) -> Optional[str]:
