@@ -23279,6 +23279,18 @@ def _pulse_team(ctx):
     return _TEAM_API.teams().get(str(ctx)[len("team:"):])
 
 
+def _pulse_team_live(key, ctx):
+    """Nhóm của ngữ cảnh CHỈ khi nhóm đang hoạt động và `key` là thành viên đang tham gia (review T3 P P2-1). Mọi đường đăng
+    tin hay xếp việc tự phát vào nhóm (nhịp, phán xử, học) đi qua đây: rời nhóm, nhóm tạm dừng hay lưu trữ thì không đăng."""
+    team = _pulse_team(ctx)
+    if team is None or team.get("status") != "active":
+        return None
+    try:
+        return team if _TEAM_API.teams().is_active_member(team["team_id"], key) else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _pulse_contexts(key):
     """Phạm vi đã giao: mỗi nhóm đang hoạt động mà agent là thành viên đang tham gia, và chat riêng với chủ."""
     out = [f"dm:{key}"]
@@ -23404,9 +23416,8 @@ def _pulse_engine_for(key, ctx, purpose):
 def _pulse_can_enqueue(key, ctx):
     """enqueue chỉ khi quyền cho phép: trưởng nhóm của nhóm đang hoạt động có Toàn quyền còn hiệu lực. Chat riêng: không
     (chủ giao việc bằng nút Giao việc), agent chỉ đề xuất."""
-    team = _pulse_team(ctx)
-    return bool(team and team.get("status") == "active" and team.get("leader_key") == key
-                and _TEAM_API.teams().active_authority(team["team_id"]))
+    team = _pulse_team_live(key, ctx)
+    return bool(team and team.get("leader_key") == key and _TEAM_API.teams().active_authority(team["team_id"]))
 
 
 def _pulse_on_loop(coro):
@@ -23421,7 +23432,9 @@ def _pulse_on_loop(coro):
 
 
 def _pulse_enqueue(key, ctx, item, src):
-    team = _pulse_team(ctx)
+    team = _pulse_team_live(key, ctx)
+    if team is None:
+        return None
     tid, created = tasks_feature.store.enqueue_team(
         team["brain_id"], team["team_id"], item["title"], item.get("brief") or item["title"],
         source_ref=f"pulse:{key}:{src}", coordinator_key=key, chat_id=f"team:{team['team_id']}", created_by=f"agent:{key}")
@@ -23444,9 +23457,11 @@ def _pulse_dm_session(key):
 
 
 def _pulse_post(key, ctx, text, meta):
-    team = _pulse_team(ctx)
     ss = get_store()
-    if team is not None:
+    if str(ctx).startswith("team:"):
+        team = _pulse_team_live(key, ctx)
+        if team is None:
+            return None
         mid, _ = ss.append_team_message(team["session_id"], "assistant", text, author_kind="agent", author_ref=key,
                                         meta=meta)
         msg = ss.team_message(team["session_id"], mid)
@@ -23465,7 +23480,9 @@ def _pulse_post(key, ctx, text, meta):
 def _pulse_propose(key, ctx, item, src):
     """Thẻ đề xuất có nguồn cho chủ/trưởng nhóm: ở nhóm là tin mang `proposal` (nút Tạo việc có sẵn), ở chat riêng là
     một tin đề xuất. Không tạo việc."""
-    if _pulse_team(ctx) is not None:
+    if str(ctx).startswith("team:"):
+        if _pulse_team_live(key, ctx) is None:
+            return None
         got = _pulse_post(key, ctx, f"{item['title']}\n{item.get('brief') or ''}".strip(),
                           {"proposal": {"title": item["title"], "brief": item.get("brief") or item["title"]},
                            "pulse_source": src, "proactive": True})
@@ -23698,8 +23715,10 @@ _LEARN_SENDER = [False]
 def _learn_send(key, ctx, text, meta):
     """Tin MỚI của lượt xem xét reaction (`ask_back`/`revise`), sau khi bộ phán xử nói `speak`. Nhóm: tin của trợ lý trả
     lời tin bị phản hồi. Chat riêng: tin của trợ lý trong phiên chat riêng của nó (như tin chủ động của nhịp)."""
-    team = _pulse_team(ctx)
-    if team is not None:
+    if str(ctx).startswith("team:"):
+        team = _pulse_team_live(key, ctx)
+        if team is None:
+            return None   # rời nhóm, nhóm tạm dừng hay lưu trữ: không đăng (review T3 P P2-1)
         ss = get_store()
         mid, _ = ss.append_team_message(team["session_id"], "assistant", text, author_kind="agent", author_ref=key,
                                         reply_to=meta.get("reply_to"),

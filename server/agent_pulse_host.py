@@ -267,14 +267,34 @@ class PulseHost:
                         AP.ensure_row(store, key, ctx, at=now)
                 except Exception as ex:  # noqa: BLE001
                     print(f"[pulse contexts] {key}: {type(ex).__name__}: {ex}", file=sys.stderr)
-        with store._Tx(store) as c:
-            # Dòng có lịch mà chưa có mốc (tạo từ T2, hay vừa tiếp sau tạm dừng): đặt mốc theo bậc.
-            for r in c.execute("SELECT agent_key, context_ref, tier FROM agent_pulse WHERE next_due_at IS NULL AND "
-                               "context_ref<>'*' AND state IN ('active','awake','slowed')").fetchall():
-                iv = AP.interval(int(r["tier"]))
-                if iv is not None:
-                    c.execute("UPDATE agent_pulse SET next_due_at=? WHERE agent_key=? AND context_ref=?",
-                              (now + iv, r["agent_key"], r["context_ref"]))
+        scope_cache: dict = {}
+
+        def in_scope(key: str, ctx: str) -> Optional[bool]:
+            """Ngữ cảnh còn trong phạm vi đã giao của agent (5.5): nhóm đang hoạt động mà agent là thành viên đang tham
+            gia, hay chat riêng (review T3 P P2-1). None khi không đọc được phạm vi (lỗi tạm): bỏ qua lần này, không gỡ."""
+            if key not in scope_cache:
+                try:
+                    scope_cache[key] = set(self.deps.contexts(key) or [])
+                except Exception as ex:  # noqa: BLE001
+                    print(f"[pulse scope] {key}: {type(ex).__name__}: {ex}", file=sys.stderr)
+                    scope_cache[key] = None
+            s = scope_cache[key]
+            return None if s is None else (ctx in s)
+
+        with closing(store._conn()) as c:
+            nodue = [dict(r) for r in c.execute(
+                "SELECT agent_key, context_ref, tier FROM agent_pulse WHERE next_due_at IS NULL AND context_ref<>'*' "
+                "AND state IN ('active','awake','slowed')").fetchall()]
+        if nodue:
+            with store._Tx(store) as c:
+                # Dòng có lịch mà chưa có mốc (tạo từ T2, hay vừa tiếp sau tạm dừng): đặt mốc theo bậc. Dòng của ngữ cảnh
+                # ngoài phạm vi (đã rời nhóm, nhóm tạm dừng hay lưu trữ) giữ không lịch tới khi trở lại phạm vi.
+                for r in nodue:
+                    iv = AP.interval(int(r["tier"]))
+                    if iv is None or (r["agent_key"] in agents and not in_scope(r["agent_key"], r["context_ref"])):
+                        continue
+                    c.execute("UPDATE agent_pulse SET next_due_at=? WHERE agent_key=? AND context_ref=? AND "
+                              "next_due_at IS NULL", (now + iv, r["agent_key"], r["context_ref"]))
         try:
             AP.sweep_seen_ignored(store, self.deps.interacted, at=now)
         except Exception as ex:  # noqa: BLE001
@@ -315,6 +335,17 @@ class PulseHost:
             key = r["agent_key"]
             if key not in agents:
                 continue
+            scoped = in_scope(key, r["context_ref"])
+            if scoped is None:
+                continue
+            if not scoped:
+                # Ngoài phạm vi đã giao (review T3 P P2-1): không quét, không nói; gỡ lịch (trở lại phạm vi thì có lịch lại).
+                with store._Tx(store) as c:
+                    n = c.execute("UPDATE agent_pulse SET next_due_at=NULL WHERE agent_key=? AND context_ref=? AND "
+                                  "next_due_at=?", (key, r["context_ref"], r["next_due_at"])).rowcount
+                    if n:
+                        AP._event(c, key, r["context_ref"], "out_of_scope", source="host", at=now)
+                continue
             eff = AP.effective_due(r["next_due_at"], None, is_busy(key), now)
             if eff is None or eff > now:
                 with store._Tx(store) as c:
@@ -336,6 +367,8 @@ class PulseHost:
                 continue
             if r.get("pulse_state") in ("paused", "off") or is_busy(r["agent_key"]):
                 continue
+            if not in_scope(r["agent_key"], r["context_ref"]):
+                continue   # ngữ cảnh ngoài phạm vi: lý do giữ nguyên, không phục vụ
             reasons.append(r)
         return claims, reasons
 
