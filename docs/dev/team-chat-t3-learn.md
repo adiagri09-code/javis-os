@@ -161,16 +161,17 @@ cộng `judge_batch` ở ngữ cảnh `dm:` (phán xử tin chủ động ở ch
   ...)`, `agent_pulse.register_policy_reverter(kind, ...)` cho năm loại thay đổi; `apply_policy_change`, `record_policy_labels`,
   `policy_changes`, `record_event`, `events`, `signals`; `main._learn_tick()` chạy trước `_pulse_host().tick()`. Hạn mức của P gọi
   `agent_budget.try_spend(key, "scan", at)` qua bộ chuyển `_budget_try_spend` (module đã có nên không còn "cho qua").
-- **J (chưa ghép, gọi qua `JudgeAdapter`):** `judge_proactive(..., origin, payload)` (async), `get_profile` (đọc `eagerness_source`),
-  `set_offset`, `set_eagerness`, `default().store(False).decisions/changes` (nhãn kèm `label_at`, chủ giữ độ lệch). Sau khi ghép:
+- **J (đã ghép qua `origin/claude/team-adaptive-t3` d8d1b2b1, gọi qua `JudgeAdapter`):** `judge_proactive(..., origin, payload)`
+  (async), `get_profile` (đọc `eagerness_source`), `set_offset`, `set_eagerness`, `default().store(False).decisions/changes` (nhãn kèm
+  `label_at`, chủ giữ độ lệch).
   1. `main._learn_register_sender()` đăng ký `ReviewHost.on_judge_send` với `agent_judge.register_sender` khi bộ phán xử đã nối (thử
-     lại mỗi nhịp). Bộ gửi chung của P/J (nếu có) phải BỎ QUA payload `origin = "reaction_review"` để không gửi hai lần.
-  2. Móc `policy_change` mặc định của J (`agent_pulse.default_store()`) không tồn tại ở P: `main.py` của J phải truyền kho thật. L vẫn
-     đúng khi móc hỏng (tự ghi dòng cửa sổ).
-  3. L đăng ký hàm quay lại cho `offset_set`/`eagerness_set`; thay đổi của chủ cũng mở cửa sổ ở P qua móc của J và có thể bị P đánh
-     `reverted` mà không đổi gì (hàm của L chỉ xử lý nguồn `self_review:*`). Đề nghị J/P không mở cửa sổ cho nguồn `owner` hay
-     `revert:*`.
-  4. `agent-judge-ui.js` của J đăng ký `render(part, el, ctx)`; P gọi `render(view)`. L theo chữ ký của P.
+     lại mỗi nhịp). Bộ gửi chung `main._judge_send` BỎ QUA payload `origin = "reaction_review"` (không gửi hai lần); test
+     `test_t3_integration.py` kiểm cả hai.
+  2. Còn mở: `_agent_judge()` không truyền `policy_change`, nên móc mặc định của J gọi `agent_pulse.default_store()` (không có) và
+     nhãn dịch ngưỡng không mở cửa sổ 6.4 ở P. L vẫn đúng (tự ghi dòng cửa sổ cho thay đổi của mình).
+  3. Còn mở: nếu móc đó được nối, thay đổi của chủ cũng mở cửa sổ ở P và có thể bị P đánh `reverted` mà không đổi gì (hàm quay lại
+     của L chỉ xử lý nguồn `self_review:*`). Đề nghị chỉ mở cửa sổ cho nguồn tự áp (`self_review:*`, nhãn).
+  4. Còn mở: `agent-judge-ui.js` đăng ký `render(part, el, ctx)`; `agent-pulse.js` gọi `render(view)`. L theo chữ ký của P.
 - **Bộ chạy nhóm:** `TeamRunner(learning=agent_lessons.TeamLearning(...))` qua `TeamApiDeps.learning`.
 
 ## 7. Quyết định khi làm
