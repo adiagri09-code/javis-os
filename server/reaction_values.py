@@ -25,28 +25,34 @@ PUBLIC_FIELDS = ("value", "reasons", "axis", "comment", "stale", "status", "stat
 
 
 class ReactionInputError(ValueError):
-    """Thân request sai (giá trị lạ, quá dài, nonce rỗng hay quá dài): route trả 400."""
+    """Thân request sai (giá trị lạ, quá dài, nonce rỗng hay quá dài): route trả 400. `en`: bản tiếng Anh của câu lỗi
+    (route hiện theo ngôn ngữ giao diện qua localefmt)."""
+
+    def __init__(self, vi: str, en: str = ""):
+        super().__init__(vi)
+        self.vi = vi
+        self.en = en or vi
 
 
 def normalize(value: Any, reasons: Any, axis: Any, comment: Any, nonce: Any) -> dict:
     """Kiểm và chuẩn hoá một thao tác reaction. Ném `ReactionInputError` khi sai. `value` None/""/"none" là bỏ emoji."""
     val = None if value in (None, "", "none") else str(value)
     if val is not None and val not in REACTIONS:
-        raise ReactionInputError("reaction không hợp lệ")
+        raise ReactionInputError("reaction không hợp lệ", "invalid reaction")
     if reasons is not None and not isinstance(reasons, (list, tuple)):
-        raise ReactionInputError("lý do phải là danh sách")
+        raise ReactionInputError("lý do phải là danh sách", "reasons must be a list")
     rs = list(dict.fromkeys(str(x) for x in (reasons or [])))
     if any(x not in REASONS for x in rs):
-        raise ReactionInputError("lý do không hợp lệ")
+        raise ReactionInputError("lý do không hợp lệ", "invalid reason")
     ax = str(axis or "").strip()
     if ax not in AXES:
-        raise ReactionInputError("trục nói/im không hợp lệ")
+        raise ReactionInputError("trục nói/im không hợp lệ", "invalid speak/silent axis")
     cm = str(comment or "").strip()
     if len(cm) > COMMENT_MAX:
-        raise ReactionInputError(f"góp ý tối đa {COMMENT_MAX} ký tự")
+        raise ReactionInputError(f"góp ý tối đa {COMMENT_MAX} ký tự", f"comment is at most {COMMENT_MAX} characters")
     nc = str(nonce or "").strip()
     if not nc or len(nc) > NONCE_MAX:
-        raise ReactionInputError("nonce không hợp lệ")
+        raise ReactionInputError("nonce không hợp lệ", "invalid nonce")
     return {"value": val, "reasons": rs, "axis": ax, "comment": cm, "nonce": nc}
 
 

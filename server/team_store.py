@@ -692,6 +692,24 @@ class TeamStore:
             return [dict(r) for r in c.execute("SELECT * FROM team_turns WHERE created_at >= ? ORDER BY created_at",
                                                (float(since),)).fetchall()]
 
+    def turns_for_reconcile(self, after_at: float, after_id: str, until: float, floor: float, settled_since: float,
+                            limit: int = 2000) -> tuple:
+        """Lượt cho đối soát sổ chung (T2, review T2 P1/P3). Trả (cửa sổ, nhóm đặc biệt):
+        - cửa sổ: lượt tạo SAU con trỏ `(after_at, after_id)` theo thứ tự `(created_at, turn_id)`, không mới hơn `until`, tối
+          đa `limit` dòng (con trỏ tiến tới dòng cuối, nhiều lượt cùng thời điểm vẫn tiến được);
+        - nhóm đặc biệt (không giới hạn, luôn nhỏ): lượt còn mở, lượt tạo trước mốc nâng `floor` mà chốt sau mốc (mở lúc nâng),
+          và lượt chốt từ `settled_since` (lượt đã bị con trỏ vượt qua lúc chưa tới mốc engine rồi mới chạy và chốt)."""
+        with closing(self._conn()) as c:
+            window = [dict(r) for r in c.execute(
+                "SELECT * FROM team_turns WHERE (created_at > ? OR (created_at = ? AND turn_id > ?)) AND created_at <= ? "
+                "ORDER BY created_at, turn_id LIMIT ?",
+                (float(after_at), float(after_at), str(after_id), float(until), int(limit))).fetchall()]
+            special = [dict(r) for r in c.execute(
+                "SELECT * FROM team_turns WHERE status IN ('reserved','running') "
+                "OR (created_at < ? AND settled_at >= ?) OR settled_at >= ?",
+                (float(floor), float(floor), float(settled_since))).fetchall()]
+        return window, special
+
     def open_turns(self) -> list:
         """Lượt còn `reserved` hay `running` (dùng khi khởi động lại để chốt `interrupted` hay hoàn)."""
         with closing(self._conn()) as c:
