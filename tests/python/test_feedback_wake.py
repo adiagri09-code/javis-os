@@ -188,6 +188,20 @@ check("emoji không đổi trạng thái goal, không tính lượt, không tạ
                                                                                       "calls_used": 0,
                                                                                       "run_state": "ready"}, g)
 
+# Review T2 vòng 2 (cùng lỗi P2-1 ở A2): nguồn đang thuộc một lượt goal chưa chốt bị đổi; lượt đó bị huỷ thì nguồn cũ không
+# trở về chờ cạnh nguồn mới. Lượt goal "đang chạy" được giả lập đúng như A2 ghi: `served` kèm `settled_by = <mã lượt>`.
+with gs._Tx(gs) as c:
+    c.execute("UPDATE wake_reasons SET state='served', settled_by='act_run' WHERE goal_id='g1' AND source_ref=?",
+              (f"rx:dm:{got2['log_id']}",))
+got3 = dm(ss, pj, dsid, gm, ag, "g-3", "wow", goal_id="g1")
+with gs._Tx(gs) as c:   # đúng câu lệnh trả lý do về chờ của đường huỷ lượt goal (_refund_not_run)
+    c.execute("UPDATE wake_reasons SET state='pending', settled_at=NULL, settled_by='' WHERE goal_id=? AND "
+              "state='served' AND settled_by=?", ("g1", "act_run"))
+with closing(gs._conn()) as c:
+    pend = sorted(x["source_ref"] for x in c.execute("SELECT * FROM wake_reasons WHERE goal_id='g1' AND state='pending'"))
+check("review T2 vòng 2: đổi reaction khi lượt goal đang chạy rồi lượt đó huỷ: chỉ nguồn mới chờ, nguồn cũ không sống lại",
+      pend == [f"rx:dm:{got3['log_id']}"], pend)
+
 # ═════ emoji không đổi việc, ưu tiên, quyền (nhóm) ═════
 d, gs, ss, ts, tm, owner, ag, fake, pj, r, T, dsid = world("effects", enabled=True)
 job = r.submit(T["team_id"], "Việc", as_job=True, client_msg_id="j")["task_id"]

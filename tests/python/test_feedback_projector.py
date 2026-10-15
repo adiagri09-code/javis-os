@@ -202,5 +202,56 @@ check("trang Trò chuyện chính (không agent): 'Đã nhận', không lý do",
 check("dòng nhật ký cũ của nhóm (trước T2) coi như đã chiếu: mặc định effect_state done",
       "DEFAULT 'done'" in str(team_store._T2_REACTION_COLS))
 
+# ═════ review T2 P3: hai lần chiếu chạy đua trên cùng cặp (route và nhịp, hay hai lần đổi nhanh) ═════
+import threading  # noqa: E402
+import time as _time  # noqa: E402
+d, gs, ss, tm, ag, sid, pj, box = world("race")
+W = AL.WakeReasons(gs)
+mid = ss.append_message(sid, "assistant", "Tin bị đổi nhanh hai lần")
+g1 = react(ss, sid, mid, ag, "race-1", "love")
+_orig_pair = pj._pair
+gate, done_new = threading.Event(), threading.Event()
+box_new = {}
+
+
+def slow_pair(kind, row):
+    out = _orig_pair(kind, row)
+    if int(row["id"]) == int(g1["log_id"]) and not gate.is_set():
+        gate.set()
+        done_new.wait(0.6)   # lần chiếu dòng cũ đã đọc cặp; trong khe này dòng mới được ghi và chiếu
+    return out
+
+
+def project_new():
+    gate.wait(5)
+    box_new["g2"] = react(ss, sid, mid, ag, "race-2", "angry")
+    pj.project("dm", box_new["g2"]["log_id"])
+    done_new.set()
+
+
+pj._pair = slow_pair
+t_old = threading.Thread(target=lambda: pj.project("dm", g1["log_id"]))
+t_new = threading.Thread(target=project_new)
+t_old.start()
+t_new.start()
+t_old.join(10)
+t_new.join(10)
+g2 = box_new["g2"]
+pj._pair = _orig_pair
+live = [x["source_ref"] for r_ in W.reasons(agent_key=ag["agent_key"]) for x in W.sources(r_["id"])
+        if x.get("removed_at") is None]
+check("review T2 P3: chiếu chạy đua: chỉ còn nguồn của trạng thái mới nhất, nguồn cũ không sống lại",
+      live == [f"rx:dm:{g2['log_id']}"], live)
+
+# Review T2 vòng 2: dọn khoá cặp không bao giờ bỏ khoá đang được giữ hay đang được chờ.
+held = FP._pair_lock("cap:giu")
+held.__enter__()
+for k in range(5200):
+    with FP._pair_lock(f"cap:{k}"):
+        pass
+check("review T2 vòng 2: khoá cặp đang giữ không bị dọn khi bảng khoá đầy", "cap:giu" in FP._LOCKS
+      and FP._LOCKS["cap:giu"][1] == 1 and len(FP._LOCKS) <= 5001 + 2500, len(FP._LOCKS))
+held.__exit__(None, None, None)
+
 print(f"\n{'FAIL' if fails else 'PASS'} - test_feedback_projector: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)

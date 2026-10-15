@@ -265,6 +265,7 @@ CREATE TABLE IF NOT EXISTS agent_pulse(
   scan_counter INTEGER NOT NULL DEFAULT 0, policy_version TEXT NOT NULL DEFAULT 'pulse.v1', updated_at REAL NOT NULL,
   PRIMARY KEY(agent_key, context_ref));
 CREATE TABLE IF NOT EXISTS ceiling_state(name TEXT PRIMARY KEY, value REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS ceiling_cursor(name TEXT PRIMARY KEY, at REAL NOT NULL, turn_id TEXT NOT NULL DEFAULT '');
 """
 
 # Bảng và cột có từ trước A1 (0.86.x), đúng thứ tự. A1 không được đổi (review PR #590, P1-2); test so với đây.
@@ -475,6 +476,9 @@ class GoalStore:
                     c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
             c.executescript(_POST_MIGRATION)
             c.executescript(_T2_SCHEMA)
+            # Mốc nâng lên T2 (review T2 P1, quyết định của chủ): đối soát sổ chung KHÔNG dựng lại lượt nhóm đã chốt trước
+            # mốc này, nên lịch sử nhóm không bao giờ bị tính vào trần chung. Ghi một lần, không ghi đè.
+            c.execute("INSERT OR IGNORE INTO ceiling_state(name, value) VALUES('t2_migrated_at', ?)", (time.time(),))
         self._t2_init_pulse()
         if had_goals and not had_a2:
             self._a2_migrate()
@@ -1368,6 +1372,12 @@ class GoalStore:
             n = c.execute(f"UPDATE wake_reasons SET state='superseded', settled_at=?, settled_by='reaction_changed' "
                           f"WHERE goal_id=? AND code=? AND state='pending' AND origin='event' AND source_ref IN "
                           f"({','.join('?' * len(refs))})", [now, str(goal_id), str(code)] + refs).rowcount
+            # Nguồn cũ đang thuộc một lượt goal CHƯA chốt (`served` bởi lượt đang chạy): đánh dấu để lượt đó bị huỷ thì
+            # nguồn cũ KHÔNG trở về `pending` cạnh nguồn mới (review T2 vòng 2, cùng lỗi với P2-1 ở lớp 3). Giữ `served`
+            # làm bằng chứng lượt đã đọc nó.
+            c.execute(f"UPDATE wake_reasons SET settled_by='reaction_changed:' || settled_by WHERE goal_id=? AND code=? "
+                      f"AND state='served' AND origin='event' AND settled_by NOT LIKE 'reaction_changed%' AND source_ref IN "
+                      f"({','.join('?' * len(refs))})", [str(goal_id), str(code)] + refs)
             if n:
                 self._recompute_wake(c, str(goal_id))
             return n
@@ -4749,6 +4759,8 @@ class GoalStore:
                 raise ConflictError("reviewer_" + (r["status"] if r is not None else "missing"))
             if bool(r["enabled"]):
                 return self._agent(r)
+            # T2 (review P2-3): mọi đường bật Cộng hưởng ghi mốc bật lại, kể cả đường bật người review của A5.
+            self._mark_resumed(c, r["agent_key"], now)
             return self._bump_agent(c, r, "enabled", p.by, now, {"via": "team_reviewer_enable", "goal_id": goal_id},
                                     enabled=1)
 

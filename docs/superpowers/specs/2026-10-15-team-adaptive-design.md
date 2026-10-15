@@ -474,9 +474,13 @@ Sửa sau review T1: bản trước chỉ cộng `goals.calls_used` và `call_le
     một lượt đang ở giữa hai bước giữ chỗ của hai kho.
   - Dòng chỉ có ở sổ mới (`mirror_ref = ''`: phán xử, xem xét, chủ động, quét) không có kho thứ hai nên mới dùng hạn tuổi: `reserved`
     không mốc engine quá 10 phút (dài hơn mọi lượt loại này) thì `refunded`, có mốc engine thì `interrupted` (tính).
-  - Lượt nhóm đã tới mốc engine mà **thiếu** dòng sổ (tiến trình chết giữa hai kho, hay bản trước nâng cấp) thì dựng lại dòng
-    `counted = 1` (có thể tạm vượt trần: không làm mất lượt đã tính); lượt nhóm `reserved` chưa tới mốc engine mà thiếu dòng sổ (quá
-    khoảng ân hạn, đo từ `created_at` của chính lượt nhóm vì chưa có dòng sổ) thì hoàn lượt nhóm (chưa gọi model).
+  - Lượt nhóm đã tới mốc engine mà **thiếu** dòng sổ (tiến trình chết giữa hai kho, hay kho chung lỗi lúc giữ chỗ) thì dựng lại
+    dòng `counted = 1` (có thể tạm vượt trần: không làm mất lượt đã tính), **chỉ với lượt tạo sau mốc nâng lên T2**
+    (`t2_migrated_at`, ghi một lần lúc tạo bảng) hay lượt còn mở lúc nâng. Lượt nhóm đã chốt trước khi nâng là lịch sử, không bao
+    giờ tính vào trần (quyết định của chủ sau review T2: nâng cấp không được chặn ngay máy pilot đang đặt trần). Lượt nhóm thiếu
+    dòng sổ mà chưa tới mốc engine thì để nguyên (có thể đang chờ khoá bận sau một lần kho chung lỗi); khi nó tới mốc engine thì
+    được dựng dòng như trên. Quét theo con trỏ bền `(created_at, turn_id)` có trần số dòng mỗi lần, cộng nhóm nhỏ: lượt còn mở,
+    lượt mở lúc nâng, lượt vừa chốt gần đây.
 - **Trần tính trọn đời, không theo ngày:** phép đếm cộng mọi dòng còn hiệu lực từ trước tới nay (như `goals.calls_used` hiện có), nên
   khi chạm trần thì mọi lượt trong phạm vi bị chặn (kể cả trả lời tin nhóm và bước việc) tới khi chủ nâng biến môi trường. Đây là
   trần của pilot có hạn mức, không phải hạn mức hằng ngày; trần theo ngày vẫn là `daily_turns` của nhóm và `agent_daily_calls`.

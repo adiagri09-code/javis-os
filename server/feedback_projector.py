@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 import time
 from typing import Any, Callable, Optional
 
@@ -44,6 +45,37 @@ def _chu(vi: str, en: str) -> str:
         return localefmt.chu(vi, en)
     except Exception:  # noqa: BLE001
         return vi
+
+
+_LOCKS: dict = {}   # khoá cặp -> [Lock, số người đang dùng]
+_LOCKS_GUARD = threading.Lock()
+
+
+class _pair_lock:
+    """Khoá theo cặp (tin, người phản hồi) trong tiến trình, có đếm người dùng: chỉ dọn khoá không ai đang giữ HAY đang chờ,
+    nên không có khe "lấy khoá rồi bị dọn trước khi acquire" làm hai lần chiếu cùng cặp chạy song song (review T2 vòng 2)."""
+
+    def __init__(self, key: str):
+        self.key = key
+
+    def __enter__(self):
+        with _LOCKS_GUARD:
+            ent = _LOCKS.get(self.key)
+            if ent is None:
+                if len(_LOCKS) > 5000:
+                    for k in [k for k, v in _LOCKS.items() if v[1] == 0][:2500]:
+                        _LOCKS.pop(k, None)
+                ent = _LOCKS[self.key] = [threading.Lock(), 0]
+            ent[1] += 1
+        ent[0].acquire()
+        self._ent = ent
+        return self
+
+    def __exit__(self, *exc):
+        self._ent[0].release()
+        with _LOCKS_GUARD:
+            self._ent[1] -= 1
+        return False
 
 
 def source_ref(kind: str, log_id: int) -> str:
@@ -141,6 +173,12 @@ class FeedbackProjector:
         row = self._log_row(kind, log_id)
         if row is None:
             return []
+        # Một khoá cho mỗi cặp (tin, người phản hồi) trong tiến trình (review T2 P3): request và nhịp, hay hai lần đổi
+        # nhanh, không chiếu xen nhau (đọc cặp cũ rồi thêm nguồn cũ SAU khi lần chiếu mới đã gỡ nó). Đọc lại cặp TRONG khoá.
+        with _pair_lock(group_ref(kind, row["session_id"], row["message_id"], row["reactor"])):
+            return self._project_locked(kind, row)
+
+    def _project_locked(self, kind: str, row: dict) -> list:
         pair = self._pair(kind, row)
         if not pair:
             return []

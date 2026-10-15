@@ -19,6 +19,7 @@ import os
 import tempfile
 import threading
 import time
+from contextlib import closing
 from pathlib import Path
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-agent-calls-")
@@ -473,9 +474,158 @@ removed = W.remove_group("grp", keep=["rx:dm:101"])
 check("gỡ theo cặp (tin, người phản hồi) trừ nguồn mới nhất", removed == ["rx:dm:100"]
       and [s["source_ref"] for s in W.sources(g, live_only=True)] == ["rx:dm:101"])
 cl3 = W.claim(g, try_busy=lambda: True)
-check("gỡ nguồn của lý do đang chạy: không đụng (lượt tự xử lý consumed)", W.remove_source("rx:dm:101") is False
-      and W.source("rx:dm:101")["removed_at"] is None)
+check("gỡ nguồn của lý do đang chạy: đánh removed_at, lý do vẫn claimed (review T2 P2-1)",
+      W.remove_source("rx:dm:101") is True and W.source("rx:dm:101")["removed_at"] is not None
+      and W.get(g)["status"] == "claimed")
 check("lý do tự phát dùng sổ chung với obligation = 0", L.get(cl3["call_id"])["obligation"] == 0)
+
+# ═════ review T2 P2-1: đổi/bỏ reaction trong lúc lượt xem xét đang chạy ═════
+d, gs = fresh("claimed-change")
+W = AL.WakeReasons(gs)
+r1 = W.add_source("ag_c", "dm:ag_c", "reaction_review", "rx:dm:1", "dm:s:9:owner")
+W.claim(r1, try_busy=lambda: True)
+W.add_source("ag_c", "dm:ag_c", "reaction_review", "rx:dm:2", "dm:s:9:owner")     # chủ đổi reaction
+W.remove_group("dm:s:9:owner", keep=["rx:dm:2"])
+out = W.settle(r1, "ok", consumed=[])
+nxt = W.reasons(agent_key="ag_c", status="pending")
+check("đổi reaction lúc đang xem xét: lý do chờ kế tiếp chỉ giữ nguồn MỚI", len(nxt) == 1
+      and [x["source_ref"] for x in W.sources(nxt[0]["id"], live_only=True)] == ["rx:dm:2"], (out, nxt))
+r3 = W.add_source("ag_d", "dm:ag_d", "reaction_review", "rx:dm:3", "dm:s:10:owner")
+W.claim(r3, try_busy=lambda: True)
+W.remove_group("dm:s:10:owner")                                                    # chủ bỏ hết
+out = W.settle(r3, "ok", consumed=[])
+check("bỏ reaction lúc đang xem xét: không mang gì sang lượt sau", out == {"status": "served", "moved_to": None}
+      and W.reasons(agent_key="ag_d", status="pending") == [], out)
+
+# ═════ review T2 P3: lý do rỗng chốt superseded thật; khoá bận không rò khi kho lỗi ═════
+d, gs = fresh("claim-p3")
+W = AL.WakeReasons(gs)
+e = W.add_source("ag_e", "dm:ag_e", "reaction_review", "rx:dm:50")
+with gs._Tx(gs) as c:
+    c.execute("UPDATE agent_wake_sources SET removed_at=1 WHERE source_ref='rx:dm:50'")
+rel = []
+res_e = W.claim(e, try_busy=lambda: True, release_busy=lambda: rel.append(1))
+check("nhận lý do không còn nguồn: superseded được GHI (không bị rollback), nhả khoá bận",
+      res_e["outcome"] == "gone" and W.get(e)["status"] == "superseded" and rel == [1], (res_e, W.get(e)))
+f = W.add_source("ag_f", "dm:ag_f", "reaction_review", "rx:dm:60")
+
+
+class Boom(AL.CallLedger):
+    def reserve(self, **k):
+        raise RuntimeError("kho khoá")
+
+
+Wb = AL.WakeReasons(gs, ledger=Boom(gs))
+rel = []
+try:
+    Wb.claim(f, try_busy=lambda: True, release_busy=lambda: rel.append(1))
+    boom = False
+except RuntimeError:
+    boom = True
+check("lỗi kho bất ngờ lúc nhận: lỗi nổi lên, khoá bận vẫn được nhả, lý do giữ pending",
+      boom and rel == [1] and W.get(f)["status"] == "pending" and W.get(f)["attempt"] == 0)
+
+# ═════ review T2 P3: lỗi kho bất ngờ lúc nhận lý do vẫn nhả khoá bận ═════
+d, gs = fresh("claim-leak")
+W = AL.WakeReasons(gs)
+rid_l = W.add_source("ag_l", "dm:ag_l", "reaction_review", "rx:dm:900")
+_orig_reserve = W.ledger.reserve
+
+
+def _reserve_boom(*a, **k):
+    raise RuntimeError("disk I/O error")
+
+
+W.ledger.reserve = _reserve_boom
+rel = []
+try:
+    W.claim(rid_l, try_busy=lambda: True, release_busy=lambda: rel.append(1))
+    leak_out = "no-raise"
+except RuntimeError:
+    leak_out = "raised"
+W.ledger.reserve = _orig_reserve
+check("review T2 P3: kho lỗi bất ngờ khi nhận lý do: khoá bận vẫn được nhả, lý do giữ pending",
+      rel == [1] and W.get(rid_l)["status"] == "pending" and W.get(rid_l)["attempt"] == 0, (leak_out, rel, W.get(rid_l)))
+
+# ═════ review T2 P2-3: đường bật người review của A5 ghi resumed_at ═════
+d, gs = fresh("reviewer-enable")
+own = RS.Principal("owner", "owner", "brainX")
+mk = gs.agent_register(own, "maker")
+rv = gs.agent_register(own, "reviewer")
+with gs._Tx(gs) as c:
+    c.execute("INSERT INTO goals(id,brain_id,owner,revision,status,idempotency_key,output_root,budget_calls,calls_used,"
+              "created_at,updated_at) VALUES('gr','brainX','o',1,'active','kr','x',10,0,0,0)")
+    c.execute("INSERT INTO goal_team(goal_id,maker_agent_key,reviewer_agent_key,reviewer_version_at_attach,"
+              "pair_config_version,max_rounds,status,created_at) VALUES('gr',?,?,1,1,2,'active',0)",
+              (mk["agent_key"], rv["agent_key"]))
+check("người review chưa bật: chưa có mốc bật lại", gs.resumed_at(rv["agent_key"]) is None)
+gs.team_reviewer_enable(own, "gr", rv["agent_key"])
+check("bật người review (A5): ghi resumed_at, nhịp thôi 'off'", (gs.resumed_at(rv["agent_key"]) or 0) > 0
+      and all(x["state"] != "off" for x in gs.pulse_rows(rv["agent_key"])), gs.pulse_rows(rv["agent_key"]))
+
+# ═════ review T2 P1: nâng cấp không tính lịch sử lượt nhóm vào trần ═════
+ceiling(20)
+d = TEMP / "upgrade-history"
+d.mkdir()
+tm_u = team_store.TeamStore(d / "team.sqlite3")
+old = time.time() - 30 * 86400
+with closing(tm_u._conn()) as c:
+    for i in range(30):
+        c.execute("INSERT INTO team_turns(turn_id,team_id,agent_key,role,engine,model,status,engine_at,created_at,"
+                  "settled_at) VALUES(?,?,?,?,?,?,?,?,?,?)", (f"old{i}", "tm_x", "lan", "leader_reply", "e", "m", "ok",
+                                                              old + i, old + i, old + i + 1))
+    c.commit()
+gs_u = RS.GoalStore(d / "resonance.sqlite3")          # mã mới mở kho lần đầu: ghi mốc t2_migrated_at
+TC_u = AL.TeamCeiling(gs_u)
+rep_u = TC_u.reconcile(tm_u, startup=True, now=time.time() + 300)
+check("nâng cấp: 30 lượt nhóm đã chốt từ trước KHÔNG bị dựng lại, đã dùng vẫn 0",
+      rep_u["rebuilt"] == 0 and AL.CallLedger(gs_u).used() == 0, rep_u)
+check("lượt nhóm kế tiếp vẫn được giữ chỗ", TC_u.reserve({"turn_id": "new1", "team_id": "tm_x", "agent_key": "lan",
+                                                         "role": "leader_reply"}))
+with closing(gs_u._conn()) as c:
+    check("đường kiểm trần của goal A2 vẫn cho chạy", RS._under_ceiling(c, 1))
+rep_u2 = TC_u.reconcile(tm_u, now=time.time() + 3600)
+check("đối soát theo nhịp sau đó cũng không dựng lại lịch sử", rep_u2["rebuilt"] == 0
+      and not any(x["mirror_ref"].startswith("team_turn:old") for x in AL.CallLedger(gs_u).rows()), rep_u2)
+d2 = TEMP / "upgrade-open"
+d2.mkdir()
+tm_o = team_store.TeamStore(d2 / "team.sqlite3")
+with closing(tm_o._conn()) as c:
+    c.execute("INSERT INTO team_turns(turn_id,team_id,agent_key,role,engine,model,status,engine_at,created_at) "
+              "VALUES('open1','tm_y','lan','work','e','m','running',?,?)", (old, old))
+    c.execute("INSERT INTO team_turns(turn_id,team_id,agent_key,role,status,engine_at,created_at,settled_at) "
+              "VALUES('done1','tm_y','lan','work','ok',?,?,?)", (old, old, old + 5))
+    c.commit()
+gs_o = RS.GoalStore(d2 / "resonance.sqlite3")
+tm_o.settle_turn("open1", "interrupted")              # phục hồi lúc khởi động chốt lượt còn mở lúc nâng
+rep_o = AL.TeamCeiling(gs_o).reconcile(tm_o, startup=True, now=time.time() + 300)
+check("lượt còn mở lúc nâng (đã tới mốc engine) được dựng lại và tính; lượt đã chốt trước đó thì không",
+      rep_o["rebuilt"] == 1 and [x["mirror_ref"] for x in AL.CallLedger(gs_o).rows()] == ["team_turn:open1"]
+      and AL.CallLedger(gs_o).rows()[0]["status"] == "interrupted", (rep_o, AL.CallLedger(gs_o).rows()))
+gs_o2 = RS.GoalStore(d2 / "resonance.sqlite3")
+with closing(gs_o2._conn()) as c:
+    m1 = c.execute("SELECT value FROM ceiling_state WHERE name='t2_migrated_at'").fetchone()[0]
+with closing(gs_o._conn()) as c:
+    m0 = c.execute("SELECT value FROM ceiling_state WHERE name='t2_migrated_at'").fetchone()[0]
+check("mốc t2_migrated_at ghi một lần, mở lại kho không ghi đè", m0 == m1)
+ceiling(None)
+
+# Đối soát có trần số dòng mỗi lần, quét tiếp từ mốc lần trước (không nạp cả bảng mỗi 60 giây).
+gs, ss, ts, tm, fake, r, T = world("batch")
+ids = []
+for i in range(5):
+    tid_b = tm.reserve_turn(T["team_id"], None, None, "lan", "leader_reply")
+    tm.mark_engine(tid_b, "e", "m")
+    tm.settle_turn(tid_b, "ok")
+    ids.append(tid_b)
+later = time.time() + AL.RECONCILE_GRACE_S + 60
+p1 = r.ceiling.reconcile(tm, now=later, batch=2)
+p2 = r.ceiling.reconcile(tm, now=later + 1, batch=2)
+p3 = r.ceiling.reconcile(tm, now=later + 2, batch=2)
+built = {x["mirror_ref"] for x in AL.CallLedger(gs).rows()}
+check("đối soát theo lô: mỗi lần tối đa batch dòng, các lần sau quét tiếp, cuối cùng đủ cả 5, không trùng",
+      p1["truncated"] and built == {f"team_turn:{x}" for x in ids} and len(AL.CallLedger(gs).rows()) == 5,
+      (p1, p2, p3, built))
 
 print(f"\n{'FAIL' if fails else 'PASS'} - test_agent_calls_ledger: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)
