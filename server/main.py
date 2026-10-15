@@ -160,6 +160,9 @@ import deploy_info              # Javis đang đứng ở đâu (docker/native) 
 import ollama_catalog           # danh mục model để gợi ý + tìm kiếm
 import ollama_local             # dò/tải/gỡ model trên máy chạy Ollama
 import sessions                  # PROJECT_INSTRUCTIONS_MAX cho khối project trong system prompt
+import reaction_values           # T2: khuôn reaction R của hợp đồng (chat riêng)
+import feedback_projector        # T2: bộ chiếu phản hồi (outbox của reaction) và khối phản hồi chat riêng
+import agent_ledger              # T2: sổ lượt chung (trần máy chủ) và lý do thức theo agent
 from sessions import get_store   # kho phiên hội thoại (sqlite + fts5): list/resume/search
 import compaction   # nén hội thoại dài cho engine API (tóm tắt phần cũ thay vì cắt bỏ)
 import lenh_he_thong   # lõi dùng chung của lệnh "/" hệ thống (web + Telegram): /plan /compact /usage...
@@ -9749,6 +9752,30 @@ def _agent_chat_prompt(brain, slug) -> str:
             "không cần báo cáo dạng nhiệm vụ trừ khi được giao việc cụ thể.")
 
 
+def _dm_feedback_prompt(brain, slug, conv_sid) -> str:
+    """T2 (thiết kế 4.3): khối "Phản hồi gần đây của chủ" cho lượt `agent:<slug>`, CHỈ của agent này (ngữ cảnh
+    `dm:<agent_key>`, mọi phiên chat riêng của agent gộp chung). Mã agent tra theo ghim của phiên, không thì dòng sống
+    của slug; chưa có kho resonance.sqlite3 thì không tạo kho chỉ để đọc. Lỗi thì rỗng, không làm hỏng lượt."""
+    try:
+        if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+            return ""
+        rs = _resonance_store()
+        pin = rs.session_pin(conv_sid) if conv_sid else None
+        key = pin["agent_key"] if pin else ((rs.agent(_brain_key(brain), slug) or {}).get("agent_key") or "")
+        if not key:
+            return ""
+        return feedback_projector.dm_feedback_block(get_store(), key)
+    except Exception as _e:   # noqa: BLE001
+        print(f"[dm feedback block] {type(_e).__name__}: {_e}", file=sys.stderr)
+        return ""
+
+
+def _agent_turn_system_prompt(brain, slug, conv_sid) -> str:
+    """System prompt của một lượt chat riêng với trợ lý (`agent:<slug>`): prompt trợ lý, khối phiên, và khối phản hồi
+    reaction gần đây của chủ cho ĐÚNG trợ lý này (T2)."""
+    return _agent_chat_prompt(brain, slug) + _session_block(conv_sid) + _dm_feedback_prompt(brain, slug, conv_sid)
+
+
 def _ket_luot_agent(brain, slug, user_message, final_text) -> str:
     """Cuối một lượt chat với trợ lý: bóc JAVIS_LESSON vào bộ nhớ trợ lý, ghi nhật ký chạy của
     trợ lý (memory/agents/<slug>/runs), trả về text SẠCH để lưu phiên và hiện lên chat."""
@@ -12041,6 +12068,11 @@ async def _start_scheduler():
                 #      chân vòng lặp này. Chưa brain nào bật Resonance thì không có kho, thoát ngay.
                 if not _RESONANCE_TICK_BUSY[0]:
                     asyncio.create_task(_resonance_tick())
+                # 3b4) Bộ chiếu phản hồi (T2): chiếu reaction còn chờ và ghi ngược trạng thái, chỉ code.
+                try:
+                    await _feedback_pulse_tick()
+                except Exception as fpe:
+                    print(f"[feedback pulse tick] {type(fpe).__name__}: {fpe}", file=__import__('sys').stderr)
                 # 3c) Ngân sách token + báo cáo tuần. Nhịp RIÊNG 10 phút chứ không theo 30s:
                 #     mỗi lượt kiểm là một truy vấn sqlite cả tháng, chạy 30 giây một lần thì
                 #     chính cái đồng hồ đo tiền lại thành thứ tốn tài nguyên nhất.
@@ -14430,7 +14462,9 @@ async def _persist_turn(store, conv_sid, brain, user_message, final_text):
     Vì sao là hàm chung: trước 0.9.244 chỉ nhánh dashboard lưu, nên hội thoại Telegram vắng
     mặt ở `/sessions`, ở `brain/memory/conversations`, và ở vòng tự học.
 
-    Trả về text đã bóc khối (rỗng/None thì KHÔNG lưu gì - lượt lỗi hoặc bị huỷ).
+    Trả về MÃ TIN của câu trả lời vừa lưu (T2, 0.154.0); rỗng/None thì KHÔNG lưu gì (lượt lỗi hoặc bị huỷ) và trả None.
+    Ngay sau khi lưu, đẩy gói WS `turn_saved` {session_id, message_id, content_sha} tới mọi tab: bong bóng vừa trả lời
+    nhận `data-mid` từ gói này (chưa có mã thì chưa hiện nút reaction). Gói `response`/`turn_done` giữ nguyên.
     """
     clean = channel_context.strip_control_blocks(final_text or "")
     if not clean:
@@ -14438,6 +14472,11 @@ async def _persist_turn(store, conv_sid, brain, user_message, final_text):
     _answer_mid = store.append_message(conv_sid, "assistant", clean)
     if voice_turn_protocol.response_id.get():
         voice_turn_protocol.note_answer(store, _answer_mid, final_text)
+    try:
+        await _CHAT_RUNTIME.publish({"type": "turn_saved", "session_id": conv_sid, "message_id": int(_answer_mid),
+                                     "content_sha": sessions.content_sha(clean)})
+    except Exception as _e:   # noqa: BLE001 - gói hiển thị không được làm hỏng việc lưu lượt
+        print(f"[turn_saved] {type(_e).__name__}: {_e}", file=sys.stderr)
     store.auto_title(conv_sid, user_message)
     log_conversation(brain, user_message, clean)
     # Rewire: đưa lượt vào hàng đợi học. `enqueue` chỉ đọc config + cộng bộ đếm dưới khoá
@@ -14447,7 +14486,7 @@ async def _persist_turn(store, conv_sid, brain, user_message, final_text):
         await learn_feature.enqueue(brain, conv_sid, user_message, clean)
     except Exception as _e:
         print(f"[learn enqueue hook] {_e}", file=__import__('sys').stderr)
-    return clean
+    return _answer_mid
 
 
 def _persist_limit_notice(store, conv_sid, user_message, notice):
@@ -14647,7 +14686,7 @@ async def websocket_endpoint(ws: WebSocket):
                 nonlocal sysprompt
                 if sysprompt is None:
                     if _persona and _persona[0] == "agent":
-                        sysprompt = _agent_chat_prompt(brain, _persona[1]) + _session_block(conv_sid)
+                        sysprompt = _agent_turn_system_prompt(brain, _persona[1], conv_sid)
                     else:
                         sysprompt = build_system_prompt(
                             brain, lang=_lang_qd, project_id=_row0.get("project_id") or "",
@@ -16820,6 +16859,7 @@ def sessions_get(session_id: str, limit: int = Query(0)):
         sess["total"] = store.count_messages(session_id)
     else:
         sess["messages"] = store.get_messages(session_id)
+    _gan_reaction(store, session_id, sess["messages"])
     return sess
 
 
@@ -16836,7 +16876,21 @@ async def sessions_messages(session_id: str, limit: int = Query(30),
     truoc = None
     if before_ts is not None and before_id is not None:
         truoc = (float(before_ts), int(before_id))
-    return store.get_messages_page(session_id, limit=max(1, min(int(limit), 200)), before=truoc)
+    page = store.get_messages_page(session_id, limit=max(1, min(int(limit), 200)), before=truoc)
+    _gan_reaction(store, session_id, page.get("messages") or [])
+    return page
+
+
+def _gan_reaction(store, session_id, msgs) -> None:
+    """T2: mỗi tin đã có `content_sha` (kho phiên); tin `assistant` thêm `reaction` (khuôn R của hợp đồng hay null)."""
+    try:
+        got = store.dm_reactions_for(session_id, [m["id"] for m in msgs if m.get("role") == "assistant"])
+    except Exception as _e:   # noqa: BLE001
+        print(f"[dm reactions] {type(_e).__name__}: {_e}", file=sys.stderr)
+        got = {}
+    for m in msgs:
+        if m.get("role") == "assistant":
+            m["reaction"] = reaction_values.public(got.get(int(m["id"])))
 
 
 # ============================================================
@@ -22412,12 +22466,139 @@ async def _team_notify(session_id, text):
                           label=localefmt.chu("Nhóm", "Team"), source="team")
 
 
+_FEEDBACK_PROJECTOR = [None]
+
+
+def _feedback_projector():
+    """Bộ chiếu phản hồi dùng chung (T2): chat riêng (kho phiên), nhóm (kho nhóm, khi đã có), sổ lý do ở resonance."""
+    if _FEEDBACK_PROJECTOR[0] is None:
+        def _teams():
+            return _TEAM_API.teams() if _TEAM_API.exists() else None
+
+        def _view(team_id, session_id, mid):
+            return _TEAM_API.runner().team_message_view(team_id, session_id, mid) if _TEAM_API.exists() else None
+
+        _FEEDBACK_PROJECTOR[0] = feedback_projector.FeedbackProjector(
+            resonance=lambda: _resonance_store(), sessions=lambda: get_store(), teams=_teams, team_view=_view)
+    return _FEEDBACK_PROJECTOR[0]
+
+
+def _team_ceiling():
+    """Sổ lượt chung cho lượt nhóm (T2, thiết kế 3.1, 9.1): mọi lượt nhóm giữ chỗ ở resonance.sqlite3 trước engine."""
+    return agent_ledger.TeamCeiling(_resonance_store())
+
+
 _TEAM_API = team_api.register(app, team_api.TeamApiDeps(
     brain_key=lambda b: _brain_key(b), session_store=lambda: get_store(),
     task_store=lambda: tasks_feature.store, resonance_store=lambda: _resonance_store(),
     agents_meta=_resonance_agents_meta, agent_info=_team_agent_info, engine_for=_team_engine_for,
     broadcast=lambda ev: _CHAT_RUNTIME.publish(ev), notify=_team_notify, admin=_TeamAdmin(),
-    owner_name=lambda: ((cfgmod.read_settings().get("auth") or {}).get("username") or "")))
+    owner_name=lambda: ((cfgmod.read_settings().get("auth") or {}).get("username") or ""),
+    ceiling=_team_ceiling, projector=_feedback_projector))
+
+
+# ── Reaction chat riêng (T2, 0.154.0; hợp đồng docs/dev/team-chat-t2-contract.md mục 4) ──
+def _dm_reaction_author(sess: dict) -> tuple:
+    """(agent_key, config_version) của tác giả câu trả lời trong phiên `sess`. Phiên kênh `agent:<slug>` là của trợ lý đó:
+    mã do host tra (ghim của phiên, không thì cấp mã bền cho trợ lý mà KHÔNG bật Cộng hưởng rồi ghim phiên, như nhóm
+    chat cấp mã cho thành viên). Phiên Javis chính: ("", 0). Không tra được (file trợ lý mất, phiên của mã cũ): ("", 0)."""
+    persona = workflow_chat.persona_cua_phien(sess or {})
+    if not persona or persona[0] != "agent":
+        return "", 0
+    slug, bkey, sid = persona[1], _brain_key(sess.get("brain")), str(sess.get("id") or "")
+    rs = _resonance_store()
+    pin = rs.session_pin(sid)
+    if pin:
+        a = rs.agent_any(pin["agent_key"]) or {}
+        return pin["agent_key"], int(a.get("config_version") or 0)
+    if not (_agents_dir(sess.get("brain")) / f"{slug}.md").is_file():
+        live = rs.agent(bkey, slug)
+        return (live["agent_key"], int(live["config_version"])) if live else ("", 0)
+    try:
+        rs.agent_register(resonance_store.Principal("owner", "owner", bkey), slug)
+    except Exception as _e:   # noqa: BLE001
+        print(f"[dm reaction register] {slug}: {type(_e).__name__}: {_e}", file=sys.stderr)
+    a = rs.session_agent(bkey, sid, slug, float(sess.get("created_at") or 0), pin=True)
+    return (a["agent_key"], int(a["config_version"])) if a else ("", 0)
+
+
+@app.post("/sessions/{session_id}/messages/{message_id}/reaction")
+async def sessions_message_reaction(session_id: str, message_id: int, request: Request, brain: str = Query("")):
+    """Thả, đổi, bỏ reaction trên một câu trả lời của chat riêng (trang Trò chuyện chính và trang Cộng sự). Chỉ ghi kho và
+    chiếu tác động (bộ chiếu phản hồi); không mở lượt, không gọi model, không đổi việc hay goal. Gửi lại cùng `nonce` trả
+    trạng thái hiện tại; `nonce` đã dùng cho tin khác hay tin không phải câu trả lời: 409."""
+    try:
+        body = await request.json()
+    except Exception:   # noqa: BLE001
+        body = None
+    if not isinstance(body, dict):
+        return JSONResponse({"ok": False, "error": localefmt.chu("Thân yêu cầu không hợp lệ", "Invalid request body")},
+                            status_code=400)
+    store = get_store()
+    sess = store.get_session(session_id)
+    if not sess:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không có phiên này", "No such session")},
+                            status_code=404)
+
+    def _do():
+        msg = store.message_row(session_id, int(message_id))
+        if msg is None:
+            raise sessions.DmReactionError(404, "không có tin này trong phiên")
+        if msg.get("role") != "assistant":
+            raise sessions.DmReactionError(409, "chỉ câu trả lời mới nhận reaction")
+        agent_key, ver = _dm_reaction_author(sess)
+        receipt = store.report_receipt_by_message(session_id, int(message_id)) or {}
+        got = store.set_dm_reaction(session_id, int(message_id), value=body.get("value"), reasons=body.get("reasons"),
+                                    axis=body.get("axis"), comment=body.get("comment"), nonce=body.get("nonce"),
+                                    seen_sha=body.get("seen_sha") or None, agent_key=agent_key,
+                                    agent_config_version=ver, goal_id=str(receipt.get("goal_id") or ""))
+        if not got["replayed"]:
+            _feedback_projector().project("dm", got["log_id"])
+        return got, store.dm_reaction_of(session_id, int(message_id))
+
+    try:
+        got, state = await asyncio.to_thread(_do)
+    except sessions.DmReactionError as ex:
+        en = {400: "Invalid reaction request", 404: "No such message in this session",
+              409: "This message cannot take this reaction"}.get(ex.code, "Reaction failed")
+        return JSONResponse({"ok": False, "error": localefmt.chu(str(ex), f"{en}: {ex}" if ex.code == 400 else en)},
+                            status_code=ex.code)
+    r = reaction_values.public(state)
+    if not got["replayed"]:
+        try:
+            await _CHAT_RUNTIME.publish({"type": "chat_reaction", "session_id": session_id,
+                                         "message_id": int(message_id), "reaction": r})
+        except Exception as _e:   # noqa: BLE001
+            print(f"[chat_reaction] {type(_e).__name__}: {_e}", file=sys.stderr)
+    return {"ok": True, "reaction": r}
+
+
+_FEEDBACK_PULSE_BUSY = [False]
+
+
+async def _feedback_pulse_tick():
+    """Nhịp của bộ chiếu phản hồi (T2, thiết kế 3.5): chiếu mọi dòng nhật ký reaction còn `pending` (lỗi lúc ghi, tiến
+    trình chết giữa hai kho) và ghi ngược trạng thái hiển thị; đẩy gói WS cho mọi thay đổi. Chạy lúc khởi động và mỗi
+    nhịp scheduler. Chỉ code, không gọi model. Chưa có kho resonance thì không có gì để chiếu tới lớp 3."""
+    if _FEEDBACK_PULSE_BUSY[0]:
+        return
+    _FEEDBACK_PULSE_BUSY[0] = True
+    try:
+        events = await asyncio.to_thread(_feedback_projector().project_pending)
+        for ev in events or []:
+            try:
+                await _CHAT_RUNTIME.publish(ev)
+            except Exception:   # noqa: BLE001
+                pass
+    except Exception as e:   # noqa: BLE001
+        print(f"[feedback pulse] {type(e).__name__}: {e}", file=sys.stderr)
+    finally:
+        _FEEDBACK_PULSE_BUSY[0] = False
+
+
+@app.on_event("startup")
+async def _feedback_pulse_startup():
+    asyncio.create_task(_feedback_pulse_tick())
 
 
 

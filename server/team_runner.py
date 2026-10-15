@@ -29,6 +29,7 @@ import time
 import unicodedata
 from typing import Any, Awaitable, Callable, Optional
 
+import reaction_values as RV
 import resonance_store
 from team_store import (DEFAULT_CAPS, FIXED_CAPS, OWNER_CAPS, REACTION_EMOJI, UNLIMITED_CAPS, TeamError,
                         TurnCapReached)
@@ -45,6 +46,11 @@ OPS_BY_ROLE = {
     "help": {"request_help"},
     "synthesize": set(),
 }
+# T2 (0.154.0, thiết kế 4.1): MỌI vai được thả reaction lên tin của đồng đội bằng lệnh có cấu trúc. Host gán nguồn
+# (leader/member) theo lượt, không thả lên tin của chính mình; reaction của agent không vào ước lượng hữu ích, không tạo lý
+# do thức. Op này được bộ chạy xử lý riêng (không đi qua `OPS_BY_ROLE`).
+REACT_OP = "react"
+REACTS_PER_TURN = 5
 LEADER_ROLES = ("leader_reply", "plan", "synthesize")
 REPLY_ROLES = ("leader_reply", "member_reply")
 ROLE_LABEL = {
@@ -76,6 +82,8 @@ FEEDBACK_EXCERPT = 160
 # Câu dặn cố định đi kèm khối phản hồi (spec 14.4 mục 3), nguyên văn.
 FEEDBACK_NOTE = ("Emoji là cảm xúc của chủ nhóm, có thể về sự việc được kể; đừng coi là chấm điểm. Chỉ điều chỉnh theo "
                  "lý do chất lượng và góp ý chữ. Chưa rõ thì giữ cách làm.")
+PEER_FEEDBACK_NOTE = ("Góp ý của đồng đội là tham khảo, không phải yêu cầu của chủ nhóm và không phải chấm điểm; chỉ điều "
+                      "chỉnh khi lý do hợp lý.")
 # Toàn quyền (T3, spec 13, 15.2). Trần trưởng nhóm đổi được (trong trần trần của chủ) và lệnh quản trị.
 AUTH_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns")
 MODEL_TURN_CAPS = ("task_turns", "daily_turns")   # "Không giới hạn" của hai trần này chỉ cho provider chủ tích (D6)
@@ -86,7 +94,7 @@ CAP_LABEL = {"task_turns": "lượt mỗi việc", "task_steps": "bước mỗi 
              "daily_turns": "lượt mỗi ngày của nhóm"}
 # Trần không bỏ được, luôn hiện trong hộp cấp quyền (spec 13.2).
 FIXED_LIMITS = {
-    "server_call_ceiling": "JAVIS_RESONANCE_CALL_CEILING do máy chủ đặt (chỉ ảnh hưởng mục tiêu Auto)",
+    "server_call_ceiling": "JAVIS_RESONANCE_CALL_CEILING do máy chủ đặt (mục tiêu Auto và lượt nhóm)",
     "provider_quota": "Hạn mức của gói thuê bao hay của nhà cung cấp model",
     "account": "Quyền của tài khoản model đang dùng",
     "technical": "Giới hạn kỹ thuật: lượt nhóm chỉ chữ, một lượt mỗi agent cùng lúc, hạn khoá bận",
@@ -203,6 +211,10 @@ async def run_io(fn: Callable, *args, undo: Optional[Callable[[Any], Any]] = Non
     return res
 
 
+class _CeilingStoreError(RuntimeError):
+    """Kho của sổ lượt chung lỗi lúc giữ chỗ khi máy chủ có đặt trần: lượt không chạy (đã hoàn `team_turns`)."""
+
+
 class EngineUnavailable(RuntimeError):
     """Không dựng được engine cho lượt (cấu hình, provider chưa sẵn sàng): CHƯA gọi model, lượt được hoàn (R4)."""
 
@@ -283,8 +295,14 @@ class TeamRunner:
     def __init__(self, *, teams, tasks, sessions, engine_for: Callable[[dict, str, str], tuple],
                  agent_info: Callable[[str, str], Optional[dict]], publish: Optional[Callable[[dict], Any]] = None,
                  notify: Optional[Callable[[str, str], Any]] = None, worker_id: str = "team-runner",
-                 max_parallel_teams: int = 2, clock: Callable[[], float] = time.time, admin: Any = None):
+                 max_parallel_teams: int = 2, clock: Callable[[], float] = time.time, admin: Any = None,
+                 ceiling: Any = None, projector: Any = None):
         self.teams = teams
+        # T2 (thiết kế 3.1, 9.1): sổ lượt chung của trần máy chủ (`agent_ledger.TeamCeiling`). None: không có (test cũ).
+        # Mỗi lượt nhóm giữ chỗ một dòng ở đó ngay sau `team_turns`, trước khoá bận và engine.
+        self.ceiling = ceiling
+        # T2 (thiết kế 3.5): bộ chiếu phản hồi (`feedback_projector.FeedbackProjector`). None: chỉ ghi kho như trước.
+        self.projector = projector
         self.tasks = tasks
         self.sessions = sessions
         self.engine_for = engine_for
@@ -579,7 +597,7 @@ class TeamRunner:
 
     # Lý do lỗi của lượt trả lời (mã ngắn lưu bền; dashboard dịch sang lời thường).
     _REPLY_REASON = {"cap": "cap", "busy_long": "busy", "team_paused": "team_paused", "member_left": "member_left",
-                     "superseded": "superseded"}
+                     "superseded": "superseded", "server_ceiling": "server_ceiling"}
 
     def _settle_reply_out(self, team_id: str, mid: int, key: str, attempt: int, out: dict, reason: str = "") -> None:
         st = out.get("status")
@@ -595,8 +613,10 @@ class TeamRunner:
                                     detail=str(out.get("detail") or out.get("error") or ""),
                                     turn_id=out.get("turn_id"))
         else:
+            # Trần chung của máy chủ (T2) có lý do riêng: "Cho thêm lượt" của nhóm không gỡ được nó.
+            code = "server_ceiling" if st == "cap" and out.get("cap") == "server_ceiling" else st
             self.teams.settle_reply(team_id, mid, key, "error", attempt=attempt,
-                                    reason=self._REPLY_REASON.get(st, str(st or "unknown")),
+                                    reason=self._REPLY_REASON.get(code, str(code or "unknown")),
                                     detail=str(out.get("cap") or ""), turn_id=out.get("turn_id"))
         self._publish_replies(team_id, mid)
 
@@ -1039,20 +1059,97 @@ class TeamRunner:
     # ───────────── phản hồi (T2, spec mục 14) ─────────────
 
     def react(self, team_id: str, message_id: int, value: Optional[str], *, reasons: Optional[list] = None,
-              comment: str = "", nonce: str) -> Optional[dict]:
-        """Chủ nhóm thả cảm xúc, chọn lý do, viết góp ý trên một tin của agent. CHỈ ghi kho và đẩy gói WS: không đổi
-        việc, goal hay hàng đợi, không đánh thức agent, không mở lượt, không gọi model (spec 14.4 mục 2)."""
+              comment: str = "", nonce: str, axis: str = "", seen_sha: Optional[str] = None) -> Optional[dict]:
+        """Chủ nhóm thả cảm xúc, chọn lý do, trục nói/im, viết góp ý trên một tin của agent. Ghi kho (outbox), chiếu tác
+        động (bộ chiếu phản hồi: tạo/gom lý do xem xét khi agent bật Cộng hưởng) rồi đẩy gói WS. Không đổi việc, goal hay
+        hàng đợi, không mở lượt, không gọi model (spec 14.4 mục 2; thiết kế 4.3)."""
         team = self._team(team_id)
         sid = team["session_id"]
         msg = self.sessions.team_message(sid, int(message_id))
         if not msg or msg.get("author_kind") != "agent" or not msg.get("author_ref"):
             raise TeamError("chỉ thả cảm xúc được trên tin của trợ lý trong nhóm này")
-        state = self.teams.set_reaction(team_id=team_id, session_id=sid, message_id=int(message_id),
-                                        agent_key=msg["author_ref"], task_id=msg.get("task_id"),
-                                        content_sha=_sha(msg.get("content") or ""), value=value, reasons=reasons,
-                                        comment=comment, nonce=nonce)
-        self._publish({"type": "team_message", "team_id": team_id, "message": dict(msg, reaction=state)})
+        got = self.teams.set_reaction_ex(team_id=team_id, session_id=sid, message_id=int(message_id),
+                                         agent_key=msg["author_ref"], task_id=msg.get("task_id"),
+                                         content_sha=_sha(msg.get("content") or ""), value=value, reasons=reasons,
+                                         comment=comment, nonce=nonce, axis=axis, seen_sha=seen_sha)
+        if not got["replayed"]:
+            self._project("team", got["log_id"])
+        state = self.teams.reaction_of(sid, int(message_id))
+        self._publish({"type": "team_message", "team_id": team_id,
+                       "message": self.message_view(team, msg, reaction=state)})
         return state
+
+    def _project(self, kind: str, log_id: Optional[int]) -> None:
+        """Chiếu tác động của một dòng nhật ký reaction ngay sau khi ghi. Lỗi bị nuốt (bộ chiếu tự ghi log), dòng giữ
+        `pending` để nhịp sau chiếu lại; reaction đã lưu không bao giờ bị lỗi tác động làm hỏng."""
+        if self.projector is None or log_id is None:
+            return
+        try:
+            self.projector.project(kind, int(log_id))
+        except Exception as ex:  # noqa: BLE001
+            log.warning("team reaction projector failed for log %s: %s", log_id, ex)
+
+    def message_view(self, team: dict, msg: dict, reaction: Any = _UNPINNED) -> dict:
+        """Tin nhóm cho gói WS và trang tin: reaction của chủ, reaction của agent (chip riêng, chỉ đọc), `content_sha`."""
+        sid = team["session_id"]
+        mid = int(msg["id"])
+        out = dict(msg)
+        out["reaction"] = self.teams.reaction_of(sid, mid) if reaction is _UNPINNED else reaction
+        out["agent_reactions"] = self.agent_reactions_view(team, self.teams.agent_reactions_for(sid, [mid]).get(mid))
+        out.setdefault("content_sha", _sha(msg.get("content") or ""))
+        return out
+
+    def agent_reactions_view(self, team: dict, rows: Optional[list]) -> list:
+        out = []
+        for r in rows or []:
+            key = str(r.get("reactor") or "")[len("agent:"):]
+            out.append({"agent_key": key, "name": self._name(team, key), "source_kind": r.get("source_kind") or "member",
+                        "value": r.get("value"), "reasons": list(r.get("reasons") or []),
+                        "comment": r.get("comment") or ""})
+        return out
+
+    def team_message_view(self, team_id: str, session_id: str, message_id: int) -> Optional[dict]:
+        """Tin nhóm đã gắn reaction (bộ chiếu phản hồi đẩy lại sau khi host đổi trạng thái)."""
+        team = self.teams.get(team_id)
+        if not team or team["session_id"] != session_id:
+            return None
+        msg = self.sessions.team_message(session_id, int(message_id))
+        return self.message_view(team, msg) if msg else None
+
+    def _agent_react(self, team_id: str, agent_key: str, op: dict, notes: list, nonce: str) -> Optional[int]:
+        """Lệnh `react` của agent trong lượt nhóm (thiết kế 4.1). Host lấy danh tính từ lượt, nguồn `leader` nếu agent là
+        trưởng nhóm lúc chấp nhận đầu ra, không thì `member`. Không thả lên tin của chính mình, chỉ lên tin của trợ lý
+        trong ĐÚNG nhóm này. Trả mã tin đã thả, None khi bị bỏ (kèm ghi chú)."""
+        team = self._team(team_id)
+        try:
+            mid = int(op.get("message_id"))
+        except (TypeError, ValueError):
+            notes.append("Lệnh 'react' thiếu message_id hợp lệ, đã bỏ")
+            return None
+        msg = self.sessions.team_message(team["session_id"], mid)
+        if not msg or msg.get("author_kind") != "agent" or not msg.get("author_ref"):
+            notes.append(f"Lệnh 'react' trỏ tới tin #{mid} không phải tin của trợ lý trong nhóm này, đã bỏ")
+            return None
+        if msg["author_ref"] == agent_key:
+            notes.append("Không thả reaction lên tin của chính mình, đã bỏ")
+            return None
+        kind = "leader" if team.get("leader_key") == agent_key else "member"
+        reasons = op.get("reasons")
+        if reasons is not None and not isinstance(reasons, list):
+            notes.append("Lệnh 'react' có lý do không phải danh sách, đã bỏ")
+            return None
+        try:
+            got = self.teams.set_reaction_ex(team_id=team_id, session_id=team["session_id"], message_id=mid,
+                                             agent_key=msg["author_ref"], task_id=msg.get("task_id"),
+                                             content_sha=_sha(msg.get("content") or ""), value=op.get("value"),
+                                             reasons=reasons, comment=str(op.get("comment") or "")[:RV.COMMENT_MAX],
+                                             nonce=nonce, reactor=f"agent:{agent_key}", source_kind=kind)
+        except TeamError as ex:
+            notes.append(f"Lệnh 'react' không hợp lệ ({ex}), đã bỏ")
+            return None
+        if not got["replayed"]:
+            self._project("team", got["log_id"])
+        return mid
 
     def _feedback_lines(self, team: dict, agent_key: str) -> list:
         """Khối "Phản hồi gần đây của chủ nhóm" cho lượt kế của CHÍNH agent này trong CHÍNH nhóm này: tối đa 5 mục trong
@@ -1074,10 +1171,36 @@ class TeamRunner:
                 parts.append(f"cảm xúc: {REACTION_EMOJI.get(fb['value'], '')} ({fb['value']})")
             if fb["reasons"]:
                 parts.append("lý do: " + ", ".join(REASON_LABEL.get(x, x) for x in fb["reasons"]))
+            if fb.get("axis"):
+                parts.append("nói/im: " + RV.AXIS_LABEL.get(fb["axis"], fb["axis"]))
             if fb["comment"]:
                 # Một dòng mỗi mục: góp ý nhiều dòng không được giả thành đầu mục mới của khối ngữ cảnh.
                 comment = re.sub(r"\s+", " ", fb["comment"]).strip()
                 parts.append(f'góp ý: "{comment}"')
+            out.append(" · ".join(parts))
+        return out
+
+    def _peer_feedback_lines(self, team: dict, agent_key: str) -> list:
+        """Reaction của trưởng nhóm, thành viên trên tin của agent này trong nhóm này (góp ý cộng tác, không phải đánh
+        giá của chủ): tối đa 5 mục trong 30 ngày, kèm tên người thả."""
+        rows = self.teams.recent_feedback(team["team_id"], agent_key, self.clock() - FEEDBACK_DAYS * 86400,
+                                          FEEDBACK_LIMIT * 3, reactor="agent:%")
+        out = []
+        for fb in rows:
+            if len(out) >= FEEDBACK_LIMIT:
+                break
+            msg = self.sessions.team_message(team["session_id"], fb["message_id"])
+            if msg is None:
+                continue
+            excerpt = re.sub(r"\s+", " ", str(msg.get("content") or "")).strip()[:FEEDBACK_EXCERPT]
+            who = self._name(team, str(fb["reactor"])[len("agent:"):])
+            parts = [f'- [#{fb["message_id"]}] "{excerpt}"', f"từ: {who}"]
+            if fb["value"]:
+                parts.append(f"cảm xúc: {REACTION_EMOJI.get(fb['value'], '')} ({fb['value']})")
+            if fb["reasons"]:
+                parts.append("lý do: " + ", ".join(REASON_LABEL.get(x, x) for x in fb["reasons"]))
+            if fb["comment"]:
+                parts.append('góp ý: "' + re.sub(r"\s+", " ", fb["comment"]).strip() + '"')
             out.append(" · ".join(parts))
         return out
 
@@ -1136,6 +1259,11 @@ class TeamRunner:
             lines.append("\n## Phản hồi gần đây của chủ nhóm (về tin của bạn trong nhóm này)")
             lines.extend(feedback)
             lines.append(FEEDBACK_NOTE)
+        peers = self._peer_feedback_lines(team, agent_key)
+        if peers:
+            lines.append("\n## Góp ý của đồng đội (reaction của trợ lý khác trên tin của bạn trong nhóm này)")
+            lines.extend(peers)
+            lines.append(PEER_FEEDBACK_NOTE)
         if task:
             lines.append(f"\n## Việc hiện tại: {task['title']} (bản {task['team_rev']})")
             lines.append(f"Yêu cầu: {task['intent']}")
@@ -1206,10 +1334,68 @@ class TeamRunner:
                                        task_cap=caps["task_turns"] if task_id else None)
 
     def _refund_if_unmarked(self, turn_id: str) -> None:
-        """Hoàn lượt chưa tới mốc gọi engine, đúng một lần. Lượt đã qua mốc thì để nguyên (đã tính)."""
+        """Hoàn lượt chưa tới mốc gọi engine, đúng một lần. Lượt đã qua mốc thì để nguyên (đã tính). Dòng sổ chung của
+        lượt cũng hoàn theo (một hàm gọi cả hai kho, thiết kế 9.1)."""
         t = self.teams.turn(turn_id) or {}
         if t and t.get("engine_at") is None and t.get("status") == "reserved":
             self.teams.refund_turn(turn_id)
+            self._ceiling_call("refund", turn_id)
+
+    def _ceiling_call(self, op: str, *args) -> Any:
+        """Phản chiếu một lần hoàn/mốc/chốt sang sổ chung. Lỗi kho chung KHÔNG làm hỏng lượt nhóm (đối soát sửa sau)."""
+        if self.ceiling is None:
+            return None
+        try:
+            return getattr(self.ceiling, op)(*args)
+        except Exception as ex:  # noqa: BLE001
+            log.warning("team ceiling %s failed for %s: %s: %s", op, args[:1], type(ex).__name__, ex)
+            return None
+
+    def _reserve_both(self, team: dict, task_id: Optional[str], step_id: Optional[str], agent_key: str,
+                      role: str) -> str:
+        """Giữ chỗ `team_turns` rồi giữ chỗ sổ chung (thiết kế 3.1, 9.1). Trần chung đầy thì hoàn `team_turns` vừa giữ và
+        ném `TurnCapReached("server_ceiling")`: lượt không gọi engine. Kho chung lỗi khi máy chủ CÓ đặt trần thì cũng
+        hoàn và ném `_CeilingStoreError` (không chạy lượt khi không kiểm được trần); không đặt trần thì chạy tiếp, đối
+        soát dựng lại dòng sổ khi lượt tới mốc engine."""
+        turn_id = self._reserve(team, task_id, step_id, agent_key, role)
+        if self.ceiling is None:
+            return turn_id
+        try:
+            ok = self.ceiling.reserve({"turn_id": turn_id, "team_id": team["team_id"], "agent_key": agent_key,
+                                       "role": role, "brain_id": team.get("brain_id") or ""})
+        except Exception as ex:  # noqa: BLE001
+            enabled = True
+            try:
+                enabled = bool(self.ceiling.enabled())
+            except Exception:  # noqa: BLE001
+                pass
+            log.warning("team ceiling reserve failed for %s: %s: %s", turn_id, type(ex).__name__, ex)
+            if not enabled:
+                return turn_id
+            self.teams.refund_turn(turn_id)
+            raise _CeilingStoreError(str(ex)) from ex
+        if not ok:
+            self.teams.refund_turn(turn_id)
+            raise TurnCapReached("server_ceiling")
+        return turn_id
+
+    def _refund_both(self, turn_id: Any) -> None:
+        """`undo` của `_reserve_both` khi lượt bị huỷ lúc đang giữ chỗ."""
+        if turn_id:
+            self._refund_if_unmarked(str(turn_id))
+
+    def _mark_engine(self, turn_id: str, engine: str, model: str) -> None:
+        self.teams.mark_engine(turn_id, engine, model)
+        self._ceiling_call("mark", turn_id, engine, model)
+
+    def _settle_turn(self, turn_id: str, status: str, tokens_in: Optional[int] = None,
+                     tokens_out: Optional[int] = None, cost_usd: Optional[float] = None) -> None:
+        self.teams.settle_turn(turn_id, status, tokens_in, tokens_out, cost_usd)
+        self._ceiling_call("settle", turn_id, status, tokens_in, tokens_out, cost_usd)
+
+    def reconcile_ceiling(self, startup: bool = False) -> Optional[dict]:
+        """Đối soát sổ chung với `team_turns` (lúc khởi động và theo nhịp, thiết kế 9.1). Không có sổ chung: None."""
+        return self._ceiling_call("reconcile", self.teams, startup)
 
     def _prepare(self, team_id: str, agent_key: str, role: str, task: Optional[dict], step: Optional[dict],
                  body: str, turn_id: str) -> dict:
@@ -1247,10 +1433,13 @@ class TeamRunner:
         task_id = task["id"] if task else None
         step_id = step["step_id"] if step else None
         try:
-            turn_id = await self._io(self._reserve, team, task_id, step_id, agent_key, role,
-                                     undo=self.teams.refund_turn)
+            turn_id = await self._io(self._reserve_both, team, task_id, step_id, agent_key, role,
+                                     undo=self._refund_both)
         except TurnCapReached as cap:
             return {"status": "cap", "cap": cap.cap}
+        except _CeilingStoreError as ex:
+            return {"status": "error", "error": f"Không kiểm được trần lượt chung của máy chủ: {str(ex)[:200]}",
+                    "detail": str(ex)[:300], "reason": "internal", "before_engine": True, "internal": True}
         # Trạng thái quyền giữ của lượt (review T1 #3, #4): `lost` là lý do mất quyền giữ agent hay việc, None khi còn giữ.
         lease = {"lost": None, "busy_ok": time.monotonic(), "job_ok": time.monotonic()}
         # Bước của việc nhóm: hạn giữ việc được gia hạn NGAY trong lúc chờ khoá bận (chờ có thể tới busy_wait_s), nhưng
@@ -1292,7 +1481,7 @@ class TeamRunner:
             async def engine_started(engine: Optional[str] = None, model: Optional[str] = None) -> None:
                 nonlocal marked
                 if not marked:
-                    await self._io(self.teams.mark_engine, turn_id, str(engine or prep["engine"]),
+                    await self._io(self._mark_engine, turn_id, str(engine or prep["engine"]),
                                    str(model or prep["model"]))
                     marked = True
                     if on_engine is not None:
@@ -1309,7 +1498,7 @@ class TeamRunner:
                 res = await asyncio.wait_for(fn(req), timeout=limit)
             except asyncio.TimeoutError:
                 if marked:
-                    await self._io(self.teams.settle_turn, turn_id, "error")
+                    await self._io(self._settle_turn, turn_id, "error")
                 else:
                     await self._io(self._refund_if_unmarked, turn_id)
                 mins = max(1, int(round(limit / 60)))
@@ -1317,7 +1506,7 @@ class TeamRunner:
                         "detail": f"{mins}", "turn_id": turn_id, "before_engine": not marked}
             except asyncio.CancelledError:
                 if marked:
-                    await self._io(self.teams.settle_turn, turn_id, "interrupted")
+                    await self._io(self._settle_turn, turn_id, "interrupted")
                 else:
                     await self._io(self._refund_if_unmarked, turn_id)
                 raise
@@ -1327,7 +1516,7 @@ class TeamRunner:
                     await self._io(self._refund_if_unmarked, turn_id)
                     return {"status": "error", "error": f"Không dựng được engine: {str(ex)[:300]}",
                             "before_engine": True, "turn_id": turn_id}
-                await self._io(self.teams.settle_turn, turn_id, "error")
+                await self._io(self._settle_turn, turn_id, "error")
                 msg = (OUTCOME_TEXT.get(ex.kind, ex.kind) + (f" ({ex.detail})" if ex.detail else "")
                        if isinstance(ex, EngineOutcomeError) else str(ex))
                 # `detail`: riêng câu của engine (dòng trạng thái lượt trả lời đã có nhãn lý do, khỏi lặp lại).
@@ -1338,7 +1527,7 @@ class TeamRunner:
             if not marked:
                 await engine_started()
             res = res or {}
-            await self._io(self.teams.settle_turn, turn_id, "ok", res.get("tokens_in"), res.get("tokens_out"),
+            await self._io(self._settle_turn, turn_id, "ok", res.get("tokens_in"), res.get("tokens_out"),
                            res.get("cost_usd"))
         finally:
             # Dừng gia hạn TRƯỚC khi nhả khoá. Một lần gia hạn đang chạy dở ở luồng phụ chỉ UPDATE đúng dòng của lượt này,
@@ -1448,7 +1637,8 @@ class TeamRunner:
             # Lệnh quản trị Toàn quyền (spec 13, 15.2): chỉ lượt của trưởng nhóm, đầu ra còn hiệu lực; kiểm Toàn quyền
             # TRONG khoá này, cùng khoá với thu hồi, nên lệnh tới sau mốc thu hồi bị từ chối (13.5).
             admin_ops = [op for op in ops if op["op"] in ADMIN_OPS]
-            ops = [op for op in ops if op["op"] not in ADMIN_OPS]
+            react_ops = [op for op in ops if op["op"] == REACT_OP]
+            ops = [op for op in ops if op["op"] not in ADMIN_OPS and op["op"] != REACT_OP]
             # Quyền ghim lúc giữ chỗ lượt (GOAL T1 mục 9). Đọc trong khoá, cùng khoá với cấp và thu hồi.
             pin = (self.teams.turn(turn_id) or {}).get("authority_id") if admin_ops else None
             for i, op in enumerate(admin_ops):
@@ -1460,6 +1650,18 @@ class TeamRunner:
                     break
                 # Khoá nguồn không kết thúc bằng số: `_source_id` không đọc nhầm thứ tự lệnh thành mã tin (review T3).
                 self._apply_admin(team_id, agent_key, op, notes, f"{turn_id}#op{i}", authority_pin=pin)
+            # Reaction của agent (T2): mọi vai, chỉ khi đầu ra còn hiệu lực; nonce theo lượt nên xử lý lặp không ghi lần hai.
+            reacted = []
+            for i, op in enumerate(react_ops):
+                if not applied:
+                    notes.append("Lệnh 'react' không dùng được ở lượt này, đã bỏ")
+                    continue
+                if i >= REACTS_PER_TURN:
+                    notes.append(f"Mỗi lượt tối đa {REACTS_PER_TURN} reaction, đã bỏ phần thừa")
+                    break
+                mid_r = self._agent_react(team_id, agent_key, op, notes, f"{turn_id}#rx{i}")
+                if mid_r is not None:
+                    reacted.append(mid_r)
         allowed = OPS_BY_ROLE.get(role, set())
         kept = []
         for op in ops:
@@ -1489,6 +1691,13 @@ class TeamRunner:
         mid = self._post(self._team(team_id), clean or "(không có nội dung)", author_kind="agent", author_ref=agent_key,
                          reply_to=reply_to, task_id=task["id"] if task else None,
                          step_id=step["step_id"] if step else None, meta=meta)
+        if reacted:
+            team_now = self._team(team_id)
+            for mid_r in dict.fromkeys(reacted):
+                m_r = self.sessions.team_message(team_now["session_id"], mid_r)
+                if m_r:
+                    self._publish({"type": "team_message", "team_id": team_id,
+                                   "message": self.message_view(team_now, m_r)})
         return {"status": status, "applied": applied, "ops": kept, "notes": notes, "message_id": mid,
                 "text": clean, "sha": meta["sha"], "turn_id": turn_id, "extra": extra,
                 "commit": commit if applied and step is not None else None, "lessons": held,
@@ -1829,6 +2038,11 @@ class TeamRunner:
     def _apply_step_locked(self, team: dict, task: dict, step: dict, out: dict) -> Optional[str]:
         sid = step["step_id"]
         st = out["status"]
+        if st == "cap" and out.get("cap") == "server_ceiling":
+            # Trần lượt chung của máy chủ (T2): không phải trần của nhóm, nút "Cho thêm lượt" không gỡ được.
+            self.teams.requeue_step(sid)
+            return self._block(task["id"], "server_ceiling",
+                               "Máy chủ đã dùng hết trần lượt chung do chủ máy đặt (JAVIS_RESONANCE_CALL_CEILING)")
         if st == "cap":
             self.teams.requeue_step(sid)
             why = ("Nhóm đã dùng hết số lần trả lời hôm nay" if out["cap"] == "daily_turns"
@@ -2203,10 +2417,11 @@ class TeamRunner:
             self.teams.release_busy(t["agent_key"], t["turn_id"])
             if t["engine_at"] is None:
                 self.teams.refund_turn(t["turn_id"])
+                self._ceiling_call("refund", t["turn_id"])
                 if t["step_id"]:
                     self.teams.requeue_step(t["step_id"])
             else:
-                self.teams.settle_turn(t["turn_id"], "interrupted")
+                self._settle_turn(t["turn_id"], "interrupted")
                 if t["step_id"]:
                     self.teams.set_step_status(t["step_id"], "interrupted", "server khởi động lại giữa lượt")
                 if t["task_id"]:
@@ -2219,4 +2434,6 @@ class TeamRunner:
                 blocked.append(task["id"])
             else:
                 resumed.append(task["id"])
+        # Sổ chung: lượt nhóm của tiến trình trước đã hoàn hay chốt ở trên; dòng sổ thiếu hay dư được đối soát (9.1).
+        self.reconcile_ceiling(startup=True)
         return {"resumed": resumed, "blocked": blocked}

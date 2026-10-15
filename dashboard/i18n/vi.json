@@ -4142,6 +4142,8 @@
   "teams.head_people": "Bạn + {n} trợ lý",
   "teams.head_leader": "{name} điều phối",
   "teams.reply.why.timeout": "Quá {n} phút chưa có câu trả lời",
+  "teams.reply.why.server_ceiling": "Máy chủ đã dùng hết trần lượt chung do chủ máy đặt",
+  "teams.block.server_ceiling": "Máy chủ đã dùng hết trần lượt chung",
   "teams.reply.why.auth": "Model của trợ lý cần đăng nhập lại",
   "teams.reply.why.no_leader": "Nhóm chưa có người điều phối để trả lời tin chung",
   "teams.reply.leader_slot": "Điều phối",
