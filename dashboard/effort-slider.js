@@ -1,5 +1,5 @@
-/* effort-slider.js - thanh trượt mức suy nghĩ ở khung gõ (0.153.0).
- * Phần thuần (nấc, vị trí, khoá) test bằng node; phần vẽ (canvas hạt cam) chỉ chạy trong trình duyệt.
+/* effort-slider.js - the composer's thinking-level slider (0.153.0).
+ * Pure parts (stops, position, lock) are tested with node; drawing (orange particle canvas) runs only in the browser.
  */
 (function () {
   "use strict";
@@ -11,7 +11,7 @@
   function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
   function levelFromRatio(r) { return LEVELS[clamp(Math.round(clamp(Number(r) || 0, 0, 1) * 5), 0, 5)]; }
   function ratioFromLevel(v) { var i = LEVELS.indexOf(v); return i < 0 ? 0 : i / 5; }
-  // Model Antigravity mang sẵn mức trong tên (agy từ chối nhận thêm --effort): thanh trượt khoá.
+  // Antigravity models carry the level in their name (agy refuses an extra --effort): the slider is locked.
   function isLocked(provider, model) { return provider === "antigravity-cli" && LOCKED_SUFFIX.test(String(model || "")); }
 
   var api = { LEVELS: LEVELS, LABEL_KEY: LABEL_KEY, levelFromRatio: levelFromRatio, ratioFromLevel: ratioFromLevel, isLocked: isLocked };

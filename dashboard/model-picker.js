@@ -12,14 +12,14 @@
   // chọn xong server lọc về "off" mà giao diện vẫn khoe đang bật.
   const EFFORT = [["off", "models.r_off"], ["low", "models.r_low"], ["medium", "models.r_med"],
                   ["high", "models.r_high"], ["xhigh", "models.r_xhigh"], ["ultra", "models.r_ultra"]];
-  // Nhãn chip mức suy nghĩ (0.153.0, tiếng Anh theo ý chủ repo): khoá đầy đủ để test i18n đọc được.
+  // Effort chip labels (0.153.0, English as the owner asked): full keys so the i18n test can read them.
   const EFF_KEY = { off: "eff.off", low: "eff.low", medium: "eff.medium", high: "eff.high", xhigh: "eff.xhigh", ultra: "eff.ultra" };
   // FAST_NOTE_BEGIN
-  // Fast mode theo bộ não (nghiên cứu 15/10/2026, xem docs/superpowers/specs/2026-10-15-composer-plus-fast-mode-design.md).
-  // Claude chỉ Opus 5.5, Opus 5, Opus 4.8; model rỗng = mặc định của Claude Code (Opus) nên coi là có.
+  // Fast mode per brain (researched 2026-10-15, see docs/superpowers/specs/2026-10-15-composer-plus-fast-mode-design.md).
+  // Claude only on Opus 5.5, Opus 5 and Opus 4.8; an empty model means Claude Code's default (Opus), so it counts.
   function fastNote(provider, model) {
     const m = String(model || "").toLowerCase();
-    // Bí danh "opus" của Claude Code trỏ tới Opus 5.5 (đứng đầu danh mục, cũng là mặc định dự phòng).
+    // The Claude Code alias "opus" points at Opus 5.5 (first in the catalog and the fallback default).
     const opusOk = !m || m === "opus" || /opus-(5-5|5|4-8)(?![0-9])/.test(m);
     if (provider === "anthropic-cli") return opusOk ? { supported: true, note: "fast.claude" } : { supported: false, note: "fast.model_none" };
     if (provider === "anthropic-api") return opusOk ? { supported: true, note: "fast.api" } : { supported: false, note: "fast.model_none" };
@@ -114,7 +114,7 @@
     const n = fastNote(eff.provider, eff.model);
     fb.setAttribute("aria-pressed", n.supported && state.fast ? "true" : "false");
     fb.setAttribute("aria-disabled", n.supported ? "false" : "true");
-    // Bản này chỉ lưu lựa chọn, nối vào engine ở bản sau; spec bắt tooltip nói rõ (bỏ khi nối xong).
+    // This release only stores the choice; engine wiring comes next. The spec requires the tooltip to say so (drop it then).
     fb.title = "Fast mode\n" + window.t(n.note) + (n.supported ? "\n" + window.t("fast.pending") : "");
   }
 
@@ -131,7 +131,7 @@
     // (o.cho). Trước đây popup mở ra trống trơn trong lúc chờ (Codex mất vài giây).
     const o = {
     // Thân bảng (ô tìm + nhà + model + hàng khoá) dựng bởi model-list.js, dùng CHUNG với ô
-    // Model của trợ lý bên Studio. Mức suy nghĩ có chip và khung riêng từ 0.153.0.
+    // The assistant's model on the Studio side. The thinking level has its own chip and popover since 0.153.0.
       providers: state.providers,
       expanded, filter,
       selected: effective(),
@@ -172,7 +172,7 @@
   function close() { const pop = $("mbPop"); if (pop) pop.hidden = true; }
   function isOpen() { const pop = $("mbPop"); return pop && !pop.hidden; }
 
-  // Chip mức suy nghĩ (0.153.0): tách khỏi bảng chọn model, mở một khung nhỏ có thanh trượt.
+  // Effort chip (0.153.0): split from the model picker, opens a small popover with a slider.
   let effSlider = null;
   function effOpen() {
     const pop = $("effPop"), btn = $("effBtn");
@@ -216,7 +216,7 @@
       sessionPin = null;
     }
     await loadState(); renderBar();
-    if (effIsOpen()) { effClose(); effOpen(); }   // model mới có thể khoá hoặc mở khoá thanh trượt
+    if (effIsOpen()) { effClose(); effOpen(); }   // the new model may lock or unlock the slider
   }
 
   // `/model <tên>`: tìm trong model của các nhà ĐÃ KẾT NỐI. Khớp NGUYÊN id thì thắng ngay; nếu

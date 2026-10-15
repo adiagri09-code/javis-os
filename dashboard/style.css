@@ -1353,9 +1353,9 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .voice-focus-resume[hidden] { display: none; }
 .hud-voice {
   position: relative;
-  /* Một khung bo tròn kiểu Claude (0.153.0): ảnh đính kèm, ô gõ, hàng nút xếp dọc. Từng con tự
-     giãn hết bề ngang (align-self: stretch bên dưới); flex-end giữ các con không co về giữa khi
-     khung cao lên. */
+  /* One rounded card in the style of Claude (0.153.0): attachments, text box and button row stacked.
+     Each child stretches to full width (align-self: stretch below); flex-end keeps children from
+     drifting to the middle when the card grows. */
   display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
   margin: 4px 16px 16px; padding: 10px 12px 8px;
   border: 1px solid var(--border); border-radius: 24px; background: var(--bg2);
@@ -1363,8 +1363,8 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 }
 .hud-voice > * { align-self: stretch; }
 .hud-voice:focus-within { border-color: var(--accent-line); }
-/* Dải đính kèm nằm trong khung: bỏ lề ngang 20px của bản dải full-width. Viết .has-items.attach-bar
-   (không phải .attach-bar.has-items) để khối gốc bên dưới vẫn là khối đầu tiên mang tên đó. */
+/* The attachment strip sits inside the card: drop the 20px side margin of the full-width strip. Written as
+   .has-items.attach-bar (not .attach-bar.has-items) so the base block below stays the first with that name. */
 .hud-voice .attach-bar { padding: 0 2px; }
 .hud-voice .has-items.attach-bar { padding: 2px 2px 6px; }
 .model-bar:empty { display: none; }
@@ -1386,7 +1386,7 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
   color: var(--accent-ink); font-family: var(--font); font-weight: 600; cursor: pointer; white-space: nowrap;
 }
 .cp-eff:hover, .cp-eff[aria-expanded="true"] { border-color: var(--accent); }
-/* Tia sét Fast mode: tắt thì đứng yên, bật thì nền cam có dải sáng chạy ngang và tia sét đập nhẹ. */
+/* Fast mode bolt: still when off; when on, an orange background with a moving shine and a gently pulsing bolt. */
 .cp-fast[aria-pressed="true"] {
   color: var(--on-accent); border-color: var(--accent);
   background: linear-gradient(110deg, var(--accent) 0%, var(--accent-ink) 25%, var(--accent) 50%, var(--accent-solid) 75%, var(--accent) 100%);
@@ -1451,7 +1451,7 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .send-btn:hover { opacity: 0.85; }
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* ===== Mobile: cùng khung, chỉ thu khoảng đệm; chip model lên đầu trang (mobile-chat.js) ===== */
+/* ===== Mobile: same card with tighter padding; the model chip moves to the page header (mobile-chat.js) ===== */
 @media (max-width: 860px) {
   .hud-voice {
     margin: 6px 10px 8px; padding: 8px 8px 6px; gap: 2px;

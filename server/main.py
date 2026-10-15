@@ -5129,7 +5129,7 @@ async def settings_set(section: str = Form(...), data: str = Form("{}")):
         if "reasoning" in patch:
             r = patch["reasoning"]
             m["reasoning"] = r if r in engine.REASONING_LEVELS else "off"
-        # Fast mode (tia sét ở khung gõ, 0.153.0). Đường POST này nuốt khoá lạ nên phải có nhánh riêng.
+        # Fast mode (composer bolt, 0.153.0). This POST drops unknown keys, so it needs its own branch.
         if "fast" in patch:
             m["fast"] = patch["fast"] is True
         # Legacy trực tiếp (tương thích ngược)
@@ -7517,9 +7517,9 @@ def _md_hong_ghi_sach(broot: str, sach: bool) -> None:
 
 @app.get("/files/resolve")
 async def files_resolve(brain: str = Query("brain"), path: str = Query("")):
-    """Đường dẫn TUYỆT ĐỐI của một file có sẵn trong brain, cho mục "Chọn file trong brain" của
-    menu "+" ở khung gõ (0.153.0). `path` tính theo trần như /files/search trả về. Chỉ nhận file
-    thật nằm trong gốc brain (chặn `..`, đường tuyệt đối, symlink trỏ ra ngoài)."""
+    """ABSOLUTE path of a file already in the brain, for the composer "+" menu item "Pick a file from
+    the brain" (0.153.0). `path` is relative to the browse ceiling, as /files/search returns it. Only a
+    real file inside the brain root is accepted (blocks `..`, absolute paths, symlinks pointing out)."""
     rel = (path or "").strip().replace("\\", "/")
     if not rel or rel.startswith("/") or re.match(r"^[A-Za-z]:", rel):
         return JSONResponse({"ok": False, "error": "path"}, status_code=400)
