@@ -77,7 +77,7 @@ function fakeFetch(status, body, seen) {
   check("khoá judge.* có đủ ở vi và en, en đã dịch", keys.length > 40 && keys.every(function (k) { return en[k] && en[k] !== vi[k] || /\{/.test(vi[k]) && en[k]; })
     && !keys.some(function (k) { return /[ăđơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i.test(en[k]); }));
   const src = fs.readFileSync(path.join(ROOT, "dashboard", "agent-judge-ui.js"), "utf8");
-  check("không em dash hay en dash", !/[–—]/.test(src));
+  check("không em dash hay en dash", !/[\u2013\u2014]/.test(src));
   check("đăng ký phần judge với khung nhịp của phần P", src.includes('window.JavisPulseParts.push({ name: "judge", render: render })'));
   const css = fs.readFileSync(path.join(ROOT, "dashboard", "console.css"), "utf8");
   check("CSS phán xử: chữ 16px, nút 44px", /\.ajd \{[^}]*font-size: 16px/.test(css) && /\.ajd-btn \{[^}]*min-height: 44px/.test(css));
