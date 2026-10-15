@@ -50,14 +50,24 @@ Chỗ nối vào `main.py`, `team_runner.py`, `resonance_heartbeat.py` giữ ng�
 
 ## 3. Học (L) cung cấp
 
-- `agent_lessons.add(store, *, agent_key, scope, kind, text, source, source_refs) -> id`, `revoke(...)`, `promote(...)`,
-  `for_prompt(store, agent_key, scopes) -> list`: lượt nhóm nạp `team:<id>` và `*`, chat riêng nạp `dm:<agent_key>` và `*`.
+Chi tiết và lý do: [team-chat-t3-learn.md](team-chat-t3-learn.md).
+
+- `agent_lessons.add(store, *, agent_key, scope, kind, text, source, source_refs=(), at=None) -> id`,
+  `revoke(store, lesson_id, *, by, reason="", agent_key=None) -> dict|None`, `promote(store, lesson_id, *, by ("owner"|"review"),
+  evidence_contexts=(), source_refs=()) -> id_mới`, `restore(...)`, `for_prompt(store, agent_key, scopes) -> list`,
+  `scopes_for(context_ref, agent_key)`, `prompt_block(store, agent_key, context_ref) -> str`: lượt nhóm nạp `team:<id>` và `*`, chat
+  riêng nạp `dm:<agent_key>` và `*`. `agent_lessons.TeamLearning(store_fn, task_state=...)` là phụ thuộc `learning` của `TeamRunner`.
+- `agent_review.ReviewHost(ReviewDeps(...))`, nối một lần bằng `agent_review.wire(host)` rồi `agent_review.register_with_pulse()`
+  (bộ xử lý `reaction_review`, mục "lessons", hàm quay lại cho `offset_set|eagerness_set|lesson_add|lesson_remove|lesson_promote`).
+  `ReviewHost.tick(agents)` chạy trước `PulseHost.tick`. `ReviewHost.on_judge_send(decision, payload, mode)` là bộ gửi đăng ký với J
+  (chỉ nhận `payload.origin == "reaction_review"`).
 - `JAVIS_LESSON` của chat riêng ghi `agent_lessons` scope `dm:<agent_key>` (không còn vào `MEMORY.md`); của lượt nhóm scope
   `team:<id>`; `JAVIS_RULE` giữ nguyên.
 - `agent_review.serve_reaction_review(reason)`: phục vụ lý do `reaction_review` theo 4.4 (lượt có cấu trúc, `consumed ⊆ nguồn`, trạng
   thái theo kết quả host thật, ghi `agent_pulse_events`).
 - `agent_review.maybe_self_review(agent_key)`: 8.3, tối đa 3 thay đổi từ danh sách đóng, tự áp, ghi trước/sau, quay lại theo 6.4.
-- `agent_budget.try_spend(agent_key, purpose, at=None) -> (ok, reason)`: trần `agent_daily_calls` (mặc định 6, chủ có "Không giới hạn"),
+- `agent_budget.try_spend(agent_key, purpose, at=None, *, store=None, reason_ref=None) -> (ok, reason)` (chỉ kiểm, đếm từ
+  `agent_calls`; `main.py` nối kho bằng `agent_budget.wire(store_fn)`): trần `agent_daily_calls` (mặc định 6, chủ có "Không giới hạn"),
   thứ tự ưu tiên `reaction_review` > `related_review` > `wait_unblocked` > chủ động/quét, giữ 2 lượt cho hai loại đầu. Mọi lượt của P, J
   (trừ lô phán xử nhóm, tính vào `judge_daily`) và L hỏi hàm này trước khi giữ chỗ sổ lượt. Hết trần: lý do giữ `pending`, trạng thái
   "Chờ hạn mức" (`waiting_quota`).
