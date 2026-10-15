@@ -558,6 +558,29 @@ class WakeReasons:
                       (st, max(0, att), t, r["id"]))
             return {"status": st, "moved_to": None}
 
+    def requeue(self, reason_id: int, source_refs: Iterable[str], now: Optional[float] = None) -> Optional[int]:
+        """Trả các nguồn ĐÃ tiêu thụ của một lý do `served` về lý do `pending` cùng loại (tạo nếu chưa có), bỏ mốc tiêu thụ.
+        Dùng khi lượt đã chạy nhưng tác động bị chặn vì hết hạn mức trước khi phán xử (review T3 L P2-1: hết trần không làm
+        mất phản hồi). Lý do cũ giữ `served` (lượt đã thật sự gọi model). Trả mã lý do chờ, None khi không có gì để trả."""
+        refs = [str(x) for x in source_refs or [] if x]
+        if not refs:
+            return None
+        t = _now(now)
+        with self._tx() as c:
+            r = c.execute("SELECT * FROM agent_wake_reasons WHERE id=?", (int(reason_id),)).fetchone()
+            if r is None or r["status"] != "served":
+                return None
+            rows = [x["source_ref"] for x in c.execute(
+                f"SELECT source_ref FROM agent_wake_sources WHERE reason_id=? AND removed_at IS NULL AND consumed_at "
+                f"IS NOT NULL AND source_ref IN ({','.join('?' * len(refs))})", [r["id"]] + refs).fetchall()]
+            if not rows:
+                return None
+            p = self._pending_in(c, r["agent_key"], r["context_ref"], r["code"], t)
+            c.executemany("UPDATE agent_wake_sources SET reason_id=?, consumed_at=NULL WHERE source_ref=?",
+                          [(p["id"], ref) for ref in rows])
+            c.execute("UPDATE agent_wake_reasons SET updated_at=? WHERE id=?", (t, p["id"]))
+            return int(p["id"])
+
     def retry_failed(self, reason_id: int, now: Optional[float] = None) -> Optional[int]:
         """Chủ bấm thử lại một lý do `failed`: về `pending` (attempt về 0). Đã có lý do chờ cùng loại thì gộp nguồn vào
         đó. Trả mã lý do đang chờ, None khi lý do không ở `failed`."""

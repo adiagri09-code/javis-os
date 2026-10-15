@@ -62,6 +62,10 @@ MESSAGE_MAX = 4000
 EXCERPT_MAX = 1200
 EVIDENCE_LIMIT = 40
 SOURCE_TAG = "self_review:"
+# Mã im của bộ phán xử nghĩa là "chưa phán xử vì hết hạn mức hay chạm trần", không phải "chọn im" (review T3 L P2-1).
+QUOTA_SILENCE = ("waiting_quota", "judge_cap", "server_ceiling")
+QUOTA_BACKOFF_S = 600.0     # hết hạn mức: phục vụ lại lý do sau 10 phút (không phải mỗi nhịp 30 giây)
+ENGINE_BACKOFF_S = 300.0    # engine chưa dựng được: sau 5 phút
 PROPOSAL_AREAS = ("permissions", "owner_rule", "code", "skill", "workflow", "structure", "other")
 
 _SCHEMA = """
@@ -355,9 +359,9 @@ class ReviewDeps:
 
 
 def _default_budget(store):
-    def fn(key, purpose, at=None, reason_ref=None):
+    def fn(key, purpose, at=None, reason_ref=None, units=1):
         import agent_budget
-        return agent_budget.try_spend(key, purpose, at, store=store, reason_ref=reason_ref)
+        return agent_budget.try_spend(key, purpose, at, store=store, reason_ref=reason_ref, units=units)
     return fn
 
 
@@ -369,6 +373,10 @@ class ReviewHost:
         self._self_running: set = set()
         self._running: set = set()
         self._tasks: set = set()
+        # Lùi lại theo lý do (review T3 L P3): hết hạn mức hay engine chưa dựng được thì không phục vụ lại lý do đó mỗi
+        # 30 giây (mỗi lần một dòng sự kiện, một gói WS, một dòng sổ giữ rồi hoàn). {reason_id: thời điểm được thử lại}.
+        self._backoff: dict = {}
+        self._quota_noted: dict = {}   # {reason_id: lần cuối ghi "Chờ hạn mức"} để không ghi lặp mỗi nhịp
 
     # ───────────── tiện ích ─────────────
 
@@ -378,10 +386,13 @@ class ReviewHost:
             ensure(st)
         return st
 
-    def _budget(self, store, key, purpose, now, reason_ref=None) -> tuple:
+    def _budget(self, store, key, purpose, now, reason_ref=None, units=1) -> tuple:
         fn = self.deps.budget or _default_budget(store)
         try:
-            got = fn(key, purpose, now, reason_ref=reason_ref)
+            if units != 1:
+                got = fn(key, purpose, now, reason_ref=reason_ref, units=units)
+            else:
+                got = fn(key, purpose, now, reason_ref=reason_ref)
         except TypeError:
             got = fn(key, purpose, now)
         except Exception as ex:  # noqa: BLE001 - hạn mức hỏng không được thành "chạy vô hạn"
@@ -509,6 +520,8 @@ class ReviewHost:
         if store is None:
             return {"outcome": "no_store"}
         rid = int(reason["id"])
+        if self._backoff.get(rid, 0.0) > float(self.deps.clock()):
+            return {"outcome": "backoff"}
         W = WakeReasons(store)
         cur = await asyncio.to_thread(W.get, rid)
         if cur is None or cur["status"] != "pending" or cur["code"] != "reaction_review":
@@ -528,8 +541,16 @@ class ReviewHost:
                 except Exception:  # noqa: BLE001
                     pass
         try:
-            ok, why = await asyncio.to_thread(self._budget, store, key, "reaction_review", now, f"wr:{rid}")
+            # Chat riêng cần 2 lượt còn trống (lượt xem xét và lượt phán xử tin mới, cả hai ở mức ưu tiên reaction_review):
+            # không để ask_back/revise mất vì lượt phán xử hết chỗ sau khi phản hồi đã tiêu thụ (review T3 L P2-1).
+            units = 2 if str(ctx).startswith("dm:") else 1
+            ok, why = await asyncio.to_thread(self._budget, store, key, "reaction_review", now, f"wr:{rid}", units)
             if not ok:
+                # Hết hạn mức: vẫn kiểm mỗi nhịp (chủ nới trần thì chạy ngay), nhưng chỉ ghi trạng thái, sự kiện và gói WS
+                # một lần mỗi 10 phút cho mỗi lý do (review T3 L P3: trước đây khoảng 2.880 dòng mỗi lý do mỗi ngày).
+                if now - self._quota_noted.get(rid, -1e18) < QUOTA_BACKOFF_S:
+                    return {"outcome": "quota", "reason": why, "deduped": True}
+                self._quota_noted[rid] = now
                 live = [s["source_ref"] for s in await asyncio.to_thread(W.sources, rid, True)]
                 await self._astatus(live, "waiting_quota",
                                         _chu("Hết hạn mức lượt hôm nay của trợ lý", "The assistant's daily turns are used up"))
@@ -568,6 +589,8 @@ class ReviewHost:
             return {"outcome": "error", "error": f"prompt: {type(ex).__name__}"}
         out, started, err = await self._run_engine(key, ctx, "reaction_review", system, prompt, ledger, cid, f"wr:{rid}")
         if err:
+            if not started:
+                self._backoff[rid] = now + ENGINE_BACKOFF_S   # engine chưa dựng được: lượt hoàn, thử lại sau
             st = await asyncio.to_thread(W.settle, rid, "error" if started else "refunded", now=now)
             await self._astatus(refs, "pending_review",
                                     _chu("Lượt xem xét lỗi, sẽ thử lại", "The review failed and will be retried")
@@ -597,9 +620,18 @@ class ReviewHost:
             eff = {"status": "no_change", "status_reason": _chu("Không áp dụng được kết quả xem xét",
                                                                 "The review result could not be applied"),
                    "error": f"{type(ex).__name__}: {ex}"}
+        requeued = None
+        if eff.get("requeue"):
+            # Tin mới chưa phán xử được vì hết hạn mức: nguồn về lý do chờ (không tiêu thụ), lượt sau xem lại.
+            requeued = await asyncio.to_thread(lambda: W.requeue(rid, consumed, now=now))
+            self._backoff[rid] = now + QUOTA_BACKOFF_S
+            if requeued:
+                self._backoff[int(requeued)] = now + QUOTA_BACKOFF_S
         await self._astatus(consumed, eff["status"], eff.get("status_reason", ""))
         payload = {"reason_id": rid, "call_id": cid, "outcome": res["outcome"], "consumed": consumed,
                    "moved_to": settled.get("moved_to"), "status": eff["status"], "reason": res["reason"]}
+        if requeued:
+            payload["requeued_to"] = int(requeued)
         for k in ("lesson_id", "decision_id", "verdict", "message_id", "error"):
             if eff.get(k) is not None:
                 payload[k] = eff[k]
@@ -619,19 +651,28 @@ class ReviewHost:
         by_ref = {s["source_ref"]: s for s in sources}
         first = next((by_ref[r] for r in res["consumed"] if r in by_ref), None)
         reply_to = first["message_id"] if first else None
-        payload = dict(self.deps.judge_payload(ctx) or {})
+        # Chat riêng: tin mới vào ĐÚNG phiên có tin bị phản hồi (review T3 L P2-2), không phải phiên báo cáo.
+        src_sid = str(first.get("session_id") or "") if (first and ctx.startswith("dm:")) else ""
+        payload = dict(await asyncio.to_thread(self.deps.judge_payload, ctx) or {})
         payload.update({"origin": "reaction_review", "draft": res["message"],
                         "review": {"reason_id": rid, "consumed": list(res["consumed"]), "context_ref": ctx,
-                                   "agent_key": key, "outcome": outcome, "reply_to": reply_to}})
+                                   "agent_key": key, "outcome": outcome, "reply_to": reply_to,
+                                   "session_id": src_sid}})
         dec = await self.deps.judge.proactive(agent_key=key, context_ref=ctx, draft=res["message"],
                                               source_event=f"wr:{rid}", origin="reaction_review", payload=payload)
         verdict = dec.get("verdict")
         did = dec.get("decision_id")
+        if verdict != "speak" and str(dec.get("silence_code") or "") in QUOTA_SILENCE:
+            # Bộ phán xử dừng vì hết hạn mức hay chạm trần (chưa phán xử gì): KHÔNG phải "phán xử chọn im". Phản hồi không
+            # được mất (GOAL 8.3, review T3 L P2-1): người gọi trả nguồn về lý do chờ, trạng thái "Chờ hạn mức".
+            return {"status": "waiting_quota", "requeue": True, "verdict": verdict, "decision_id": did,
+                    "status_reason": _chu("Hết hạn mức lượt hôm nay của trợ lý, sẽ xem lại sau",
+                                          "The assistant's daily turns are used up; it will review again later")}
         if verdict != "speak":
             why = (_chu("Phán xử chọn chờ", "The judge chose to wait") if verdict == "wait"
                    else _chu("Phán xử chọn im", "The judge chose silence"))
             return {"status": "no_change", "status_reason": why, "verdict": verdict, "decision_id": did}
-        sent = await asyncio.to_thread(self._send, key, ctx, res["message"], outcome, reply_to, rid, did)
+        sent = await asyncio.to_thread(self._send, key, ctx, res["message"], outcome, reply_to, rid, did, src_sid)
         if sent and sent.get("message_id") is not None:
             return {"status": "adjusted", "verdict": "speak", "decision_id": did, "message_id": sent["message_id"],
                     "status_reason": (_chu("Đã gửi câu hỏi lại", "Sent a follow-up question") if outcome == "ask_back"
@@ -639,12 +680,12 @@ class ReviewHost:
         return {"status": "no_change", "verdict": "speak", "decision_id": did,
                 "status_reason": _chu("Chưa gửi được tin mới", "The new message could not be sent")}
 
-    def _send(self, key, ctx, text, outcome, reply_to, rid, did) -> Optional[dict]:
+    def _send(self, key, ctx, text, outcome, reply_to, rid, did, session_id="") -> Optional[dict]:
         if self.deps.send is None:
             return None
         try:
             return self.deps.send(key, ctx, text, {"source_ref": f"wr:{rid}", "decision_id": did, "reply_to": reply_to,
-                                                    "review": outcome})
+                                                    "review": outcome, "session_id": session_id or ""})
         except Exception as ex:  # noqa: BLE001
             print(f"[learn send] {type(ex).__name__}: {ex}", file=sys.stderr)
             return None
@@ -659,7 +700,8 @@ class ReviewHost:
         if not key or not ctx:
             return
         sent = await asyncio.to_thread(self._send, key, ctx, str(payload.get("draft") or ""), rv.get("outcome"),
-                                       rv.get("reply_to"), rv.get("reason_id"), (decision or {}).get("decision_id"))
+                                       rv.get("reply_to"), rv.get("reason_id"), (decision or {}).get("decision_id"),
+                                       str(rv.get("session_id") or ""))
         if sent and sent.get("message_id") is not None:
             await self._astatus(list(rv.get("consumed") or []), "adjusted",
                                     _chu("Đã gửi tin mới sau khi chờ", "Sent the new message after waiting"))

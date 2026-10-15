@@ -794,6 +794,13 @@ class SessionStore:
             return True
         return self._write(_do)
 
+    def set_message_reply(self, session_id: str, message_id: int, reply_to: Optional[int]) -> bool:
+        """Gắn `reply_to` cho một tin (vd. bản sửa của lượt xem xét reaction ở chat riêng trả lời tin bị phản hồi)."""
+        def _do(conn):
+            return conn.execute("UPDATE messages SET reply_to=? WHERE session_id=? AND id=?",
+                                (None if reply_to is None else int(reply_to), session_id, int(message_id))).rowcount == 1
+        return self._write(_do)
+
     def message_by_client_id(self, session_id: str, client_msg_id: str) -> Optional[Dict[str, Any]]:
         rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND client_msg_id = ?",
                           (session_id, str(client_msg_id)))

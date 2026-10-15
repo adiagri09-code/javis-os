@@ -1020,7 +1020,10 @@ class Judge:
         thr, eag, _off = self._threshold(st, agent_key, context_ref, now)
         prep["thr"] = thr
         if is_dm and not rejudge_of:
-            ok, why = self.try_spend(agent_key, "proactive_judge")
+            # Tin mới của lượt xem xét reaction (phần L) tiêu hạn mức ở mức ưu tiên reaction_review (dùng 2 lượt giữ
+            # riêng), không ở mức chủ động: lượt xem xét đã chạy thì tin của nó không mất vì hết chỗ (review T3 L P2-1).
+            purpose = "reaction_review" if origin == "reaction_review" else "proactive_judge"
+            ok, why = self.try_spend(agent_key, purpose)
             if not ok:
                 prep.update(done=True, out=self._proactive_record(prep, "silent", code="waiting_quota", thr=thr,
                                                                   reason=why))

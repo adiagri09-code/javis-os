@@ -96,6 +96,24 @@ for status in ("paused", "archived"):
 teams.update(TID, status="active")
 check("nhóm hoạt động trở lại: đăng được", main._pulse_post(KEY, CTX, "y", {"proactive": True}) is not None)
 
+# ═════ L P2-2: bản sửa ở chat riêng vào ĐÚNG phiên nguồn, kèm reply_to và dấu lượt xem xét ═════
+SRC = ss.create_session(brain=BK, channel="agent:lan")
+REPORT = ss.create_session(brain=BK, channel="agent:lan")
+main._pulse_dm_session = lambda key: (REPORT, "lan")
+rmid = ss.append_message(SRC, "assistant", "Câu trả lời bị phản hồi")
+got = main._learn_send(KEY, f"dm:{KEY}", "Bản sửa ngắn hơn", {"session_id": SRC, "reply_to": rmid, "review": "revise",
+                                                              "source_ref": "wr:5", "decision_id": 9})
+check("bản sửa chat riêng vào đúng phiên nguồn (không phải phiên báo cáo)", got and got["session_id"] == SRC, got)
+tm_row = ss.team_message(SRC, int(got["message_id"])) if got else None
+check("bản sửa chat riêng có reply_to tới tin bị phản hồi", tm_row and int(tm_row.get("reply_to") or 0) == rmid, tm_row)
+check("bản sửa chat riêng mang dấu lượt xem xét (meta review, decision_id)",
+      tm_row and (tm_row.get("meta") or {}).get("review") == "revise" and (tm_row.get("meta") or {}).get("decision_id") == 9,
+      tm_row)
+FOREIGN = ss.create_session(brain=BK, channel="web")
+got2 = main._learn_send(KEY, f"dm:{KEY}", "Bản sửa 2", {"session_id": FOREIGN, "reply_to": 1, "review": "revise"})
+check("phiên nguồn không phải chat riêng của trợ lý: về phiên báo cáo, không đăng vào phiên lạ",
+      got2 and got2["session_id"] == REPORT, got2)
+
 if fails:
     print(f"\n{len(fails)} FAIL")
     raise SystemExit(1)

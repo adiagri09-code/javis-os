@@ -146,9 +146,10 @@ def _purpose_of(purpose: str) -> str:
 
 
 def try_spend(agent_key: str, purpose: str, at: Optional[float] = None, *, store: Any = None,
-              reason_ref: Optional[str] = None) -> tuple:
+              reason_ref: Optional[str] = None, units: int = 1) -> tuple:
     """Có được chạy thêm MỘT lượt tự phát `purpose` hôm nay không: (True, "") hay (False, lý do). Gọi TRƯỚC khi giữ chỗ sổ
-    lượt. `reason_ref` (`wr:<id>`): lý do đã từng chờ hạn mức thì qua ngày chỉ được một lượt mỗi ngày. Chưa nối kho hay
+    lượt. `reason_ref` (`wr:<id>`): lý do đã từng chờ hạn mức thì qua ngày chỉ được một lượt mỗi ngày. `units`: số lượt
+    cần còn trống (lượt xem xét reaction ở chat riêng cần 2: lượt xem xét và lượt phán xử tin mới, review T3 L P2-1). Chưa nối kho hay
     chưa có kho: cho qua (khi đó không có lượt tự phát nào chạy được; trần chung của máy chủ vẫn áp ở sổ lượt)."""
     st = store if store is not None else _default_store()
     if st is None:
@@ -170,11 +171,12 @@ def try_spend(agent_key: str, purpose: str, at: Optional[float] = None, *, store
     cap = u["cap"]
     if cap is None:
         return True, ""
+    extra = max(0, int(units or 1) - 1)
     if p in RESERVED_FOR:
-        ok = u["used"] < cap
+        ok = u["used"] + extra < cap
     else:
         hold = max(0, RESERVED - u["reserved_used"])
-        ok = u["used"] < cap - hold
+        ok = u["used"] + extra < cap - hold
     if ok:
         return True, ""
     if reason_ref:

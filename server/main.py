@@ -23751,9 +23751,44 @@ def _learn_send(key, ctx, text, meta):
             msg = _TEAM_API.runner().message_view(team, msg)
         _pulse_on_loop(_CHAT_RUNTIME.publish({"type": "team_message", "team_id": team["team_id"], "message": msg}))
         return {"session_id": team["session_id"], "message_id": mid}
-    return _pulse_post(key, ctx, text, {"proactive": True, "review": meta.get("review") or "",
-                                        "pulse_source": meta.get("source_ref") or "",
-                                        "decision_id": meta.get("decision_id")})
+    if str(ctx) != f"dm:{key}":
+        return None
+    # Chat riêng (review T3 L P2-2): tin MỚI trả lời ĐÚNG tin bị phản hồi, nên vào chính phiên có tin đó (không phải phiên
+    # báo cáo của trợ lý), kèm `reply_to` và dấu lượt xem xét. Phiên nguồn không còn hay không phải chat riêng của trợ lý
+    # này thì về phiên báo cáo như tin chủ động của nhịp.
+    ss = get_store()
+    sid = str(meta.get("session_id") or "")
+    if sid and not _learn_dm_session_ok(ss, sid, key):
+        sid = ""
+    if not sid:
+        sid, _slug = _pulse_dm_session(key)
+        if not sid:
+            return None
+    mid = ss.append_message(sid, "assistant", text)
+    if meta.get("reply_to") is not None:
+        ss.set_message_reply(sid, mid, int(meta["reply_to"]))
+    ss.update_team_message_meta(sid, mid, {"proactive": True, "review": meta.get("review") or "",
+                                           "pulse_source": meta.get("source_ref") or "",
+                                           "decision_id": meta.get("decision_id")})
+    reg = _pulse_sql("SELECT slug FROM resonance_agents WHERE agent_key=?", (key,))
+    _pulse_on_loop(_bo_vao_hom_thu(f"{WEB_CHAT_PREFIX}{sid}", text, kind="report",
+                                   label=(reg[0]["slug"] if reg else ""), source="pulse"))
+    return {"session_id": sid, "message_id": mid}
+
+
+def _learn_dm_session_ok(ss, sid, key):
+    """Phiên `sid` là chat riêng của trợ lý `key` (kênh `agent:<slug>`, ghim đúng trợ lý hay chưa ghim)."""
+    try:
+        sess = ss.get_session(sid)
+        if not sess:
+            return False
+        pin = _resonance_store().session_pin(sid)
+        if pin:
+            return pin.get("agent_key") == key
+        reg = _pulse_sql("SELECT slug FROM resonance_agents WHERE agent_key=?", (key,))
+        return bool(reg) and sess.get("channel") == f"agent:{reg[0]['slug']}"
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _judge_team_payload(ctx):
