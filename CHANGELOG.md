@@ -34,6 +34,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 ### Cải thiện
 - **Bảng giới hạn trong Nâng cao của nhóm:** mọi giới hạn chia theo bạn chỉnh được, người điều phối chỉnh được, máy chủ cố định và nhà cung cấp quyết. Số lần trả lời, số bước, số lần nhờ nhau có lựa chọn **Không giới hạn**.
 
+## [0.166.4] - 2026-10-15
+### Sửa lỗi
+- **Lưu cài đặt không còn có thể xoá sạch tài khoản, model và kênh admin.** Nếu `settings.json` bị khoá trong tích tắc lúc Javis đọc (hay gặp trên Windows khi phần mềm diệt virus quét file vừa ghi), Javis từng hiểu nhầm là máy mới cài, hiện lại trình cài đặt, rồi lần lưu kế tiếp (ví dụ lưu kênh Lark) ghi cấu hình trống đè lên cấu hình thật. Giờ Javis đọc lại vài lần cho tới khi được, và không bao giờ ghi một cấu hình trống đè lên máy đã cài đặt.
+
 ## [0.166.3] - 2026-10-15
 ### Sửa lỗi
 - **Bot không còn nhắn khách "Anh chị đợi em chút xíu để em kiểm tra lại ạ" khi gặp trục trặc kỹ thuật** (hết token, hết lượt gói, model lỗi). Khách không nhận tin nào cả, kể cả trên Zalo cá nhân, Zalo OA, Telegram và WhatsApp.
