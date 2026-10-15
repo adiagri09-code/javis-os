@@ -4219,6 +4219,8 @@
   "ajobs.srcf.auto": "Auto",
   "ajobs.srcf.chat": "Private chat",
   "ajobs.srcf.label": "Filter by source",
+  "ajobs.tb_source": "Source",
+  "ajobs.tb_status": "Status",
   "ajobs.srcf.team": "Teams",
   "ajobs.sum_crit": "Criteria: {crit}",
   "ajobs.sum_crit_none": "Criteria: none yet (add some so it is clear what done means)",

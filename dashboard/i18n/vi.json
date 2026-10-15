@@ -4219,6 +4219,8 @@
   "ajobs.srcf.auto": "Auto",
   "ajobs.srcf.chat": "Chat riêng",
   "ajobs.srcf.label": "Lọc theo nguồn",
+  "ajobs.tb_source": "Nguồn",
+  "ajobs.tb_status": "Trạng thái",
   "ajobs.srcf.team": "Nhóm",
   "ajobs.sum_crit": "Tiêu chí: {crit}",
   "ajobs.sum_crit_none": "Tiêu chí: chưa có (nên thêm để biết thế nào là xong)",
