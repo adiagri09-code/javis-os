@@ -47,19 +47,23 @@ dùng chung `install_guards` với bench):
 - **Nhóm bị chặn hay agent ngủ không chiếm suất:** pool một chỗ, hai nhóm chỉ có việc bị chặn, nhóm có việc vẫn được nhận; việc
   của agent đang ngủ đông vẫn chạy xong; pool trống sau lượt; nhịp ngủ đông không giữ khoá bận.
 
-## 3. Phát hiện khi đo (chưa sửa ở T4, cần chủ phần quyết)
+## 3. Phát hiện khi đo
+
+Mục 1, 2, 3 đã được nhánh T3 sửa (`7e8b96f5`); số đo trước/sau ở [team-chat-t4-bench.md](team-chat-t4-bench.md). Giữ lại để đối chiếu.
 
 1. **Lô phán xử nhóm (phần J) đọc ghi SQLite ngay trên luồng event loop.** `--stall-watch` của bench chụp được luồng loop
    bị giữ quá 50 ms tại `agent_judge.judge_team_message` -> `agent_judge_store` (`get_decision`, `profile`, `get_offset`,
    `cases`, `add_decision`) và `agent_ledger.reserve/mark_engine`. Ở pha chỉ lô phán xử, độ trễ event loop lớn nhất khoảng
    15 ms trên máy này, nhưng tăng theo số thành viên và độ chậm đĩa (VPS). Hướng sửa: chạy phần kho của lô trong luồng phụ
-   (`asyncio.to_thread`) như `team_runner` làm (R5). Thuộc phần J.
+   (`asyncio.to_thread`) như `team_runner` làm (R5). Thuộc phần J. **Đã sửa** ở T3 (`server/io_offload.py`); sau sửa,
+   pha chỉ lô phán xử vẫn có lúc giữ loop khoảng 70 ms trên máy này.
 2. **Nhịp pulse nặng khi còn nhiều phản hồi chờ.** Một tick tốn 0,5 tới 3,4 s (luồng phụ), độ trễ event loop lớn nhất ở pha
    chỉ nhịp khoảng 0,2 s, nhiều khả năng do luồng đối soát của bộ chiếu tranh GIL (khoảng 4,7 ms mỗi reaction "Chờ xem xét",
    trần 200 dòng mỗi nhịp). Phần L chưa ghép thì các reaction đó không bao giờ được phục vụ nên chi phí lặp mỗi 30 giây. Cần
-   đo lại khi L ghép và trên VPS. Số đo: [team-chat-t4-bench.md](team-chat-t4-bench.md).
+   đo lại khi L ghép và trên VPS. **Đã sửa** ở T3 (bộ chiếu theo lô, tick rời loop): độ trễ lớn nhất pha chỉ nhịp
+   217 ms xuống 39 ms; một lần chiếu với 1.125 reaction chờ còn khoảng 20 ms. Chưa đo VPS.
 3. **Test của phần P giả định chưa có phần J:** `test_agent_pulse_host.py` ca "chưa có agent_judge: say thành silent
-  (judge_unavailable)" đỏ khi đã ghép J (nhận `judge_error`). Đây là lỗi ghép T3, không phải T4.
+  (judge_unavailable)" đỏ khi đã ghép J (nhận `judge_error`). Đây là lỗi ghép T3, không phải T4. **Đã hết** sau khi ghép T3 hoàn chỉnh.
 4. **Mỗi gói `team_message` vẽ lại cả khung tin của mỗi tab** (`teams.js onTeamEvent -> drawMsgs`) và hẹn một lần đọc lại danh
    sách, hàng đợi, nhóm sau 300 ms. 20 gói reaction x 2 tab x 200 tin: khoảng 80 ms dựng chuỗi dưới node. Chấp nhận được ở cỡ
    này; nếu cần nhanh hơn thì chỉ vẽ lại tin đổi.

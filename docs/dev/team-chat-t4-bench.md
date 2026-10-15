@@ -67,7 +67,37 @@ dựng chuỗi HTML bằng chính hàm vẽ của dashboard dưới node:
 | 20 gói reaction tới 2 tab, mỗi gói vẽ lại cả khung 200 tin | 92 ms | 101 ms |
 | 500 chip + bộ chọn reaction | 25 ms | 36 ms |
 
-## Nhận xét
+## Trước và sau bản sửa hiệu năng của T3 (nhánh T3 `7e8b96f5`)
+
+Cùng máy, cùng lệnh mặc định, cùng dữ liệu. "Trước" là head T4 `89a0acd1` (T3 chỉ có P và J, chưa sửa hiệu năng); "sau" là
+head T4 sau khi ghép T3 `7e8b96f5` (P, J, L; lô phán xử và tick nhịp rời event loop qua `server/io_offload.py`, bộ chiếu theo
+lô; số đo của T3 ở docs/dev/team-chat-t3-pulse.md mục 9). Kết quả gốc của lần sau:
+`exports/reviews/team-adaptive/t4-bench-2026-10-15-after-t3-fix.json`. Máy dùng chung với phiên khác nên lệch vài chục ms
+giữa hai lần là nhiễu; chỉ đọc các thay đổi lớn.
+
+| Số đo | Trước | Sau |
+|---|---|---|
+| Event loop lớn nhất, chỉ nhịp pulse | 217 ms | **39 ms** |
+| Event loop lớn nhất, tất cả cùng lúc | 245 ms | **67 ms** |
+| Event loop lớn nhất, chỉ lô phán xử | 75 ms | 73 ms |
+| Event loop lớn nhất, chỉ request | 45 ms | 52 ms |
+| Request p95 khi tất cả cùng lúc | 1,29 s | 0,93 s |
+| Một tick nhịp (chỉ nhịp, lần 2 tới 5) | 0,46 tới 1,5 s | 0,26 tới 0,51 s |
+| Một lần chiếu ổn định của bộ chiếu | 2,5 tới 3,6 ms (0 reaction chờ) | 16 tới 21 ms với **1.125** reaction "Chờ xem xét" (bản trước: khoảng 700 ms với 150) |
+| Xả outbox 1.500 reaction | 48 s | 81 s (nhiều reaction vào "Chờ xem xét" hơn, vì phần L giờ phục vụ lý do) |
+| GET trang nhóm p50 / câu SQL đọc | 54 ms / 25 | 49 ms / 25 |
+| GET trang tin p50 / câu SQL đọc | 10 ms / 5 | 14 ms / 5 |
+| POST reaction nhóm p50 / đọc, ghi | 72 ms / 26, 9 | 80 ms / 26, 9 |
+| POST reaction chat riêng p50 | 52 ms | 43 ms |
+| GET khung nhịp p50 / câu SQL đọc | 37 ms / 17 | 83 ms / **29** (thêm mục bài học của phần L) |
+| Lượt model giả, pha đồng thời | 24 nhóm, 24 lô phán xử, 0 quét | 24 nhóm, 24 lô phán xử, 0 quét (cả bench: 6 lượt học giả của L) |
+| Engine thật được dựng | 0 | 0 |
+
+Kết luận: bản sửa của T3 gỡ được phần lớn độ trễ event loop ở pha nhịp và pha đồng thời, và chi phí đối soát của bộ chiếu
+không còn tăng theo số reaction đang chờ. Khung nhịp chậm hơn vì có thêm mục bài học (29 câu SQL đọc, vẫn là hằng số). Lô
+phán xử vẫn có lúc giữ loop khoảng 70 ms ở máy này. Chưa đo VPS.
+
+## Nhận xét (lần đo trước bản sửa của T3)
 
 1. **Lô phán xử giữ event loop:** chẩn đoán `--stall-watch` (chụp ngăn xếp luồng loop khi bị giữ quá 50 ms) chỉ ra
    `agent_judge.judge_team_message` gọi `agent_judge_store` (`get_decision`, `profile`, `get_offset`, `add_decision`),

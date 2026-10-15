@@ -53,7 +53,7 @@ for op in ("GET /teams/{id}/messages (trang tin)", "GET /teams/{id} (trang nhóm
 # Trần rộng (khoảng gấp đôi số đo lúc viết test), để bắt hồi quy N+1 chứ không bắt dao động.
 CAPS = {"GET /teams/{id}/messages (trang tin)": (20, 0), "GET /teams/{id} (trang nhóm)": (60, 0),
         "POST reaction nhóm": (60, 20), "POST reaction chat riêng": (60, 20), "GET /agents/{slug}/pulse (khung nhịp)":
-        (30, 0)}
+        (45, 0)}   # khung nhịp: 17 câu lúc viết test, 29 sau khi phần L thêm mục bài học (vẫn hằng số)
 for op, (rmax, wmax) in CAPS.items():
     got = io_b.get(op, {})
     check(f"{op}: câu SQL đọc <= {rmax}, ghi <= {wmax}", got and got["sql_reads_max"] <= rmax
