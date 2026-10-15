@@ -111,6 +111,9 @@ check("Anthropic: bolt off sends neither", len(sent) == 1 and "speed" not in sen
 ev, sent = run(lambda: engine.anthropic_stream("k", "claude-sonnet-5-5", MSG), [_Resp(200, lines=[])], True)
 check("Anthropic: unsupported model sends neither", "speed" not in sent[0]["json"])
 
+ev, sent = run(lambda: engine.anthropic_stream("k", "", MSG), [_Resp(200, lines=[])], True)
+check("Anthropic: empty model falls back to Sonnet, so no speed is sent", "speed" not in sent[0]["json"], sent[0]["json"].get("model"))
+
 # 2. OpenAI-compatible streams.
 ev, sent = run(lambda: engine.openai_stream("k", "gpt-6-sol", MSG),
                [_Resp(400, '{"error": {"message": "Unsupported value: service_tier"}}'), _Resp(200, lines=SSE_DONE)], True)
@@ -143,6 +146,13 @@ ev, sent = run(lambda: engine.openai_chat_with_mcp("k", "gpt-6-sol", MSG, "off",
                [_Resp(400, "invalid service_tier"), _Resp(200, data=CC_OK)], True)
 check("OpenAI tool loop: service_tier fast, retry without after a refusal",
       sent[0]["json"].get("service_tier") == "fast" and len(sent) == 2 and "service_tier" not in sent[1]["json"], sent)
+fast_mode.remember("openai", "fallback", "old")
+ev, sent = run(lambda: engine.openai_chat_with_mcp("k", "gpt-6-sol", MSG, "off", [], {}), [_Resp(200, data=CC_OK)], True)
+check("a successful fast round in a tool loop records 'on', clearing an old fallback",
+      fast_mode.states().get("openai", {}).get("state") == "on", fast_mode.states())
+fast_mode.remember("anthropic-api", "fallback", "old")
+ev, sent = run(lambda: engine.anthropic_chat_with_mcp("k", "claude-opus-4-8", MSG, "off", [], {}), [_Resp(200, data=ANTH_OK)], True)
+check("Anthropic tool loop success records 'on'", fast_mode.states().get("anthropic-api", {}).get("state") == "on", fast_mode.states())
 ev, sent = run(lambda: engine.gemini_chat_with_mcp("k", "gemini-4-argon", MSG, "off", [], {}), [_Resp(200, data=CC_OK)], True)
 check("Gemini tool loop: service_tier priority", sent[0]["json"].get("service_tier") == "priority", sent)
 ev, sent = run(lambda: engine.responses_with_mcp("tok", "acc", "gpt-6.1-sol", MSG, "off", [], {}),

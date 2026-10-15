@@ -20,7 +20,8 @@
   function fastNote(provider, model) {
     const m = String(model || "").toLowerCase();
     // The Claude Code alias "opus" points at Opus 5.5 (first in the catalog and the fallback default).
-    const opusOk = !m || m === "opus" || /opus-(5-5|5|4-8)(?![0-9])/.test(m);
+    // Same rule as server/fast_mode.py: the version ends the id or is followed by a date (-YYYYMMDD).
+    const opusOk = !m || m === "opus" || /opus-(?:5-5|4-8|5)(?=$|-\d{8}(?!\d)|[^-\d.])/.test(m);
     if (provider === "anthropic-cli") return opusOk ? { supported: true, note: "fast.claude" } : { supported: false, note: "fast.model_none" };
     if (provider === "anthropic-api") return opusOk ? { supported: true, note: "fast.api" } : { supported: false, note: "fast.model_none" };
     if (provider === "openai-oauth") return { supported: true, note: "fast.codex" };
@@ -121,8 +122,9 @@
     fb.setAttribute("aria-pressed", n.supported && state.fast ? "true" : "false");
     fb.setAttribute("aria-disabled", n.supported ? "false" : "true");
     // 0.164.0: the last real state this brain reported (cooldown, provider refusal) as an extra line.
-    const key = n.supported && state.fast ? fastStateKey(fastStates[eff.provider]) : "";
-    fb.title = "Fast mode\n" + window.t(n.note) + (key ? "\n" + window.t(key) : "");
+    const st = fastStates[eff.provider];
+    const key = n.supported && state.fast ? fastStateKey(st) : "";
+    fb.title = "Fast mode\n" + window.t(n.note) + (key ? "\n" + window.t(key, { reason: (st && st.reason) || "" }) : "");
   }
   // FAST_STATE_BEGIN
   // Tooltip line for the last Fast mode state a brain reported (server: fast_mode.states()).
@@ -130,6 +132,8 @@
     const s = st && st.state;
     if (s === "cooldown") return "fast.state_cooldown";
     if (s === "fallback") return "fast.state_fallback";
+    // Claude Code reports off with a reason (e.g. out_of_credits when usage credits are not enabled).
+    if (s === "off" && st.reason) return st.reason === "out_of_credits" ? "fast.state_credits" : "fast.state_off";
     return "";
   }
   // FAST_STATE_END

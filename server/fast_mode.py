@@ -49,11 +49,22 @@ def claude_supports(model: str) -> bool:
     return not m or m == "opus" or bool(_CLAUDE_FAST.search(m))
 
 
-def claude_sdk_settings(model: str, on: bool) -> Optional[str]:
-    """`ClaudeAgentOptions(settings=...)` value: a JSON string, or None when nothing to send."""
-    if on and claude_supports(model):
-        return json.dumps({"fastMode": True})
-    return None
+def claude_sdk_settings(model: str, on: bool) -> str:
+    """`ClaudeAgentOptions(settings=...)` value (a JSON string).
+
+    Always explicit: Claude Code persists /fast in ~/.claude/settings.json, and Javis loads user
+    settings, so "nothing" would let a /fast typed once in a terminal bill every Javis turn 2x.
+    Flag settings win over user settings, so `false` here means normal speed (review 0.164.0)."""
+    return json.dumps({"fastMode": bool(on and claude_supports(model))})
+
+
+def normal(coro):
+    """Run background work spawned from a turn (compaction, summaries) at the normal tier:
+    `create_task` copies the turn's context, which would otherwise carry the bolt along."""
+    async def _run():
+        CURRENT.set(False)
+        return await coro
+    return _run()
 
 
 def anthropic_params(model: str, on: bool) -> Tuple[dict, dict]:

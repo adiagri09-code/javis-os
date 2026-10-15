@@ -882,7 +882,7 @@ async def _fast_retry(provider, fast, make):
 
 async def anthropic_stream(api_key, model, messages, reasoning="off"):
     """Anthropic Messages API without tools; Fast mode with one retry without it (0.164.0)."""
-    async for ev in _fast_retry("anthropic-api", fast_mode.current() and fast_mode.claude_supports(model),
+    async for ev in _fast_retry("anthropic-api", fast_mode.current() and fast_mode.claude_supports(model or "claude-sonnet-4-6"),
                                 lambda fast: _anthropic_stream_once(api_key, model, messages, reasoning, fast)):
         yield ev
 
@@ -904,7 +904,7 @@ async def _anthropic_stream_once(api_key, model, messages, reasoning="off", fast
                "content-type": "application/json"}
     payload = {"model": model or "claude-sonnet-4-6", "max_tokens": 4096, "messages": conv, "stream": True}
     payload.update(_anthropic_reasoning(model, reasoning))   # thinking + effort + max_tokens nếu bật reasoning
-    fast_h, fast_b = fast_mode.anthropic_params(model, fast)
+    fast_h, fast_b = fast_mode.anthropic_params(payload["model"], fast)   # the model actually sent
     headers.update(fast_h)
     payload.update(fast_b)
     sys_txt = "\n\n".join(s for s in sys_parts if s)
@@ -1818,6 +1818,8 @@ async def _cc_tool_loop(url, headers, model, messages, mcp_tools, mcp_route, rea
                         and requirement not in (None, "required")):
                     payload["tool_choice"] = "required"
                     r = await client.post(url, headers=headers, json=payload)
+            if r.status_code == 200 and (reasoning_extra or {}).get("service_tier"):
+                fast_mode.remember(str(label).lower(), "on")
             if r.status_code != 200:
                 body_text = r.text or ""
                 # Fast mode (0.164.0): the provider refused service_tier, so drop it and retry the round.
@@ -2161,6 +2163,8 @@ async def responses_with_mcp(access_token, account_id, model, messages, reasonin
                            "remedy": _fact.remedy, "raw": _fact.raw}
                         yield ev_loi_http("ChatGPT", r.status_code, body_text, r.headers, _fact)
                         return
+                    if fast_extra:
+                        fast_mode.remember("openai-oauth", "on")
                     async for line in r.aiter_lines():
                         line = (line or "").strip()
                         if not line.startswith("data:"):
@@ -2291,7 +2295,7 @@ async def anthropic_chat_with_mcp(api_key, model, messages, reasoning, mcp_tools
         tools[-1]["cache_control"] = {"type": "ephemeral"}   # tools = prefix ổn định, cache 1 lần đủ
     yield {"type": "meta", "model": model}
     extras = _anthropic_reasoning(model, reasoning)
-    fast_h, fast_b = fast_mode.anthropic_params(model, fast_mode.current())   # Fast mode (0.164.0)
+    fast_h, fast_b = fast_mode.anthropic_params(model or "claude-sonnet-4-6", fast_mode.current())   # Fast mode (0.164.0)
     timeout = httpx.Timeout(180, connect=15)
     async with httpx.AsyncClient(timeout=timeout) as client:
         usage_in = usage_out = 0
@@ -2315,6 +2319,8 @@ async def anthropic_chat_with_mcp(api_key, model, messages, reasoning, mcp_tools
                 fast_h, fast_b = {}, {}   # Fast mode refused: drop it and retry the round
                 fast_mode.remember("anthropic-api", "fallback", (r.text or "")[:160])
                 continue
+            if r.status_code == 200 and fast_b:
+                fast_mode.remember("anthropic-api", "on")
             if r.status_code == 400 and extras and "thinking" in (r.text or "").lower():
                 extras = {}   # thinking không tương thích payload/tool này → bỏ thinking, thử lại
                 continue

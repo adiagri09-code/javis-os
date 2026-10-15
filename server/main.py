@@ -9647,6 +9647,9 @@ def _workflow_agent_helpers(brain, tools, mode=None):
             cc = CodexCLI(cwd=vault_root, tag="workflow", model=_codex_safe_model(model),
                           instructions=sysprompt)
             _apply_codex_hub(cc, vault_root)
+            # Fast mode (0.164.0): workflow steps run in the background, so force the normal tier.
+            cc.extra_config[:] = [x for x in cc.extra_config if not str(x).startswith("service_tier=")]
+            cc.extra_config.append('service_tier="default"')
             return cc
         allowed, natives = (_step_grant(extra_tools) if tools is not None else ([], []))
         gated_tools = (list(tools) + allowed) if tools is not None else None
@@ -15750,8 +15753,8 @@ async def websocket_endpoint(ws: WebSocket):
                 if (not used_fast_path and kind == "api" and api_key and
                         prov in ("openrouter", "openai", "anthropic-api", "gemini", "groq", "deepseek")):
                     try:
-                        asyncio.create_task(compaction.maybe_compact(
-                            store, conv_sid, prov, api_key, api_model, _api_stream))
+                        asyncio.create_task(fast_mode.normal(compaction.maybe_compact(
+                            store, conv_sid, prov, api_key, api_model, _api_stream)))
                     except Exception as _e:
                         print(f"[compact hook] {_e}", file=__import__('sys').stderr)
             return final_text
@@ -19045,7 +19048,7 @@ def _tg_compact_bg(sess, prov, api_key, api_model):
             sess["dang_nen"] = False
 
     try:
-        asyncio.create_task(_chay())
+        asyncio.create_task(fast_mode.normal(_chay()))
     except Exception as _e:
         sess["dang_nen"] = False
         print(f"[compact_mem nền] {_e}", file=__import__('sys').stderr)
@@ -19918,7 +19921,8 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
     sess["last"] = text
     sess["sent"] = set()    # lượt mới → reset dedupe (endpoint /telegram/send-file add vào đây)
     reasoning = _reasoning_level(mcfg)
-    fast_mode.use(mcfg.get("fast") is True)
+    # The bolt is the owner's: customer chatbots answering strangers never inherit it.
+    fast_mode.use(mcfg.get("fast") is True and not bot)
     runtime_trace = context_runtime.current_trace()
 
     # NGÔN NGỮ cho lượt này. Dính theo TỪNG CUỘC CHAT (chat_id), không theo tiến trình: một

@@ -260,6 +260,8 @@
   "fast.model_none": "This model has no Fast mode; only Opus 5.5, Opus 5 and Opus 4.8 do.",
   "fast.state_cooldown": "Running at normal speed for now because the Fast mode limit was hit; it comes back on its own.",
   "fast.state_fallback": "The provider did not accept Fast mode last turn, so it ran at normal speed.",
+  "fast.state_credits": "Fast mode is off: turn on usage credits in your Claude account.",
+  "fast.state_off": "Fast mode is off ({reason}).",
   "rail.expand": "Expand sidebar",
   "rail.collapse": "Collapse sidebar",
   "run.title": "Run workflow",

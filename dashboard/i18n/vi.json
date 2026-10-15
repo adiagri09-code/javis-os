@@ -260,6 +260,8 @@
   "fast.model_none": "Model này không có Fast mode, chỉ Opus 5.5, Opus 5 và Opus 4.8.",
   "fast.state_cooldown": "Đang tạm chạy tốc độ thường vì vượt giới hạn Fast mode, sẽ tự bật lại.",
   "fast.state_fallback": "Lượt trước nhà cung cấp không nhận Fast mode nên đã chạy tốc độ thường.",
+  "fast.state_credits": "Fast mode đang tắt: cần bật usage credits trong tài khoản Claude.",
+  "fast.state_off": "Fast mode đang tắt ({reason}).",
   "rail.expand": "Mở rộng thanh bên",
   "rail.collapse": "Thu gọn thanh bên",
   "run.title": "Chạy workflow",

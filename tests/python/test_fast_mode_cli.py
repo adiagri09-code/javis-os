@@ -37,18 +37,19 @@ srv._cli_fast(c)
 check("Claude Code + bolt on + Opus 5.5: fastMode setting", json.loads(c.fast_settings or "{}") == {"fastMode": True}, c.fast_settings)
 s = _Cli("claude-sonnet-5-5")
 srv._cli_fast(s)
-check("Claude Code + Sonnet: no fastMode (model does not support it)", s.fast_settings is None)
+check("Claude Code + Sonnet: fastMode false (model does not support it)", json.loads(s.fast_settings) == {"fastMode": False})
 fast_mode.CURRENT.reset(tok)
 o = _Cli("claude-opus-5-5")
 srv._cli_fast(o)
-check("Claude Code + bolt off: nothing", o.fast_settings is None)
+check("Claude Code + bolt off: fastMode false, so a persisted /fast cannot bill 2x", json.loads(o.fast_settings) == {"fastMode": False})
 
 e = ClaudeSDK(tag="chat", model="claude-opus-5-5")
 e.fast_settings = fast_mode.claude_sdk_settings("claude-opus-5-5", True)
 opts = e._options()
 check("ClaudeAgentOptions carries settings when fast", getattr(opts, "settings", None) == '{"fastMode": true}', getattr(opts, "settings", None))
 e2 = ClaudeSDK(tag="chat", model="claude-opus-5-5")
-check("ClaudeAgentOptions has no settings when not fast", getattr(e2._options(), "settings", None) in (None, ""))
+check("background Claude Code runs (never touched by _cli_fast) send fastMode false",
+      getattr(e2._options(), "settings", None) == '{"fastMode": false}', getattr(e2._options(), "settings", None))
 
 # The SDK passes Claude Code's init data through; Javis remembers the real Fast mode state.
 from claude_agent_sdk import SystemMessage  # noqa: E402
@@ -109,9 +110,14 @@ check("GET /model/fast-state returns the remembered states",
 # 3. Wiring: both chat entry points set the per-turn choice next to the thinking level, and call the helpers.
 src = open(os.path.join(SERVER, "main.py"), encoding="utf-8").read()
 check("dashboard and Telegram turns set fast_mode next to the thinking level",
-      src.count("reasoning = _reasoning_level(mcfg)\n") >= 2 and src.count("fast_mode.use(mcfg.get(\"fast\") is True)") >= 2)
+      src.count("reasoning = _reasoning_level(mcfg)\n") >= 2 and src.count("fast_mode.use(mcfg.get(\"fast\") is True") >= 2)
 check("Codex call sites apply the tier right after the effort", src.count("_codex_fast(ccli)") >= 2)
 check("Claude Code call sites apply fast right after the effort", src.count("_cli_fast(cli)") >= 2)
+check("customer chatbots do not inherit the owner's bolt", 'fast_mode.use(mcfg.get("fast") is True and not bot)' in src)
+check("compaction spawned from a turn runs at the normal tier", src.count("fast_mode.normal(") >= 2)
+_wf = src[src.index("def _workflow_agent_helpers"):]
+_wf = _wf[:_wf.index("\ndef ", 10)]
+check("workflow Codex agents force the normal tier", 'service_tier="default"' in _wf)
 
 if fails:
     print("\nFAIL - test_fast_mode_cli: %d" % len(fails))

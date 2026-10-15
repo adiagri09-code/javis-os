@@ -42,6 +42,14 @@ const fastStateKey = new Function(stateLine + "\nreturn fastStateKey;")();
 check("cooldown maps to its line", fastStateKey({ state: "cooldown" }) === "fast.state_cooldown");
 check("fallback maps to its line", fastStateKey({ state: "fallback" }) === "fast.state_fallback");
 check("on or unknown adds no line", fastStateKey({ state: "on" }) === "" && fastStateKey(null) === "");
+// Review 0.164.0: Claude Code reports off + a reason (e.g. out_of_credits); the tooltip must say why.
+check("off because of usage credits has its own line", fastStateKey({ state: "off", reason: "out_of_credits" }) === "fast.state_credits");
+check("off with another reason shows that reason", fastStateKey({ state: "off", reason: "org_disabled" }) === "fast.state_off");
+check("off without a reason adds no line", fastStateKey({ state: "off", reason: "" }) === "");
+check("i18n has the off lines", !!vi["fast.state_credits"] && !!en["fast.state_off"] && /\{reason\}/.test(en["fast.state_off"]));
+check("UI and server agree on which Claude ids support Fast mode",
+  fastNote("anthropic-cli", "claude-opus-5-50").supported === false && fastNote("anthropic-cli", "claude-opus-5-20261001").supported === true
+  && fastNote("anthropic-cli", "opus").supported === true);
 check("clicking the bolt saves settings.model.fast", src.indexOf("saveModel({ fast: state.fast })") !== -1);
 check("the dimmed bolt uses aria-disabled, not disabled", src.indexOf('setAttribute("aria-disabled"') !== -1 && src.indexOf("fb.disabled") === -1);
 

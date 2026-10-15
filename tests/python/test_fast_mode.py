@@ -25,9 +25,12 @@ for m, ok in (("", True), ("opus", True), ("claude-opus-5-5", True), ("claude-op
               ("claude-opus-5-20261001", True), ("claude-opus-5-5-20261001", True)):
     check(f"claude_supports({m!r}) == {ok}", F.claude_supports(m) is ok)
 
-check("Claude Code settings only when on and supported",
-      json.loads(F.claude_sdk_settings("claude-opus-5-5", True) or "{}") == {"fastMode": True}
-      and F.claude_sdk_settings("claude-opus-5-5", False) is None and F.claude_sdk_settings("claude-sonnet-5-5", True) is None)
+check("Claude Code: fastMode true only when on and supported",
+      json.loads(F.claude_sdk_settings("claude-opus-5-5", True) or "{}") == {"fastMode": True})
+# Review 0.164.0: Claude Code persists /fast in ~/.claude/settings.json, so off must say false explicitly.
+check("Claude Code: off or unsupported sends fastMode false (overrides a persisted /fast)",
+      json.loads(F.claude_sdk_settings("claude-opus-5-5", False)) == {"fastMode": False}
+      and json.loads(F.claude_sdk_settings("claude-sonnet-5-5", True)) == {"fastMode": False})
 
 h, b = F.anthropic_params("claude-opus-4-8", True)
 check("Anthropic API: beta header and speed when on", h == {"anthropic-beta": "fast-mode-2026-02-01"} and b == {"speed": "fast"}, (h, b))
@@ -70,8 +73,18 @@ async def _turn():
 async def _peek():
     return F.current()
 
+async def _turn_bg():
+    tok = F.use(True)
+    try:
+        bg = await asyncio.create_task(F.normal(_peek()))
+        return F.current(), bg
+    finally:
+        F.CURRENT.reset(tok)
+
 on, inner = asyncio.run(_turn())
-check("a turn that turns it on sees it, and tasks it starts inherit it", on is True and inner is True)
+check("a turn that turns it on sees it", on is True)
+on2, bg = asyncio.run(_turn_bg())
+check("background work spawned from a turn through normal() runs at the normal tier", on2 is True and bg is False)
 check("after the turn it is off again", F.current() is False)
 
 F.remember("anthropic-cli", "cooldown", "rate limit")
