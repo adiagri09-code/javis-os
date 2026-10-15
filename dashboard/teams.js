@@ -376,10 +376,14 @@
     }
     var prop = "";
     if (meta.proposal && meta.proposal.title) {
+      // T3: trạng thái thẻ do máy chủ ghi (mọi tab thấy). Bỏ qua là bác đề xuất (-0.4 cho trợ lý đề xuất), chỉ hiện sau 200.
+      var pst = meta.proposal_status === "accepted" ? tw("teams.proposal_accepted")
+        : meta.proposal_status === "rejected" ? tw("teams.proposal_rejected") : "";
       prop = '<div class="tm-proposal"><div>' + esc(tw("teams.proposal", { name: who, title: meta.proposal.title })) + "</div>" +
-        '<div class="tm-actions"><button type="button" class="ws-btn tm-primary" data-accept="' + esc(m.id) + '">' +
-        esc(tw("teams.proposal_create")) + '</button><button type="button" class="ws-btn" data-skip="' + esc(m.id) + '">' +
-        esc(tw("teams.proposal_skip")) + "</button></div></div>";
+        (pst ? '<div class="tm-proposal-state">' + esc(pst) + "</div>"
+          : '<div class="tm-actions"><button type="button" class="ws-btn tm-primary" data-accept="' + esc(m.id) + '">' +
+            esc(tw("teams.proposal_create")) + '</button><button type="button" class="ws-btn" data-skip="' + esc(m.id) + '">' +
+            esc(tw("teams.proposal_skip")) + "</button></div>") + "</div>";
     }
     // Quyết định đã ghim: nhãn là nút bỏ ghim. Chưa ghim: nút Ghim nằm trong bảng nhấn giữ / ba chấm.
     var decision = meta.decision ? '<button type="button" class="tm-decision" data-decision="' + esc(m.id) + '" data-on="0" title="' +
@@ -2040,7 +2044,12 @@
       }).catch(function () { delete S.retrying[rk]; setNote(tw("teams.err_network")); drawMsgs(false); });
     }
     if (d.accept) return call("POST", teamUrl("/messages/" + q(d.accept) + "/accept")).then(function (r) { act(r); });
-    if (d.skip) { S.skipped["p" + d.skip] = true; drawMsgs(false); return; }
+    if (d.skip) {
+      return call("POST", teamUrl("/messages/" + q(d.skip) + "/reject")).then(function (r) {
+        if (r.code !== 200) return fail(r);
+        loadMsgs(false);
+      });
+    }
     if (d.decision) {
       return call("POST", teamUrl("/messages/" + q(d.decision) + "/decision"), { on: d.on === "1" }).then(function (r) {
         if (r.code !== 200) return fail(r);

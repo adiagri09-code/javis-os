@@ -42,9 +42,29 @@ reaction không lý do của người đó trong loại ngữ cảnh (nhóm hay 
 
 Tín hiệu (6.1): ❤️ +0.8 w1, 😮 +0.6 w1, 👍 +0.4 w1, 😂 +0.2 w0.5, 😢 -0.2 w0.4, 😡 -0.4 w0.4; có lý do thì lý do thắng emoji
 (đúng ý +0.8, quá dài -0.3, sai dữ kiện/thiếu ý/khó hiểu/lạc đề -0.6, w1, nhiều lý do lấy trung bình); trục nói/im và góp ý
-chữ không tạo tín hiệu; chấp nhận đề xuất/chốt quyết định +0.6 w0.8; sửa sau kết quả, huỷ -0.4 w0.8; kiểm khách quan ±0.5
-w0.8 (API có, chưa nối, xem mục 6); tin chủ động đã xem, qua 24 giờ không tương tác -0.15 w0.6; reaction của agent không bao
-giờ. `pulse_signals` UNIQUE `(source_ref, agent_key)`; thay reaction thì dòng cũ `superseded_by`, xoá tin/agent thì `void`.
+chữ không tạo tín hiệu; chấp nhận đề xuất/chốt quyết định +0.6 w0.8; sửa sau kết quả, huỷ, bác đề xuất -0.4 w0.8; kiểm
+khách quan ±0.5 w0.8 (mục 2a); tin chủ động đã xem, qua 24 giờ không tương tác -0.15 w0.6; reaction của agent không bao giờ. `pulse_signals` UNIQUE `(source_ref, agent_key)`; thay reaction thì dòng cũ `superseded_by`, xoá tin/agent thì `void`.
+
+## 2a. Kiểm khách quan và đề xuất: sự kiện host nào được tính
+
+- **Kiểm khách quan (±0.5 w 0.8), chỉ kết luận CUỐI**, một tín hiệu mỗi (mục tiêu, revision), nguồn `obj:<goal_id>:<revision>`:
+  - đạt: `GoalStore.finish(..., "succeeded")`, tức A2 vừa đánh giá `met`, mọi guard `clear`, không ở bước khám phá, và (mục tiêu
+    có đội) review A5 `pass` hợp lệ; đây là nơi duy nhất đóng mục tiêu là đạt;
+  - không đạt: `GoalStore.finish(..., "failed")` (API có, hiện chưa đường nào gọi), hay revision bị gác `blocked/budget` trong
+    `_settle` khi kiểm cuối là `not_met` (hết sạch lượt, không còn lần thử nào); kết luận `unknown` không tính;
+  - KHÔNG tính: mọi `add_assessment` trong vòng làm việc (`not_met` trung gian), hạn chót qua (chỉ báo), chủ huỷ.
+  - Cùng revision về sau có kết luận cuối khác (chủ nới hạn mức rồi đạt): sửa giá trị của chính tín hiệu đó, vẫn một dòng.
+  - Người nhận: agent của mục tiêu (`goal_agents`), ngữ cảnh `dm:<agent_key>`, chỉ khi bật Cộng hưởng. Mục tiêu A2 có một tác
+    giả sản phẩm, không có bước tổng hợp, nên luật 6.5 thu về tác giả.
+  - Việc nhóm: host KHÔNG có kiểm khách quan khi chốt việc (`team_finish` chỉ ghi kết quả), nên không có tín hiệu kiểm.
+- **Đề xuất** (`pulse_proposals`): lượt quét `propose` ghi sổ (nguồn, phiên bản). Cùng nguồn cùng phiên bản đã có đề xuất (chờ,
+  đã nhận, đã bác) thì không đề xuất lại (5.5). Chủ quyết:
+  - nhóm: thẻ trong khung chat (nút Tạo việc là nhận, +0.6, xếp việc vào hàng đợi chung của nhóm như cũ; nút Bỏ qua nay là bác,
+    `POST /teams/{id}/messages/{mid}/reject`, -0.4); trạng thái ghi lên tin nên mọi tab thấy, thẻ hết nút;
+  - bảng Nhịp: `POST /agents/{slug}/pulse/proposals/{id}/accept|reject`. Chat riêng: nhận thành việc giao cho trợ lý như nút
+    Giao việc (Kanban, báo về chat riêng, khoá chống trùng `pp<id>`), +0.6; bác -0.4. Đề xuất trong nhóm từ bảng Nhịp đi đúng
+    đường thẻ nhóm. Đã quyết rồi: 409.
+  - Trưởng nhóm có Toàn quyền tự xếp việc được (enqueue của lượt quét) nên không cần duyệt đề xuất của chính mình.
 
 ## 3. Vectơ đồng hồ giả (`tests/python/test_agent_pulse_policy.py`, đều xanh)
 
@@ -84,7 +104,8 @@ giờ. `pulse_signals` UNIQUE `(source_ref, agent_key)`; thay reaction thì dòn
 ## 5. Di trú và quay về
 
 - Mở `resonance.sqlite3` bằng mã này: tạo `agent_pulse_events`, `pulse_signals`, `pulse_contrib`, `message_seen`,
-  `pulse_opportunities`, `pulse_proactive`, `pulse_policy_changes`, `pulse_meta`, thêm cột có mặc định cho `agent_pulse`. Lần
+  `pulse_opportunities`, `pulse_proactive`, `pulse_policy_changes`, `pulse_proposals`, `pulse_meta`, thêm cột có mặc định cho
+  `agent_pulse`. Lần
   đầu (mốc `pulse_v1_upgraded_at`): mọi dòng nhịp về B3, `resumed_at = lúc nâng cấp`, agent tắt Cộng hưởng ở `off`; reaction cũ
   không thành tín hiệu.
 - Quay về 0.154.x: bản cũ bỏ qua bảng và cột mới (cột đều có mặc định). Khôi phục hẳn dùng bản chụp `.pre-0.154.0` như T2.
@@ -100,10 +121,8 @@ giờ. `pulse_signals` UNIQUE `(source_ref, agent_key)`; thay reaction thì dòn
    `w = min(1, 0.5 x n_eff tổng hợp)`, suy giảm như tín hiệu khác, không phải bằng chứng mới, không vào `k`.
 4. **Nhiều lý do chất lượng** trên một reaction: lấy trung bình giá trị.
 5. **`k` chỉ đếm reaction không lý do** (reaction có lý do dùng giá trị của lý do, `k = 1`).
-6. **Kiểm khách quan chưa nối:** đánh giá goal A2 (`met`/`not_met`) chạy nhiều lần trong vòng làm việc; tính mỗi `not_met`
-   trung gian là phạt sự lặp lại. API `record_host_event("objective_pass"|"objective_fail")` có sẵn cho chỗ có kết quả kiểm
-   cuối cùng.
-7. **Bác đề xuất** chưa có thao tác trong nhóm nên chưa có tín hiệu.
+6. **Kiểm khách quan chỉ tính kết luận cuối** (mục 2a), không bao giờ đánh giá trung gian.
+7. **Bỏ qua trên thẻ đề xuất nhóm nay là bác** (ghi máy chủ, -0.4); trước đây chỉ ẩn ở trang.
 8. **Bỏ chốt rồi chốt lại** cùng tin không tính lại (nguồn đã `void` giữ chỗ UNIQUE), chống bấm qua lại để nâng điểm.
 9. **Lý do lớp 3 khi tạm dừng:** host không điều phối lý do của ngữ cảnh `paused`/`off`; ngủ đông và chờ chủ vẫn được.
 10. **`POST /seen`** nhận thêm `context_ref = "session:<mã phiên>"` (trang không biết `agent_key`); máy chủ đổi sang
@@ -132,8 +151,9 @@ giờ. `pulse_signals` UNIQUE `(source_ref, agent_key)`; thay reaction thì dòn
 
 Engine giả ở mọi nơi; không lời gọi model thật. (Phiên làm việc không ghi được ra `exports/reviews/`, nên bằng chứng nằm ở đây.)
 
-- `test_agent_pulse_policy.py` 100 kiểm, `test_agent_pulse_host.py` 60 kiểm (gồm chặn engine thật qua `main.py`, route,
-  `POST /seen`), `test_pulse_contrib.py` 31 kiểm, `tests/js/test_agent_pulse_ui.js` 38 kiểm: đều xanh.
+- `test_agent_pulse_policy.py` 100 kiểm, `test_agent_pulse_host.py` 66 kiểm (gồm chặn engine thật qua `main.py`, route,
+  `POST /seen`, nhận/bác đề xuất), `test_pulse_contrib.py` 49 kiểm (gồm kiểm khách quan, bác đề xuất),
+  `tests/js/test_agent_pulse_ui.js` 45 kiểm: đều xanh.
 - `tests/run.py pulse team resonance feedback agent_calls i18n icons route_table`: 88/89, cái đỏ là `test_resonance_perf.py`
   (trễ event loop 0,114 giây > 0,1). So với `origin/claude/team-adaptive-t3` trong worktree sạch: bản gốc 4/4 xanh, nhánh 3/4 đỏ,
   nên là lỗi thật của nhánh: `GoalStore` dựng trong event loop ở GET đầu tiên và `agent_pulse.ensure` ghi nhiều lần. Sửa ở

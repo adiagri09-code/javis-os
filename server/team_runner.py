@@ -733,6 +733,8 @@ class TeamRunner:
         prop = ((msg or {}).get("meta") or {}).get("proposal")
         if not msg or msg.get("author_kind") != "agent" or not prop:
             raise TeamError("tin này không phải đề xuất việc")
+        if (msg.get("meta") or {}).get("proposal_status") == "rejected":
+            raise TeamError("đề xuất này đã bị bác")
         tid, created = self.tasks.enqueue_team(
             team["brain_id"], team_id, prop["title"], prop.get("brief") or prop["title"],
             source_ref=f"proposal:{team['session_id']}:{int(message_id)}", coordinator_key=team["leader_key"] or "",
@@ -743,6 +745,12 @@ class TeamRunner:
             self.pulse_task_event("accept", team_id, [msg.get("author_ref") or ""],
                                   f"accept:{team_id}:{int(message_id)}", f"team:{team['session_id']}:{int(message_id)}",
                                   wake_why="new_job")
+            self._pulse("pulse_proposal_decided", f"team:{team_id}", int(message_id), "accepted", tid)
+        if (msg.get("meta") or {}).get("proposal_status") != "accepted":
+            self.sessions.update_team_message_meta(team["session_id"], int(message_id),
+                                                   {"proposal_status": "accepted", "proposal_task": tid})
+            self._publish({"type": "team_message", "team_id": team_id,
+                           "message": self.sessions.team_message(team["session_id"], int(message_id))})
         return tid
 
     # ───────────── bộ phán xử theo agent (T3 phần J, 0.156.0) ─────────────
@@ -1150,6 +1158,26 @@ class TeamRunner:
     def _team_msg(self, team_id: str, mid: int) -> Optional[dict]:
         team = self.teams.get(team_id)
         return self.sessions.team_message(team["session_id"], int(mid)) if team else None
+
+    def reject_proposal(self, team_id: str, message_id: int) -> bool:
+        """Chủ nhóm bác thẻ đề xuất (nút Bỏ qua, T3): ghi trạng thái lên thẻ (mọi tab thấy), tín hiệu -0.4 w 0.8 cho agent
+        đề xuất. Đã nhận thành việc thì không bác được; bấm lại không ghi lần hai. Trả True khi lần này mới bác."""
+        team = self._team(team_id)
+        msg = self.sessions.team_message(team["session_id"], int(message_id))
+        meta = (msg or {}).get("meta") or {}
+        if not msg or msg.get("author_kind") != "agent" or not meta.get("proposal"):
+            raise TeamError("tin này không phải đề xuất việc")
+        if meta.get("proposal_status") == "accepted":
+            raise TeamError("đề xuất này đã thành việc")
+        if meta.get("proposal_status") == "rejected":
+            return False
+        self.sessions.update_team_message_meta(team["session_id"], int(message_id), {"proposal_status": "rejected"})
+        self.pulse_task_event("reject", team_id, [msg.get("author_ref") or ""], f"reject:{team_id}:{int(message_id)}",
+                              f"team:{team['session_id']}:{int(message_id)}")
+        self._pulse("pulse_proposal_decided", f"team:{team_id}", int(message_id), "rejected")
+        self._publish({"type": "team_message", "team_id": team_id,
+                       "message": self.sessions.team_message(team["session_id"], int(message_id))})
+        return True
 
     # ───────────── Toàn quyền (T3, spec mục 13) ─────────────
 

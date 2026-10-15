@@ -2838,6 +2838,12 @@ def _settle(goal: GoalRecord, a: Assessment, deps: GoalDeps, now: float, worked:
             store.supersede_timers(p, goal.id, ("retry", "check"), now, revision=rev)
             store.set_run_state(p, goal.id, "blocked", "budget", notify="goal.blocked", payload={"code": "budget"},
                                 idem=f"blocked:budget:{rev}", expect_revision=rev)
+            if a.verdict == "not_met":
+                # T3 (6.1): revision đóng lại vì hết hạn mức mà kiểm khách quan cuối là KHÔNG ĐẠT: đó là kết luận cuối
+                # (không còn lượt thử). Đánh giá trung gian trong vòng làm việc không bao giờ thành tín hiệu.
+                fn = getattr(store, "pulse_objective", None)
+                if fn is not None:
+                    fn(goal.id, rev, False)
             return a
         else:
             # Bế tắc (hay chỉ còn lượt dự phòng): DỪNG thử tự động và chờ, không kết luận thất bại. Góp ý hay revision

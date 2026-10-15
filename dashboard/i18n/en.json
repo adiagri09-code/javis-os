@@ -4402,5 +4402,13 @@
   "teams.cap.volunteer_k": "People who may speak up per message (K, 0 turns it off)",
   "teams.cap.judge_off_batch": "Judging when an assistant's Auto is off",
   "teams.limits.mode_batch": "Code filter, then one judge batch",
-  "teams.limits.mode_code": "Code filter only"
+  "teams.limits.mode_code": "Code filter only",
+  "pulse.proposals_title": "Assistant proposals",
+  "pulse.btn.accept": "Turn into a job",
+  "pulse.btn.reject": "Reject",
+  "pulse.prop.status.pending": "Waiting for you",
+  "pulse.prop.status.accepted": "Turned into a job",
+  "pulse.prop.status.rejected": "Rejected",
+  "teams.proposal_accepted": "A job was created from this proposal",
+  "teams.proposal_rejected": "You rejected this proposal"
 }

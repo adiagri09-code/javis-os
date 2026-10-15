@@ -779,6 +779,20 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             return {"ok": True, "task_id": tid}
         return await api.io(_do)
 
+    @app.post("/teams/{team_id}/messages/{message_id}/reject")
+    async def teams_reject(team_id: str, message_id: int, brain: str = "brain"):
+        """Bác thẻ đề xuất việc (T3, nút Bỏ qua): -0.4 cho agent đề xuất, thẻ đổi trạng thái ở mọi tab."""
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            try:
+                changed = api.runner().reject_proposal(team_id, message_id)
+            except TeamError as ex:
+                return _team_err(ex, 409)
+            return {"ok": True, "rejected": True, "changed": changed}
+        return await api.io(_do)
+
     @app.post("/teams/{team_id}/messages/{message_id}/decision")
     async def teams_decision(team_id: str, message_id: int, request: Request, brain: str = "brain"):
         on = bool((await _body(request)).get("on", True))

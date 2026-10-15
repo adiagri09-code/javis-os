@@ -175,6 +175,43 @@ r.accept_proposal(tid, mp)
 acc = [s for s in AP.signals(gs, K["lan"]) if s["source_ref"] == f"accept:{tid}:{mp}"]
 check("chấp nhận đề xuất: +0.6 w0.8 cho agent đề xuất, bấm lại không thêm", len(acc) == 1 and acc[0]["value"] == 0.6
       and acc[0]["w"] == 0.8, acc)
+check("thẻ đã nhận thành việc: trạng thái ghi lên tin (mọi tab thấy), không bác được nữa",
+      (ss.team_message(tsid, mp)["meta"] or {}).get("proposal_status") == "accepted")
+try:
+    r.reject_proposal(tid, mp)
+    check("bác thẻ đã thành việc: từ chối", False)
+except team_store.TeamError:
+    check("bác thẻ đã thành việc: từ chối", True)
+mq, _ = ss.append_team_message(tsid, "assistant", "Đề xuất 2", author_kind="agent", author_ref=K["lan"],
+                               meta={"proposal": {"title": "Khảo sát", "brief": "x"}})
+check("bác đề xuất (nút Bỏ qua): lần đầu đổi trạng thái, bấm lại không ghi lần hai",
+      r.reject_proposal(tid, mq) is True and r.reject_proposal(tid, mq) is False
+      and (ss.team_message(tsid, mq)["meta"] or {}).get("proposal_status") == "rejected")
+rj = [s for s in AP.signals(gs, K["lan"]) if s["source_ref"] == f"reject:{tid}:{mq}"]
+check("bác đề xuất: -0.4 w0.8 cho agent đề xuất, đúng một dòng", len(rj) == 1 and rj[0]["value"] == -0.4
+      and rj[0]["w"] == 0.8, rj)
+try:
+    r.accept_proposal(tid, mq)
+    check("thẻ đã bác: không tạo việc được", False)
+except team_store.TeamError:
+    check("thẻ đã bác: không tạo việc được", True)
+# Đề xuất do lượt quét tạo trong nhóm: chủ quyết ở thẻ thì sổ đề xuất của nhịp cập nhật, không ghi tín hiệu lần hai.
+mr, _ = ss.append_team_message(tsid, "assistant", "Đề xuất 3", author_kind="agent", author_ref=K["lan"],
+                               meta={"proposal": {"title": "Cập nhật", "brief": "x"}})
+pid = AP.record_proposal(gs, agent_key=K["lan"], context_ref=ctx, source_ref="task:t9", version="5", title="Cập nhật",
+                         session_id=tsid, message_id=mr)
+r.reject_proposal(tid, mr)
+check("thẻ nhóm do lượt quét tạo: sổ đề xuất thành rejected, chỉ một tín hiệu (của thẻ)",
+      AP.proposal(gs, pid)["status"] == "rejected" and not [s for s in AP.signals(gs, K["lan"])
+                                                              if s["source_ref"] == f"reject:pp:{pid}"])
+check("không mở lại đề xuất khi không có dữ kiện mới: cùng nguồn cùng phiên bản bị chặn, phiên bản mới thì được",
+      AP.proposal_blocked(gs, K["lan"], ctx, "task:t9", "5") and not AP.proposal_blocked(gs, K["lan"], ctx, "task:t9", "6"))
+pd = AP.record_proposal(gs, agent_key=K["minh"], context_ref=f"dm:{K['minh']}", source_ref="goal:g", version="1",
+                        title="Hỏi lại mục tiêu")
+row = AP.decide_proposal(gs, pd, "accepted", task_id="t_x")
+check("đề xuất chat riêng được nhận: +0.6 w0.8, nguồn accept:pp:<id>, lần hai không quyết được",
+      row and row["status"] == "accepted" and AP.decide_proposal(gs, pd, "rejected") is None
+      and [s["value"] for s in AP.signals(gs, K["minh"]) if s["source_ref"] == f"accept:pp:{pd}"] == [0.6])
 authors = r.result_authors(ts.get_task(task))
 check("người nộp kết quả của bản hiện tại: bước làm và tổng hợp đã áp", set(authors) == set(K.values()), authors)
 r.pulse_task_event("revise", tid, authors, f"revise:{task}:2")
@@ -197,6 +234,58 @@ r.pulse_task_event("decision", tid, [K["minh"]], f"decision:{tid}:2")
 pj.void_task_event(f"decision:{tid}:2")
 check("bỏ chốt quyết định: tín hiệu void", [s["status"] for s in AP.signals(gs, K["minh"])
                                             if s["source_ref"] == f"decision:{tid}:2"] == ["void"])
+
+# ═════ kiểm khách quan: chỉ kết luận CUỐI của mỗi (mục tiêu, revision) ═════
+import inspect  # noqa: E402
+import time as _t  # noqa: E402
+import resonance as R  # noqa: E402
+
+go = TEMP / "goal"
+go.mkdir()
+G = RS.GoalStore(go / "resonance.sqlite3")
+gown = RS.Principal("owner", "owner", str(go))
+gk = G.agent_set_enabled(gown, "viet", True)["agent_key"]
+gk2 = G.agent_set_enabled(gown, "lan", True)["agent_key"]
+
+
+def mk_goal(gid, key):
+    now = _t.time()
+    with G._Tx(G) as c:
+        c.execute("INSERT INTO goals(id,brain_id,owner,revision,status,idempotency_key,output_root,created_at,updated_at) "
+                  "VALUES(?,?,?,?,?,?,?,?,?)", (gid, str(go), "owner", 1, "active", gid, str(go), now, now))
+        c.execute("INSERT INTO goal_agents(goal_id,brain_id,agent_key,created_at) VALUES(?,?,?,?)", (gid, str(go), key, now))
+
+
+mk_goal("g1", gk)
+for v in ("not_met", "not_met", "unknown"):
+    G.add_assessment(gown, {"goal_id": "g1", "revision": 1, "verdict": v})
+check("đánh giá trung gian trong vòng làm việc không tạo tín hiệu nào",
+      [s for s in AP.signals(G, gk) if s["source_ref"].startswith("obj:")] == [])
+check("kết thúc succeeded (kiểm khách quan cuối đạt): một tín hiệu +0.5 w0.8 cho agent của mục tiêu, nguồn obj:<goal>:<rev>",
+      G.finish(gown, "g1", 1, "succeeded") is True)
+obj = [s for s in AP.signals(G, gk) if s["source_ref"] == "obj:g1:1"]
+check("tín hiệu kiểm khách quan đúng giá trị, ngữ cảnh chat riêng của agent", len(obj) == 1 and obj[0]["value"] == 0.5
+      and obj[0]["w"] == 0.8 and obj[0]["context_ref"] == f"dm:{gk}" and obj[0]["status"] == "live", obj)
+check("kết thúc lại (không còn active): không thêm tín hiệu", G.finish(gown, "g1", 1, "succeeded") is False
+      and len([s for s in AP.signals(G, gk) if s["source_ref"] == "obj:g1:1"]) == 1)
+mk_goal("g2", gk)
+check("revision bị gác vì hết hạn mức với kiểm cuối không đạt: -0.5", G.pulse_objective("g2", 1, False) == "recorded"
+      and [s["value"] for s in AP.signals(G, gk) if s["source_ref"] == "obj:g2:1"] == [-0.5])
+check("gọi lại cùng kết luận: không đổi", G.pulse_objective("g2", 1, False) == "unchanged")
+check("chủ nới hạn mức rồi chính revision đó đạt: sửa ĐÚNG tín hiệu đó thành +0.5, vẫn một dòng",
+      G.finish(gown, "g2", 1, "succeeded") and [s["value"] for s in AP.signals(G, gk) if s["source_ref"] == "obj:g2:1"]
+      == [0.5])
+mk_goal("g3", gk2)
+G.agent_set_enabled(gown, "lan", False)
+G.finish(gown, "g3", 1, "succeeded")
+check("agent tắt Cộng hưởng: kết luận cuối không thành tín hiệu", [s for s in AP.signals(G, gk2)
+                                                                  if s["source_ref"].startswith("obj:")] == [])
+src = inspect.getsource(R._settle)
+i = src.index('"blocked", "budget"')
+check("đường hết hạn mức trong _settle chỉ ghi kiểm khách quan khi kết luận là not_met (không ghi cho unknown)",
+      'if a.verdict == "not_met"' in src[i:i + 900] and "pulse_objective" in src[i:i + 900])
+check("finish chỉ là nơi kết luận cuối đạt/không đạt; add_assessment không gọi kho nhịp",
+      "pulse_objective" not in inspect.getsource(RS.GoalStore.add_assessment))
 
 print(f"\n{len(fails)} FAIL" if fails else "\nALL OK")
 raise SystemExit(1 if fails else 0)
