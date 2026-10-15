@@ -10,6 +10,13 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 ### Sửa lỗi
 - **Nhóm chat không còn hiện tên lệnh lạ do trợ lý tự bịa.** Khi câu trả lời của một trợ lý có lệnh Javis không hỗ trợ, nhóm chỉ ghi "Câu trả lời có một lệnh Javis không hỗ trợ, đã bỏ", thay vì chép nguyên một mã khó hiểu ra bong bóng tin.
 
+## [0.171.0] - 2026-10-15
+### Thêm mới
+- **Trích dẫn để hỏi tiếp:** dưới mỗi tin trong khung chat có nút Trích dẫn. Bấm vào là đoạn đó nằm sẵn trên ô nhập, bạn chỉ việc gõ câu hỏi tiếp, khỏi phải chép lại. Muốn trích một phần thì bôi đen đoạn đó rồi bấm.
+- **Chia sẻ hội thoại bằng link:** nút Chia sẻ cạnh nút kẹp giấy trên đầu khung chat tạo link cho người khác đọc, không cần đăng nhập, link tự được chép sẵn. Người xem chỉ thấy câu hỏi và câu trả lời, không thấy file đính kèm, công cụ hay ghi chú ẩn.
+- **Hộp thư bot hiện ảnh và file khách gửi:** ảnh hiện thẳng trong cuộc chat (bấm để xem cỡ thật), file thành thẻ bấm Tải về, thay cho dòng link dài hay đường dẫn trên máy chủ. Áp dụng cho Zalo cá nhân và các kênh bot Telegram, Zalo Bot, Slack, WhatsApp, Messenger, Discord, Lark.
+- **Link là ảnh chụp tới lúc chia sẻ:** tin gõ sau đó không tự hiện ra. Muốn người xem thấy thêm thì bấm "Cập nhật tới tin mới nhất", link giữ nguyên. Link hội thoại nằm chung ở trang Link chia sẻ, đổi tên và thu hồi được như link file.
+- (đang viết)
 ## [0.170.0] - 2026-10-15
 ### Cải thiện
 - **Nhóm nhiều nghìn tin vẫn nhớ điều quan trọng:** mỗi lượt trả lời trợ lý vẫn thấy quyết định đã ghim, yêu cầu gốc và trạng thái các việc đang mở, ai đã góp vào kết quả gần nhất và phản hồi của bạn còn chờ xem xét, dù chúng nằm rất xa trong lịch sử.
