@@ -1085,12 +1085,15 @@ class SessionStore:
         p = self.get_project(project_id)
         if not p:
             return None
+        # `rowid DESC` breaks added_at ties by insertion order: two adds in the same clock
+        # tick (common on a fast Windows box) otherwise came back in whatever order SQLite
+        # chose. Same tie-break in list_session_files / list_session_links.
         p["files"] = [dict(r) for r in self._read(
             "SELECT id, path, name, pinned, added_at FROM project_files "
-            "WHERE project_id = ? ORDER BY pinned DESC, added_at DESC", (project_id,))]
+            "WHERE project_id = ? ORDER BY pinned DESC, added_at DESC, rowid DESC", (project_id,))]
         p["links"] = [dict(r) for r in self._read(
             "SELECT id, url, label, pinned, added_at FROM project_links "
-            "WHERE project_id = ? ORDER BY pinned DESC, added_at DESC", (project_id,))]
+            "WHERE project_id = ? ORDER BY pinned DESC, added_at DESC, rowid DESC", (project_id,))]
         return p
 
     def update_project(self, project_id: str, *, name: Optional[str] = None,
@@ -1220,12 +1223,12 @@ class SessionStore:
     def list_session_files(self, session_id: str) -> List[Dict[str, Any]]:
         return [dict(r) for r in self._read(
             "SELECT id, path, name, pinned, added_at FROM session_files "
-            "WHERE session_id = ? ORDER BY pinned DESC, added_at DESC", (session_id,))]
+            "WHERE session_id = ? ORDER BY pinned DESC, added_at DESC, rowid DESC", (session_id,))]
 
     def list_session_links(self, session_id: str) -> List[Dict[str, Any]]:
         return [dict(r) for r in self._read(
             "SELECT id, url, label, pinned, added_at FROM session_links "
-            "WHERE session_id = ? ORDER BY pinned DESC, added_at DESC", (session_id,))]
+            "WHERE session_id = ? ORDER BY pinned DESC, added_at DESC, rowid DESC", (session_id,))]
 
     def add_session_file(self, session_id: str, path: str, name: str = "") -> Optional[str]:
         """Gắn một file có sẵn trong brain vào cuộc trò chuyện. Trùng đường dẫn thì trả id cũ.

@@ -94,6 +94,47 @@ check("bỏ ghim thì về lại thứ tự mới-nhất-trước",
       st.get_project_full(pid)["files"][0]["id"] == f2)   # f2 thêm sau nên vẫn đứng đầu
 
 # ============================================================
+# 2b. Identical timestamps: newest-first must not depend on the clock ticking
+# ============================================================
+# Regression: on a fast machine two back-to-back adds can share one time.time() value, and
+# the old ORDER BY (pinned, added_at) left the tie to SQLite, so the older row could come
+# first. Freeze the clock so every row below gets the SAME added_at and check that
+# insertion order (rowid) breaks the tie, for all four project/session asset lists.
+from unittest import mock  # noqa: E402
+
+pid_tie = st.create_project("Tie project", brain="brain")
+st.get_or_create("s-tie", brain="brain", engine="cli", model="sonnet")
+with mock.patch.object(sessions.time, "time", return_value=1_700_000_000.0):
+    tf1 = st.add_project_file(pid_tie, "a/first.md")
+    tf2 = st.add_project_file(pid_tie, "a/second.md")
+    tl1 = st.add_project_link(pid_tie, "https://first.example")
+    tl2 = st.add_project_link(pid_tie, "https://second.example")
+    sf1 = st.add_session_file("s-tie", "a/first.md")
+    sf2 = st.add_session_file("s-tie", "a/second.md")
+    sl1 = st.add_session_link("s-tie", "https://first.example")
+    sl2 = st.add_session_link("s-tie", "https://second.example")
+_full_tie = st.get_project_full(pid_tie)
+check("tie setup: both project files really share one timestamp",
+      len({f["added_at"] for f in _full_tie["files"]}) == 1, _full_tie["files"])
+check("same timestamp: project files still newest first",
+      [f["id"] for f in _full_tie["files"]] == [tf2, tf1],
+      [f["name"] for f in _full_tie["files"]])
+check("same timestamp: project links still newest first",
+      [l["id"] for l in _full_tie["links"]] == [tl2, tl1],
+      [l["url"] for l in _full_tie["links"]])
+check("same timestamp: session files still newest first",
+      [f["id"] for f in st.list_session_files("s-tie")] == [sf2, sf1])
+check("same timestamp: session links still newest first",
+      [l["id"] for l in st.list_session_links("s-tie")] == [sl2, sl1])
+st.set_project_file_pinned(pid_tie, tf1, True)
+check("same timestamp: a pin still wins over the tie-break",
+      [f["id"] for f in st.get_project_full(pid_tie)["files"]] == [tf1, tf2])
+st.set_project_file_pinned(pid_tie, tf1, False)
+check("same timestamp: unpinning goes back to newest first",
+      [f["id"] for f in st.get_project_full(pid_tie)["files"]] == [tf2, tf1])
+st.delete_project(pid_tie)
+
+# ============================================================
 # 3. Không được đụng sang project khác dù đoán trúng id
 # ============================================================
 pid2 = st.create_project("Project khác", brain="brain")
