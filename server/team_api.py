@@ -586,11 +586,15 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 return _err(404, "Không có việc này trong nhóm", "No such job in this team")
             if not text:
                 return _err(400, "Thiếu nội dung sửa", "The change is empty")
-            with api.runner().accept_lock:
+            runner = api.runner()
+            with runner.accept_lock:
+                authors = runner.result_authors(deps.task_store().get_task(task_id))
                 rev = deps.task_store().team_amend(task_id, text)
             if rev is None:
                 return _err(409, "Việc đã kết thúc", "The job has already ended")
-            api.runner()._state(team_id)
+            runner._state(team_id)
+            # T3 (6.1): sửa yêu cầu SAU khi đã có kết quả: -0.4 cho người nộp kết quả của bản trước.
+            runner.pulse_task_event("revise", team_id, authors, f"revise:{task_id}:{rev}")
             return {"ok": True, "revision": rev}
         return await api.io(_do)
 
@@ -767,8 +771,15 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             ss = deps.session_store()
             if not ss.update_team_message_meta(team["session_id"], message_id, {"decision": on}):
                 return _err(404, "Không có tin này trong nhóm", "No such message in this team")
-            api.runner()._publish({"type": "team_message", "team_id": team_id,
-                                   "message": ss.team_message(team["session_id"], message_id)})
+            msg = ss.team_message(team["session_id"], message_id)
+            api.runner()._publish({"type": "team_message", "team_id": team_id, "message": msg})
+            # T3 (6.1): chốt quyết định trên tin của agent là bằng chứng hữu ích (+0.6); bỏ chốt thì tín hiệu `void`.
+            src = f"decision:{team_id}:{int(message_id)}"
+            if on and (msg or {}).get("author_kind") == "agent":
+                api.runner().pulse_task_event("decision", team_id, [msg.get("author_ref") or ""], src,
+                                              f"team:{team['session_id']}:{int(message_id)}")
+            elif not on:
+                api.runner()._pulse("void_task_event", src)
             return {"ok": True}
         return await api.io(_do)
 

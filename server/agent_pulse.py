@@ -590,6 +590,8 @@ def record_contrib(store, *, source_ref: str, result_ref: str, synth: str, input
     hiệu trực tiếp riêng cho cùng nguồn). Gọi lại cùng `result_ref`: không đổi gì. Bản kết quả khác (thay bản): phân bổ
     cũ `superseded`, tính lại theo bản mới, không cộng dồn. Trả {agent_key: share}."""
     ensure(store)
+    if str(reactor or "").startswith("agent:"):
+        return {}   # agent không tự thưởng nhau, kể cả qua bản tổng hợp
     sig = signal or reaction_signal(value, reasons)
     inputs = [str(a) for a in (inputs or []) if a]
     alloc = attribute(synth, inputs)

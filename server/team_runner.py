@@ -489,6 +489,9 @@ class TeamRunner:
         self.teams.touch(team_id)
         out.update(message_id=mid, created=created)
         self._publish({"type": "team_message", "team_id": team_id, "message": self.sessions.team_message(sid, mid)})
+        if created:
+            for key in valid:
+                self._pulse("pulse_wake", key, f"team:{team_id}", "new_job" if as_job else "direct_call")
         if as_job:
             out["task_id"] = self._enqueue_for(team, mid, text, valid)[0]
             self._state(team_id)
@@ -680,11 +683,16 @@ class TeamRunner:
         prop = ((msg or {}).get("meta") or {}).get("proposal")
         if not msg or msg.get("author_kind") != "agent" or not prop:
             raise TeamError("tin này không phải đề xuất việc")
-        tid, _ = self.tasks.enqueue_team(
+        tid, created = self.tasks.enqueue_team(
             team["brain_id"], team_id, prop["title"], prop.get("brief") or prop["title"],
             source_ref=f"proposal:{team['session_id']}:{int(message_id)}", coordinator_key=team["leader_key"] or "",
             chat_id=f"team:{team_id}")
         self._state(team_id)
+        if created:
+            # T3 (6.1): chủ chấp nhận đề xuất là bằng chứng hữu ích cho agent đề xuất (+0.6, w 0.8).
+            self.pulse_task_event("accept", team_id, [msg.get("author_ref") or ""],
+                                  f"accept:{team_id}:{int(message_id)}", f"team:{team['session_id']}:{int(message_id)}",
+                                  wake_why="new_job")
         return tid
 
     # ───────────── Toàn quyền (T3, spec mục 13) ─────────────
@@ -1090,6 +1098,40 @@ class TeamRunner:
             self.projector.project(kind, int(log_id))
         except Exception as ex:  # noqa: BLE001
             log.warning("team reaction projector failed for log %s: %s", log_id, ex)
+
+    # ───────────── tín hiệu nhịp lớp 3 từ sự kiện host (T3, thiết kế 6.1, 5.2) ─────────────
+
+    def _pulse(self, method: str, *args, **kwargs) -> Any:
+        """Gọi bộ chiếu (T3) mà không bao giờ làm hỏng thao tác của chủ: không có bộ chiếu hay lỗi thì bỏ qua."""
+        fn = getattr(self.projector, method, None) if self.projector is not None else None
+        if fn is None:
+            return None
+        try:
+            return fn(*args, **kwargs)
+        except Exception as ex:  # noqa: BLE001
+            log.warning("pulse %s failed: %s", method, ex)
+            return None
+
+    def result_authors(self, task: Optional[dict]) -> list:
+        """Agent đã nộp kết quả ĐÃ ÁP cho bản yêu cầu hiện tại của việc (bước làm, tổng hợp; không có thì bước kế hoạch tự
+        làm). Dùng cho tín hiệu "sửa yêu cầu sau kết quả" và "huỷ" (6.1): chưa có kết quả thì không ai bị tính."""
+        if not task:
+            return []
+        rev = int(task.get("team_rev") or 0)
+        done = [s for s in self.teams.steps(task["id"]) if s["status"] == "done" and s["applied"]
+                and s["result_msg_id"] and int(s["job_revision"]) == rev]
+        main = [s["agent_key"] for s in done if s["kind"] in ("work", "synthesize")]
+        if not main:
+            main = [s["agent_key"] for s in done if s["kind"] == "plan"]
+        return [k for k in dict.fromkeys(main) if k]
+
+    def pulse_task_event(self, event: str, team_id: str, authors: list, source: str, subject: str = "",
+                         wake_why: str = "") -> None:
+        authors = [a for a in dict.fromkeys(authors or []) if a]
+        if authors:
+            self._pulse("record_task_event", event, context_ref=f"team:{team_id}",
+                        agents={a: 1.0 / len(authors) for a in authors}, source_ref_=source, subject_ref=subject,
+                        wake_why=wake_why)
 
     def message_view(self, team: dict, msg: dict, reaction: Any = _UNPINNED) -> dict:
         """Tin nhóm cho gói WS và trang tin: reaction của chủ, reaction của agent (chip riêng, chỉ đọc), `content_sha`."""
@@ -2270,9 +2312,14 @@ class TeamRunner:
         """Huỷ việc (spec 7.6). Lượt đang gọi engine bị ngắt (tính một lần, `interrupted`); bước chưa chạy huỷ theo.
         Trả trạng thái trước khi huỷ, None nếu việc đã kết thúc hay không thuộc làn team. Gọi được từ luồng phụ: phần
         ghi kho chạy ngay, phần huỷ task asyncio xếp về event loop."""
+        before = self.tasks.get_task(task_id)
+        authors = self.result_authors(before) if before else []
         prev = self._cancel_records(task_id, reason)
         if prev is not None:
             self._on_loop(self._cancel_task, task_id)
+            if before:
+                # T3 (6.1): huỷ sau khi đã có kết quả là bằng chứng chưa hữu ích (-0.4) cho người nộp kết quả đó.
+                self.pulse_task_event("cancel", before["team_id"], authors, f"cancel:{task_id}")
         return prev
 
     def _cancel_records(self, task_id: str, reason: str) -> Optional[str]:

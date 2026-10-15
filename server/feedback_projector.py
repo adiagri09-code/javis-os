@@ -174,6 +174,18 @@ class FeedbackProjector:
             log.warning("pulse task event %s %s: %s: %s", event, source_ref_, type(ex).__name__, ex)
             return []
 
+    def pulse_wake(self, agent_key: str, context_ref: str, why: str) -> bool:
+        """Thức lại nhịp lớp 3 (5.2) khi chủ gọi trực tiếp hay giao việc mới. Tạm dừng, tắt: không đổi gì. Lỗi nuốt."""
+        try:
+            res = self._resonance()
+            if res is None or not agent_key:
+                return False
+            import agent_pulse as AP
+            return AP.wake(res, agent_key, context_ref, why)
+        except Exception as ex:  # noqa: BLE001
+            log.warning("pulse wake %s %s: %s", agent_key, context_ref, ex)
+            return False
+
     def void_task_event(self, source_ref_: str) -> None:
         """Chủ gỡ một sự kiện đã ghi (bỏ ghim quyết định): tín hiệu của nguồn đó thành `void`."""
         try:
