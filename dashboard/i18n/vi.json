@@ -4337,6 +4337,7 @@
   "pulse.fb.status.superseded": "Đã thay",
   "pulse.fb.status.void": "Đã bỏ",
   "pulse.fb.share": "(phần {p}%)",
+  "pulse.empty_waiting": "Chưa có nhịp ở đây. Auto đang bật: nhịp sẽ có sau lần thức đầu tiên.",
   "pulse.empty": "Chưa có nhịp ở đây. Bật Auto cho trợ lý để nó tự điều nhịp.",
   "pulse.error": "Chưa lưu được: {e}",
   "pulse.error_generic": "máy chủ không xác nhận",

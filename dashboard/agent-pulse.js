@@ -195,7 +195,8 @@
     if (!o.only) html += '<div class="pulse-line pulse-note">' + esc(tw("pulse.intro")) + "</div>";
     var ctxs = (v.contexts || []).filter(function (c) { return !o.only || c.context_ref === o.only; });
     if (!v.agent_key || !ctxs.length) {
-      html += '<div class="pulse-line">' + esc(tw("pulse.empty")) + "</div>";
+      // Auto đang bật mà chưa có dòng nhịp (chưa tới lần thức đầu): nói đúng như vậy, không khuyên "bật Auto".
+      html += '<div class="pulse-line">' + esc(tw(v.resonance ? "pulse.empty_waiting" : "pulse.empty")) + "</div>";
     } else {
       html += ctxs.map(function (c) { return ctxRowHtml(c, o); }).join("");
     }
@@ -223,7 +224,8 @@
         fb.slice(0, 8).map(function (f) { return "<li>" + esc(feedbackLine(f)) + "</li>"; }).join("") + "</ul>";
     }
     html += proposalsHtml(v.proposals, o);
-    html += partsHtml(v, o.registry, { slug: o.slug || v.slug || "" });
+    // Hàng thành viên của MỘT nhóm (`only`): các mục chỉ vẽ phần của ngữ cảnh đó; tên nhóm thay cho mã.
+    html += partsHtml(v, o.registry, { slug: o.slug || v.slug || "", only: o.only || "", teamNames: o.teamNames || {} });
     if (o.err) html += '<div class="pulse-line pulse-err" role="alert">' + esc(tw("pulse.error", { e: o.err })) + "</div>";
     else if (o.msg) html += '<div class="pulse-line pulse-ok" role="status">' + esc(o.msg) + "</div>";
     return html;
