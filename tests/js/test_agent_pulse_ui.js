@@ -211,8 +211,8 @@ function fakeTimers() {
   check("mọi khoá i18n dùng tới có ở cả vi và en", miss.length === 0, miss.join(", "));
   check("chữ tiếng Việt có dấu (không chữ không dấu)", vi["pulse.btn.wake"] === "Đánh thức" && vi["pulse.state.slowed"] === "Giảm nhịp");
   const dashes = Object.entries(vi).concat(Object.entries(en)).filter(([k, v]) => k.startsWith("pulse.") &&
-    /[–—]/.test(v));
-  check("không em dash, en dash trong chữ mới", dashes.length === 0 && !/[–—]/.test(pulseSrc));
+    /[\u2013\u2014]/.test(v));
+  check("không em dash, en dash trong chữ mới", dashes.length === 0 && !/[\u2013\u2014]/.test(pulseSrc));
 
   console.log(fails ? `\n${fails} FAIL` : "\nALL OK");
   process.exit(fails ? 1 : 0);
