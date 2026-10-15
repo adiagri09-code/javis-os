@@ -321,9 +321,181 @@ class TeamApi:
             await asyncio.sleep(LOOP_EVERY_S)
 
 
+class OpError(Exception):
+    """Lỗi của một thao tác nhóm, có mã HTTP và câu hai thứ tiếng (route trả JSON, công cụ `javis_team` trả chữ)."""
+
+    def __init__(self, code: int, vi: str, en: str, **extra):
+        super().__init__(vi)
+        self.code, self.vi, self.en, self.extra = code, vi, en, extra
+
+
+class TeamOps:
+    """Thao tác quản lý nhóm dùng chung cho route `/teams/*` và công cụ `javis_team` (0.172.0): một chỗ duy nhất giữ luật
+    (kiểm trợ lý có thật, khoá `accept_lock`, huỷ việc khi lưu trữ, chạy lại khi mở lại), nên trang web và Javis trong chat
+    làm y như nhau. Mọi hàm chạy ở luồng phụ (route qua `api.io`, công cụ qua `asyncio.to_thread`). Lỗi: `OpError` hay
+    `TeamError` của kho."""
+
+    def __init__(self, api: "TeamApi"):
+        self.api = api
+        self.deps = api.deps
+
+    # ───────────── tra cứu ─────────────
+
+    def root(self, brain: str) -> str:
+        root = self.deps.brain_key(brain or "")
+        if not root or not Path(root).is_dir():
+            raise OpError(404, "Không tìm thấy brain", "Brain not found")
+        return root
+
+    def team(self, root: str, team_id: str) -> dict:
+        team = self.api.teams().get(team_id) if self.api.exists() else None
+        if not team or team["brain_id"] != root:
+            raise OpError(404, "Không có nhóm này", "Team not found")
+        return team
+
+    def slugs(self, root: str) -> set:
+        return {m["slug"] for m in (self.deps.agents_meta(root) or [])}
+
+    def member_key(self, team: dict, who: str) -> str:
+        """`who` là agent_key hay slug của một thành viên (đang hoạt động hay đã rời) của nhóm."""
+        who = str(who or "").strip()
+        for m in self.api.teams().members(team["team_id"], include_removed=True):
+            if who in (m["agent_key"], m.get("slug_at_join")):
+                return m["agent_key"]
+        reg = self.deps.resonance_store().agent(team["brain_id"], who) if who else None
+        if reg:
+            return reg["agent_key"]
+        raise OpError(404, f"Không có thành viên: {who}", f"No such member: {who}")
+
+    # ───────────── thao tác ─────────────
+
+    def create(self, brain: str, root: str, name: str, members: list, leader: str = "", description: str = "",
+               client_req_id: str = "") -> dict:
+        """Tạo nhóm. Trả {"team": dòng nhóm, "duplicate": bool}."""
+        name = str(name or "").strip()
+        members = [str(s) for s in (members or []) if str(s or "").strip()]
+        leader = str(leader or "").strip()
+        if not name:
+            raise OpError(400, "Thiếu tên nhóm", "Team name is required")
+        if leader and leader not in members:
+            members.append(leader)
+        # Nhóm cần ít nhất một trợ lý (0.142.0): người tạo là người thật, không tính là thành viên AI.
+        if not members:
+            raise OpError(400, "Chọn ít nhất một trợ lý", "Pick at least one assistant")
+        have = self.slugs(root)
+        missing = [s for s in members if s not in have]
+        if missing:
+            raise OpError(400, f"Không có trợ lý: {', '.join(missing)}", f"No such assistant: {', '.join(missing)}")
+        teams = self.api.teams()
+        # Bấm Tạo hai lần hay mạng chậm gửi lại cùng mã: trả nhóm đã tạo, không tạo phiên hay nhóm thứ hai.
+        req = str(client_req_id or "").strip()[:80]
+        old = teams.find_by_request(root, req) if req else None
+        if old is not None:
+            return {"team": old, "duplicate": True}
+        keys = {slug: self.api.register_agent(root, slug)["agent_key"] for slug in dict.fromkeys(members)}
+        tid = team_store.new_team_id()
+        sid = self.deps.session_store().create_session(brain=brain, channel=f"team:{tid}", title=name[:120])
+        # Người tạo: luôn là chủ máy đã qua cổng đăng nhập của server (Javis có một tài khoản), không đọc từ client.
+        try:
+            team = teams.create_team(root, name, str(description or ""), sid, team_id=tid,
+                                     members=[(keys[s], s) for s in keys], leader_key=keys[leader] if leader else None,
+                                     client_req_id=req or None, by="owner")
+        except Exception:
+            # Không tạo được nhóm (kho bận quá lâu...): phiên vừa mở không gắn nhóm nào thì bỏ, không để mồ côi.
+            self._drop_session(sid)
+            raise
+        if team["team_id"] != tid:
+            # Hai yêu cầu cùng mã chạy song song: yêu cầu kia thắng, phiên vừa mở không gắn nhóm nào thì bỏ.
+            self._drop_session(sid)
+            return {"team": team, "duplicate": True}
+        return {"team": team, "duplicate": False}
+
+    def update(self, root: str, team_id: str, **fields) -> dict:
+        """Đổi tên, mô tả, trạng thái (`active`/`paused`/`archived`). Lưu trữ huỷ việc đang chờ hay bị chặn; mở lại thì
+        chạy tiếp. Trả dòng nhóm sau khi đổi."""
+        team = self.team(root, team_id)
+        fields = {k: v for k, v in fields.items() if k in ("name", "description", "status") and v is not None}
+        if not fields:
+            return team
+        runner = self.api.runner()
+        with runner.accept_lock:
+            updated = self.api.teams().update(team_id, **fields)
+        if fields.get("status") == "archived":
+            q = self.deps.task_store().team_queue(team_id)
+            for t in q["waiting"] + q["blocked"]:
+                runner.cancel_job(t["id"], "nhóm đã lưu trữ")
+            runner.cancel_idle_running(team_id, "nhóm đã lưu trữ")
+        elif fields.get("status") == "active" and team["status"] != "active":
+            runner._on_loop(lambda: self.api._spawn(runner.resume_team(team_id)))
+            self.api.kick()
+        runner._state(team_id)
+        return updated
+
+    def add_member(self, root: str, team_id: str, slug: str) -> dict:
+        self.team(root, team_id)
+        slug = str(slug or "").strip()
+        if slug not in self.slugs(root):
+            raise OpError(400, f"Không có trợ lý: {slug}", f"No such assistant: {slug}")
+        reg = self.api.register_agent(root, slug)
+        self.api.teams().add_member(team_id, reg["agent_key"], slug)
+        self.api.runner()._state(team_id)
+        return self.api.teams().get(team_id)
+
+    def remove_member(self, root: str, team_id: str, agent_key: str) -> dict:
+        self.team(root, team_id)
+        with self.api.runner().accept_lock:
+            removed = self.api.teams().remove_member(team_id, agent_key)
+        if not removed:
+            raise OpError(404, "Không phải thành viên đang hoạt động", "Not an active member")
+        self.api.runner()._state(team_id)
+        return self.api.teams().get(team_id)
+
+    def set_leader(self, root: str, team_id: str, agent_key: Optional[str]) -> dict:
+        self.team(root, team_id)
+        with self.api.runner().accept_lock:
+            updated = self.api.teams().set_leader(team_id, str(agent_key) if agent_key else None)
+        if updated["leader_key"]:
+            self.api.runner().resume_no_leader(team_id)
+            self.api.kick()
+        self.api.runner()._state(team_id)
+        return updated
+
+    def delete(self, root: str, team_id: str) -> dict:
+        """Xoá hẳn một nhóm ĐÃ LƯU TRỮ (0.172.0): dòng của nhóm trong kho nhóm và phiên chat của nhóm. Trả dòng đã xoá."""
+        self.team(root, team_id)
+        with self.api.runner().accept_lock:
+            gone = self.api.teams().delete_team(team_id)
+        self._drop_session(gone["session_id"])
+        self.api.runner()._publish({"type": "team_state", "team_id": team_id, "deleted": True})
+        return gone
+
+    def _drop_session(self, sid: str) -> None:
+        try:
+            self.deps.session_store().delete(sid)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+_CURRENT: list = [None]
+
+
+def current() -> Optional[TeamOps]:
+    """`TeamOps` của tiến trình (đặt trong `register`), cho plugin `javis_team` gọi mà không import main. None khi chưa
+    đăng ký (test không dựng host)."""
+    return _CURRENT[0]
+
+
 def register(app, deps: TeamApiDeps) -> TeamApi:
     """Đăng ký route `/teams/*`. Gọi SAU route cuối của main.py để bảng route cũ giữ nguyên thứ tự."""
     api = TeamApi(deps)
+    ops = TeamOps(api)
+    api.ops = ops
+    _CURRENT[0] = ops
+
+    def _op_err(ex: Exception) -> JSONResponse:
+        if isinstance(ex, OpError):
+            return _err(ex.code, ex.vi, ex.en, **ex.extra)
+        return _team_err(ex)
 
     @app.on_event("startup")
     async def _team_loop_start():
@@ -344,9 +516,6 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
         if not team or team["brain_id"] != root:
             return None, _err(404, "Không có nhóm này", "Team not found")
         return team, None
-
-    def _slugs(root: str) -> set:
-        return {m["slug"] for m in (deps.agents_meta(root) or [])}
 
     def _own_task(team_id: str, task_id: str) -> Optional[dict]:
         t = deps.task_store().get_task(task_id)
@@ -379,52 +548,17 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
         body = await _body(request)
 
         def _do():
-            root = _root(brain)
-            if root is None:
-                return _err(404, "Không tìm thấy brain", "Brain not found")
-            name = str(body.get("name") or "").strip()
-            members = [str(s) for s in (body.get("members") or []) if str(s or "").strip()]
-            leader = str(body.get("leader_slug") or "").strip()
-            if not name:
-                return _err(400, "Thiếu tên nhóm", "Team name is required")
-            if leader and leader not in members:
-                members.append(leader)
-            # Nhóm cần ít nhất một trợ lý (0.142.0): người tạo là người thật, không tính là thành viên AI.
-            if not members:
-                return _err(400, "Chọn ít nhất một trợ lý", "Pick at least one assistant")
-            have = _slugs(root)
-            missing = [s for s in members if s not in have]
-            if missing:
-                return _err(400, f"Không có trợ lý: {', '.join(missing)}", f"No such assistant: {', '.join(missing)}")
-            teams = api.teams()
-            # Bấm Tạo hai lần hay mạng chậm gửi lại cùng mã: trả nhóm đã tạo, không tạo phiên hay nhóm thứ hai.
-            req = str(body.get("client_req_id") or "").strip()[:80]
-            old = teams.find_by_request(root, req) if req else None
-            if old is not None:
-                return {"ok": True, "team": api.view(old), "duplicate": True}
-            keys = {slug: api.register_agent(root, slug)["agent_key"] for slug in dict.fromkeys(members)}
-            tid = team_store.new_team_id()
-            sid = deps.session_store().create_session(brain=brain, channel=f"team:{tid}", title=name[:120])
-            # Người tạo: luôn là chủ máy đã qua cổng đăng nhập của server (Javis có một tài khoản), không đọc từ client.
             try:
-                team = teams.create_team(root, name, str(body.get("description") or ""), sid, team_id=tid,
-                                         members=[(keys[s], s) for s in keys], leader_key=keys[leader] if leader else None,
-                                         client_req_id=req or None, by="owner")
-            except Exception:
-                # Không tạo được nhóm (kho bận quá lâu...): phiên vừa mở không gắn nhóm nào thì bỏ, không để mồ côi.
-                try:
-                    deps.session_store().delete(sid)
-                except Exception:  # noqa: BLE001
-                    pass
-                raise
-            if team["team_id"] != tid:
-                # Hai yêu cầu cùng mã chạy song song: yêu cầu kia thắng, phiên vừa mở không gắn nhóm nào thì bỏ.
-                try:
-                    deps.session_store().delete(sid)
-                except Exception:  # noqa: BLE001
-                    pass
-                return {"ok": True, "team": api.view(team), "duplicate": True}
-            return {"ok": True, "team": api.view(team)}
+                root = ops.root(brain)
+                got = ops.create(brain, root, body.get("name"), list(body.get("members") or []),
+                                 body.get("leader_slug") or "", body.get("description") or "",
+                                 body.get("client_req_id") or "")
+            except (OpError, TeamError) as ex:
+                return _op_err(ex)
+            out = {"ok": True, "team": api.view(got["team"])}
+            if got["duplicate"]:
+                out["duplicate"] = True
+            return out
         return await api.io(_do)
 
     @app.get("/teams/{team_id}")
@@ -443,24 +577,25 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             if err:
                 return err
             fields = {k: body[k] for k in ("name", "description", "status") if k in body}
-            if not fields:
-                return {"ok": True, "team": api.view(team)}
-            runner = api.runner()
             try:
-                with runner.accept_lock:
-                    updated = api.teams().update(team_id, **fields)
-            except TeamError as ex:
-                return _team_err(ex)
-            if fields.get("status") == "archived":
-                q = deps.task_store().team_queue(team_id)
-                for t in q["waiting"] + q["blocked"]:
-                    runner.cancel_job(t["id"], "nhóm đã lưu trữ")
-                runner.cancel_idle_running(team_id, "nhóm đã lưu trữ")
-            elif fields.get("status") == "active" and team["status"] != "active":
-                runner._on_loop(lambda: api._spawn(runner.resume_team(team_id)))
-                api.kick()
-            runner._state(team_id)
+                updated = ops.update(team["brain_id"], team_id, **fields)
+            except (OpError, TeamError) as ex:
+                return _op_err(ex)
             return {"ok": True, "team": api.view(updated)}
+        return await api.io(_do)
+
+    @app.delete("/teams/{team_id}")
+    async def teams_delete(team_id: str, brain: str = "brain"):
+        """Xoá hẳn một nhóm đã lưu trữ (0.172.0). Nhóm chưa lưu trữ: 400 kèm lời nhắc lưu trữ trước."""
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            try:
+                gone = ops.delete(team["brain_id"], team_id)
+            except (OpError, TeamError) as ex:
+                return _op_err(ex)
+            return {"ok": True, "deleted": gone["team_id"]}
         return await api.io(_do)
 
     @app.post("/teams/{team_id}/members")
@@ -471,12 +606,10 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             team, err = _team(team_id, brain)
             if err:
                 return err
-            if slug not in _slugs(team["brain_id"]):
-                return _err(400, f"Không có trợ lý: {slug}", f"No such assistant: {slug}")
-            reg = api.register_agent(team["brain_id"], slug)
-            api.teams().add_member(team_id, reg["agent_key"], slug)
-            api.runner()._state(team_id)
-            return {"ok": True, "team": api.view(api.teams().get(team_id))}
+            try:
+                return {"ok": True, "team": api.view(ops.add_member(team["brain_id"], team_id, slug))}
+            except (OpError, TeamError) as ex:
+                return _op_err(ex)
         return await api.io(_do)
 
     @app.delete("/teams/{team_id}/members/{agent_key}")
@@ -485,12 +618,10 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             team, err = _team(team_id, brain)
             if err:
                 return err
-            with api.runner().accept_lock:
-                removed = api.teams().remove_member(team_id, agent_key)
-            if not removed:
-                return _err(404, "Không phải thành viên đang hoạt động", "Not an active member")
-            api.runner()._state(team_id)
-            return {"ok": True, "team": api.view(api.teams().get(team_id))}
+            try:
+                return {"ok": True, "team": api.view(ops.remove_member(team["brain_id"], team_id, agent_key))}
+            except (OpError, TeamError) as ex:
+                return _op_err(ex)
         return await api.io(_do)
 
     @app.post("/teams/{team_id}/leader")
@@ -502,15 +633,9 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             if err:
                 return err
             try:
-                with api.runner().accept_lock:
-                    updated = api.teams().set_leader(team_id, str(key) if key else None)
-            except TeamError as ex:
-                return _team_err(ex)
-            if updated["leader_key"]:
-                api.runner().resume_no_leader(team_id)
-                api.kick()
-            api.runner()._state(team_id)
-            return {"ok": True, "team": api.view(updated)}
+                return {"ok": True, "team": api.view(ops.set_leader(team["brain_id"], team_id, key))}
+            except (OpError, TeamError) as ex:
+                return _op_err(ex)
         return await api.io(_do)
 
     @app.post("/teams/{team_id}/caps")

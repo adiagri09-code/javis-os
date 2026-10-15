@@ -1503,11 +1503,22 @@
     });
   }
 
+  // Nhóm đang mở vừa bị xoá (0.172.0: Javis xoá bằng công cụ javis_team, hay tab khác bấm xoá): đóng khung chat về trạng
+  // thái trống thay vì giữ một nhóm không còn, ô soạn vẫn mở mà gửi tin nào cũng lỗi.
+  function closeGone(id) {
+    if (!S || S.activeId !== id) return;
+    S.activeId = ""; S.team = null; S.queue = null; S.msgs = []; S.view = "list"; S.side = false;
+    S.picker = null; S.draft = null; S.picked = []; S.filterTask = ""; S.turns = [];
+    drawAll(false);
+    setNote(tw("teams.gone"));
+  }
+
   function loadTeam() {
     if (!S.activeId) return Promise.resolve();
     var forTeam = S.activeId;
     return call("GET", teamUrl()).then(function (r) {
       if (S.activeId !== forTeam) return;
+      if (r.code === 404) return closeGone(forTeam);
       if (r.code !== 200) return fail(r);
       S.team = r.j.team;
       drawHead(); drawHint(); drawSide();
@@ -2329,6 +2340,7 @@
       if (S.activeId) { loadMsgs(false); loadQueue(); loadTeam(); }
       return;
     }
+    if (d.type === "team_state" && d.deleted && d.team_id === S.activeId) closeGone(d.team_id);
     if (d.type === "team_replies" && d.team_id === S.activeId) {
       // Kết cục lượt trả lời đổi (0.142.0): chỉ vẽ lại khung tin, không cần hỏi lại danh sách.
       var k = S.msgs.findIndex(function (m) { return Number(m.id) === Number(d.message_id); });

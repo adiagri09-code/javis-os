@@ -9,6 +9,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 ## [0.172.0] - 2026-10-16
 ### Thêm mới
 - **Javis tự tạo và quản lý nhóm chat ngay trong khung chat.** Nói "tạo nhóm thử gồm ba trợ lý" là Javis tạo trợ lý còn thiếu, lập nhóm, chọn trưởng nhóm; sửa tên, thêm bớt người, lưu trữ hay xoá nhóm cũng chỉ cần nói.
+- Mỗi trợ lý tạo theo cách này có thể chạy một model riêng, để thử nhóm nhiều model cho nhanh.
+- Nhóm đã lưu trữ giờ xoá hẳn được. Nhóm đang mở mà bị xoá thì trang Nhóm tự đóng lại và báo cho bạn biết.
 
 ## [0.171.4] - 2026-10-16
 ### Sửa lỗi

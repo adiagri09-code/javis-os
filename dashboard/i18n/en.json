@@ -4050,6 +4050,7 @@
   "teams.settings_btn": "Team and settings",
   "teams.close": "Close",
   "teams.err": "Could not do that: {e}",
+  "teams.gone": "This team was just deleted.",
   "teams.err_network": "No network connection, so it was not done.",
   "teams.queue_changed": "The queue just changed and was redrawn.",
   "teams.amend_prompt": "Edit the request of \"{title}\":",

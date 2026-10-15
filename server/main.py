@@ -22645,8 +22645,10 @@ class _TeamAdmin:
     def register(self, root, slug):
         return _TEAM_API.register_agent(root, slug)
 
-    def create_agent(self, root, name, role, prompt):
-        """Tạo trợ lý MỚI, không bao giờ ghi đè: slug trùng thì thêm -2, -3. Gắn tag "Nhóm" để không bị trống nhãn."""
+    def create_agent(self, root, name, role, prompt, model="", model_provider="", tags=None):
+        """Tạo trợ lý MỚI, không bao giờ ghi đè: slug trùng thì thêm -2, -3. Gắn tag "Nhóm" (hay `tags` được đưa) để không
+        bị trống nhãn. `model`/`model_provider` (0.172.0, công cụ `javis_team`): model riêng của trợ lý; provider lạ bị bỏ
+        về "" để `_agent_model_provider` suy như trợ lý cũ."""
         base = _ascii_slug(name) or "tro-ly"
         with _AGENT_META_LOCK:
             d = _agents_dir(root)
@@ -22654,11 +22656,37 @@ class _TeamAdmin:
             slug, n = base, 2
             while (d / f"{slug}.md").exists():
                 slug, n = f"{base}-{n}", n + 1
-            meta = {"type": "agent", "name": name, "slug": slug, "role": role, "skills": [], "model": "",
-                    "updated": _today()}
-            agent_tags.write_tags(meta, agent_tags.normalize_tags(["Nhóm"]))
+            meta = {"type": "agent", "name": name, "slug": slug, "role": role, "skills": [],
+                    "model": str(model or "").strip(), "updated": _today()}
+            mp = str(model_provider or "").strip()
+            if meta["model"] and mp in AGENT_PROVIDERS:
+                meta["model_provider"] = mp
+            agent_tags.write_tags(meta, agent_tags.normalize_tags(list(tags or []) or ["Nhóm"]))
             _write_md(d / f"{slug}.md", meta, (prompt or "").strip() or role or name)
         return slug
+
+    def set_model(self, root, slug, model, model_provider=""):
+        """Đổi model riêng của một trợ lý có sẵn (0.172.0). `model` rỗng: về model chính. Không đụng phần còn lại của file."""
+        with _AGENT_META_LOCK:
+            path = _agent_md_path(root, slug)
+            if path is None:
+                raise FileNotFoundError(slug)
+            meta, body = _read_md(path)
+            if not meta:
+                raise ValueError("file trợ lý không có frontmatter đọc được, không sửa")
+            meta["model"] = str(model or "").strip()
+            mp = str(model_provider or "").strip()
+            if meta["model"] and mp in AGENT_PROVIDERS:
+                meta["model_provider"] = mp
+            else:
+                meta.pop("model_provider", None)
+            meta["updated"] = _today()
+            _write_md(path, meta, body)
+        return {"slug": slug, "model": meta["model"], "model_provider": meta.get("model_provider", "")}
+
+    @staticmethod
+    def providers():
+        return list(AGENT_PROVIDERS)
 
     def edit_prompt(self, root, slug, prompt):
         with _AGENT_META_LOCK:

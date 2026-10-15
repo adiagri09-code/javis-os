@@ -360,6 +360,27 @@ class TeamStore:
             self._event(c, team_id, "updated", by, before, fields)
         return self.get(team_id)
 
+    # Bảng gắn với một nhóm, xoá khi chủ xoá hẳn nhóm (0.172.0). `team_events` cũng xoá: nhóm đã mất thì không còn chỗ xem.
+    # Sổ lượt chung, quyết định phán xử và bài học nằm ở kho khác, giữ lại làm bằng chứng (không còn nhóm nào trỏ tới).
+    _TEAM_TABLES = ("team_members", "team_events", "team_steps", "team_turns", "team_reactions", "team_authority",
+                    "team_replies", "team_reaction_log", "agent_busy")
+
+    def delete_team(self, team_id: str) -> dict:
+        """Xoá hẳn MỘT nhóm ĐÃ LƯU TRỮ (lưu trữ đã huỷ việc đang chờ và dừng hoạt động). Nhóm chưa lưu trữ: TeamError.
+        Một giao dịch: hoặc xoá hết dòng của nhóm, hoặc không xoá gì. Trả dòng `teams` vừa xoá (để xoá tiếp phiên chat)."""
+        with self._Tx(self) as c:
+            r = c.execute("SELECT * FROM teams WHERE team_id=?", (team_id,)).fetchone()
+            if r is None:
+                raise TeamError("không có nhóm này")
+            if r["status"] != "archived":
+                raise TeamError("chỉ xoá được nhóm đã lưu trữ, hãy lưu trữ nhóm trước")
+            if c.execute("SELECT 1 FROM agent_busy WHERE team_id=? AND lease_until>?", (team_id, time.time())).fetchone():
+                raise TeamError("nhóm còn lượt đang chạy, đợi lượt xong rồi xoá")
+            for table in self._TEAM_TABLES:
+                c.execute(f"DELETE FROM {table} WHERE team_id=?", (team_id,))
+            c.execute("DELETE FROM teams WHERE team_id=?", (team_id,))
+        return dict(r)
+
     def set_caps(self, team_id: str, caps: dict, by: str = "owner") -> dict:
         """Chủ nhóm đổi trần (spec 12.3). Chỉ nhận khoá trong OWNER_CAPS, giá trị số không âm; trần trong UNLIMITED_CAPS
         nhận thêm `None` hay {"unlimited": true} là "Không giới hạn" (GOAL T1 mục 9). Trần máy chủ cố định bị từ chối."""

@@ -11,6 +11,8 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 ## [0.172.0] - 2026-10-16
 ### Added
 - **Javis creates and manages team chats from the chat box.** Ask for "a test team of three assistants" and Javis creates any missing assistant, sets up the team and picks the leader; renaming, adding or removing members, archiving or deleting a team works the same way.
+- Each assistant created this way can run its own model, so a mixed-model test team takes one request.
+- An archived team can now be deleted for good. If the team you have open is deleted, the Teams page closes it and tells you.
 
 ## [0.171.4] - 2026-10-16
 ### Fixed

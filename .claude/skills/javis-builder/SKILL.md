@@ -129,6 +129,12 @@ updated: <YYYY-MM-DD>
 ```
 Nếu workflow tham chiếu agent chưa tồn tại -> TẠO agent đó trước.
 
+### Nhóm chat -> tool `javis_team` (KHÔNG ghi file tay, KHÔNG điều khiển trình duyệt)
+Người dùng muốn một nhóm chat gồm vài trợ lý: gọi `javis_team` op=create một lần, `members` là slug trợ lý có sẵn, `new_agents`
+là trợ lý cần tạo mới (`name`, `role`, `prompt`, `model`, `model_provider` nếu muốn model riêng), `leader` là slug hay tên trưởng
+nhóm. Sửa: op=update, add_member, remove_member, set_leader, set_agent_model. Xoá: op=archive trước, op=delete kèm confirm=true chỉ
+khi người dùng nói rõ là xoá. Xem trước trợ lý đang có bằng op=list_agents để khỏi tạo trùng.
+
 ### Loop -> `Javis/loops/<slug>.md`
 
 **Việc LẶP MỚI: ưu tiên GỌI TOOL `javis_schedule`** (op=create, name/prompt/schedule - vd
