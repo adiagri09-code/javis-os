@@ -57,11 +57,15 @@
   // Bảng giới hạn (GOAL T1 mục 9): bốn nhóm theo ai đổi được, nhãn từng dòng. Khoá viết trọn cho bộ kiểm i18n.
   var LIMIT_CATS = [{ id: "owner", key: "teams.limits.owner" }, { id: "leader", key: "teams.limits.leader" },
     { id: "server", key: "teams.limits.server" }, { id: "provider", key: "teams.limits.provider" }];
+  // Nhãn bậc nhịp (T3) viết trọn khoá để bộ kiểm i18n đọc được.
+  var PULSE_TIER_KEY = ["pulse.tier_0", "pulse.tier_1", "pulse.tier_2", "pulse.tier_3", "pulse.tier_4", "pulse.tier_5",
+    "pulse.tier_6", "pulse.tier_7", "pulse.tier_8"];
   var LIMIT_KEY = { running_jobs: "teams.limits.running_jobs", max_parallel_teams: "teams.limits.max_parallel_teams",
     agent_one_turn: "teams.limits.agent_one_turn", busy_lease: "teams.limits.busy_lease", no_progress: "teams.limits.no_progress",
     turn_timeout: "teams.limits.turn_timeout", step_timeout: "teams.limits.step_timeout",
     admin_ops_per_turn: "teams.limits.admin_ops_per_turn", history_window: "teams.limits.history_window",
     text_only: "teams.limits.text_only", server_call_ceiling: "teams.limits.server_call_ceiling",
+    max_tier: "teams.limits.max_tier", autonomous_reserve: "teams.limits.autonomous_reserve",
     provider_quota: "teams.limits.provider_quota", account: "teams.limits.account" };
   // Toàn quyền (T3, spec 13): trần trưởng nhóm đổi được trong trần trần của chủ.
   var AUTH_CAPS = ["task_turns", "task_steps", "help_depth", "daily_turns"];
@@ -678,7 +682,10 @@
         '<span class="tm-actions">' + (lead
           ? '<button type="button" class="ws-btn" data-leader="">' + esc(tw("teams.remove_leader")) + "</button>"
           : '<button type="button" class="ws-btn" data-leader="' + esc(m.agent_key) + '">' + esc(tw("teams.make_leader")) + "</button>") +
-        '<button type="button" class="ws-btn" data-remove="' + esc(m.agent_key) + '">' + esc(tw("teams.remove")) + "</button></span></div></div>";
+        '<button type="button" class="ws-btn" data-remove="' + esc(m.agent_key) + '">' + esc(tw("teams.remove")) + "</button></span>" +
+        // T3: nhịp chủ động của thành viên TRONG nhóm này (agent-pulse.js gắn vào sau khi vẽ).
+        (open && m.slug ? '<div class="tm-pulse" data-pulse-slug="' + esc(m.slug) + '" data-pulse-ctx="team:' +
+          esc(team.team_id) + '"></div>' : "") + "</div></div>";
     }).join("");
     // Thêm người: mở hộp chọn kiểu Zalo (tìm không dấu, lọc tag, chọn nhiều người một lần), 0.142.0.
     var add = '<div class="tm-add"><button type="button" class="ws-btn tm-add-open">' + ic("users") +
@@ -785,6 +792,8 @@
       return x.value >= 60 && x.value % 60 === 0 ? tw("teams.limits.minutes", { n: x.value / 60 })
         : tw("teams.limits.seconds", { n: x.value });
     }
+    if (x.unit === "percent") return tw("pulse.percent", { n: x.value });
+    if (x.unit === "tier") return tw(PULSE_TIER_KEY[x.value] || "pulse.tier_1");
     return String(x.value);
   }
 
@@ -800,7 +809,8 @@
       if (cat.id === "leader" && !mine[0].granted) note = tw("teams.limits.leader_off");
       else if (cat.id === "leader" && mine.some(function (x) { return x.model_turns; })) note = tw("teams.limits.leader_model_note");
       var items = mine.map(function (x) {
-        var label = tw(cat.id === "owner" || cat.id === "leader" ? (CAP_KEY[x.key] || AUTH_CAP_KEY[x.key]) : LIMIT_KEY[x.key]);
+        var label = tw(cat.id === "owner" || cat.id === "leader" ? (CAP_KEY[x.key] || AUTH_CAP_KEY[x.key] || LIMIT_KEY[x.key])
+          : LIMIT_KEY[x.key]);
         var v = cat.id === "leader" ? (!x.granted ? "" : x.editable ? tw("teams.limits.leader_max", { v: limitValue(x) })
           : tw("teams.limits.leader_locked")) : limitValue(x);
         var unl = cat.id === "owner" && x.unlimited_ok ? " (" + tw("teams.limits.unl_ok") + ")" : "";
@@ -1205,6 +1215,8 @@
   function drawMsgs(stick) {
     var box = S.el.querySelector(".tm-msgs");
     if (!box) return;
+    // T3 (6.2): khung tin của nhóm đang mở; pulse-seen.js đọc mã nhóm ở đây để báo tin của trợ lý đã được xem.
+    if (S.team) box.setAttribute("data-seen-team", S.team.team_id); else box.removeAttribute("data-seen-team");
     if (!S.team) {
       box.innerHTML = S.teams.length ? '<div class="tm-empty tm-empty-chat">' + esc(tw("teams.pick_team")) + "</div>" : "";
       return;
@@ -1347,6 +1359,14 @@
       esc(tw(TAB_KEY[S.tab])) + '">' + body + "</div>";
     var nb = side.querySelector(".tm-side-body");
     if (nb && keep) nb.scrollTop = top;
+    if (window.JavisPulse) {
+      Array.prototype.forEach.call(side.querySelectorAll(".tm-pulse[data-pulse-slug]"), function (el) {
+        var names = {};
+        names[S.team.team_id] = S.team.name || "";
+        window.JavisPulse.mount(el, { slug: el.getAttribute("data-pulse-slug"), brain: brain(),
+          only: el.getAttribute("data-pulse-ctx"), teamNames: names });
+      });
+    }
   }
 
   function drawAll(stick) {
