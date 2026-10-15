@@ -1098,7 +1098,7 @@ class TeamRunner:
     async def _judge_wait_expired(self, w: dict) -> list:
         cref = w["context_ref"]
         team_id = cref.split(":", 1)[1]
-        st = self.judge.store(True)
+        st = await self._io(self.judge.store, True)
         d0 = await self._io(st.get_decision, int(w["decision_id"])) or {}
         payload = w.get("payload") or {}
         mid = int(payload.get("message_id") or 0)

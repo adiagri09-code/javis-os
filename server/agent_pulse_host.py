@@ -34,6 +34,7 @@ from typing import Any, Callable, Optional
 from fastapi import Request
 
 import agent_pulse as AP
+from io_offload import call_hook
 
 TICK_S = 30.0
 CONTEXT_REFRESH_S = 300.0
@@ -216,7 +217,8 @@ class PulseHost:
         try:
             if self.deps.project_pending is not None:
                 try:
-                    await _maybe(self.deps.project_pending())
+                    # Hàm thường (đọc/ghi kho) chạy ở luồng phụ; coroutine (như `_feedback_pulse_tick` của host) trên loop.
+                    await call_hook(self.deps.project_pending)
                 except Exception as ex:  # noqa: BLE001
                     print(f"[pulse project] {type(ex).__name__}: {ex}", file=sys.stderr)
             if await asyncio.to_thread(self.deps.store) is None:
