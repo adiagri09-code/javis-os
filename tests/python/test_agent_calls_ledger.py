@@ -525,6 +525,28 @@ except RuntimeError:
 check("lỗi kho bất ngờ lúc nhận: lỗi nổi lên, khoá bận vẫn được nhả, lý do giữ pending",
       boom and rel == [1] and W.get(f)["status"] == "pending" and W.get(f)["attempt"] == 0)
 
+# ═════ review T2 P3: lỗi kho bất ngờ lúc nhận lý do vẫn nhả khoá bận ═════
+d, gs = fresh("claim-leak")
+W = AL.WakeReasons(gs)
+rid_l = W.add_source("ag_l", "dm:ag_l", "reaction_review", "rx:dm:900")
+_orig_reserve = W.ledger.reserve
+
+
+def _reserve_boom(*a, **k):
+    raise RuntimeError("disk I/O error")
+
+
+W.ledger.reserve = _reserve_boom
+rel = []
+try:
+    W.claim(rid_l, try_busy=lambda: True, release_busy=lambda: rel.append(1))
+    leak_out = "no-raise"
+except RuntimeError:
+    leak_out = "raised"
+W.ledger.reserve = _orig_reserve
+check("review T2 P3: kho lỗi bất ngờ khi nhận lý do: khoá bận vẫn được nhả, lý do giữ pending",
+      rel == [1] and W.get(rid_l)["status"] == "pending" and W.get(rid_l)["attempt"] == 0, (leak_out, rel, W.get(rid_l)))
+
 # ═════ review T2 P2-3: đường bật người review của A5 ghi resumed_at ═════
 d, gs = fresh("reviewer-enable")
 own = RS.Principal("owner", "owner", "brainX")

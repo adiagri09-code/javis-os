@@ -262,11 +262,13 @@ class TeamCeiling:
                 "AND created_at <= ?", (cutoff,)).fetchall()]
             mark = c.execute("SELECT value FROM ceiling_state WHERE name='team_scan_at'").fetchone()
             mig = c.execute("SELECT value FROM ceiling_state WHERE name='t2_migrated_at'").fetchone()
+            cur_row = c.execute("SELECT at, turn_id FROM ceiling_cursor WHERE name='team_turns'").fetchone()
         # Mốc nâng lên T2 (GoalStore ghi lúc tạo bảng). Kho thiếu mốc (không nên có) thì lấy lúc này: không tính lịch sử.
         migrated = float(mig["value"]) if mig else t
-        scan_from = migrated - float(grace_s)
-        if mark:
-            scan_from = max(scan_from, float(mark["value"]) - 2 * float(grace_s) - 60.0)
+        floor = migrated - float(grace_s)
+        # Con trỏ bền `(created_at, turn_id)`: lần đầu bắt đầu từ mốc nâng; lần sau quét tiếp đúng chỗ dừng.
+        cur_at, cur_id = (float(cur_row["at"]), str(cur_row["turn_id"])) if cur_row else (floor, "")
+        settled_since = (float(mark["value"]) if mark else migrated) - 2 * float(grace_s) - 60.0
         for r in open_rows:
             tid = r["mirror_ref"][len("team_turn:"):]
             turn = teams.turn(tid)
@@ -294,10 +296,9 @@ class TeamCeiling:
         # Lượt nhóm thiếu dòng sổ (review T2 P1, quyết định của chủ): KHÔNG tính lịch sử trước khi nâng lên T2. Chỉ xét
         # lượt tạo sau mốc `t2_migrated_at` (trừ ân hạn) và lượt còn mở lúc nâng (chốt hay còn chạy sau mốc). Cửa sổ quét
         # bắt đầu từ lần quét trước (không quét lại cả bảng), có trần số dòng mỗi lần.
-        if hasattr(teams, "turns_for_reconcile"):
-            turns = teams.turns_for_reconcile(scan_from, limit=batch)
-        else:
-            turns = [x for x in (teams.turns_since(scan_from) if hasattr(teams, "turns_since") else [])]
+        window, special = teams.turns_for_reconcile(cur_at, cur_id, cutoff, floor, settled_since, limit=batch)
+        seen_ids = {x["turn_id"] for x in window}
+        turns = window + [x for x in special if x["turn_id"] not in seen_ids]
         refs = [self.mirror(x["turn_id"]) for x in turns]
         have = set()
         with closing(self.store._conn()) as c:
@@ -329,14 +330,16 @@ class TeamCeiling:
                            float(turn.get("created_at") or t),
                            None if status == "running" else (turn.get("settled_at") or t)))
                 out["rebuilt"] += 1
-        # Mốc quét: đủ cả cửa sổ thì là lúc này; bị cắt ở trần `batch` thì chỉ tới dòng cuối đã xét (lần sau quét tiếp).
-        new_mark = t
-        if len(turns) >= int(batch) and turns:
-            new_mark = min(t, float(turns[-1].get("created_at") or t) + 2 * float(grace_s) + 60.0)
-        out["truncated"] = len(turns) >= int(batch)
+        # Con trỏ tiến tới dòng cuối của cửa sổ; cửa sổ đầy thì lần sau quét tiếp (không nạp lại cả bảng).
+        out["truncated"] = len(window) >= int(batch)
         with self.ledger._tx() as c:
+            if window:
+                last = window[-1]
+                c.execute("INSERT INTO ceiling_cursor(name, at, turn_id) VALUES('team_turns', ?, ?) "
+                          "ON CONFLICT(name) DO UPDATE SET at=excluded.at, turn_id=excluded.turn_id",
+                          (float(last.get("created_at") or 0), str(last["turn_id"])))
             c.execute("INSERT INTO ceiling_state(name, value) VALUES('team_scan_at', ?) "
-                      "ON CONFLICT(name) DO UPDATE SET value=excluded.value", (new_mark,))
+                      "ON CONFLICT(name) DO UPDATE SET value=excluded.value", (t,))
         out["stale"] = self.ledger.reconcile_stale(now=t, stale_s=stale_s)
         return out
 

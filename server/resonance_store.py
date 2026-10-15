@@ -265,6 +265,7 @@ CREATE TABLE IF NOT EXISTS agent_pulse(
   scan_counter INTEGER NOT NULL DEFAULT 0, policy_version TEXT NOT NULL DEFAULT 'pulse.v1', updated_at REAL NOT NULL,
   PRIMARY KEY(agent_key, context_ref));
 CREATE TABLE IF NOT EXISTS ceiling_state(name TEXT PRIMARY KEY, value REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS ceiling_cursor(name TEXT PRIMARY KEY, at REAL NOT NULL, turn_id TEXT NOT NULL DEFAULT '');
 """
 
 # Bảng và cột có từ trước A1 (0.86.x), đúng thứ tự. A1 không được đổi (review PR #590, P1-2); test so với đây.

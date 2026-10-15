@@ -224,5 +224,40 @@ res = main._TeamAdmin().set_resonance(str(BR), "minh", True, "leader:test")
 check("lệnh set_resonance của trưởng nhóm ghi resumed_at", res.get("enabled") is True
       and (rs.resumed_at(minh["agent_key"]) or 0) > 0, res)
 
+# ═════ review T2 P3: tra tác giả SAU khi kiểm thân và nonce; kho resonance lỗi không làm mất reaction ═════
+(BR / "agents" / "hoa.md").write_text("---\nname: Hoa\nrole: Trợ lý\n---\nBạn là Hoa.\n", encoding="utf-8", newline="\n")
+S_HOA = store.create_session(brain=str(BR), channel="agent:hoa")
+ah = store.append_message(S_HOA, "assistant", "Câu trả lời của Hoa")
+BK = main._brain_key(str(BR))
+r = post(S_HOA, ah, {"value": "thumbs", "nonce": "hoa-bad"})
+check("review T2 P3: request 400 không cấp mã trợ lý, không ghim phiên", r.status_code == 400
+      and rs.agent(BK, "hoa") is None and not rs.session_pin(S_HOA), (r.status_code, rs.agent(BK, "hoa")))
+check("review T2 P3: lỗi 400 theo ngôn ngữ giao diện, không lẫn câu tiếng Việt khi đang tiếng Anh",
+      "reaction" in r.json()["error"].lower())
+_orig_author = main._dm_reaction_author
+
+
+def _author_down(sess):
+    raise RuntimeError("resonance store is locked")
+
+
+main._dm_reaction_author = _author_down
+r = post(S_HOA, ah, {"value": "love", "nonce": "hoa-down"})
+main._dm_reaction_author = _orig_author
+R = r.json().get("reaction") or {}
+log_row = store.dm_reaction_log(S_HOA, ah)[-1]
+check("review T2 P3: kho resonance lỗi lúc tra tác giả: reaction VẪN lưu (200), trạng thái Đã nhận kèm lý do",
+      r.status_code == 200 and R.get("value") == "love" and R.get("status") == "received" and R.get("status_reason"), r.text)
+check("review T2 P3: dòng nhật ký chờ tra tác giả, chưa chiếu", log_row.get("effect_state") == "pending_author", log_row)
+n_fix = main._dm_resolve_pending_authors()
+main._feedback_projector().project_pending()
+after = store.dm_reaction_of(S_HOA, ah)
+check("review T2 P3: nhịp sau tra lại được tác giả, chiếu xong (Hoa tắt Cộng hưởng: chỉ lưu)",
+      n_fix == 1 and after["agent_key"] and after["status"] == "stored_only"
+      and store.dm_reaction_log(S_HOA, ah)[-1]["effect_state"] == "done", (n_fix, after))
+r = post(S_HOA, ah, {"value": "love", "nonce": "hoa-down"})
+check("review T2 P3: gửi lại cùng nonce sau đó vẫn 200, không ghi thêm dòng", r.status_code == 200
+      and len(store.dm_reaction_log(S_HOA, ah)) == 1, r.text)
+
 print(f"\n{'FAIL' if fails else 'PASS'} - test_dm_reactions: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)

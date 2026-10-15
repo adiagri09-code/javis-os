@@ -205,6 +205,18 @@ mới chạy bản cũ.
 13. **`waiting_quota`** chưa được ghi ở T2 (thuộc lượt xem xét của T3).
 14. **`content_sha`** thêm vào mọi dict tin của kho phiên (`_tin`, `_team_msg`).
 15. Câu `FIXED_LIMITS["server_call_ceiling"]` đổi thành "mục tiêu Auto và lượt nhóm".
+16. **Nâng cấp không tính lịch sử nhóm vào trần** (review T2 P1, quyết định của chủ): mốc `ceiling_state.t2_migrated_at` ghi một
+    lần lúc tạo bảng; đối soát chỉ dựng dòng cho lượt tạo sau mốc (trừ 120 giây) hay còn mở lúc nâng. Quét theo con trỏ bền
+    `ceiling_cursor` `(created_at, turn_id)`, tối đa 2000 dòng mỗi lần, cộng nhóm nhỏ lượt còn mở và vừa chốt.
+17. **Đổi/bỏ reaction khi lý do đang chạy** (P2-1): nguồn của lý do `claimed` cũng được đánh `removed_at`, nên không bị mang
+    sang lý do chờ kế tiếp.
+18. **Mọi đường bật Cộng hưởng ghi `resumed_at`**, kể cả đường bật người review của A5 (P2-3).
+19. **Route chat riêng** kiểm thân, tin và nonce gửi lại TRƯỚC khi tra tác giả; kho resonance lỗi lúc tra thì reaction vẫn lưu
+    (`effect_state = 'pending_author'`, trạng thái Đã nhận kèm lý do) và nhịp phản hồi tra lại rồi chiếu. Bộ chiếu khoá theo cặp
+    (tin, người phản hồi) trong tiến trình để request và nhịp không chiếu xen nhau.
+20. **Hạn chế đã biết:** tin báo cáo của goal hiện cả hàng Hữu ích / Chưa ổn của A3 lẫn sáu emoji của T2. Hai hàng ghi hai kho
+    khác nhau (A3 dạy bài học trình bày, không đánh thức; T2 đánh thức goal qua lý do `feedback` của A2). Gộp hai hàng là quyết
+    định sản phẩm, để lại cho chủ. Route reaction chat riêng không kiểm `brain` (giống `GET /sessions/{id}`): phiên là khoá.
 
 ### 6. Còn mở
 
