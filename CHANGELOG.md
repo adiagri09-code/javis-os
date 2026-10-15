@@ -8,7 +8,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.164.1] - 2026-10-15
 ### Sửa lỗi
-- (đang viết)
+- **Hội thoại và Project tạo cùng một lúc luôn xếp đúng thứ tự**, cái mới nhất đứng trên. Trước đây trên máy nhanh, hai cuộc ghi cùng một tích tắc có thể bị đảo chỗ ngẫu nhiên trong danh sách bên trái.
 
 ## [0.164.0] - 2026-10-15
 ### Thêm mới

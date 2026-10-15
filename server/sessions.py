@@ -937,7 +937,9 @@ class SessionStore:
                     ORDER BY ts, id LIMIT 1) AS preview
             FROM sessions s
             {where_sql}
-            ORDER BY s.pinned DESC, s.updated_at DESC
+            -- rowid breaks a tie on updated_at (two writes in one time.time() tick): the
+            -- row created later counts as newer, never left to SQLite's scan order.
+            ORDER BY s.pinned DESC, s.updated_at DESC, s.rowid DESC
             LIMIT ?
             """,
             tuple(params),
@@ -1052,7 +1054,7 @@ class SessionStore:
                        AS has_instructions
             FROM projects p
             {where_sql}
-            ORDER BY p.pinned DESC, p.updated_at DESC
+            ORDER BY p.pinned DESC, p.updated_at DESC, p.rowid DESC
             """,
             params,
         )

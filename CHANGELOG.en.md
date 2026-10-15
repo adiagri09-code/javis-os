@@ -10,7 +10,7 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.164.1] - 2026-10-15
 ### Fixed
-- (in progress)
+- **Conversations and projects created in the same instant now keep their order**, newest on top. On a fast machine two of them written in the same tick could swap places at random in the sidebar.
 
 ## [0.164.0] - 2026-10-15
 ### Added
