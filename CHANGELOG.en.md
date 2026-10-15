@@ -11,6 +11,10 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 ## [0.156.0] - 2026-10-15
 ### Added
 - **Agents pace themselves and judge when to speak** (in progress).
+- **Agents really review your feedback:** with Auto on, reactions and comments on an agent's message are reviewed in one turn; the agent keeps its approach, asks back, sends a revision (a new message, through the judge) or learns a lesson. The status under the reaction says what actually happened.
+- **Scoped lessons:** a lesson learned in a team is used only in that team, one learned in private chat only there; revoke a lesson or use it everywhere from the agent card. Older lessons in memory are labeled "no scope yet".
+- **Self-review with rollback:** once there is enough new feedback, an agent adjusts at most 3 things (speak or stay quiet, eagerness, lessons), records before and after, and rolls back on its own if results get worse; it never overrides a setting you hold. Teammates can leave each other notes, for reference only.
+- **Daily autonomous turns per agent** (default 6, No limit available), always keeping 2 turns for feedback reviews.
 
 ## [0.154.0] - 2026-10-15
 ### Added

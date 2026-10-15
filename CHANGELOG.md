@@ -9,6 +9,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 ## [0.156.0] - 2026-10-15
 ### Thêm mới
 - **Trợ lý tự điều nhịp và tự biết lúc nên nói** (đang làm).
+- **Trợ lý xem lại phản hồi của bạn thật sự:** với Auto bật, cảm xúc và góp ý trên tin của trợ lý được xem xét trong một lượt, rồi trợ lý giữ cách làm, hỏi lại, gửi bản sửa (tin mới, qua bộ phán xử) hay rút bài học. Trạng thái dưới cảm xúc nói đúng điều đã xảy ra.
+- **Bài học có phạm vi:** bài học trong một nhóm chỉ dùng ở nhóm đó, bài học ở chat riêng chỉ dùng ở chat riêng; bạn thu hồi hay cho dùng ở mọi nơi ngay trên thẻ trợ lý. Bài học cũ trong bộ nhớ được ghi "chưa có phạm vi".
+- **Trợ lý tự rà soát có quay lại:** khi đủ phản hồi mới, trợ lý tự chỉnh tối đa 3 điều (nói/im, độ hăng hái, bài học), ghi trước/sau và tự quay lại nếu kết quả kém đi; không đụng thiết lập bạn đang giữ. Đồng đội góp ý được cho nhau, chỉ là tham khảo.
+- **Hạn mức lượt tự phát mỗi trợ lý mỗi ngày** (mặc định 6, có Không giới hạn), luôn chừa 2 lượt cho việc xem xét phản hồi.
 
 ## [0.154.0] - 2026-10-15
 ### Thêm mới

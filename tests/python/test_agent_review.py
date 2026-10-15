@@ -413,6 +413,25 @@ mid, src = dm_react(w12, "Tin", value="sad")
 check("Cộng hưởng tắt: không lý do reaction_review nào", pending(w12) == []
       and dm_status(w12, mid)["status"] == "stored_only")
 
+# ═════ tiến trình chết giữa lượt: lý do `claimed` không kẹt mãi ═════
+w14 = world()
+mid, src = dm_react(w14, "Tin bị kẹt", value="sad")
+rid = pending(w14)[0]["id"]
+cl = w14["W"].claim(rid, purpose="reaction_review", obligation=False)
+w14["W"].ledger.mark_engine(cl["call_id"])
+check("giả tiến trình chết: lý do claimed, dòng sổ running", w14["W"].get(rid)["status"] == "claimed")
+check("chưa quá một lượt: không gỡ", w14["host"].recover_stale_claims() == [])
+import time as _time  # noqa: E402
+got = w14["host"].recover_stale_claims(now=_time.time() + AR.REVIEW_TIMEOUT_S + 120)
+row = ALG.CallLedger(w14["gs"]).get(cl["call_id"])
+check("quá một lượt: lý do về pending (attempt giữ), dòng sổ interrupted (vẫn tính), reaction 'Chờ xem xét'",
+      got == [rid] and w14["W"].get(rid)["status"] == "pending" and w14["W"].get(rid)["attempt"] == 1
+      and row["status"] == "interrupted" and dm_status(w14, mid)["status"] == "pending_review",
+      [got, w14["W"].get(rid), row])
+w14["eng"].text = out("keep", [src])
+check("sau khi gỡ: lượt sau phục vụ bình thường", run(w14["host"].serve_reaction_review({"id": rid}))["outcome"] ==
+      "served")
+
 # ═════ host nhịp của P điều phối sang bộ xử lý đã đăng ký ═════
 w13 = world()
 mid, src = dm_react(w13, "Tin qua nhịp", value="sad")

@@ -367,6 +367,7 @@ class ReviewHost:
         self.host_id = "learn-" + secrets.token_hex(4)
         self._self_checked: dict = {}
         self._self_running: set = set()
+        self._running: set = set()
         self._tasks: set = set()
 
     # ───────────── tiện ích ─────────────
@@ -542,7 +543,11 @@ class ReviewHost:
                                             _chu("Đã chạm trần lượt chung của máy chủ",
                                                  "The server-wide turn ceiling is reached"))
                 return {"outcome": cl["outcome"]}
-            return await self._review_claimed(store, W, CallLedger(store), cur, cl, now)
+            self._running.add(rid)
+            try:
+                return await self._review_claimed(store, W, CallLedger(store), cur, cl, now)
+            finally:
+                self._running.discard(rid)
         finally:
             release()
 
@@ -660,6 +665,33 @@ class ReviewHost:
                 self._event(store, key, ctx, "reaction_review_sent", reason=str(rv.get("outcome") or ""),
                             payload={"reason_id": rv.get("reason_id"), "message_id": sent["message_id"],
                                      "decision_id": (decision or {}).get("decision_id")})
+
+    def recover_stale_claims(self, now: Optional[float] = None) -> list:
+        """Lý do `reaction_review` còn `claimed` quá một lượt (10 phút + 60 giây) mà tiến trình này không còn chạy lượt đó
+        (tiến trình cũ chết giữa lượt): chốt `interrupted` để nguồn về `pending` (hay `failed` khi đã thử đủ), không kẹt mãi.
+        Dòng sổ đã qua mốc engine vẫn tính (đối soát T2), chưa qua thì đối soát hoàn. Trả mã lý do đã gỡ; gói WS của trạng
+        thái để ở `self.stale_events` cho người gọi đẩy trên event loop."""
+        from agent_ledger import WakeReasons
+        self.stale_events = []
+        store = self._store()
+        if store is None:
+            return []
+        t = float(self.deps.clock()) if now is None else float(now)
+        with closing(store._conn()) as c:
+            rows = [int(r[0]) for r in c.execute(
+                "SELECT id FROM agent_wake_reasons WHERE code='reaction_review' AND status='claimed' AND updated_at<?",
+                (t - REVIEW_TIMEOUT_S - 60.0,)).fetchall()]
+        out = []
+        W = WakeReasons(store)
+        for rid in rows:
+            if rid in self._running:
+                continue
+            got = W.settle(rid, "interrupted", now=t)
+            if got.get("status") in ("pending", "failed", "superseded"):
+                out.append(rid)
+                live = [s["source_ref"] for s in W.sources(got.get("moved_to") or rid, live_only=True)]
+                self.stale_events.extend(self._status(live, "pending_review", ""))
+        return out
 
     def pending_reviews(self, limit: int = 20) -> list:
         """Lý do `reaction_review` đang chờ (cũ trước). Dùng khi host nhịp không có sổ đăng ký lý do."""
@@ -1108,6 +1140,11 @@ class ReviewHost:
             await asyncio.to_thread(self.refresh_policy_labels)
         except Exception as ex:  # noqa: BLE001
             print(f"[learn labels] {type(ex).__name__}: {ex}", file=sys.stderr)
+        try:
+            await asyncio.to_thread(self.recover_stale_claims)
+            self._publish(getattr(self, "stale_events", []))
+        except Exception as ex:  # noqa: BLE001
+            print(f"[learn stale] {type(ex).__name__}: {ex}", file=sys.stderr)
         now = float(self.deps.clock())
         spawned = 0
         for key in list(agents or []):
