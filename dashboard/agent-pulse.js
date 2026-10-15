@@ -35,6 +35,12 @@
   var STATE_KEY = { active: "pulse.state.active", awake: "pulse.state.awake", slowed: "pulse.state.slowed",
     hibernating: "pulse.state.hibernating", waiting_owner: "pulse.state.waiting_owner", paused: "pulse.state.paused",
     off: "pulse.state.off" };
+  // Đổi chính sách (cửa sổ quan sát 6.4): tên loại dùng chung với mục Bài học, trạng thái riêng của bảng Nhịp.
+  var POLICY_KIND = { offset_set: "lessons.change.offset_set", eagerness_set: "lessons.change.eagerness_set",
+    lesson_add: "lessons.change.lesson_add", lesson_remove: "lessons.change.lesson_remove",
+    lesson_promote: "lessons.change.lesson_promote" };
+  var POLICY_STATUS = { observing: "pulse.policy.status.observing", kept: "pulse.policy.status.kept",
+    reverted: "pulse.policy.status.reverted" };
   var WHY_KEY = { direct_call: "pulse.why.direct_call", owner_message: "pulse.why.owner_message",
     owner_reply: "pulse.why.owner_reply", new_job: "pulse.why.new_job", reaction: "pulse.why.reaction",
     manual: "pulse.why.manual", related_event: "pulse.why.related_event" };
@@ -155,12 +161,27 @@
       lines.map(function (l) { return '<div class="pulse-line">' + esc(l) + "</div>"; }).join("") + acts + "</div>";
   }
 
+  /* Đổi chính sách đang quan sát (6.4): chủ quay lại được bằng nút (review T3 P P3). */
+  function policyHtml(list, o) {
+    var pcs = (list || []).filter(function (p) { return !o.only || p.context_ref === o.only || p.context_ref === "*"; });
+    if (!pcs.length) return "";
+    return '<div class="pulse-sub">' + esc(tw("pulse.policy_title")) + '</div><ul class="pulse-list">' +
+      pcs.slice(0, 8).map(function (p) {
+        var can = p.status === "observing", key = "pc" + p.id;
+        return "<li>" + esc(tw(POLICY_KIND[p.kind] || "pulse.policy.kind_other")) + " · " +
+          esc(contextLabel(p.context_ref, o.teamNames)) + " · " + esc(tw(POLICY_STATUS[p.status] || "pulse.policy.status.observing")) +
+          (can ? ' <button type="button" class="ws-btn pulse-act" data-pulse-act="revert_policy" data-change="' + esc(p.id) +
+            '"' + (o.busy && o.busy[key] ? " disabled" : "") + ">" + esc(tw("pulse.btn.revert")) + "</button>" : "") + "</li>";
+      }).join("") + "</ul>";
+  }
+
   /* Mục của phần J/L (sổ đăng ký). Mỗi mục tự escape; lỗi của một mục không làm hỏng bảng. */
-  function partsHtml(view, registry) {
+  function partsHtml(view, registry, ctx) {
     var list = registry || (typeof window !== "undefined" ? window.JavisPulseParts : null) || [];
     return list.map(function (p) {
       try {
-        var h = p && typeof p.render === "function" ? p.render(view || {}) : "";
+        // `render(view, null, {slug})`: mục nào cần slug (nút sửa của phán xử, nút thu hồi bài học) lấy từ ngữ cảnh.
+        var h = p && typeof p.render === "function" ? p.render(view || {}, null, ctx || {}) : "";
         return h ? '<div class="pulse-part" data-part="' + esc(p.name || "") + '">' + h + "</div>" : "";
       } catch (e) { return ""; }
     }).join("");
@@ -181,7 +202,7 @@
     if (!o.only && v.agent_key) {
       var mt = v.aggregate ? Number(v.aggregate.max_tier) : 1;
       html += '<label class="pulse-max"><span>' + esc(tw("pulse.max_tier")) + '</span><select class="pulse-max-sel">' +
-        [0, 1, 2, 3].map(function (n) {
+        [0, 1, 2, 3, 4, 5, 6, 7].map(function (n) {
           return '<option value="' + n + '"' + (n === mt ? " selected" : "") + ">" + esc(tierLabel(n)) + "</option>";
         }).join("") + '</select></label><div class="pulse-line pulse-note">' + esc(tw("pulse.max_tier_note")) + "</div>";
     }
@@ -195,13 +216,14 @@
               '">' + esc(tw("pulse.btn.revert")) + "</button>" : "") + "</li>";
         }).join("") + "</ul>";
     }
+    html += policyHtml(v.policy_changes, o);
     var fb = (v.feedback || []).filter(function (f) { return !o.only || f.context_ref === o.only; });
     if (fb.length) {
       html += '<div class="pulse-sub">' + esc(tw("pulse.feedback_title")) + '</div><ul class="pulse-list">' +
         fb.slice(0, 8).map(function (f) { return "<li>" + esc(feedbackLine(f)) + "</li>"; }).join("") + "</ul>";
     }
     html += proposalsHtml(v.proposals, o);
-    html += partsHtml(v, o.registry);
+    html += partsHtml(v, o.registry, { slug: o.slug || v.slug || "" });
     if (o.err) html += '<div class="pulse-line pulse-err" role="alert">' + esc(tw("pulse.error", { e: o.err })) + "</div>";
     else if (o.msg) html += '<div class="pulse-line pulse-ok" role="status">' + esc(o.msg) + "</div>";
     return html;
@@ -251,6 +273,9 @@
       if (!b || b.disabled || !host.contains(b)) return;
       var name = b.getAttribute("data-pulse-act");
       if (name === "revert") return act("revert", { event_id: Number(b.getAttribute("data-ev")) }, "ev" + b.getAttribute("data-ev"));
+      if (name === "revert_policy") {
+        return act("revert", { change_id: Number(b.getAttribute("data-change")) }, "pc" + b.getAttribute("data-change"));
+      }
       if (name === "proposal_accept" || name === "proposal_reject") {
         var pid = b.getAttribute("data-pid");
         return act("proposals/" + encodeURIComponent(pid) + (name === "proposal_accept" ? "/accept" : "/reject"), {}, "pp" + pid);
@@ -277,7 +302,7 @@
 
   if (typeof window !== "undefined" && !window.JavisPulseParts) window.JavisPulseParts = [];
   var apiOut = { panelHtml: panelHtml, contextLabel: contextLabel, changeLine: changeLine, feedbackLine: feedbackLine,
-    partsHtml: partsHtml, proposalsHtml: proposalsHtml, tierLabel: tierLabel, stateLabel: stateLabel, mount: mount };
+    partsHtml: partsHtml, proposalsHtml: proposalsHtml, policyHtml: policyHtml, tierLabel: tierLabel, stateLabel: stateLabel, mount: mount };
   if (typeof window !== "undefined") window.JavisPulse = apiOut;
   if (typeof module !== "undefined" && module.exports) module.exports = apiOut;
 })();

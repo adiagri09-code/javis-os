@@ -112,6 +112,16 @@ function fakeFetch(status, body, seen) {
   check("ngăn Nhóm gọi hydrate sau khi vẽ", tjs.includes("window.JavisAgentJudge.hydrate(side)"));
   check("gợi ý 'sao không trả lời' mở lịch sử quyết định của đúng người", tjs.includes("data-judge-hint") && tjs.includes("if (d.judgeHint)"));
 
+  // Ghép T3: trang nhịp gọi render(view, null, {slug}) và cần chuỗi HTML (mục ở view.parts.judge).
+  const PULSE = require(path.join(ROOT, "dashboard", "agent-pulse.js"));
+  const pulseView = { slug: "lan", parts: { judge: view } };
+  const viaPulse = PULSE.partsHtml(pulseView, [{ name: "judge", render: UI.render }], { slug: "lan" });
+  check("trang nhịp vẽ được mục phán xử (render(view, null, {slug}) trả HTML có lịch sử và nút sửa)",
+    viaPulse.includes('data-part="judge"') && viaPulse.includes('data-judge-slug="lan"') && viaPulse.includes('data-ajd-id="7"'),
+    viaPulse);
+  check("mục phán xử lỗi hay rỗng thì trang nhịp không vẽ gì", UI.render({ parts: { judge: { error: "x" } } }, null,
+    { slug: "lan" }) === "" && UI.render({ parts: {} }, null, { slug: "lan" }) === "");
+
   console.log(fails ? `\n${fails} FAIL` : "\nOK");
   process.exit(fails ? 1 : 0);
 })();

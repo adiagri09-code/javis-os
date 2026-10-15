@@ -993,6 +993,26 @@ class TeamStore:
                 f"SELECT log_id FROM team_reactions WHERE log_id IS NOT NULL AND status IN ({','.join('?' * len(st))}) "
                 f"ORDER BY updated_at LIMIT ?", st + [int(limit)]).fetchall()]
 
+    def open_reaction_rows(self, statuses, limit: int = 200) -> list:
+        """Như `open_reaction_logs` nhưng trả cả reaction (một câu đọc): nhịp của bộ chiếu đối soát trạng thái theo lô
+        (T3 hiệu năng) thay vì đọc lại từng reaction."""
+        st = [str(x) for x in statuses or []]
+        if not st:
+            return []
+        with closing(self._conn()) as c:
+            return [self._reaction(r) for r in c.execute(
+                f"SELECT * FROM team_reactions WHERE log_id IS NOT NULL AND status IN ({','.join('?' * len(st))}) "
+                f"ORDER BY updated_at LIMIT ?", st + [int(limit)]).fetchall()]
+
+    def reaction_log_rows(self, log_ids: list) -> dict:
+        """{log_id: dòng nhật ký} cho nhiều mã trong một câu đọc."""
+        ids = sorted({int(x) for x in log_ids or []})
+        if not ids:
+            return {}
+        with closing(self._conn()) as c:
+            return {int(r["id"]): self._log(r) for r in c.execute(
+                f"SELECT * FROM team_reaction_log WHERE id IN ({','.join('?' * len(ids))})", ids).fetchall()}
+
     def agent_reactions_for(self, session_id: str, message_ids: list) -> dict:
         """{message_id: [reaction của agent]} (reactor `agent:<mã>`, nguồn leader/member) cho một trang tin."""
         ids = [int(x) for x in message_ids or []]
@@ -1097,6 +1117,13 @@ class TeamStore:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM agent_busy WHERE agent_key=? AND lease_until > ?", (agent_key, t)).fetchone()
             return dict(r) if r else None
+
+    def busy_keys(self, now: Optional[float] = None) -> set:
+        """Mọi agent đang giữ khoá bận còn hạn (một câu đọc cho cả nhịp lớp 3)."""
+        t = time.time() if now is None else float(now)
+        with closing(self._conn()) as c:
+            return {str(r[0]) for r in c.execute("SELECT agent_key FROM agent_busy WHERE lease_until > ?",
+                                                 (t,)).fetchall()}
 
     # ───────────── kết cục lượt trả lời trò chuyện (0.142.0) ─────────────
 

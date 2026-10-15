@@ -38,7 +38,7 @@ UP_U = 0.25
 DOWN_U = -0.25
 NEW_MIN = 1.0
 BUSY_DEFER_S = 60.0       # effective_due: agent đang bận thì dời 60 giây (3.3)
-CLAIM_S = 600.0           # một lượt tối đa 10 phút; chết giữa chừng thì lịch tự tới hạn lại
+CLAIM_S = 900.0           # lease 15 phút (3.4): lớn hơn hạn một lượt quét (9 phút) và mốc đối soát sổ lượt (10 phút)
 SCAN_EVERY = 3            # quét giới hạn mỗi 3 lần thức ở active/awake
 SCAN_MIN_GAP_S = DAY      # tối đa một lượt quét giới hạn mỗi ngày mỗi ngữ cảnh
 SEEN_WAIT_S = DAY         # tin chủ động đã xem, qua 24 giờ không tương tác
@@ -459,10 +459,12 @@ def _ensure_row_in(c, agent_key: str, context_ref: str, now: float) -> dict:
         return star
     resumed = star.get("resumed_at") if star.get("resumed_at") is not None else (now if on else None)
     state = "off" if (not on or star.get("state") == "off") else ("paused" if star.get("state") == "paused" else "awake")
+    mt = int(star.get("max_tier") if star.get("max_tier") is not None else DEFAULT_MAX_TIER)
+    t0 = max(INIT_TIER, mt)   # không nhanh hơn trần chủ đặt (review T3 P P3)
     c.execute("INSERT INTO agent_pulse(agent_key,context_ref,state,tier,next_due_at,last_change_at,resumed_at,max_tier,"
               "updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
-              (agent_key, context_ref, state, INIT_TIER, now + TIERS[INIT_TIER] if state == "awake" else None, now,
-               resumed, int(star.get("max_tier") if star.get("max_tier") is not None else DEFAULT_MAX_TIER), now))
+              (agent_key, context_ref, state, t0, now + TIERS[t0] if state == "awake" else None, now,
+               resumed, mt, now))
     agg = _aggregate_in(c, agent_key, now)
     if agg["n_eff"] > 0:
         w = min(1.0, CONTEXT_INIT_FACTOR * agg["n_eff"])
@@ -471,7 +473,7 @@ def _ensure_row_in(c, agent_key: str, context_ref: str, now: float) -> dict:
                   "created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                   (f"init:{agent_key}:{context_ref}", agent_key, context_ref, ctx_kind(context_ref), "context_init",
                    v, w, 1.0, now, now, now))
-    _event(c, agent_key, context_ref, "context_created", after={"tier": INIT_TIER, "state": state},
+    _event(c, agent_key, context_ref, "context_created", after={"tier": t0, "state": state},
            source="host", payload={"init_estimate": agg["estimate"], "init_n_eff": agg["n_eff"]}, at=now)
     return _row(c, agent_key, context_ref)
 
@@ -660,6 +662,9 @@ def record_contrib(store, *, source_ref: str, result_ref: str, synth: str, input
                       "VALUES(?,?,?,?,?,?,?)", (src, str(result_ref), key, share, role, _j(inputs), t))
         old = {r["agent_key"]: dict(r) for r in c.execute("SELECT * FROM pulse_signals WHERE source_ref=?",
                                                           (src,)).fetchall()}
+        if old and all(r["status"] == "void" for r in old.values()):
+            # Nguồn đã xoá (xoá tin, xoá agent): không phân bổ lại, không hồi sinh (review T3 P P3).
+            return {}
         for key, r in old.items():
             if key not in alloc and r["status"] == "live":
                 c.execute("UPDATE pulse_signals SET status='superseded', superseded_by=?, updated_at=? WHERE id=?",
@@ -667,6 +672,8 @@ def record_contrib(store, *, source_ref: str, result_ref: str, synth: str, input
         for key, share in alloc.items():
             _ensure_row_in(c, key, context_ref, t)
             if key in old:
+                if old[key]["status"] == "void":
+                    continue   # dòng của agent đã xoá giữ `void`
                 c.execute("UPDATE pulse_signals SET share=?, status='live', superseded_by='', updated_at=? WHERE id=?",
                           (min(1.0, share), time.time(), old[key]["id"]))
             else:
@@ -748,12 +755,17 @@ def wake(store, agent_key: str, context_ref: str, why: str, at: Optional[float] 
         if st == "waiting_owner" and why not in OWNER_WAKES:
             return False
         tier = int(row["tier"])
-        nt = min(tier, INIT_TIER)
+        # min(bậc, B3) nhưng không nhanh hơn `max_tier` chủ đặt (review T3 P P3: trần B4-B7 bị thức lại về B3).
+        mt = int(row.get("max_tier") if row.get("max_tier") is not None else DEFAULT_MAX_TIER)
+        nt = max(min(tier, INIT_TIER), mt)
         sets = {"state": state_for_tier(nt), "wake_count": int(row.get("wake_count") or 0) + 1, "last_wake_why": str(why),
                 "last_wake_at": t, "updated_at": t, "waiting_since": None, "reminded_at": None}
-        nd = t + TIERS[nt]
-        sets["next_due_at"] = min(float(row["next_due_at"]), nd) if (row.get("next_due_at") is not None
-                                                                     and tier < HIBERNATE) else nd
+        nd = t + TIERS[nt] if nt < HIBERNATE else None
+        if nd is None:
+            sets["next_due_at"] = None
+        else:
+            sets["next_due_at"] = min(float(row["next_due_at"]), nd) if (row.get("next_due_at") is not None
+                                                                         and tier < HIBERNATE) else nd
         if nt != tier:
             sets.update({"tier": nt, "last_change_at": t, "last_change_dir": +1, "holds": 0})
             _event(c, key, ctx, "tier_change", before={"tier": tier, "state": st}, after={"tier": nt,
@@ -806,8 +818,9 @@ def set_state(store, agent_key: str, context_ref: str, state: str, by: str = "ow
                     continue
                 sets = {"state": "off", "next_due_at": None}
             else:  # on
-                sets = {"state": "awake", "tier": INIT_TIER, "resumed_at": t, "last_change_at": t, "last_change_dir": 0,
-                        "holds": 0, "next_due_at": None if r["context_ref"] == "*" else t + TIERS[INIT_TIER]}
+                t0 = max(INIT_TIER, int(r["max_tier"] if r["max_tier"] is not None else DEFAULT_MAX_TIER))
+                sets = {"state": "awake", "tier": t0, "resumed_at": t, "last_change_at": t, "last_change_dir": 0,
+                        "holds": 0, "next_due_at": None if r["context_ref"] == "*" else t + TIERS[t0]}
             sets["updated_at"] = t
             cols = ", ".join(f"{k}=?" for k in sets)
             c.execute(f"UPDATE agent_pulse SET {cols} WHERE agent_key=? AND context_ref=?",
@@ -829,11 +842,12 @@ def reset(store, agent_key: str, context_ref: str, by: str = "owner", at: Option
     with store._Tx(store) as c:
         r = _ensure_row_in(c, key, ctx, t)
         st = r["state"] if r["state"] in ("paused", "off") else "awake"
+        t0 = max(INIT_TIER, int(r["max_tier"] if r["max_tier"] is not None else DEFAULT_MAX_TIER))
         c.execute("UPDATE agent_pulse SET tier=?, state=?, last_change_at=?, last_change_dir=0, holds=0, resumed_at=?, "
                   "scan_counter=0, next_due_at=?, updated_at=? WHERE agent_key=? AND context_ref=?",
-                  (INIT_TIER, st, t, t, t + TIERS[INIT_TIER] if st == "awake" else None, t, key, ctx))
+                  (t0, st, t, t, t + TIERS[t0] if st == "awake" else None, t, key, ctx))
         _event(c, key, ctx, "reset", before={"tier": int(r["tier"]), "state": r["state"]},
-               after={"tier": INIT_TIER, "state": st}, source=str(by), at=t)
+               after={"tier": t0, "state": st}, source=str(by), at=t)
     return True
 
 
@@ -1167,6 +1181,8 @@ def revert_policy_change(store, change_id: int, reason: str = "owner", by: str =
     ch = dict(r)
     ch["before"], ch["after"] = _jl(ch.pop("before_json"), {}), _jl(ch.pop("after_json"), {})
     fn = _POLICY_REVERTERS.get(ch["kind"])
+    # Hàm quay lại của J/L biết ai quay lại và vì sao (chủ bấm nút thì ghi `owner`, không phải `policy_revert`).
+    ch["revert_reason"], ch["revert_by"] = str(reason), str(by)
     if fn is not None:
         fn(ch)
     with store._Tx(store) as c:

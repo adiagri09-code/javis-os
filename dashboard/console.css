@@ -3194,6 +3194,21 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 @media (max-width: 480px) {
   .pulse-acts .ws-btn { flex: 1 1 auto; }
 }
+/* Mục Bài học và hạn mức (T3 phần L): chữ 16px, vùng chạm 44px, không tràn ngang ở 375px. */
+.lessons-part { font-size: 16px; min-width: 0; }
+.lessons-scope { margin-top: 10px; }
+.lessons-scope-name { font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.lessons-item { margin-top: 6px; }
+.lessons-text { color: var(--text); overflow-wrap: anywhere; }
+.lessons-meta { font-size: 16px; color: var(--text2); overflow-wrap: anywhere; }
+.lessons-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.lessons-part .ws-btn { min-height: 44px; font-size: 16px; }
+.lessons-budget { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; color: var(--text); }
+.lessons-budget select { min-height: 44px; font-size: 16px; max-width: 100%; background: var(--surface-2);
+  color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
+@media (max-width: 480px) {
+  .lessons-acts .ws-btn { flex: 1 1 auto; }
+}
 
 /* Bộ phán xử nói / chờ / im (T3 phần J 0.156.0, agent-judge-ui.js): chữ tối thiểu 16px, vừa màn 375px, vùng chạm 44px. */
 .ajd { font-size: 16px; line-height: 1.45; min-width: 0; }

@@ -210,15 +210,31 @@
     });
   }
 
-  // Phần "judge" trong khung nhịp của thẻ trợ lý (phần P gọi `render(part, el, ctx)` với `ctx.slug`).
-  function render(part, el, ctx) {
-    if (!el) return "";
+  // Phần "judge" trong khung nhịp của thẻ trợ lý. Hai cách gọi: trang nhịp (agent-pulse.js) gọi `render(view, null,
+  // {slug})` và cần CHUỖI HTML (mục lấy ở `view.parts.judge`); cách cũ `render(part, el, ctx)` vẽ thẳng vào `el`.
+  function render(a, el, ctx) {
     var slug = (ctx && ctx.slug) || "";
     var key = slug + "|*";
+    if (el) {
+      cache[key] = { at: Date.now(), view: a };
+      paint(el, key, a, false);
+      if (slug) bind(el, slug, key, function () { return (cache[key] || {}).view; }, false);
+      return el.innerHTML;
+    }
+    var part = a && a.parts ? a.parts.judge : a;
+    if (!part || part.error || !part.contexts) return "";
     cache[key] = { at: Date.now(), view: part };
-    paint(el, key, part, false);
-    if (slug) bind(el, slug, key, function () { return (cache[key] || {}).view; }, false);
-    return el.innerHTML;
+    // Gắn nút sửa sau khi trang nhịp đã chèn chuỗi vào DOM (một lần mỗi ô).
+    if (slug && typeof setTimeout === "function" && typeof document !== "undefined") {
+      setTimeout(function () {
+        Array.prototype.forEach.call(document.querySelectorAll(".ajd-host.ajd-pulse"), function (h) {
+          if (h.getAttribute("data-judge-slug") !== slug) return;
+          bind(h, slug, key, function () { return (cache[key] || {}).view; }, false);
+        });
+      }, 0);
+    }
+    return '<div class="ajd-host ajd-pulse" data-judge-slug="' + esc(slug) + '" data-judge-ctx="">' +
+      viewHtml(part, { compact: false }) + "</div>";
   }
 
   var api = { decisionHtml: decisionHtml, contextHtml: contextHtml, viewHtml: viewHtml, postLabel: postLabel,

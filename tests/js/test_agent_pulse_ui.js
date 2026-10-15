@@ -68,6 +68,17 @@ check("bảng: phản hồi đã xử lý kèm trạng thái và phần chia", h
 check("bảng: chọn nhịp nhanh nhất (chủ), mặc định B1, có câu trưởng nhóm không nâng được",
   /<option value="1" selected>/.test(h) && h.includes(vi["pulse.max_tier_note"]));
 check("bảng: Auto bật nói rõ", h.includes(vi["pulse.resonance_on"]));
+// Review T3 P P3: chủ chọn được trần B0..B7 (không chỉ B0..B3), và quay lại một đổi chính sách đang quan sát.
+check("bảng: chọn nhịp nhanh nhất có đủ B0 tới B7", [0, 1, 2, 3, 4, 5, 6, 7].every((n) =>
+  h.includes('<option value="' + n + '"')) && !h.includes('<option value="8"'));
+const pview = Object.assign({}, view, { policy_changes: [
+  { id: 31, kind: "offset_set", context_ref: "dm:ag_1", status: "observing" },
+  { id: 30, kind: "pulse_version", context_ref: "*", status: "kept" }] });
+const hp = P.panelHtml(pview, { teamNames: names, registry: [] });
+check("bảng: đổi chính sách đang quan sát có nút Quay lại (change_id), đã giữ thì không",
+  hp.includes(vi["pulse.policy_title"]) && /data-pulse-act="revert_policy" data-change="31"/.test(hp)
+  && !/data-change="30"/.test(hp) && hp.includes(vi["lessons.change.offset_set"]) && hp.includes(vi["pulse.policy.kind_other"])
+  && hp.includes(vi["pulse.policy.status.kept"]), hp);
 const only = P.panelHtml(view, { only: "team:tm_a", teamNames: names, registry: [] });
 check("dòng thành viên nhóm: chỉ đúng ngữ cảnh của nhóm đó, không lộ chat riêng",
   (only.match(/class="pulse-ctx"/g) || []).length === 1 && !only.includes(vi["pulse.ctx_dm"]) &&

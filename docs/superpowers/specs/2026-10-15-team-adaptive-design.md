@@ -323,6 +323,8 @@ Chỉ áp cho thay đổi **chính sách** (độ lệch ngưỡng phán xử, �
 (bậc chỉ theo 5.3). Sau thay đổi có cửa sổ quan sát (≥ 6 nhãn hoặc ≥ 5 tín hiệu mới, tối đa 14 ngày); tỷ lệ lỗi phán xử tăng quá 0.15
 (≥ 6 nhãn) hoặc `estimate` của ngữ cảnh giảm quá 0.3 (`confidence ≥ 0.5`) thì tự quay lại và ghi lý do. Không tuyên bố cải thiện khi
 chưa qua cửa sổ.
+Ghép T3: dịch ngưỡng do nhãn của chủ là chủ dạy trực tiếp, không mở cửa sổ quay lại; cửa sổ chỉ mở cho thay đổi do tự rà soát
+(phần L ghi) và đổi phiên bản `pulse`.
 
 ### 6.5 Ghi nhận đóng góp (`pulse_contrib`)
 

@@ -53,6 +53,7 @@ class TeamApiDeps:
     ceiling: Optional[Callable[[], Any]] = None        # () -> agent_ledger.TeamCeiling (T2, trần lượt chung) | None
     projector: Optional[Callable[[], Any]] = None      # () -> feedback_projector.FeedbackProjector (T2) | None
     judge: Optional[Callable[[], Any]] = None          # () -> agent_judge.Judge (T3 phần J) | None
+    learning: Optional[Callable[[], Any]] = None       # () -> agent_lessons.TeamLearning (T3 phần L) | None
     contrib_reader: Optional[Callable[[str], list]] = None  # result_ref -> pulse_contrib còn hiệu lực (T4, lịch sử dài)
 
 
@@ -143,6 +144,7 @@ class TeamApi:
                 ceiling=self.deps.ceiling() if self.deps.ceiling is not None else None,
                 projector=self.deps.projector() if self.deps.projector is not None else None,
                 judge=self.deps.judge() if self.deps.judge is not None else None,
+                learning=self.deps.learning() if self.deps.learning is not None else None,
                 contrib_reader=self.deps.contrib_reader)
             if self._loop is not None:
                 self._runner._loop, self._runner._loop_thread = self._loop, self._loop_thread
@@ -585,7 +587,7 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 return err
             if not _own_task(team_id, task_id):
                 return _err(404, "Không có việc này trong nhóm", "No such job in this team")
-            prev = api.runner().cancel_job(task_id)
+            prev = api.runner().cancel_job(task_id, owner_cancel=True)
             if prev is None:
                 return _err(409, "Việc đã kết thúc", "The job has already ended")
             api.kick()
@@ -606,13 +608,14 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 return _err(400, "Thiếu nội dung sửa", "The change is empty")
             runner = api.runner()
             with runner.accept_lock:
-                authors = runner.result_authors(deps.task_store().get_task(task_id))
+                shares = runner.result_shares(deps.task_store().get_task(task_id))
                 rev = deps.task_store().team_amend(task_id, text)
             if rev is None:
                 return _err(409, "Việc đã kết thúc", "The job has already ended")
             runner._state(team_id)
-            # T3 (6.1): sửa yêu cầu SAU khi đã có kết quả: -0.4 cho người nộp kết quả của bản trước.
-            runner.pulse_task_event("revise", team_id, authors, f"revise:{task_id}:{rev}")
+            # T3 (6.1): sửa yêu cầu SAU khi đã có kết quả: -0.4 cho người nộp kết quả của bản trước, phân bổ theo 6.5 khi
+            # có bản tổng hợp (review T3 P P3).
+            runner.pulse_task_event("revise", team_id, list(shares), f"revise:{task_id}:{rev}", shares=shares)
             return {"ok": True, "revision": rev}
         return await api.io(_do)
 

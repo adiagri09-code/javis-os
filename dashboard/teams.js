@@ -70,6 +70,7 @@
     admin_ops_per_turn: "teams.limits.admin_ops_per_turn", history_window: "teams.limits.history_window",
     text_only: "teams.limits.text_only", server_call_ceiling: "teams.limits.server_call_ceiling",
     max_tier: "teams.limits.max_tier", autonomous_reserve: "teams.limits.autonomous_reserve",
+    agent_daily_calls: "teams.limits.agent_daily_calls",
     provider_quota: "teams.limits.provider_quota", account: "teams.limits.account" };
   // Toàn quyền (T3, spec 13): trần trưởng nhóm đổi được trong trần trần của chủ.
   var AUTH_CAPS = ["task_turns", "task_steps", "help_depth", "daily_turns"];

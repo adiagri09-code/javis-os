@@ -201,9 +201,11 @@ check("phiên chat riêng khác của cùng trợ lý dùng chung ngữ cảnh d
 src = inspect.getsource(main)
 check("lượt chat trợ lý ghép khối phản hồi giống hệt _agent_turn_system_prompt",
       "sysprompt = (_agent_chat_prompt(brain, _persona[1]) + _session_block(conv_sid)\n" in src
-      and "+ _dm_feedback_prompt(brain, _persona[1], conv_sid))" in src
-      and "return _agent_chat_prompt(brain, slug) + _session_block(conv_sid) + _dm_feedback_prompt(brain, slug, conv_sid)"
-      in src)
+      and "+ _dm_feedback_prompt(brain, _persona[1], conv_sid)\n" in src
+      # T3 phần L: cả hai chỗ còn ghép bài học phạm vi chat riêng + chung.
+      and "+ _dm_lessons_prompt(brain, _persona[1], conv_sid))" in src
+      and "return (_agent_chat_prompt(brain, slug) + _session_block(conv_sid) + _dm_feedback_prompt(brain, slug, conv_sid)"
+      "\n            + _dm_lessons_prompt(brain, slug, conv_sid))" in src)
 
 # Cộng hưởng bật: route của chủ ghi resumed_at; phản hồi mới tạo một lý do
 r = c.post(f"/resonance/agents/toggle{Q}", json={"slug": "lan", "enabled": True})

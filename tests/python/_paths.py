@@ -31,6 +31,7 @@ if str(SERVER) not in sys.path:
 # nhóm, nên thiếu chốt này thì lô phán xử sẽ dựng model thật. Test cần phán xử tự tiêm engine giả.
 import os as _os  # noqa: E402
 _os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
+_os.environ["JAVIS_NO_REAL_REVIEW_ENGINE"] = "1"
 
 
 def moi_route(app):

@@ -806,6 +806,13 @@ class SessionStore:
             return True
         return self._write(_do)
 
+    def set_message_reply(self, session_id: str, message_id: int, reply_to: Optional[int]) -> bool:
+        """Gắn `reply_to` cho một tin (vd. bản sửa của lượt xem xét reaction ở chat riêng trả lời tin bị phản hồi)."""
+        def _do(conn):
+            return conn.execute("UPDATE messages SET reply_to=? WHERE session_id=? AND id=?",
+                                (None if reply_to is None else int(reply_to), session_id, int(message_id))).rowcount == 1
+        return self._write(_do)
+
     def message_by_client_id(self, session_id: str, client_msg_id: str) -> Optional[Dict[str, Any]]:
         rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND client_msg_id = ?",
                           (session_id, str(client_msg_id)))
@@ -1113,6 +1120,23 @@ class SessionStore:
         rows = self._read(f"SELECT log_id FROM dm_reactions WHERE log_id IS NOT NULL AND status IN "
                           f"({','.join('?' * len(st))}) ORDER BY updated_at LIMIT ?", tuple(st + [int(limit)]))
         return [int(r["log_id"]) for r in rows]
+
+    def dm_open_reaction_rows(self, statuses, limit: int = 200) -> List[Dict[str, Any]]:
+        """Như `dm_open_reaction_logs` nhưng trả cả reaction (một câu đọc) cho đối soát theo lô của bộ chiếu."""
+        st = [str(x) for x in statuses or []]
+        if not st:
+            return []
+        rows = self._read(f"SELECT * FROM dm_reactions WHERE log_id IS NOT NULL AND status IN "
+                          f"({','.join('?' * len(st))}) ORDER BY updated_at LIMIT ?", tuple(st + [int(limit)]))
+        return [self._dm_reaction(r) for r in rows]
+
+    def dm_reaction_log_rows(self, log_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """{log_id: dòng nhật ký} cho nhiều mã trong một câu đọc."""
+        ids = sorted({int(x) for x in log_ids or []})
+        if not ids:
+            return {}
+        rows = self._read(f"SELECT * FROM dm_reaction_log WHERE id IN ({','.join('?' * len(ids))})", tuple(ids))
+        return {int(r["id"]): self._dm_log(r) for r in rows}
 
     def recent_dm_feedback(self, agent_key: str, since: float, limit: int = 15,
                            reactor: str = "owner") -> List[Dict[str, Any]]:

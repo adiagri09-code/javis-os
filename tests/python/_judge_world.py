@@ -131,7 +131,7 @@ class World:
         self.ledger = AL.CallLedger(self.gs)
         self.wake = AL.WakeReasons(self.gs)
         self.judge = AJ.Judge(
-            store=self.js, ledger=lambda: self.ledger, wake=lambda: self.wake, ask=self.jeng.ask,
+            store=self.js, ledger=lambda: self.ledger, wake=lambda: self.wake, ask=AJ.mark_test_fake(self.jeng.ask),
             engine_label=lambda: ("fake-aux", "fake-judge-model"),
             resonance_on=lambda key: bool((self.gs.agent_any(key) or {}).get("enabled")),
             resumed_at=lambda key, ctx: self.gs.resumed_at(key, ctx), clock=self.clock, timeout_s=2.0)
