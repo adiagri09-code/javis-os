@@ -49,6 +49,8 @@ check("nothing held: claimPending returns null so the first message is not delay
 check("app.js keeps the claim promise and sends the first turn only after it settles",
   /_pinWait = window\.JavisPinnedFolder\.claimPending\(savedSessionId\)/.test(app)
   && /const _w = _pinWait; _pinWait = null;\s*if \(_w\) _w\.then\(_send, _send\); else _send\(\);/.test(app));
+check("if the socket drops while the first turn waits for the pin, the text goes back to the input with a notice",
+  /const _send = \(\) => \{\s*if \(!ws \|\| ws\.readyState !== WebSocket\.OPEN\) \{[\s\S]{0,400}chatInput\.value = msg;[\s\S]{0,120}ghiChuThoang\(/.test(app));
 check("a failed claim clears the chip and says why in the composer", /apply\(null\);\s*if \(window\.JavisAttach\) window\.JavisAttach\.note\(/.test(src));
 check("pin uses the one-call endpoint", src.indexOf('"/pin"') !== -1);
 check("pin fires javis:pinned-folder-changed", src.indexOf('"javis:pinned-folder-changed"') !== -1);

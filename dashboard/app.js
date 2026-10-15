@@ -1665,7 +1665,18 @@ function sendMessage(text, opts) {
                           voice_input: _tuGiong, voice_turn_id: String(turns[sid].id),
                           wf_run: !!(opts && opts.wfRun), ...(adaptiveMeta || {}) };
   if(adaptiveMeta) { adaptiveCurrent.set(sid,adaptiveMeta.utterance_id);adaptiveOutbox.set(adaptiveMeta.utterance_id,{payload,element:userElement,since:performance.now()}); }
-  const _send = () => { try { ws.send(JSON.stringify(payload)); } catch (e) {} };
+  const _send = () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      // The socket dropped while the first turn waited for the folder pin: nothing was sent,
+      // so end the turn here and give the text back instead of losing it silently.
+      if (turns[sid]) turns[sid].running = false;
+      setSessionRunning(sid, false); hideActivity(); syncActiveUI();
+      chatInput.value = msg;
+      ghiChuThoang(window.t("app.ws_mat_ket_noi"));
+      return;
+    }
+    try { ws.send(JSON.stringify(payload)); } catch (e) {}
+  };
   const _w = _pinWait; _pinWait = null;
   if (_w) _w.then(_send, _send); else _send();
   _tuGiong = false;

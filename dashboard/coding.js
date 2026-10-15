@@ -40,7 +40,7 @@
 
    Dải chip ngữ cảnh nhét vào chính #modelBar đã mượn, đứng TRƯỚC chip Model của app.
 
-   Các hàm THUẦN (chipHtml, nhanHienThi) phơi ra cuối file để test bằng node.
+   The pure function chipHtml is exported at the end of the file for node tests.
    KHÔNG dùng ký tự em dash. Chữ hiện ra lấy từ từ điển window.t. */
 (function () {
   "use strict";
@@ -84,13 +84,6 @@
   // ============================================================
   // Hàm thuần (test bằng node)
   // ============================================================
-
-  /** Nhãn ngắn của một thư mục trên chip. Đường dẫn dài trên điện thoại đẩy mọi chip khác ra
-   *  khỏi màn hình, nên chip mang TÊN, còn đường dẫn đầy đủ nằm ở title. */
-  function nhanHienThi(tm) {
-    if (!tm) return "";
-    return String(tm.ten || tm.duong_dan || "").split(/[\\/]/).pop();
-  }
 
   /** HTML của hàng chip ngữ cảnh. Thuần để test được không cần DOM.
    *
@@ -146,6 +139,8 @@
             // Chip gom nhóm hội thoại của trang Trò chuyện đậu vào đây, y như thanh tiêu đề
             // của trang đó. Thiếu ô này thì JavisChatSide.chip() không có chỗ để vẽ.
             '<span class="proj-chip-host"></span>' +
+            // 0.159.0: errors get their own slot, so a chip redraw cannot wipe them.
+            '<small class="cd-err ws-err" id="cdErr" role="status"></small>' +
           "</div>" +
           // Chỗ đứng của dải chip trên MÀN HẸP. Trên máy tính dải chip nằm trong #modelBar
           // (một hàng đọc từ trái sang: thư mục, nhánh, worktree, điểm hồi, chế độ, model),
@@ -179,7 +174,7 @@
                           el.querySelector("#cdSlot"))
       : function () { el.querySelector("#cdPage").classList.toggle("side-thu"); };
     el.querySelector("#cdLeftBtn").onclick = bat;
-    await taiThuMuc();
+    await taiKenh();
 
     // CỘT TRÁI = chính cột hội thoại của trang Trò chuyện, lọc theo kênh Coding. Mượn nguyên
     // module nên có sẵn: tab Hội thoại|Thư mục, thanh gom nhóm, ô tìm, ghim, nhóm theo ngày,
@@ -244,8 +239,10 @@
   // ============================================================
   // Dữ liệu
   // ============================================================
-  async function taiThuMuc() {
-    var r = await api("/coding/folders?brain=" + encodeURIComponent(brain()));
+  // The Coding channel name comes from the server (coding_store.KENH). /coding/sessions returns
+  // it with a one-row list, much lighter than reading the whole folder registry for one field.
+  async function taiKenh() {
+    var r = await api("/coding/sessions?brain=" + encodeURIComponent(brain()) + "&limit=1");
     if (!active) return;
     if (r && r.kenh) S.kenh = r.kenh;
   }
@@ -322,13 +319,10 @@
     }
   }
 
-  // Errors show at the start of the chip row (the page bar no longer has an identity line).
+  // Errors go to the page bar slot #cdErr; an empty message clears it.
   function veLoi(msg) {
-    var row = document.getElementById("cdChips");
-    if (!row) return;
-    var old = row.querySelector(".ws-err");
-    if (old) old.remove();
-    row.insertAdjacentHTML("afterbegin", '<small class="ws-err">' + esc(msg) + "</small>");
+    var el = S.el && S.el.querySelector("#cdErr");
+    if (el) el.textContent = msg || "";
   }
 
   function sid() { return W.JavisSessions ? W.JavisSessions.current() : ""; }
@@ -341,6 +335,7 @@
     S.tmDs = (r && r.thu_muc_ds) || (S.tm ? [S.tm] : []);
     S.cwd = (r && r.cwd) || "";
     S.diemHoi = (r && r.diem_hoi) || [];
+    veLoi("");
     veChip();
   }
 
@@ -373,8 +368,7 @@
       bar.insertBefore(row, bar.firstChild);
     }
     var rb = S.rb || {};
-    row.innerHTML = chipHtml({ nhanh: rb.nhanh, worktree: rb.worktree, muc_quyen: rb.muc_quyen,
-                               so_thu_muc: (S.tmDs || []).length }, S.tm);
+    row.innerHTML = chipHtml({ nhanh: rb.nhanh, worktree: rb.worktree, muc_quyen: rb.muc_quyen }, S.tm);
     row.querySelectorAll("[data-cd]").forEach(function (n) {
       n.onclick = function () { bamChip(n.dataset.cd, n); };
     });
@@ -447,18 +441,13 @@
   // ============================================================
   // Menu bật lên từ một chip
   // ============================================================
-  /** `veLai` (tuỳ chọn) = hàm dựng lại chính menu này, cho những mục mang `giuMo`. */
-  function menu(anchor, muc, veLai) {
+  function menu(anchor, muc) {
     dongMenu();
     var m = document.createElement("div");
     m.className = "cd-menu"; m.id = "cdMenu";
     m.innerHTML = muc.map(function (x, i) {
-      // Mục TÍCH CHỌN mang thêm một ô vuông: dấu tích nói "đang gắn", chữ đậm thôi thì
-      // người dùng không đoán ra là bấm vào sẽ THÊM hay THAY.
-      var o = x.tich ? '<span class="cd-tich">' + (x.chon ? ic("check") : "") + "</span>" : "";
       return '<button type="button" data-i="' + i + '" class="' +
-        (x.chon ? "on " : "") + (x.nguyHiem ? "nguy " : "") + (x.tich ? "tich " : "") +
-        (x.nhanMoi ? "moi" : "") + '">' + o +
+        (x.chon ? "on " : "") + (x.nguyHiem ? "nguy" : "") + '">' +
         "<span>" + esc(x.nhan) + (x.phu ? '<small>' + esc(x.phu) + "</small>" : "") + "</span>" +
         "</button>";
     }).join("");
@@ -486,14 +475,8 @@
     m.style.top = (len ? Math.max(tran, r.top - cao - 6)
                        : Math.min(r.bottom + 6, Math.max(tran, vh - cao - 8))) + "px";
     m.querySelectorAll("[data-i]").forEach(function (b) {
-      b.onclick = async function (e) {
+      b.onclick = function () {
         var x = muc[Number(b.dataset.i)];
-        if (x && x.giuMo && veLai) {
-          e.stopPropagation();          // đừng để cú bấm này rơi xuống bộ đóng menu ở dưới
-          if (x.bam) await x.bam();
-          if (document.getElementById("cdMenu") === m) veLai(anchor);   // vẽ lại cho đúng dấu tích
-          return;
-        }
         dongMenu();
         if (x && x.bam) x.bam();
       };
@@ -519,10 +502,10 @@
 
   W.JavisCoding = {
     render: render, roi: roi,
-    // Phơi cho test node
-    chipHtml: chipHtml, nhanHienThi: nhanHienThi,
+    // Exposed for node tests
+    chipHtml: chipHtml,
   };
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { chipHtml: chipHtml, nhanHienThi: nhanHienThi };
+    module.exports = { chipHtml: chipHtml };
   }
 })();

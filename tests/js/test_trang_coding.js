@@ -99,8 +99,14 @@ check("server thật sự áp mức quyền cho phiên chưa gắn thư mục", 
   const ST = fs.readFileSync(path.join(ROOT, "server", "coding_store.py"), "utf8");
   return /def muc_quyen_cua_phien[\s\S]{0,160}MUC_QUYEN_MAC_DINH/.test(ST);
 })());
-check("the folder label helper returns the NAME, not the whole path",
-  M.nhanHienThi({ ten: "du-an", duong_dan: "/home/u/du-an" }) === "du-an" && !chipGit.includes(">/x<"));
+// 0.159.0: leftovers of the removed folder picker are gone from coding.js.
+const CD_NC = CD.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+check("no folder picker leftovers in coding.js (tick menu, extra-folder count, folder label, registry fetch)",
+  !/x\.tich|giuMo|nhanMoi|S\.thuMuc|so_thu_muc|nhanHienThi|taiThuMuc|\/coding\/folders/.test(CD_NC) && typeof M.nhanHienThi === "undefined");
+check("the page reads its channel from /coding/sessions instead of the folder registry",
+  /api\("\/coding\/sessions\?[^)]*\)[\s\S]{0,200}S\.kenh = r\.kenh/.test(CD_NC));
+check("errors have their own slot in the page bar, so a chip redraw cannot wipe them",
+  /id="cdErr"/.test(CD) && /function veLoi\(msg\) \{[\s\S]{0,200}#cdErr/.test(CD_NC) && !/function veLoi\(msg\) \{[\s\S]{0,200}cdChips/.test(CD_NC));
 
 // ---- 3. Icon ----
 check("icon mục Coding KHÔNG còn là git-branch hay file-code",
@@ -306,8 +312,8 @@ check("menu dài thì tự cuộn chứ không tràn ra ngoài",
   && /\.cd-menu \{[^}]*max-height:/.test(CSS));
 // Luật cho ô chữ CO được phải chừa ô tích ra: nới cả hai thì ô vuông 16px bị kéo dài thành
 // thanh ngang (thấy trong ảnh chụp thử 22/09).
-check("đường dẫn dài cắt bằng dấu ba chấm, ô tích vẫn vuông",
-  /\.cd-menu button\.tich > span:not\(\.cd-tich\) \{[^}]*min-width: 0/.test(CSS));
+check("no CSS left for the removed folder picker (identity line, folder chip, tick menu)",
+  !/\.cd-id \{|\.cd-cwd|\.cd-chip-tm|\.cd-chip-mo|\.cd-chip-them|\.cd-tich|button\.tich|button\.moi/.test(CSS));
 check("menu đo chỗ trống thật quanh chip rồi mới đặt",
   /m\.style\.maxHeight/.test(CD_MA) && /W\.innerHeight/.test(CD_MA)
   && /m\.offsetWidth/.test(CD_MA));

@@ -2282,11 +2282,10 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
    ============================================================
    Khung trang dùng lại nguyên bộ lớp `.chatpage*` của trang Trò chuyện (luật xếp khung nằm
    trong _injectChatCss của console.js), và cột trái là chính module lịch sử `.cside-*`. Nên ở
-   đây chỉ còn ba thứ trang này thật sự đẻ ra: dải chip ngữ cảnh, menu bật lên từ chip, và
-   tấm thêm thư mục. */
-.cd-id { flex: 1 1 auto; min-width: 0; font-size: 14px; color: var(--text3);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cd-cwd.dim { opacity: .75; }
+   đây chỉ còn hai thứ trang này thật sự đẻ ra: dải chip ngữ cảnh và menu bật lên từ chip.
+   0.159.0: errors sit in their own slot (#cdErr) in the page bar. */
+.cd-err { margin-left: auto; font-size: 12.5px; }
+.cd-err:empty { display: none; }
 
 /* Hàng chip ngữ cảnh: nhét vào chính #modelBar đã mượn, đứng TRƯỚC chip Model, nên một hàng
    đọc từ trái sang là thư mục, nhánh, worktree, điểm hồi, chế độ, rồi model. */
@@ -2296,10 +2295,6 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   background: var(--bg3); color: var(--text2); cursor: pointer; white-space: nowrap; }
 .cd-chip:hover { border-color: var(--info-line); color: var(--text); }
 .cd-chip.on { border-color: var(--ok-line); color: var(--text); }
-.cd-chip-tm { font-weight: 600; color: var(--text); }
-/* Chip mời gắn thư mục: nét đứt để đọc ra ngay là "chỗ trống chờ chọn", không phải một giá
-   trị đã đặt. Chưa gắn thì đây là chip DUY NHẤT trên hàng. */
-.cd-chip-mo { border-style: dashed; }
 /* Ba chế độ, ba sắc thái. Plan đọc là "an toàn", Toàn quyền phải NHÌN ra được từ xa vì ở mức
    đó engine commit, push và deploy được.
 
@@ -2344,21 +2339,6 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
    VIỀN, alpha 0,35, nên đặt làm màu CHỮ thì chữ mờ đến khó đọc (chủ dự án báo 22/09). Dùng
    biến -ink dành cho chữ, kèm in đậm để mắt bắt ngay mục đang chọn. */
 .cd-menu button.on { color: var(--info-ink); font-weight: 600; }
-/* Mục TÍCH CHỌN: ô vuông bên trái nói rõ bấm vào là THÊM/BỚT chứ không phải THAY. */
-.cd-menu button.tich { display: flex; align-items: flex-start; gap: 8px; }
-/* Ô chữ phải CO ĐƯỢC: mặc định con của flex không hẹp hơn nội dung, nên đường dẫn dài đâm
-   thẳng ra mép menu và bị cắt cụt không dấu "...". */
-.cd-menu button.tich > span:not(.cd-tich) { flex: 1 1 auto; min-width: 0; }
-.cd-tich { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; border-radius: 4px;
-  border: 1px solid var(--glass-brd); display: inline-flex; align-items: center;
-  justify-content: center; color: var(--info-ink); }
-.cd-menu button.on .cd-tich { border-color: var(--info-line); background: var(--info-wash); }
-.cd-tich svg { width: 12px; height: 12px; }
-/* Đang gắn nhiều thư mục: chip mang tên thư mục chính kèm "+N". */
-.cd-chip-them { font-weight: 600; color: var(--info-ink); }
-.cd-menu button.moi { border-top: 1px solid var(--glass-brd); border-radius: 0 0 8px 8px; }
-/* Chưa gắn thư mục nào thì "Thêm thư mục" là mục DUY NHẤT: vạch ngăn phía trên chẳng ngăn gì cả. */
-.cd-menu button.moi:first-child { border-top: 0; border-radius: 8px; }
 .cd-menu button.nguy { color: var(--red); }   /* --danger không có trong bảng màu */
 .cd-menu button small { display: block; font-size: 12px; color: var(--text3); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
