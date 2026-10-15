@@ -17,7 +17,7 @@ khi có plugin đăng ký (0 overhead khi không plugin nào dùng hook).
 
 AN TOÀN (lớp CỨNG - plugin chạy code Python THẬT trong tiến trình server):
     - Bundled: tự nạp khi effective-enabled (mặc định theo manifest `enabled:`).
-    - Vault:  loaded when the manifest says enabled:true. Since 0.161.0 (owner decision) user and vault
+    - Vault:  loaded when the manifest says enabled:true. Since 0.162.0 (owner decision) user and vault
       plugins load by default; JAVIS_ENABLE_USER_PLUGINS=false opts out (it used to be opt-in, like
       Hermes HERMES_ENABLE_PROJECT_PLUGINS).
     - Enable-state: bundled ở STATE_DIR/plugins.json (override, KHÔNG mutate file app);
@@ -112,7 +112,7 @@ _OFF_VALUES = ("0", "false", "no", "off")
 def _env_user_enabled() -> bool:
     """May user-installed plugins run (global STATE_DIR/plugins + vault/plugins)?
 
-    0.161.0, owner decision: YES BY DEFAULT. Each plugin still runs only when its own manifest says
+    0.162.0, owner decision: YES BY DEFAULT. Each plugin still runs only when its own manifest says
     `enabled: true` (a plugin created from chat starts at `enabled: false`), and the permission level
     of the caller still decides every tool call. Opt out with JAVIS_ENABLE_USER_PLUGINS=false (or
     the old alias JAVIS_ENABLE_VAULT_PLUGINS=false) and a restart. The new name wins when both are

@@ -224,7 +224,7 @@ A few things to remember while writing:
 
 ### Step 4: Enable the plugin
 
-Since 0.161.0, Javis **loads the plugins you install by default**: a plugin with `enabled: true` (you clicked **Enable** on its card) runs, no environment variable needed.
+Since 0.162.0, Javis **loads the plugins you install by default**: a plugin with `enabled: true` (you clicked **Enable** on its card) runs, no environment variable needed.
 
 To block user plugins on a machine altogether (for example a shared server):
 
@@ -238,7 +238,7 @@ Off accepts `0`, `false`, `no` or `off` (case insensitive). The old name `JAVIS_
 
 This is the most important part of this page.
 
-- **Plugins you install run real Python code, inside Javis's own server process.** They have that process's rights: reading and writing files, calling the network, reading environment variables. Since 0.161.0 the project owner chose to **load them by default**; the remaining guard is each plugin's own **Enable** switch (`enabled: true` in `plugin.yaml`).
+- **Plugins you install run real Python code, inside Javis's own server process.** They have that process's rights: reading and writing files, calling the network, reading environment variables. Since 0.162.0 the project owner chose to **load them by default**; the remaining guard is each plugin's own **Enable** switch (`enabled: true` in `plugin.yaml`).
 - **Only enable a plugin once you have read its code.** Note: anyone who can write into a `plugins/` folder (including the model, since it can write into the brain) can also write `enabled: true`. On a shared server, or one that runs bots for strangers, set `JAVIS_ENABLE_USER_PLUGINS=false`.
 - **Bundled plugins (the "Bundled" label) are not subject to this switch** because they ship with the Javis release. They keep working even when the machine sets `false`.
 - **A plugin Javis creates from chat is always disabled** (`enabled: false`) and at the `readonly` level. Javis never enables it for you; you must read the code then click **Enable** yourself.

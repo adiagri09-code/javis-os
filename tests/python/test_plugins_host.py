@@ -62,7 +62,7 @@ async def main():
     plugins_host.set_enabled("tool-audit", False, None)
     assert "javis_tool_stats" not in _names(plugins_host.plugin_tools("full", None)[0])
 
-    # 7) 0.161.0, owner decision: user plugins LOAD BY DEFAULT; JAVIS_ENABLE_USER_PLUGINS=false opts out
+    # 7) 0.162.0, owner decision: user plugins LOAD BY DEFAULT; JAVIS_ENABLE_USER_PLUGINS=false opts out
     vault = tempfile.mkdtemp(prefix="javis-vault-")
     pdir = os.path.join(vault, "plugins", "demo-x")
     os.makedirs(pdir)

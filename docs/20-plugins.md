@@ -224,7 +224,7 @@ Vài điều cần nhớ khi viết:
 
 ### Bước 4: Bật plugin
 
-Từ 0.161.0, Javis **tải plugin do bạn cài theo mặc định**: plugin nào có `enabled: true` (tức bạn đã bấm **Bật** trên thẻ) là chạy, không cần biến môi trường nào.
+Từ 0.162.0, Javis **tải plugin do bạn cài theo mặc định**: plugin nào có `enabled: true` (tức bạn đã bấm **Bật** trên thẻ) là chạy, không cần biến môi trường nào.
 
 Muốn chặn hẳn plugin người dùng trên một máy (ví dụ máy chủ dùng chung):
 
@@ -238,7 +238,7 @@ Giá trị tắt nhận `0`, `false`, `no` hoặc `off` (không phân biệt hoa
 
 Đây là phần quan trọng nhất của trang này.
 
-- **Plugin do bạn cài chạy mã Python thật, trong chính tiến trình server của Javis.** Nó có quyền của tiến trình đó: đọc ghi file, gọi mạng, đọc biến môi trường. Từ 0.161.0 chủ dự án quyết định **cho tải mặc định**; chốt chặn còn lại là công tắc **Bật** của từng plugin (`enabled: true` trong `plugin.yaml`).
+- **Plugin do bạn cài chạy mã Python thật, trong chính tiến trình server của Javis.** Nó có quyền của tiến trình đó: đọc ghi file, gọi mạng, đọc biến môi trường. Từ 0.162.0 chủ dự án quyết định **cho tải mặc định**; chốt chặn còn lại là công tắc **Bật** của từng plugin (`enabled: true` trong `plugin.yaml`).
 - **Chỉ bật plugin khi bạn đã tự đọc mã của nó.** Lưu ý: ai ghi được vào thư mục `plugins/` (kể cả model, vì nó ghi được vào brain) cũng có thể ghi `enabled: true`. Máy chủ dùng chung hoặc chạy bot cho người lạ thì nên đặt `JAVIS_ENABLE_USER_PLUGINS=false`.
 - **Plugin có sẵn (nhãn "Có sẵn") không chịu công tắc này** vì chúng đi kèm bản phát hành Javis. Chúng vẫn chạy bình thường kể cả khi máy đặt `false`.
 - **Plugin do Javis tạo qua chat luôn ở trạng thái tắt** (`enabled: false`) và mức `readonly`. Javis không tự bật hộ; bạn phải đọc mã rồi tự bấm **Bật**.
