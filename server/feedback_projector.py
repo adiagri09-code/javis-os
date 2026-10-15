@@ -438,8 +438,9 @@ class FeedbackProjector:
 
     # ───────────── trạng thái hiển thị ─────────────
 
-    def _status_for(self, refs: dict) -> Optional[tuple]:
-        """(status, status_reason) theo trạng thái lý do thật; None khi không đổi gì."""
+    def _status_for(self, refs: dict, prefetched: Optional[dict] = None) -> Optional[tuple]:
+        """(status, status_reason) theo trạng thái lý do thật; None khi không đổi gì. `prefetched`: {source_ref: nguồn}
+        đã đọc theo lô (đối soát của nhịp); nguồn vắng trong đó nghĩa là không có."""
         res = self._resonance()
         if res is None:
             return None
@@ -453,8 +454,11 @@ class FeedbackProjector:
                                          "The goal read this feedback on its next work turn")
             return None
         if route == "l3":
-            from agent_ledger import WakeReasons
-            s = WakeReasons(res).source(refs.get("source_ref") or "")
+            if prefetched is not None:
+                s = prefetched.get(refs.get("source_ref") or "")
+            else:
+                from agent_ledger import WakeReasons
+                s = WakeReasons(res).source(refs.get("source_ref") or "")
             if s is None or s.get("removed_at") is not None:
                 return None
             rs = s.get("reason_status")
@@ -470,11 +474,13 @@ class FeedbackProjector:
             return None
         return None
 
-    def _sync_one(self, kind: str, row: dict, refs: dict) -> Optional[dict]:
-        got = self._status_for(refs)
+    def _sync_one(self, kind: str, row: dict, refs: dict, *, cur: Any = None,
+                  prefetched: Optional[dict] = None) -> Optional[dict]:
+        got = self._status_for(refs, prefetched)
         if got is None:
             return None
-        cur = self._reaction(kind, row)
+        if cur is None:
+            cur = self._reaction(kind, row)
         if cur is None or int(cur.get("log_id") or 0) != int(row["id"]):
             return None
         # Trạng thái do lượt xem xét thật ghi (T3: adjusted/no_change kèm lý do) không bị bộ chiếu ghi đè bằng mặc định.
@@ -545,6 +551,43 @@ class FeedbackProjector:
         ev = self._event(kind, row)
         return [ev] if ev else []
 
+    def _refresh_open(self, kind: str, st: Any, limit: int) -> Optional[list]:
+        """Đối soát trạng thái của các reaction đang chờ/đang xem xét THEO LÔ (T3 hiệu năng): một câu đọc reaction, một câu
+        đọc nhật ký, một câu đọc nguồn lý do, rồi CHỈ ghi những reaction có trạng thái lý do đổi. Trước đây mỗi nhịp 30
+        giây đọc lại từng dòng (ba kết nối SQLite mỗi dòng, tối đa 200 dòng) dù không có gì đổi. None khi kho không có
+        hàm đọc theo lô (kho giả của test cũ): người gọi dùng đường từng dòng."""
+        open_rows = getattr(st, "dm_open_reaction_rows" if kind == "dm" else "open_reaction_rows", None)
+        log_rows = getattr(st, "dm_reaction_log_rows" if kind == "dm" else "reaction_log_rows", None)
+        if open_rows is None or log_rows is None:
+            return None
+        res = self._resonance()
+        if res is None:
+            return []
+        reactions = [r for r in open_rows(OPEN_STATUSES, limit) if r.get("log_id") is not None]
+        if not reactions:
+            return []
+        logs = log_rows([int(r["log_id"]) for r in reactions])
+        todo = []
+        for cur in reactions:
+            row = logs.get(int(cur["log_id"]))
+            if row is None or row.get("effect_state") != "done":
+                continue
+            todo.append((row, cur, row.get("effect_refs") or {}))
+        refs_l3 = [refs.get("source_ref") for _r, _c, refs in todo if refs.get("route") == "l3"]
+        from agent_ledger import WakeReasons
+        W = WakeReasons(res)
+        prefetched = W.sources_by_ref(refs_l3) if hasattr(W, "sources_by_ref") else None
+        events = []
+        for row, cur, refs in todo:
+            try:
+                if self._sync_one(kind, row, refs, cur=cur, prefetched=prefetched) is not None:
+                    ev = self._event(kind, row)
+                    if ev:
+                        events.append(ev)
+            except Exception as ex:  # noqa: BLE001
+                log.warning("feedback projector refresh %s %s: %s", kind, row.get("id"), ex)
+        return events
+
     def project_pending(self, limit: int = 200) -> list:
         """Nhịp và lúc khởi động: chiếu mọi dòng còn `pending` (theo thứ tự mã nhật ký), rồi ghi ngược trạng thái của
         các reaction đang chờ hay đang xem xét. Kho nào chưa có thì bỏ qua."""
@@ -562,6 +605,10 @@ class FeedbackProjector:
                         continue
                     done.add(pair)
                     events.extend(self.project(kind, row["id"]))
+                bulk = self._refresh_open(kind, st, limit)
+                if bulk is not None:
+                    events.extend(bulk)
+                    continue
                 open_ids = (st.dm_open_reaction_logs(OPEN_STATUSES, limit) if kind == "dm"
                             else st.open_reaction_logs(OPEN_STATUSES, limit))
                 events.extend(self.refresh(kind, open_ids))

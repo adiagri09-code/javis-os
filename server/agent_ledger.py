@@ -609,6 +609,22 @@ class WakeReasons:
                           (str(source_ref),)).fetchone()
             return dict(r) if r else None
 
+    def sources_by_ref(self, source_refs: Iterable[str]) -> dict:
+        """{source_ref: nguồn kèm trạng thái lý do} cho nhiều nguồn trong một câu đọc (bộ chiếu đối soát theo lô)."""
+        refs = sorted({str(x) for x in source_refs or [] if x})
+        out: dict = {}
+        if not refs:
+            return out
+        with closing(self.store._conn()) as c:
+            for i in range(0, len(refs), 500):
+                part = refs[i:i + 500]
+                for r in c.execute("SELECT s.*, r.status AS reason_status, r.attempt AS reason_attempt, r.code AS code, "
+                                   "r.context_ref AS context_ref, r.agent_key AS agent_key FROM agent_wake_sources s "
+                                   "JOIN agent_wake_reasons r ON r.id = s.reason_id WHERE s.source_ref IN "
+                                   f"({','.join('?' * len(part))})", part).fetchall():
+                    out[str(r["source_ref"])] = dict(r)
+        return out
+
 
 class _Abort(Exception):
     def __init__(self, outcome: str):

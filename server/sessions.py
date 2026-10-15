@@ -1102,6 +1102,23 @@ class SessionStore:
                           f"({','.join('?' * len(st))}) ORDER BY updated_at LIMIT ?", tuple(st + [int(limit)]))
         return [int(r["log_id"]) for r in rows]
 
+    def dm_open_reaction_rows(self, statuses, limit: int = 200) -> List[Dict[str, Any]]:
+        """Như `dm_open_reaction_logs` nhưng trả cả reaction (một câu đọc) cho đối soát theo lô của bộ chiếu."""
+        st = [str(x) for x in statuses or []]
+        if not st:
+            return []
+        rows = self._read(f"SELECT * FROM dm_reactions WHERE log_id IS NOT NULL AND status IN "
+                          f"({','.join('?' * len(st))}) ORDER BY updated_at LIMIT ?", tuple(st + [int(limit)]))
+        return [self._dm_reaction(r) for r in rows]
+
+    def dm_reaction_log_rows(self, log_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """{log_id: dòng nhật ký} cho nhiều mã trong một câu đọc."""
+        ids = sorted({int(x) for x in log_ids or []})
+        if not ids:
+            return {}
+        rows = self._read(f"SELECT * FROM dm_reaction_log WHERE id IN ({','.join('?' * len(ids))})", tuple(ids))
+        return {int(r["id"]): self._dm_log(r) for r in rows}
+
     def recent_dm_feedback(self, agent_key: str, since: float, limit: int = 15,
                            reactor: str = "owner") -> List[Dict[str, Any]]:
         """Phản hồi còn hiệu lực của `reactor` trên câu trả lời của ĐÚNG agent `agent_key` ở chat riêng (mọi phiên
