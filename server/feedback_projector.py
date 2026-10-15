@@ -467,6 +467,51 @@ class FeedbackProjector:
                 log.warning("feedback projector refresh %s %s: %s", kind, lid, ex)
         return events
 
+    # ───────────── điểm nối cho lượt xem xét reaction (T3 phần L, `agent_review`) ─────────────
+
+    def review_source(self, src: str) -> Optional[dict]:
+        """Một nguồn `rx:<kind>:<log_id>` của lý do `reaction_review`, đủ để dựng lời nhắc: tin bị phản hồi, emoji, lý do,
+        trục nói/im, góp ý. `current`: lần đổi này còn là trạng thái hiện tại của reaction (đổi sau đó thì không). None
+        khi nguồn không đọc được (kho chưa có, dòng đã mất)."""
+        m = re.match(r"^rx:(dm|team):(\d+)$", str(src or ""))
+        if not m:
+            return None
+        kind, log_id = m.group(1), int(m.group(2))
+        row = self._log_row(kind, log_id)
+        if row is None:
+            return None
+        nxt = self._next_state(kind, row) or {}
+        cur = self._reaction(kind, row)
+        text = ""
+        ss = self._sessions()
+        if ss is not None:
+            msg = (ss.message_row(row["session_id"], int(row["message_id"])) if kind == "dm"
+                   else ss.team_message(row["session_id"], int(row["message_id"])))
+            text = str((msg or {}).get("content") or "")
+        return {"source_ref": src, "kind": kind, "log_id": log_id, "session_id": row["session_id"],
+                "message_id": int(row["message_id"]), "reactor": row["reactor"], "team_id": row.get("team_id") or "",
+                "agent_key": str(row.get("agent_key") or ""), "value": nxt.get("value"),
+                "reasons": list(nxt.get("reasons") or []), "axis": nxt.get("axis") or "",
+                "comment": nxt.get("comment") or "", "created_at": row.get("created_at"), "message_text": text,
+                "current": bool(cur and int(cur.get("log_id") or 0) == log_id),
+                "status": (cur or {}).get("status") or ""}
+
+    def set_review_status(self, src: str, status: str, reason: str = "") -> list:
+        """Lượt xem xét reaction ghi trạng thái theo KẾT QUẢ HOST THẬT lên reaction của nguồn (chỉ khi reaction còn ở đúng
+        lần đổi đó). Trả gói WS cần đẩy (`chat_reaction` / `team_message`)."""
+        m = re.match(r"^rx:(dm|team):(\d+)$", str(src or ""))
+        if not m:
+            return []
+        kind, log_id = m.group(1), int(m.group(2))
+        row = self._log_row(kind, log_id)
+        if row is None:
+            return []
+        got = self._set_status(kind, row, log_id, status, reason)
+        if got is None:
+            return []
+        ev = self._event(kind, row)
+        return [ev] if ev else []
+
     def project_pending(self, limit: int = 200) -> list:
         """Nhịp và lúc khởi động: chiếu mọi dòng còn `pending` (theo thứ tự mã nhật ký), rồi ghi ngược trạng thái của
         các reaction đang chờ hay đang xem xét. Kho nào chưa có thì bỏ qua."""
