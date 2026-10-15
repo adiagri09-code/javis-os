@@ -1,6 +1,7 @@
-# Gói pilot nhóm chat thích nghi trên model thật (T1-T4) - CHUẨN BỊ SẴN, CHƯA CHẠY
+# Gói pilot nhóm chat thích nghi trên model thật (T1-T4)
 
-Trạng thái: **chưa chạy**. Không ai chạy gói này, thử lại, nâng trần hay đổi sang API trả phí khi chưa có lệnh duyệt trực tiếp
+Trạng thái: **đã chạy một lần 2026-10-16** trên 0.170.0, chủ duyệt trần 30 (thấp hơn mức 60 đề xuất ở mục 3). Báo cáo gốc và
+bằng chứng nằm ngoài repo: `exports/reviews/team-adaptive/pilot-2026-10-16/PILOT-REPORT.md`. Không ai chạy lại gói này, thử lại, nâng trần hay đổi sang API trả phí khi chưa có lệnh duyệt trực tiếp
 của chủ dự án (GOAL mục 13). Engine giả đã chứng minh phần kỹ thuật (ma trận: [team-chat-acceptance-matrix.md](team-chat-acceptance-matrix.md));
 engine giả KHÔNG chứng minh chất lượng thảo luận, phán xử hay học trên model thật. Gói này là để chứng minh phần đó.
 
@@ -16,6 +17,9 @@ engine giả KHÔNG chứng minh chất lượng thảo luận, phán xử hay h
   của từng trợ lý hay model chính), engine việc nền (lô phán xử, lượt quét). Không API trả phí nếu chủ không nói rõ.
 - `JAVIS_PULSE_TICK_PAUSED=0` chỉ khi kịch bản P4 chạy; các kịch bản khác để nhịp nền dừng (`=1`) và gọi tick bằng tay để đếm
   được lượt.
+- **Nhịp nền dừng khi MỘT TRONG HAI cờ bằng 1:** `JAVIS_PULSE_TICK_PAUSED` hay `JAVIS_RESONANCE_TICK_PAUSED` (`_pulse_tick` trong
+  `server/main.py`). Kịch bản cần nhịp (P4, lượt chủ động của P5, lượt xem xét phản hồi của P6) phải đặt CẢ HAI bằng 0. Pilot
+  2026-10-16 phần 2 chỉ đặt cờ thứ nhất nên 4 tick không chạy lượt nào, lý do `reaction_review` nằm chờ.
 
 ## 2. Cổng duyệt của chủ
 
