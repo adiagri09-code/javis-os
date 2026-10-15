@@ -120,6 +120,10 @@ try:
     c.post("/coding/session/s-rel/pin", data={"path": "", "brain": brain})
     check("a folder still used by another conversation stays registered", coding_store.thu_muc(proj_id) is not None)
 
+    c.post("/coding/session/s-x/pin", data={"path": "", "brain": brain})
+    check("unpinning also forgets extra folders nobody else uses", coding_store.thu_muc(rec3["id"]) is None)
+    check("but keeps a folder another conversation still uses", coding_store.thu_muc(proj_id) is not None)
+
     import routes.coding as coding_routes  # noqa: E402
     keep = coding_routes._DEPS.resolve_path
 

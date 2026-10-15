@@ -132,12 +132,13 @@ def _pin(sid: str, raw: str, brain: str):
     Returns (status, payload)."""
     try:
         if not raw:
-            old = (coding_store.rang_buoc(sid).get("thu_muc") or "").strip()
+            old = [r["id"] for r in coding_store.thu_muc_cua_phien(sid)]   # main first, then extras
             coding_store.dat_rang_buoc(sid, thu_muc_id="")
-            # Forget a folder no other conversation uses, so the registry does not grow forever.
-            # Only the registry entry goes; nothing on disk is touched.
-            if old and not coding_store.sessions_using(old):
-                coding_store.bo_thu_muc(old)
+            # Forget folders no other conversation uses, so the registry does not grow forever.
+            # Only the registry entries go; nothing on disk is touched.
+            for tid in old:
+                if not coding_store.sessions_using(tid):
+                    coding_store.bo_thu_muc(tid)
             return 200, {"ok": True, "folder": None, "in_brain": False, "brain_rel": "", "extra_folders": []}
         if os.path.isabs(raw):
             target = raw
