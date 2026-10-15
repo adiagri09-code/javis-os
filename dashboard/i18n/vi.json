@@ -4402,5 +4402,13 @@
   "teams.cap.volunteer_k": "Số người tự lên tiếng mỗi tin (K, 0 là tắt)",
   "teams.cap.judge_off_batch": "Phán xử khi Auto của trợ lý tắt",
   "teams.limits.mode_batch": "Lọc bằng code rồi một lô phán xử",
-  "teams.limits.mode_code": "Chỉ lọc bằng code"
+  "teams.limits.mode_code": "Chỉ lọc bằng code",
+  "pulse.proposals_title": "Đề xuất của trợ lý",
+  "pulse.btn.accept": "Nhận thành việc",
+  "pulse.btn.reject": "Bác",
+  "pulse.prop.status.pending": "Chờ bạn quyết",
+  "pulse.prop.status.accepted": "Đã nhận thành việc",
+  "pulse.prop.status.rejected": "Đã bác",
+  "teams.proposal_accepted": "Đã tạo việc từ đề xuất này",
+  "teams.proposal_rejected": "Bạn đã bác đề xuất này"
 }

@@ -521,6 +521,10 @@ class PulseHost:
                     # Quét giới hạn không có cơ hội: không tạo việc khi không có nguồn (không tạo việc để giữ mình bận).
                     return {"action": "none", "reason": "no_source", "wanted": action}
                 src = refs[0]
+            ver = next((str(o.get("version") or "") for o in fresh if o["source_ref"] == src), "")
+            if await asyncio.to_thread(AP.proposal_blocked, store, key, ctx, src, ver):
+                # Đã đề xuất (hay đã bị bác) cho đúng nguồn và phiên bản này: không mở lại khi không có dữ kiện mới.
+                return {"action": "none", "reason": "already_proposed", "wanted": action, "source_ref": src}
             item = {"title": str(act.get("title") or "")[:160].strip(), "brief": str(act.get("brief") or "")[:4000]}
             if not item["title"]:
                 return {"action": "none", "reason": "no_title", "wanted": action}
@@ -538,10 +542,17 @@ class PulseHost:
                 note = "no_permission"
             else:
                 note = ""
-            ref = await asyncio.to_thread(self.deps.propose, key, ctx, item, src) if self.deps.propose else None
+            got = await asyncio.to_thread(self.deps.propose, key, ctx, item, src) if self.deps.propose else None
+            got = got if isinstance(got, dict) else ({"ref": got} if got else {})
+            pid = await asyncio.to_thread(lambda: AP.record_proposal(
+                store, agent_key=key, context_ref=ctx, source_ref=src, version=ver, title=item["title"],
+                brief=item["brief"], session_id=str(got.get("session_id") or ""), message_id=got.get("message_id"),
+                at=now))
+            ref = got.get("ref") or (f"msg:{got['message_id']}" if got.get("message_id") is not None else None)
             await asyncio.to_thread(AP.record_event, store, key, ctx, "propose", reason=src,
-                                    payload={"ref": ref, "title": item["title"], "downgraded": note}, at=now)
-            return {"action": "propose", "ref": ref, "source_ref": src, "downgraded": note}
+                                    payload={"ref": ref, "proposal_id": pid, "title": item["title"], "downgraded": note},
+                                    at=now)
+            return {"action": "propose", "ref": ref, "proposal_id": pid, "source_ref": src, "downgraded": note}
         if action == "say":
             text = str(act.get("text") or "").strip()[:4000]
             if not text:
@@ -577,6 +588,8 @@ class PulseRouteDeps:
     agent_key: Callable[[str, str], Optional[str]]          # (root, slug) -> agent_key đang hoạt động | None
     store: Callable[[], Any]                                # () -> GoalStore | None (không tạo kho chỉ để đọc)
     seen_resolve: Callable[[str, list, str], list]          # (context_ref, ids, session_id) -> [(ctx, mid, key, sid)]
+    # (đề xuất, "accepted"|"rejected") -> {"task_id"?}: chấp nhận thì xếp việc qua hàng đợi chung với quyền của chủ.
+    proposal_action: Optional[Callable[[dict, str], Optional[dict]]] = None
 
 
 def register(app, deps: PulseRouteDeps) -> None:
@@ -690,6 +703,29 @@ def register(app, deps: PulseRouteDeps) -> None:
                 raise ValueError("thiếu event_id hay change_id")
             return AP.revert(store, key, int(b["event_id"]), by="owner")
         return await act(slug, brain, request, fn)
+
+    def _proposal_route(decision):
+        def fn(store, key, b, pid):
+            prop = AP.proposal(store, pid)
+            if prop is None or prop["agent_key"] != key or prop["status"] != "pending":
+                return None
+            if deps.proposal_action is None:
+                raise ValueError("chưa nối thao tác đề xuất")
+            return deps.proposal_action(prop, decision) or None
+        return fn
+
+    @app.post("/agents/{slug}/pulse/proposals/{pid}/accept")
+    async def agent_pulse_proposal_accept(slug: str, pid: int, request: Request, brain: str = "brain"):
+        """Chấp nhận một đề xuất của lượt quét (+0.6): xếp việc qua hàng đợi chung với quyền của chủ (việc nhóm qua thẻ
+        Tạo việc của nhóm; chat riêng thành việc giao cho trợ lý như nút Giao việc). Chỉ báo xong sau khi đã xếp."""
+        f = _proposal_route("accepted")
+        return await act(slug, brain, request, lambda store, key, b: f(store, key, b, pid))
+
+    @app.post("/agents/{slug}/pulse/proposals/{pid}/reject")
+    async def agent_pulse_proposal_reject(slug: str, pid: int, request: Request, brain: str = "brain"):
+        """Bác một đề xuất (-0.4). Cùng nguồn và phiên bản thì không đề xuất lại (5.5)."""
+        f = _proposal_route("rejected")
+        return await act(slug, brain, request, lambda store, key, b: f(store, key, b, pid))
 
     @app.post("/agents/{slug}/pulse/max_tier")
     async def agent_pulse_max_tier(slug: str, request: Request, brain: str = "brain"):

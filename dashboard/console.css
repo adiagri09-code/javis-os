@@ -3213,3 +3213,5 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 .ajd-btn[aria-pressed="true"] { font-weight: 600; }
 .tm-judge-hint { display: block; min-height: 44px; font-size: 16px; text-align: left; background: none; border: 0;
   padding: 4px 0; text-decoration: underline; cursor: pointer; color: inherit; }
+
+.tm-proposal-state { font-size: 16px; color: var(--text2); margin-top: 6px; }
