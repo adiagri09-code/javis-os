@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.156.0] - 2026-10-15
+### Added
+- **Agents pace themselves and judge when to speak** (in progress).
+
 ## [0.154.0] - 2026-10-15
 ### Added
 - **React to an agent's messages** in private and team chat (in progress).

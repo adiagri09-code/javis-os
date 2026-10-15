@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.156.0] - 2026-10-15
+### Thêm mới
+- **Trợ lý tự điều nhịp và tự biết lúc nên nói** (đang làm).
+
 ## [0.154.0] - 2026-10-15
 ### Thêm mới
 - **Thả cảm xúc cho tin của trợ lý** ở cả chat riêng lẫn nhóm (đang làm).
