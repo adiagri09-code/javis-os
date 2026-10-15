@@ -243,14 +243,16 @@ class TeamCeiling:
                 self.ledger._refund_in(c, r["id"], _now(now))
 
     def reconcile(self, teams: Any, startup: bool = False, now: Optional[float] = None,
-                  stale_s: float = STALE_RESERVED_S, grace_s: float = RECONCILE_GRACE_S) -> dict:
+                  stale_s: float = STALE_RESERVED_S, grace_s: float = RECONCILE_GRACE_S, batch: int = 2000) -> dict:
         """Đối soát hai kho (thiết kế 9.1, bản sửa sau review T1 vòng 2), idempotent. Dòng `team_turn:*` chỉ theo trạng
         thái của CHÍNH lượt nhóm đó, KHÔNG BAO GIỜ theo tuổi (lượt nhóm có thể nằm `reserved` không mốc engine trong lúc
         chờ khoá bận tới busy_wait_s, mặc định 1800 giây, và một bước chạy tới STEP_TIMEOUT_S):
         - lượt nhóm đã hoàn hay không còn: dòng `refunded` (đã có mốc engine thì `interrupted`, vẫn tính);
         - lượt nhóm đã chốt: dòng chốt theo; lượt nhóm đã tới mốc engine: dòng `running`;
         - lượt nhóm còn `reserved`/`running`: để nguyên;
-        - lượt nhóm đã tới mốc engine mà THIẾU dòng sổ: dựng lại dòng `counted = 1` theo kết cục (có thể tạm vượt trần).
+        - lượt nhóm đã tới mốc engine mà THIẾU dòng sổ: dựng lại dòng `counted = 1` theo kết cục (có thể tạm vượt trần),
+          CHỈ với lượt tạo sau mốc nâng lên T2 (`t2_migrated_at`) hay còn mở lúc nâng; lịch sử đã chốt trước khi nâng
+          không bao giờ tính vào trần (quyết định của chủ, review T2 P1).
         Dòng sổ và lượt nhóm mới hơn `grace_s` (120 giây) bị bỏ qua: không bắt gặp lượt đang ở giữa hai bước giữ chỗ.
         Lúc khởi động (`startup`) mọi lượt của tiến trình cũ đã được `TeamRunner.recover` hoàn hay chốt `interrupted`,
         nên dòng sổ của chúng đi đúng đường đó. Dòng `mirror_ref = ''` theo quy tắc 10 phút (`reconcile_stale`)."""
@@ -262,7 +264,14 @@ class TeamCeiling:
                 "SELECT * FROM agent_calls WHERE status IN ('reserved','running') AND mirror_ref LIKE 'team_turn:%' "
                 "AND created_at <= ?", (cutoff,)).fetchall()]
             mark = c.execute("SELECT value FROM ceiling_state WHERE name='team_scan_at'").fetchone()
-        scan_from = float(mark["value"]) - 86400.0 - float(grace_s) if mark else 0.0
+            mig = c.execute("SELECT value FROM ceiling_state WHERE name='t2_migrated_at'").fetchone()
+            cur_row = c.execute("SELECT at, turn_id FROM ceiling_cursor WHERE name='team_turns'").fetchone()
+        # Mốc nâng lên T2 (GoalStore ghi lúc tạo bảng). Kho thiếu mốc (không nên có) thì lấy lúc này: không tính lịch sử.
+        migrated = float(mig["value"]) if mig else t
+        floor = migrated - float(grace_s)
+        # Con trỏ bền `(created_at, turn_id)`: lần đầu bắt đầu từ mốc nâng; lần sau quét tiếp đúng chỗ dừng.
+        cur_at, cur_id = (float(cur_row["at"]), str(cur_row["turn_id"])) if cur_row else (floor, "")
+        settled_since = (float(mark["value"]) if mark else migrated) - 2 * float(grace_s) - 60.0
         for r in open_rows:
             tid = r["mirror_ref"][len("team_turn:"):]
             turn = teams.turn(tid)
@@ -287,14 +296,29 @@ class TeamCeiling:
                         "UPDATE agent_calls SET status='running', engine=?, model=?, engine_at=? WHERE id=?",
                         (turn.get("engine") or "", turn.get("model") or "", turn["engine_at"], r["id"])).rowcount
                 # Lượt nhóm còn reserved/running (đang chờ khoá bận hay đang chạy): để nguyên, dù lâu bao nhiêu.
-        turns = teams.turns_since(scan_from) if hasattr(teams, "turns_since") else []
+        # Lượt nhóm thiếu dòng sổ (review T2 P1, quyết định của chủ): KHÔNG tính lịch sử trước khi nâng lên T2. Chỉ xét
+        # lượt tạo sau mốc `t2_migrated_at` (trừ ân hạn) và lượt còn mở lúc nâng (chốt hay còn chạy sau mốc). Cửa sổ quét
+        # bắt đầu từ lần quét trước (không quét lại cả bảng), có trần số dòng mỗi lần.
+        window, special = teams.turns_for_reconcile(cur_at, cur_id, cutoff, floor, settled_since, limit=batch)
+        seen_ids = {x["turn_id"] for x in window}
+        turns = window + [x for x in special if x["turn_id"] not in seen_ids]
+        refs = [self.mirror(x["turn_id"]) for x in turns]
+        have = set()
         with closing(self.store._conn()) as c:
-            have = {row[0] for row in c.execute("SELECT DISTINCT mirror_ref FROM agent_calls "
-                                                "WHERE mirror_ref LIKE 'team_turn:%'").fetchall()}
+            for k in range(0, len(refs), 500):
+                part = refs[k:k + 500]
+                have |= {row[0] for row in c.execute(
+                    f"SELECT DISTINCT mirror_ref FROM agent_calls WHERE mirror_ref IN ({','.join('?' * len(part))})",
+                    part).fetchall()}
         for turn in turns:
             ref = self.mirror(turn["turn_id"])
             if ref in have or turn.get("engine_at") is None or float(turn.get("created_at") or 0) > cutoff:
                 continue
+            settled = turn.get("settled_at")
+            open_at_upgrade = turn.get("status") in ("reserved", "running") or (
+                settled is not None and float(settled) >= migrated - float(grace_s))
+            if float(turn.get("created_at") or 0) < migrated - float(grace_s) and not open_at_upgrade:
+                continue   # lượt đã chốt trước khi nâng: lịch sử, không bao giờ tính
             status = turn["status"] if turn["status"] in ("running", "ok", "error", "interrupted") else "running"
             with self.ledger._tx() as c:
                 if c.execute("SELECT 1 FROM agent_calls WHERE mirror_ref=?", (ref,)).fetchone():
@@ -309,7 +333,14 @@ class TeamCeiling:
                            float(turn.get("created_at") or t),
                            None if status == "running" else (turn.get("settled_at") or t)))
                 out["rebuilt"] += 1
+        # Con trỏ tiến tới dòng cuối của cửa sổ; cửa sổ đầy thì lần sau quét tiếp (không nạp lại cả bảng).
+        out["truncated"] = len(window) >= int(batch)
         with self.ledger._tx() as c:
+            if window:
+                last = window[-1]
+                c.execute("INSERT INTO ceiling_cursor(name, at, turn_id) VALUES('team_turns', ?, ?) "
+                          "ON CONFLICT(name) DO UPDATE SET at=excluded.at, turn_id=excluded.turn_id",
+                          (float(last.get("created_at") or 0), str(last["turn_id"])))
             c.execute("INSERT INTO ceiling_state(name, value) VALUES('team_scan_at', ?) "
                       "ON CONFLICT(name) DO UPDATE SET value=excluded.value", (t,))
         out["stale"] = self.ledger.reconcile_stale(now=t, stale_s=stale_s)
@@ -365,7 +396,10 @@ class WakeReasons:
         touched = []
         for s in rows:
             rr = c.execute("SELECT status FROM agent_wake_reasons WHERE id=?", (s["reason_id"],)).fetchone()
-            if rr is None or rr["status"] != "pending" or s["removed_at"] is not None or s["consumed_at"] is not None:
+            # Lý do đang chạy (`claimed`) cũng đánh `removed_at` (review T2 P2-1): danh sách nguồn của lượt đã chốt lúc
+            # nhận, nhưng `settle(ok)` chỉ chuyển nguồn còn sống, nên nguồn đã gỡ không bị mang sang lý do chờ kế tiếp.
+            if rr is None or rr["status"] not in ("pending", "claimed") or s["removed_at"] is not None \
+                    or s["consumed_at"] is not None:
                 continue
             c.execute("UPDATE agent_wake_sources SET removed_at=? WHERE source_ref=?", (t, s["source_ref"]))
             touched.append(int(s["reason_id"]))
@@ -380,8 +414,9 @@ class WakeReasons:
         return [s["source_ref"] for s in rows if int(s["reason_id"]) in touched]
 
     def remove_source(self, source_ref: str, now: Optional[float] = None) -> bool:
-        """Nguồn bị bỏ (reaction gỡ hay đổi) khi lý do còn `pending`: đánh `removed_at`; lý do không còn nguồn nào thì
-        `superseded`. Lý do đang chạy hay đã chốt thì không đụng (lượt đó tự xử lý `consumed`). Trả có gỡ không."""
+        """Nguồn bị bỏ (reaction gỡ hay đổi): đánh `removed_at` khi lý do còn `pending` hay đang `claimed`; lý do chờ không
+        còn nguồn nào thì `superseded` (lý do đang chạy giữ nguyên, lượt đó tự chốt). Lý do đã chốt thì không đụng (bằng
+        chứng). Trả có gỡ không."""
         t = _now(now)
         with self._tx() as c:
             rows = c.execute("SELECT * FROM agent_wake_sources WHERE source_ref=?", (str(source_ref),)).fetchall()
@@ -412,6 +447,7 @@ class WakeReasons:
         t = _now(now)
         if try_busy is not None and not try_busy():
             return {"outcome": "busy", "reason": self.get(reason_id), "sources": [], "call_id": None}
+        done = False
         try:
             with self._tx() as c:
                 r = c.execute("SELECT * FROM agent_wake_reasons WHERE id=?", (int(reason_id),)).fetchone()
@@ -421,9 +457,7 @@ class WakeReasons:
                     "SELECT source_ref FROM agent_wake_sources WHERE reason_id=? AND removed_at IS NULL "
                     "AND consumed_at IS NULL ORDER BY added_at, source_ref", (r["id"],)).fetchall()]
                 if not srcs:
-                    c.execute("UPDATE agent_wake_reasons SET status='superseded', updated_at=? WHERE id=?",
-                              (t, r["id"]))
-                    raise _Abort("gone")
+                    raise _Abort("empty")
                 att = int(r["attempt"]) + 1
                 try:
                     cid = self.ledger.reserve(purpose=purpose or (r["code"] if r["code"] in PURPOSES else "review"),
@@ -439,13 +473,26 @@ class WakeReasons:
                 if n != 1:
                     raise _Abort("gone")
                 out = {"outcome": "claimed", "sources": srcs, "call_id": cid}
+            done = True
         except _Abort as ab:
-            if release_busy is not None:
+            outcome = ab.outcome
+            if outcome == "empty":
+                # Lý do không còn nguồn: chốt `superseded` trong giao dịch RIÊNG (review T2 P3: ném trong cùng giao dịch
+                # làm lệnh chốt bị rollback).
+                with self._tx() as c:
+                    if not c.execute("SELECT 1 FROM agent_wake_sources WHERE reason_id=? AND removed_at IS NULL "
+                                     "AND consumed_at IS NULL", (int(reason_id),)).fetchone():
+                        c.execute("UPDATE agent_wake_reasons SET status='superseded', updated_at=? WHERE id=? "
+                                  "AND status='pending'", (t, int(reason_id)))
+                outcome = "gone"
+            return {"outcome": outcome, "reason": self.get(reason_id), "sources": [], "call_id": None}
+        finally:
+            # Không nhận được (kể cả lỗi kho bất ngờ, không chỉ _Abort): nhả khoá bận vừa lấy, không để rò tới hết hạn.
+            if not done and release_busy is not None:
                 try:
                     release_busy()
                 except Exception:  # noqa: BLE001
                     pass
-            return {"outcome": ab.outcome, "reason": self.get(reason_id), "sources": [], "call_id": None}
         out["reason"] = self.get(reason_id)
         return out
 
