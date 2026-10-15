@@ -110,6 +110,7 @@ class FakeModels:
         self.team_calls = 0
         self.judge_calls = 0
         self.scan_calls = 0
+        self.review_calls = 0
         self.judge_verdict = "silent"
         self.team_text = None
         self.team_error = None
@@ -158,14 +159,33 @@ class FakeModels:
             return {"text": '{"action": "none", "reason": "giả"}', "tokens_in": 1, "tokens_out": 1}
         return "fake", "fake-model", run
 
+    def review_engine_for(self, key, ctx, purpose):
+        """Lượt học (xem xét reaction, tự rà soát của phần L): trả JSON rỗng hợp lệ, không đổi gì."""
+        async def run(req):
+            started = req.get("engine_started")
+            if callable(started):
+                r = started()
+                if asyncio.iscoroutine(r):
+                    await r
+            self._bump("review_calls")
+            if self.delay:
+                await asyncio.sleep(self.delay)
+            return {"text": '{"consumed": [], "changes": [], "reason": "giả"}', "tokens_in": 1, "tokens_out": 1}
+        return "fake", "fake-model", run
+
     def total(self) -> int:
-        return self.team_calls + self.judge_calls + self.scan_calls
+        return self.team_calls + self.judge_calls + self.scan_calls + self.review_calls
 
 
 def install_guards(main, fakes: FakeModels | None = None) -> FakeModels:
     """Mọi lối dựng engine thật trong `main` ném lỗi ngay; lượt nhóm, phán xử, quét chạy bằng engine giả `fakes`."""
     fakes = fakes or FakeModels()
+    # Chốt trung tâm (tests/run.py, tests/python/_paths.py đặt cùng hai biến): Judge từ chối mọi hàm hỏi model chưa đánh
+    # dấu giả, main dừng engine phán xử và engine lượt học trước khi dựng. Bench chạy ngoài tests/run.py nên tự đặt.
     os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
+    os.environ["JAVIS_NO_REAL_REVIEW_ENGINE"] = "1"
+    import agent_judge  # noqa: WPS433
+    judge_fake = agent_judge.mark_test_fake(fakes.judge_ask)
     main.team_engine.build = _no_real_engine
     main.claude_engine = _no_real_engine
     main.CodexCLI = _no_real_engine
@@ -173,11 +193,13 @@ def install_guards(main, fakes: FakeModels | None = None) -> FakeModels:
     main._reply_policy_sandbox_engine = _no_real_engine
     main._TEAM_API.deps.engine_for = fakes.team_engine_for
     main._team_engine_for = fakes.team_engine_for
-    main._agent_judge_ask = fakes.judge_ask
+    main._agent_judge_ask = judge_fake
     main._pulse_engine_for = fakes.pulse_engine_for
+    if hasattr(main, "_learn_engine_for"):
+        main._learn_engine_for = fakes.review_engine_for
     judge = main._agent_judge()
     if judge is not None:
-        judge.ask = fakes.judge_ask
+        judge.ask = judge_fake
     return fakes
 
 
@@ -189,6 +211,12 @@ def guards_hold(main) -> list:
             bad.append(name)
     if main.team_engine.build is not _no_real_engine:
         bad.append("team_engine.build")
+    for env in ("JAVIS_NO_REAL_JUDGE_ENGINE", "JAVIS_NO_REAL_REVIEW_ENGINE"):
+        if os.environ.get(env) != "1":
+            bad.append(env)
+    judge = main._agent_judge()
+    if judge is not None and not getattr(judge.ask, "javis_test_fake", False):
+        bad.append("judge.ask (chưa đánh dấu giả)")
     return bad
 
 
@@ -310,7 +338,8 @@ def main_bench(argv=None) -> dict:
     base = Path(tempfile.mkdtemp(prefix="javis-t4-bench-"))
     os.environ["JAVIS_STATE_DIR"] = str(base / "state")
     os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
-    os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"   # chốt thứ hai: main._agent_judge_ask dừng trước khi dựng engine
+    os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"   # chốt trung tâm, như tests/run.py
+    os.environ["JAVIS_NO_REAL_REVIEW_ENGINE"] = "1"
     os.environ["JAVIS_PULSE_TICK_PAUSED"] = "1"       # nhịp nền của scheduler không chạy; bench gọi tick trực tiếp
     os.environ["JAVIS_RESONANCE_TICK_PAUSED"] = "1"
     (base / "state").mkdir()
@@ -570,7 +599,7 @@ def main_bench(argv=None) -> dict:
                                    "(thiết kế 5.5), nên pulse_scans có thể bằng 0 dù có lần thức"),
                 },
                 "fake_model_calls_total": {"team_turns": fakes.team_calls, "judge_batches": fakes.judge_calls,
-                                           "pulse_scans": fakes.scan_calls},
+                                           "pulse_scans": fakes.scan_calls, "review_turns": fakes.review_calls},
                 "pool": {"max_parallel_teams": pool.max_parallel_teams, "held_after": len(pool._pool)},
                 "dataset": {"teams": a.teams, "messages_per_team": a.messages, "messages_total": a.teams * a.messages,
                             "owner_reactions_seeded": min(a.reactions, len(agent_msgs)), "agents": a.agents,
