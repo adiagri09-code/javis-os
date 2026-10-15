@@ -345,6 +345,17 @@ dsid = mss.create_session(brain="brain", channel="web")
 dmid = mss.append_message(dsid, "assistant", "Câu trả lời để thả cảm xúc")
 names = ("get_session", "message_row", "dm_nonce_owner", "set_dm_reaction", "dm_reaction_of",
          "report_receipt_by_message")
+
+
+async def warm_up():
+    # Request đầu tiên qua main.app dựng bảng route lười của FastAPI (~270 ms trên luồng loop, không phải mã T3; review T3
+    # vòng 2 P2-3): gửi một request hỏng (400, không ghi gì) TRƯỚC khi đo, ngưỡng giữ nguyên.
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://127.0.0.1:8080") as cl_:
+        return await cl_.post(f"/sessions/{dsid}/messages/{dmid}/reaction", json={"value": "khong-co"})
+
+warm = asyncio.run(warm_up())
+check("làm nóng route trước khi đo: request hỏng bị từ chối, không ghi reaction", warm.status_code == 400
+      and mss.dm_reaction_of(dsid, dmid) is None, (warm.status_code, warm.text[:200]))
 ON_LOOP.clear()
 
 
