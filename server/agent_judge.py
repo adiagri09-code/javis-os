@@ -579,10 +579,24 @@ class Judge:
             st.set_message(int(decision_id), message_ref)
 
     def demote(self, decision_id: int, code: str) -> None:
-        """Người được chọn tự lên tiếng mà lượt không đăng được tin (bị chặn, hết lượt): ghi kết cục thật."""
+        """Người được chọn tự lên tiếng mà lượt không đăng được tin (bị chặn, hết lượt): ghi kết cục thật. Danh tính "được
+        chọn tự lên tiếng" giữ riêng ở `features.volunteer_origin` (review T3 J P2-4), tách khỏi kết cục, để Thử lại vẫn
+        là lượt tự lên tiếng (không thành lời gọi trực tiếp) và làm được cả với tin của agent."""
         st = self.store(False)
         if st is not None and decision_id:
+            d = st.get_decision(int(decision_id)) or {}
+            origin = bool(d.get("volunteer") or d.get("kind") == "clarify"
+                          or (d.get("features") or {}).get("volunteer_origin"))
             st.set_outcome(int(decision_id), "silent", code, volunteer=False)
+            if origin:
+                st.merge_features(int(decision_id), {"volunteer_origin": True})
+
+    def restore_volunteer(self, decision_id: int, message_ref: str) -> None:
+        """Thử lại một lượt tự lên tiếng đã hạ và lượt đó đăng được tin: quyết định về lại `speak`, tự lên tiếng, gắn tin."""
+        st = self.store(False)
+        if st is not None and decision_id:
+            st.set_outcome(int(decision_id), "speak", "", volunteer=True)
+            st.set_message(int(decision_id), message_ref)
 
     def set_chain(self, context_ref: str, message_id: int, root_ref: str, depth: int, author_key: str = "",
                   via_key: str = "") -> None:

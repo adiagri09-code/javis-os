@@ -268,6 +268,19 @@ class JudgeStore:
                       (verdict, str(silence_code or "")[:40], None if reason is None else str(reason)[:300],
                        None if volunteer is None else (1 if volunteer else 0), int(decision_id)))
 
+    def merge_features(self, decision_id: int, extra: dict) -> None:
+        """Gộp thêm khoá vào `features` của một quyết định (vd. `volunteer_origin` khi lượt tự lên tiếng bị hạ)."""
+        with self._Tx(self) as c:
+            r = c.execute("SELECT features_json FROM decisions WHERE id=?", (int(decision_id),)).fetchone()
+            if r is None:
+                return
+            try:
+                feats = json.loads(r["features_json"] or "{}")
+            except ValueError:
+                feats = {}
+            feats.update(extra or {})
+            c.execute("UPDATE decisions SET features_json=? WHERE id=?", (_j(feats), int(decision_id)))
+
     def set_label(self, decision_id: int, label: str, source: str, at: float, effect: str, delta: float) -> None:
         with self._Tx(self) as c:
             c.execute("UPDATE decisions SET label=?, label_source=?, label_at=?, label_effect=?, label_delta=? WHERE id=?",

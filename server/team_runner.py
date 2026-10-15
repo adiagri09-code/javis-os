@@ -588,9 +588,20 @@ class TeamRunner:
     async def _reply_turn(self, team_id: str, key: str, mid: int, text: str, attempt: int,
                           volunteer: bool = False) -> dict:
         if volunteer:
+            # Thử lại một lượt tự lên tiếng (review T3 J P2-4): chạy lại ĐÚNG quyết định cũ (giữ câu hỏi lại `clarify`),
+            # rồi ghi kết cục thật lên quyết định đó (đăng được tin thì về lại `speak`).
             msg = await self._io(self._team_msg, team_id, mid)
             via = (msg or {}).get("author_ref") or "" if (msg or {}).get("author_kind") == "agent" else ""
-            return await self._volunteer_turn(team_id, key, mid, attempt, {"reason": ""}, kind="message", via_key=via)
+            d = await self._io(self._volunteer_decision, team_id, mid, key)
+            out = await self._volunteer_turn(team_id, key, mid, attempt, d or {"reason": ""},
+                                             kind=(d or {}).get("kind") or "message", via_key=via)
+            if d and self.judge is not None:
+                if out.get("message_id"):
+                    if hasattr(self.judge, "restore_volunteer"):
+                        await self._io(self.judge.restore_volunteer, d["decision_id"], f"msg:{int(out['message_id'])}")
+                else:
+                    await self._io(self.judge.demote, d["decision_id"], "turn_blocked")
+            return out
         team = self._team(team_id)
         role = "leader_reply" if key == team["leader_key"] else "member_reply"
         body = (f"Chủ nhóm vừa nhắn (tin #{mid}):\n{text}\n\n"
@@ -820,15 +831,23 @@ class TeamRunner:
 
     def _volunteered(self, team_id: str, mid: int, agent_key: str) -> bool:
         """Agent có được bộ phán xử chọn tự lên tiếng cho tin `mid` không (giữ vai khi chủ bấm Thử lại)."""
+        return self._volunteer_decision(team_id, mid, agent_key) is not None
+
+    def _volunteer_decision(self, team_id: str, mid: int, agent_key: str) -> Optional[dict]:
+        """Quyết định tự lên tiếng (hay câu hỏi lại) mới nhất của agent cho tin `mid`, kể cả khi lượt đã bị hạ
+        (`features.volunteer_origin`, review T3 J P2-4). Khuôn `public_decision`, None khi không có."""
         if self.judge is None:
-            return False
+            return None
         st = self.judge.store(False)
         if st is None:
-            return False
+            return None
         for d in st.decisions(agent_key, f"team:{team_id}", 100):
-            if (d.get("features") or {}).get("reply_to") == int(mid) and (d.get("volunteer") or d.get("kind") == "clarify"):
-                return True
-        return False
+            feats = d.get("features") or {}
+            if feats.get("reply_to") == int(mid) and (d.get("volunteer") or d.get("kind") == "clarify"
+                                                       or feats.get("volunteer_origin")):
+                from agent_judge import public_decision
+                return public_decision(d)
+        return None
 
     def _judge_history(self, team: dict) -> list:
         """Lịch sử gần đây CHỈ của nhóm này cho prompt phán xử."""
