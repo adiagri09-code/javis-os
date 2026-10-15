@@ -45,7 +45,8 @@
   var TEAM_STATUS_KEY = { active: "teams.status_active", paused: "teams.status_paused", archived: "teams.status_archived" };
   var BLOCK_KEY = { failed: "teams.block.failed", interrupted: "teams.block.interrupted", no_leader: "teams.block.no_leader",
     assignee_removed: "teams.block.assignee_removed", no_progress: "teams.block.no_progress", cap_reached: "teams.block.cap_reached",
-    agent_busy_long: "teams.block.agent_busy_long", waiting_user: "teams.block.waiting_user", cancelled: "teams.block.cancelled" };
+    agent_busy_long: "teams.block.agent_busy_long", waiting_user: "teams.block.waiting_user", cancelled: "teams.block.cancelled",
+    server_ceiling: "teams.block.server_ceiling" };
   var CAP_KEY = { task_turns: "teams.cap.task_turns", task_steps: "teams.cap.task_steps", daily_turns: "teams.cap.daily_turns",
     mentions: "teams.cap.mentions", help_depth: "teams.cap.help_depth", busy_wait_s: "teams.cap.busy_wait_s" };
   var TAB_KEY = { jobs: "teams.tab_jobs", team: "teams.tab_team" };
@@ -79,43 +80,18 @@
   var LEVELS = [{ n: 1, key: "teams.level_1", desc: "teams.level_1_desc" },
     { n: 2, key: "teams.level_2", desc: "teams.level_2_desc" },
     { n: 3, key: "teams.level_3", desc: "teams.level_3_desc" }];
-  // Sáu reaction (spec mục 14.1). Emoji ở đây là DỮ LIỆU sản phẩm (giá trị chủ chọn, lưu nguyên loại), không phải icon
-  // trang trí: test_icons.py cho phép đúng sáu ký tự này trong file này và kiểm cả sáu luôn có mặt.
-  var REACTIONS = [
-    { value: "like", emoji: "👍", key: "teams.react.like" },
-    { value: "love", emoji: "❤️", key: "teams.react.love" },
-    { value: "haha", emoji: "😂", key: "teams.react.haha" },
-    { value: "wow", emoji: "😮", key: "teams.react.wow" },
-    { value: "sad", emoji: "😢", key: "teams.react.sad" },
-    { value: "angry", emoji: "😡", key: "teams.react.angry" }
-  ];
-  var REASON_KEY = { on_point: "teams.reason.on_point", wrong_facts: "teams.reason.wrong_facts",
-    missing: "teams.reason.missing", too_long: "teams.reason.too_long", unclear: "teams.reason.unclear",
-    off_topic: "teams.reason.off_topic" };
-  var REASONS = ["on_point", "wrong_facts", "missing", "too_long", "unclear", "off_topic"];
-  var COMMENT_MAX = 500;
+  // Sáu reaction, lý do, trục nói/im, chip, bộ chọn và trạng thái nằm ở reactions.js (bảng sáu emoji duy nhất của repo,
+  // dùng chung với chat riêng; hợp đồng T2 mục 6). File này chỉ giữ tên hàm cũ làm lớp mỏng với họ class "tm".
+  var JR = (typeof window !== "undefined" && window.JavisReactions) || require("./reactions.js");
+  var REACTIONS = JR.EMOJI;
+  var COMMENT_MAX = JR.COMMENT_MAX;
   var INPUT_MAX_PX = 132;   // khung soạn tự cao theo chữ, tối đa khoảng năm dòng
-
-  function reactionOf(value) {
-    for (var i = 0; i < REACTIONS.length; i++) if (REACTIONS[i].value === value) return REACTIONS[i];
-    return null;
-  }
-
-  // Chọn lại emoji đang chọn là bỏ; chọn cái khác là đổi (spec 14.1).
-  function nextReaction(current, picked) {
-    return current === picked ? "none" : picked;
-  }
+  var nextReaction = JR.nextReaction;
+  // Nonce theo thao tác: thử lại sau lỗi mạng gửi đúng nonce cũ, thành công hay lỗi 4xx thì lần sau nonce mới.
+  var reactNonces = JR.nonceKeeper(newClientId);
 
   function reactionChipHtml(m, reaction) {
-    if (!reaction) return "";
-    var r = reactionOf(reaction.value);
-    var bits = [];
-    if (r) bits.push('<span class="tm-react-emoji">' + r.emoji + "</span>" + esc(tw(r.key)));
-    if ((reaction.reasons || []).length) bits.push(esc(tw("teams.react_reasons_n", { n: reaction.reasons.length })));
-    if (reaction.comment) bits.push(esc(tw("teams.react_has_comment")));
-    if (!bits.length) return "";
-    return '<button type="button" class="tm-react-chip" data-react-open="' + esc(m.id) + '" title="' +
-      esc(tw("teams.react_change")) + '">' + bits.join(" · ") + "</button>";
+    return JR.chipHtml(reaction, { mid: m.id, prefix: "tm" });
   }
 
   function pinButtonHtml(m) {
@@ -125,33 +101,7 @@
 
   // `draft`: lý do và góp ý đang soạn dở (giữ qua lần vẽ lại khi có tin mới tới). `pin`: thêm nút Ghim vào bảng.
   function reactionPickerHtml(m, reaction, draft, pin) {
-    reaction = reaction || {};
-    if (draft) reaction = { value: reaction.value, reasons: draft.reasons, comment: draft.comment };
-    var row = REACTIONS.map(function (r) {
-      var on = reaction.value === r.value;
-      return '<button type="button" class="tm-react-pick" data-react="' + r.value + '" data-mid="' + esc(m.id) + '"' +
-        ' aria-pressed="' + (on ? "true" : "false") + '" aria-label="' + esc(tw(r.key)) + '" title="' + esc(tw(r.key)) + '">' +
-        r.emoji + "</button>";
-    }).join("");
-    var have = {};
-    (reaction.reasons || []).forEach(function (x) { have[x] = true; });
-    var reasons = REASONS.map(function (x) {
-      return '<label class="tm-react-reason"><input type="checkbox" name="tm-reason" value="' + x + '"' +
-        (have[x] ? " checked" : "") + "> " + esc(tw(REASON_KEY[x])) + "</label>";
-    }).join("");
-    return '<div class="tm-react-panel" data-panel="' + esc(m.id) + '" role="dialog" aria-label="' + esc(tw("teams.react")) + '">' +
-      '<div class="tm-react-row">' + row + "</div>" +
-      '<div class="tm-react-sub">' + esc(tw("teams.react_reasons")) + "</div>" +
-      '<div class="tm-react-reasons">' + reasons + "</div>" +
-      '<label class="tm-react-sub" for="tm-react-comment-' + esc(m.id) + '">' + esc(tw("teams.react_comment")) + "</label>" +
-      '<textarea class="tm-react-comment" id="tm-react-comment-' + esc(m.id) + '" maxlength="' + COMMENT_MAX + '" rows="2"' +
-      ' placeholder="' + esc(tw("teams.react_comment_ph")) + '">' + esc(reaction.comment || "") + "</textarea>" +
-      '<div class="tm-react-note">' + esc(tw("teams.react_note")) + "</div>" +
-      '<div class="tm-actions"><button type="button" class="ws-btn" data-react-save="' + esc(m.id) + '">' +
-      esc(tw("teams.react_save")) + '</button><button type="button" class="ws-btn" data-react-clear="' + esc(m.id) + '">' +
-      esc(tw("teams.react_clear")) + "</button>" + (pin ? pinButtonHtml(m) : "") +
-      '<button type="button" class="ws-btn" data-react-close="' + esc(m.id) + '">' +
-      esc(tw("teams.react_close")) + "</button></div></div>";
+    return JR.pickerHtml(m.id, reaction, { prefix: "tm", draft: draft || null, extraHtml: pin ? pinButtonHtml(m) : "" });
   }
 
   // Bảng của tin do chủ gửi (nhấn giữ hay nút ba chấm): chỉ có Ghim làm quyết định.
@@ -310,7 +260,9 @@
     member_left: "teams.reply.why.member_left", restart: "teams.reply.why.restart",
     interrupted: "teams.reply.why.interrupted", internal: "teams.reply.why.internal",
     leader_changed: "teams.reply.why.leader_changed", superseded: "teams.reply.why.superseded",
-    timeout: "teams.reply.why.timeout", auth: "teams.reply.why.auth", no_leader: "teams.reply.why.no_leader" };
+    lease_lost: "teams.reply.why.lease_lost",
+    timeout: "teams.reply.why.timeout", auth: "teams.reply.why.auth", no_leader: "teams.reply.why.no_leader",
+    server_ceiling: "teams.reply.why.server_ceiling" };
   var STUCK_QUEUED_S = 600;   // khớp team_store.STUCK_QUEUED_S: chờ lâu hơn thì cho Thử lại
   var LEADER_SLOT = "__leader__";   // khớp team_runner.LEADER_SLOT: tin thường gửi lúc nhóm chưa có điều phối
 
@@ -416,13 +368,17 @@
       esc(tw("teams.decision_unpin")) + '">' + ic("pin") + esc(tw("teams.decision_pinned")) + "</button>" : "";
     // Nút mở bảng nằm CẠNH bong bóng (không thêm một hàng dưới mỗi tin); bảng mở ra chiếm trọn bề ngang bên dưới.
     var foot = decision, panel = "", side;
+    // Reaction của trưởng nhóm, thành viên: chip chỉ đọc có tên agent, tách khỏi chip của chủ (hợp đồng T2 mục 5).
+    var agentChips = JR.agentChipsHtml(m.agent_reactions, { prefix: "tm" });
     if (mine) {
       // Tin của chủ đã ghim: bảng của nó chỉ có Ghim nên trống; bỏ nút, bỏ ghim bằng nhãn Quyết định (review T5 I5).
       side = meta.decision ? "" : '<button type="button" class="tm-more-btn" data-react-open="' + esc(m.id) + '" aria-label="' +
         esc(tw("teams.msg_more")) + '" title="' + esc(tw("teams.msg_more")) + '">' + ic("ellipsis-vertical") + "</button>";
       if (open && !meta.decision) panel = ownerPanelHtml(m);
+      foot += agentChips;
     } else {
-      foot += reactionChipHtml(m, m.reaction);
+      // Trạng thái do host ghi (Đã nhận, Chờ xem xét...) nằm ngay sau chip của chủ.
+      foot += reactionChipHtml(m, m.reaction) + JR.statusHtml(m.reaction, { prefix: "tm" }) + agentChips;
       side = '<button type="button" class="tm-react-btn" data-react-open="' + esc(m.id) + '" aria-label="' +
         esc(tw("teams.react")) + '" title="' + esc(tw("teams.react")) + '">' + ic("smile") + "</button>";
       if (open) panel = reactionPickerHtml(m, m.reaction, ctx.draft && ctx.draft.mid === m.id ? ctx.draft : null, !meta.decision);
@@ -2003,14 +1959,15 @@
       var cur = msgById(Number(d.mid));
       var form = panelValues(Number(d.mid), cur);
       return sendReaction(Number(d.mid), nextReaction(cur && cur.reaction && cur.reaction.value, d.react), form.reasons,
-        form.comment);
+        form.axis, form.comment);
     }
     if (d.reactSave) {
       var cm = msgById(Number(d.reactSave));
       var fv = panelValues(Number(d.reactSave), cm);
-      return sendReaction(Number(d.reactSave), (cm && cm.reaction && cm.reaction.value) || "none", fv.reasons, fv.comment);
+      return sendReaction(Number(d.reactSave), (cm && cm.reaction && cm.reaction.value) || "none", fv.reasons, fv.axis,
+        fv.comment);
     }
-    if (d.reactClear) return sendReaction(Number(d.reactClear), "none", [], "");
+    if (d.reactClear) return sendReaction(Number(d.reactClear), "none", [], "", "");
     if ((d.task && t.classList.contains("tm-tag")) || d.viewTask) {
       S.filterTask = d.task || d.viewTask;
       if (d.viewTask && window.matchMedia && window.matchMedia("(max-width: 1060px)").matches) S.side = false;
@@ -2099,20 +2056,23 @@
     return null;
   }
 
-  // Lý do và góp ý đang soạn trong bảng chọn (chưa lưu thì lấy theo phản hồi đã có).
+  // Lý do, trục nói/im và góp ý đang soạn trong bảng chọn (chưa lưu thì lấy theo phản hồi đã có).
   function panelValues(mid, m) {
     var panel = S.el.querySelector('[data-panel="' + mid + '"]');
-    var have = (m && m.reaction) || {};
-    if (!panel) return { reasons: have.reasons || [], comment: have.comment || "" };
-    var reasons = Array.prototype.map.call(panel.querySelectorAll('input[name="tm-reason"]:checked'), function (x) { return x.value; });
-    var box = panel.querySelector(".tm-react-comment");
-    return { reasons: reasons, comment: box ? box.value.trim().slice(0, COMMENT_MAX) : "" };
+    return JR.readPanel(panel, m && m.reaction, { prefix: "tm" });
   }
 
-  // Thả cảm xúc: chỉ ghi phản hồi (không mở lượt, không gọi model). Mỗi lần gửi một nonce mới.
-  function sendReaction(mid, value, reasons, comment) {
-    return call("POST", teamUrl("/messages/" + q(mid) + "/reaction"),
-      { value: value, reasons: reasons, comment: comment, nonce: newClientId() }).then(function (r) {
+  // Thả cảm xúc: chỉ ghi phản hồi (không mở lượt, không gọi model). `seen_sha` là nội dung tin giao diện đang thấy. Nonce
+  // giữ theo thao tác (reactNonces): rớt mạng thì Thử lại gửi đúng nonce cũ, server trả trạng thái hiện tại, không ghi trùng.
+  function sendReaction(mid, value, reasons, axis, comment) {
+    var m0 = msgById(mid);
+    var body = JR.payload(value, reasons, axis, comment, m0 && m0.content_sha);
+    var key = String(mid);
+    body.nonce = reactNonces.take(key, body);
+    var retry = function () { return sendReaction(mid, value, reasons, axis, comment); };
+    return call("POST", teamUrl("/messages/" + q(mid) + "/reaction"), body).then(function (r) {
+      reactNonces.settle(key, r.code);
+      if (r.code >= 500) return setNote(tw("teams.err", { e: (r.j && r.j.error) || r.code }), retry);
       if (r.code !== 200) return fail(r);
       var m = msgById(mid);
       if (m) m.reaction = r.j.reaction || null;
@@ -2121,6 +2081,9 @@
       S.draft = null;
       setNote(tw("teams.react_saved"));
       drawMsgs(false);
+    }, function () {
+      reactNonces.settle(key, 0);
+      setNote(tw("teams.err_network"), retry);
     });
   }
 
@@ -2159,23 +2122,35 @@
     return missing ? { caps: {}, missing: missing } : { caps: caps, missing: null };
   }
 
+  // Luồng nút Lưu giới hạn, tách khỏi DOM để test được hành vi dưới node: `form.read(k)` đọc ô, `ui.note(text)`,
+  // `ui.focus(k)`, `ui.post(caps)` trả Promise. Thiếu số thì nhắc, đưa con trỏ vào ô đó và KHÔNG gửi (review T1 #1).
+  function saveCapsFlow(current, read, ui) {
+    var built = capsPayload(current, read);
+    if (built.missing) {
+      ui.note(tw("teams.cap_need_number", { name: tw(CAP_KEY[built.missing]) }));
+      ui.focus(built.missing);
+      return null;
+    }
+    if (!Object.keys(built.caps).length) { ui.note(tw("teams.saved")); return null; }
+    return ui.post(built.caps);
+  }
+
   function saveCaps() {
-    var built = capsPayload(S.team.caps, function (k) {
+    saveCapsFlow(S.team.caps, function (k) {
       var box = S.el.querySelector('[name="tm-cap-' + k + '-unl"]');
       return { checked: box ? !!box.checked : null, value: val("tm-cap-" + k) };
-    });
-    var caps = built.caps;
-    var missing = built.missing;
-    if (missing) {
-      setNote(tw("teams.cap_need_number", { name: tw(CAP_KEY[missing]) }));
-      var miss = S.el.querySelector('[name="tm-cap-' + missing + '"]');
-      if (miss && miss.focus) miss.focus();
-      return;
-    }
-    if (!Object.keys(caps).length) { setNote(tw("teams.saved")); return; }
-    call("POST", teamUrl("/caps"), { caps: caps }).then(function (r) {
-      if (r.code === 200) setNote(tw("teams.saved"));
-      act(r, drawSide);
+    }, {
+      note: setNote,
+      focus: function (k) {
+        var miss = S.el.querySelector('[name="tm-cap-' + k + '"]');
+        if (miss && miss.focus) miss.focus();
+      },
+      post: function (caps) {
+        return call("POST", teamUrl("/caps"), { caps: caps }).then(function (r) {
+          if (r.code === 200) setNote(tw("teams.saved"));
+          act(r, drawSide);
+        });
+      },
     });
   }
 
@@ -2188,9 +2163,9 @@
       S.pickSt = Object.assign({}, S.pickSt, { leader: e.target.value, leaderTouched: true });
       return;
     }
-    if (e.target.name === "tm-reason" && S.picker !== null) {
+    if ((e.target.name === "tm-reason" || /^tm-axis-/.test(e.target.name || "")) && S.picker !== null) {
       var pv = panelValues(S.picker, msgById(S.picker));
-      S.draft = { mid: S.picker, reasons: pv.reasons, comment: pv.comment };
+      S.draft = { mid: S.picker, reasons: pv.reasons, axis: pv.axis, comment: pv.comment };
       return;
     }
     if (e.target.name === "tm-level") { setLevel(Number(e.target.value), e.target); return; }
@@ -2268,7 +2243,8 @@
     if (S.pickSt && e.target.classList.contains("tmp-name-input")) { S.pickSt.name = e.target.value; return; }
     if (S.pickSt && e.target.classList.contains("tmp-desc-input")) { S.pickSt.desc = e.target.value; return; }
     if (e.target.classList.contains("tm-react-comment") && S.picker !== null) {
-      S.draft = { mid: S.picker, reasons: panelValues(S.picker, msgById(S.picker)).reasons, comment: e.target.value };
+      var dv = panelValues(S.picker, msgById(S.picker));
+      S.draft = { mid: S.picker, reasons: dv.reasons, axis: dv.axis, comment: e.target.value };
       return;
     }
     if (e.target.classList.contains("tm-input")) {
@@ -2299,14 +2275,20 @@
       }
       return;
     }
-    if (d.type === "team_message" && d.team_id === S.activeId && d.message && !S.filterTask) {
-      var i = S.msgs.findIndex(function (m) { return m.id === d.message.id; });
+    if (d.type === "team_message" && d.team_id === S.activeId && d.message) {
+      var i = S.msgs.findIndex(function (m) { return Number(m.id) === Number(d.message.id); });
       // Gói không mang phản hồi (tin đổi nhãn, kết quả việc): giữ phản hồi đang có của tin.
       var nm = d.message;
       if (i >= 0 && !("reaction" in nm)) nm = Object.assign({}, nm, { reaction: S.msgs[i].reaction });
+      if (i >= 0 && !("agent_reactions" in nm) && S.msgs[i].agent_reactions) {
+        nm = Object.assign({}, nm, { agent_reactions: S.msgs[i].agent_reactions });
+      }
       if (i >= 0 && !("replies" in nm) && S.msgs[i].replies) nm = Object.assign({}, nm, { replies: S.msgs[i].replies });
-      if (i >= 0) S.msgs[i] = nm; else if (S.jumped === null || S.jumped === undefined) S.msgs.push(nm);
-      drawMsgs(false);
+      // Khung lọc theo việc (hợp đồng T2 mục 5): chỉ vẽ lại tin ĐANG hiện (reaction đổi ở tab khác), không chèn tin mới
+      // vào danh sách của việc; khung thường thì chèn như cũ.
+      if (i >= 0) S.msgs[i] = S.filterTask ? Object.assign({}, S.msgs[i], nm) : nm;
+      else if (!S.filterTask && (S.jumped === null || S.jumped === undefined)) S.msgs.push(nm);
+      if (i >= 0 || !S.filterTask) drawMsgs(false);
     }
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(function () {
@@ -2386,7 +2368,7 @@
     jobStripHtml: jobStripHtml, blockedAction: blockedAction, jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
     mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, mentionScan: mentionScan, removeMention: removeMention,
     callsHtml: callsHtml, foldName: foldName, emailBefore: emailBefore, composerHint: composerHint, newClientId: newClientId,
-    membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, capsPayload: capsPayload, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
+    membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, capsPayload: capsPayload, saveCapsFlow: saveCapsFlow, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
     levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml,
     bannersHtml: bannersHtml, reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
