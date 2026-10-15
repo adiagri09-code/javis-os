@@ -30,6 +30,7 @@ import unicodedata
 from typing import Any, Awaitable, Callable, Optional
 
 import reaction_values as RV
+from io_offload import run_io  # noqa: F401 - giữ `team_runner.run_io` cho team_api và test
 import resonance_store
 from team_store import (CAP_MAX, DEFAULT_CAPS, FIXED_CAPS, OWNER_CAPS, REACTION_EMOJI, UNLIMITED_CAPS, TeamError,
                         TurnCapReached)
@@ -192,45 +193,7 @@ def _sha(text: str) -> str:
     return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
 
 
-async def run_io(fn: Callable, *args, undo: Optional[Callable[[Any], Any]] = None, **kwargs) -> Any:
-    """Chạy một đơn vị I/O chặn (SQLite, file) ở luồng phụ, không chặn event loop (review T1, R5).
-
-    Bị huỷ (kể cả huỷ lặp) khi luồng phụ còn đang ghi: KHÔNG bỏ đi giữa chừng. Chờ luồng phụ xong hẳn, chạy `undo(kết
-    quả)` nếu có (vd. hoàn lượt vừa giữ chỗ, nhả khoá vừa lấy), rồi mới ném CancelledError. Nhờ vậy không có ghi dở,
-    không nhả khoá trước khi việc ghi kết thúc, không có lượt giữ chỗ mồ côi."""
-    fut = asyncio.ensure_future(asyncio.to_thread(fn, *args, **kwargs))
-    cancelled = False
-    while True:
-        try:
-            res = await asyncio.shield(fut)
-            break
-        except asyncio.CancelledError:
-            if fut.cancelled():
-                # Chính tác vụ luồng phụ đã bị huỷ (event loop đang đóng huỷ MỌI tác vụ): không còn gì để chờ. Trước đây
-                # vòng lặp này quay mãi ở đó (shield một tương lai đã huỷ ném lại ngay).
-                raise
-            if fut.done() and not fut.cancelled():
-                try:
-                    res = fut.result()
-                except BaseException:  # noqa: BLE001
-                    raise asyncio.CancelledError()
-                cancelled = True
-                break
-            cancelled = True
-        except BaseException:
-            if cancelled:
-                raise asyncio.CancelledError()
-            raise
-    if cancelled:
-        if undo is not None:
-            try:
-                await run_io(undo, res)
-            except asyncio.CancelledError:
-                pass
-            except Exception:  # noqa: BLE001
-                pass
-        raise asyncio.CancelledError()
-    return res
+# `run_io` nay ở `io_offload` (dùng chung với bộ phán xử và nhịp lớp 3); tên `team_runner.run_io` giữ nguyên.
 
 
 class _CeilingStoreError(RuntimeError):

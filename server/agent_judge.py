@@ -33,6 +33,11 @@ from typing import Any, Awaitable, Callable, Iterable, Optional
 
 from agent_judge_store import (DEFAULT_EAGERNESS, EAGERNESS, LABELS, WAIT_KINDS, JudgeStore,  # noqa: F401
                                clamp_offset)
+from io_offload import LoopMarker, call_hook, run_io, run_io_quiet
+
+# Mọi đọc/ghi kho phán xử, sổ lượt, lý do thức và các hàm của host (lịch sử, Cộng hưởng, hạn mức) trong đường async chạy ở
+# luồng phụ qua `run_io` (GOAL mục 10, quy ước R5 của T1): các hàm `_..._prepare` / `_..._finish` là phần ĐỒNG BỘ của một
+# lô, chỉ gọi từ luồng phụ; coroutine chỉ giữ phần chờ model.
 
 log = logging.getLogger("javis.agent_judge")
 
@@ -602,62 +607,92 @@ class Judge:
                 c.execute("UPDATE agent_wake_reasons SET status='served', updated_at=? WHERE id=? "
                           "AND status IN ('pending','claimed')", (now, rid))
 
-    async def _run_engine(self, prompt: str, cid: Optional[int], ask: Optional[AskFn]) -> tuple:
-        """Gọi model với tối đa `concurrency` lô đồng thời và hạn `timeout_s`. Trả (raw | None, mã lỗi)."""
-        ledger = self.ledger()
-        if ask is None:
-            if ledger is not None and cid is not None:
-                ledger.refund(cid)
-            return None, "engine_unavailable"
+    def _engine_label_safe(self) -> tuple:
+        try:
+            return tuple(self.engine_label() or ("", ""))
+        except Exception:  # noqa: BLE001
+            return ("", "")
+
+    @staticmethod
+    def _settle_call(ledger: Any, cid: int, status: str, mark: Optional[tuple]) -> None:
+        """Chốt dòng sổ (luồng phụ); `mark` = (engine, model) khi mốc engine chưa ghi thì ghi trước, đúng thứ tự cũ."""
+        if mark is not None:
+            ledger.mark_engine(cid, mark[0], mark[1])
+        ledger.settle(cid, status)
+
+    def _undo_reserve(self, prep: Optional[dict]) -> None:
+        """Hoàn tác của bước chuẩn bị (luồng phụ): bị huỷ ngay sau khi đã giữ chỗ dòng sổ thì hoàn dòng đó."""
+        if prep and not prep.get("done") and prep.get("cid") is not None and prep.get("ledger") is not None:
+            prep["ledger"].refund(prep["cid"])
+
+    async def _ask(self, prompt: str, ask: AskFn, marker: LoopMarker, on_cancel: Callable[[], Awaitable[Any]]) -> tuple:
+        """Phần chờ model: chỗ trong tối đa `concurrency` lô, hạn `timeout_s`. Trả (kết cục, raw). Kết cục: ok,
+        judge_busy, engine_unavailable, timeout, policy_error. Bị huỷ: nhả chỗ, chạy `on_cancel()` (ghi sổ ở luồng phụ)
+        rồi ném lại."""
         sem = _slots(self.concurrency)
         try:
             await asyncio.wait_for(sem.acquire(), timeout=self.timeout_s)
         except (asyncio.TimeoutError, TimeoutError):
-            if ledger is not None and cid is not None:
-                ledger.refund(cid)
-            return None, "judge_busy"
-        marked = {"v": False}
-        eng, model = ("", "")
-        try:
-            eng, model = self.engine_label() or ("", "")
-        except Exception:  # noqa: BLE001
-            pass
-
-        def started() -> None:
-            if not marked["v"]:
-                marked["v"] = True
-                if ledger is not None and cid is not None:
-                    ledger.mark_engine(cid, eng, model)
-
-        try:
-            raw = await asyncio.wait_for(ask(prompt, "agent_judge", started), timeout=self.timeout_s)
-        except EngineUnavailable:
-            if ledger is not None and cid is not None and not marked["v"]:
-                ledger.refund(cid)
-            return None, "engine_unavailable"
-        except (asyncio.TimeoutError, TimeoutError):
-            started()
-            if ledger is not None and cid is not None:
-                ledger.settle(cid, "error")
-            return None, "timeout"
+            return "judge_busy", None
         except asyncio.CancelledError:
-            if ledger is not None and cid is not None:
-                if marked["v"]:
-                    ledger.settle(cid, "interrupted")
-                else:
-                    ledger.refund(cid)
+            await on_cancel()
+            raise
+        held = True
+        try:
+            raw = await asyncio.wait_for(ask(prompt, "agent_judge", marker), timeout=self.timeout_s)
+        except EngineUnavailable:
+            return "engine_unavailable", None
+        except (asyncio.TimeoutError, TimeoutError):
+            return "timeout", None
+        except asyncio.CancelledError:
+            sem.release()
+            held = False
+            await on_cancel()
             raise
         except Exception as ex:  # noqa: BLE001 - lỗi engine gì cũng ra im có lý do
             log.warning("agent judge engine error: %s: %s", type(ex).__name__, str(ex)[:200])
-            started()
-            if ledger is not None and cid is not None:
-                ledger.settle(cid, "error")
-            return None, "policy_error"
+            return "policy_error", None
         finally:
-            sem.release()
-        started()
-        if ledger is not None and cid is not None:
-            ledger.settle(cid, "ok")
+            if held:
+                sem.release()
+        return "ok", raw
+
+    async def _run_engine(self, prompt: str, cid: Optional[int], ask: Optional[AskFn], ledger: Any = None,
+                          label: Optional[tuple] = None) -> tuple:
+        """Gọi model với tối đa `concurrency` lô đồng thời và hạn `timeout_s`. Trả (raw | None, mã lỗi). Mọi ghi sổ lượt
+        (hoàn, mốc engine, chốt) chạy ở luồng phụ; `ledger`/`label` do bước chuẩn bị (luồng phụ) đưa sang."""
+        if ledger is None and cid is not None:
+            ledger = await run_io(self.ledger)
+        has = ledger is not None and cid is not None
+        if ask is None:
+            if has:
+                await run_io(ledger.refund, cid)
+            return None, "engine_unavailable"
+        eng, model = label if label is not None else await run_io(self._engine_label_safe)
+        marker = LoopMarker((lambda: ledger.mark_engine(cid, eng, model)) if has else (lambda: None))
+
+        async def on_cancel() -> None:
+            try:
+                await marker.wait()
+            except asyncio.CancelledError:
+                pass
+            if has:
+                await run_io_quiet(ledger.settle if marker.marked else ledger.refund,
+                                   *((cid, "interrupted") if marker.marked else (cid,)))
+
+        outcome, raw = await self._ask(prompt, ask, marker, on_cancel)
+        await marker.wait()
+        if outcome in ("judge_busy", "engine_unavailable"):
+            if has and not marker.marked:
+                await run_io(ledger.refund, cid)
+            return None, outcome
+        need_mark = not marker.marked
+        marker.marked = True
+        if has:
+            await run_io(self._settle_call, ledger, cid, "ok" if outcome == "ok" else "error",
+                         (eng, model) if need_mark else None)
+        if outcome != "ok":
+            return None, outcome
         return str(raw or ""), ""
 
     # ───────────── chat nhóm ─────────────
@@ -670,37 +705,57 @@ class Judge:
         `ctx`: {team_id, team_name, context_ref, kind ("message"|"related"|"wait"), source_event, root_ref,
         message {id, text, author_kind, author_key, author_name, mentions}, members [{agent_key, name, role_text, order,
         open_jobs, recent_texts, relation?, reason_id?, wait_id?}], addressed_names, caps {judge_daily, k, off_batch},
-        ask?}. Người đã được gọi trực tiếp KHÔNG nằm trong `members` (ghi bằng `record_direct`)."""
+        ask?}. Người đã được gọi trực tiếp KHÔNG nằm trong `members` (ghi bằng `record_direct`).
+
+        Phần kho (cổng code, giữ chỗ, ngưỡng, ca, lịch sử, ghi quyết định, chờ) chạy ở luồng phụ; chỉ lời gọi model chờ
+        trên event loop. Bị huỷ ngay sau khi giữ chỗ: dòng sổ được hoàn (`_undo_reserve`)."""
+        prep = await run_io(self._team_prepare, ctx, undo=self._undo_reserve)
+        if prep.get("done"):
+            return prep["out"]
+        raw, err = await self._run_engine(prep["prompt"], prep["cid"], ctx.get("ask") or self.ask,
+                                          ledger=prep["ledger"], label=prep["label"])
+        return await run_io(self._team_finish, prep, raw, err)
+
+    def _team_record(self, prep: dict, m: dict, verdict: str, *, code: str = "", score=None, thr=None,
+                     reason: str = "", feats=None, ledger_ref: str = "", volunteer: bool = False, wait_until=None,
+                     ask_clarify: str = "") -> dict:
+        st = prep["st"]
+        did = st.add_decision({"agent_key": m["agent_key"], "context_ref": prep["cref"], "source_event": prep["src"],
+                               "root_ref": prep["root"], "kind": prep["dkind"], "verdict": verdict, "address": "none",
+                               "score": score, "threshold": thr, "reason": reason, "silence_code": code,
+                               "wait_until": wait_until or {}, "ask_clarify": ask_clarify, "volunteer": volunteer,
+                               "ledger_ref": ledger_ref,
+                               "features": dict(feats or {}, excerpt=prep["excerpt"], reply_to=prep["reply_to"]),
+                               "excerpt": prep["excerpt"]}, now=prep["now"])
+        d = public_decision(st.get_decision(did))
+        prep["out"].append(d)
+        return d
+
+    def _team_close(self, prep: dict) -> None:
+        self._close_reasons(prep["reason_ids"], prep["now"])
+        self._finish_waits(prep["st"], prep["wait_ids"], prep["now"])
+
+    def _team_prepare(self, ctx: dict) -> dict:
+        """Phần ĐỒNG BỘ trước model của một lô nhóm (luồng phụ): cổng code, giữ chỗ, ngưỡng, ca, lịch sử, prompt.
+        `done` = lô đã kết thúc không cần model (không ứng viên, hết trần, gọi trùng)."""
         st = self.store(True)
         now = self.clock()
         kind = str(ctx.get("kind") or "message")
-        cref = str(ctx["context_ref"])
-        src = str(ctx["source_event"])
-        root = str(ctx.get("root_ref") or src)
         msg = ctx.get("message") or {}
         text = strip_quotes(msg.get("text")) if kind == "related" else str(msg.get("text") or "")
         caps = ctx.get("caps") or {}
-        k = int(caps.get("k", DEFAULT_K) if caps.get("k") is not None else DEFAULT_K)
+        prep = {"st": st, "now": now, "cref": str(ctx["context_ref"]), "src": str(ctx["source_event"]),
+                "msg": msg, "text": text, "excerpt": clip(text, 200), "reply_to": ctx.get("reply_to"),
+                "k": int(caps.get("k", DEFAULT_K) if caps.get("k") is not None else DEFAULT_K),
+                "dkind": {"message": "message", "related": "related", "wait": "wait"}.get(kind, "message"),
+                "reason_ids": [m.get("reason_id") for m in ctx.get("members") or [] if m.get("reason_id")],
+                "wait_ids": [m.get("wait_id") for m in ctx.get("members") or [] if m.get("wait_id")],
+                "job_refs": list(ctx.get("job_refs") or []), "out": [], "done": False, "cid": None, "ledger": None,
+                "label": None}
+        prep["root"] = str(ctx.get("root_ref") or prep["src"])
+        cref, src, dkind = prep["cref"], prep["src"], prep["dkind"]
         cap_daily = caps.get("judge_daily", DEFAULT_JUDGE_DAILY)
         off_batch = bool(caps.get("off_batch", True))
-        excerpt = clip(text, 200)
-        dkind = {"message": "message", "related": "related", "wait": "wait"}.get(kind, "message")
-        out: list = []
-        reason_ids = [m.get("reason_id") for m in ctx.get("members") or [] if m.get("reason_id")]
-        wait_ids = [m.get("wait_id") for m in ctx.get("members") or [] if m.get("wait_id")]
-
-        def record(m: dict, verdict: str, *, code: str = "", score=None, thr=None, reason: str = "", feats=None,
-                   ledger_ref: str = "", volunteer: bool = False, wait_until=None, ask_clarify: str = "") -> dict:
-            did = st.add_decision({"agent_key": m["agent_key"], "context_ref": cref, "source_event": src,
-                                   "root_ref": root, "kind": dkind, "verdict": verdict, "address": "none",
-                                   "score": score, "threshold": thr, "reason": reason, "silence_code": code,
-                                   "wait_until": wait_until or {}, "ask_clarify": ask_clarify, "volunteer": volunteer,
-                                   "ledger_ref": ledger_ref,
-                                   "features": dict(feats or {}, excerpt=excerpt, reply_to=ctx.get("reply_to")),
-                                   "excerpt": excerpt}, now=now)
-            d = public_decision(st.get_decision(did))
-            out.append(d)
-            return d
 
         candidates = []
         for m in ctx.get("members") or []:
@@ -710,33 +765,37 @@ class Judge:
             else:
                 passed, feats, _code = prefilter(text, m, mentions=msg.get("mentions") or [])
             if not passed:
-                record(m, "silent", code="no_signal", feats=feats)
+                self._team_record(prep, m, "silent", code="no_signal", feats=feats)
                 continue
             if not self.resonance_on(m["agent_key"]) and not off_batch:
-                record(m, "silent", code="code_only", feats=feats)
+                self._team_record(prep, m, "silent", code="code_only", feats=feats)
                 continue
             candidates.append((m, feats))
         if candidates and len(candidates) > BATCH_MAX:
             for m, feats in candidates[BATCH_MAX:]:
-                record(m, "silent", code="batch_full", feats=feats)
+                self._team_record(prep, m, "silent", code="batch_full", feats=feats)
             candidates = candidates[:BATCH_MAX]
+        prep["candidates"] = candidates
         if not candidates:
-            self._close_reasons(reason_ids, now)
-            self._finish_waits(st, wait_ids, now)
-            return out
+            self._team_close(prep)
+            prep["done"] = True
+            return prep
         res = self._reserve(ref=f"judge:{cref}:{src}", context_ref=cref, agent_key="", team_cap=cap_daily, now=now)
         if not res["ok"]:
+            prep["done"] = True
             if res["code"] == "duplicate":
                 # Lô của nguồn này đã chạy (gọi lại sau lỗi mạng, hai tab): trả quyết định cũ, không lượt thứ hai.
-                return [public_decision(d) for d in st.decisions(context_ref=cref, limit=200)
-                        if d.get("source_event") == src]
+                prep["out"] = [public_decision(d) for d in st.decisions(context_ref=cref, limit=200)
+                               if d.get("source_event") == src]
+                return prep
             for m, feats in candidates:
-                record(m, "silent", code=res["code"], feats=feats)
-            self._close_reasons(reason_ids, now)
-            self._finish_waits(st, wait_ids, now)
-            return out
-        cid = res["cid"]
-        lref = f"call:{cid}" if cid else ""
+                self._team_record(prep, m, "silent", code=res["code"], feats=feats)
+            self._team_close(prep)
+            return prep
+        prep["cid"] = cid = res["cid"]
+        prep["ledger"] = self.ledger() if cid is not None else None
+        prep["label"] = self._engine_label_safe()
+        prep["lref"] = f"call:{cid}" if cid else ""
         prompt_cands = []
         thresholds = {}
         for m, feats in candidates:
@@ -745,50 +804,58 @@ class Judge:
             prompt_cands.append({"agent_key": m["agent_key"], "name": m.get("name") or m["agent_key"],
                                  "role_text": m.get("role_text") or "", "eagerness": eag, "features": feats,
                                  "cases": st.cases(m["agent_key"], cref, CASES_IN_PROMPT)})
-        prompt = build_batch_prompt(team_name=str(ctx.get("team_name") or ""), message=dict(msg, text=text),
-                                    candidates=prompt_cands, addressed=list(ctx.get("addressed_names") or []),
-                                    history=self.history(cref) if not ctx.get("history") else ctx["history"],
-                                    kind=dkind)
-        raw, err = await self._run_engine(prompt, cid, ctx.get("ask") or self.ask)
+        prep["thresholds"] = thresholds
+        prep["prompt"] = build_batch_prompt(team_name=str(ctx.get("team_name") or ""), message=dict(msg, text=text),
+                                            candidates=prompt_cands, addressed=list(ctx.get("addressed_names") or []),
+                                            history=self.history(cref) if not ctx.get("history") else ctx["history"],
+                                            kind=dkind)
+        return prep
+
+    def _team_finish(self, prep: dict, raw: Optional[str], err: str) -> list:
+        """Phần ĐỒNG BỘ sau model của một lô nhóm (luồng phụ): đọc JSON, ngưỡng, chờ, chọn K người, khép lý do và chờ."""
+        st, now, cref, root, src, dkind = (prep["st"], prep["now"], prep["cref"], prep["root"], prep["src"],
+                                           prep["dkind"])
+        candidates, thresholds, lref, k = prep["candidates"], prep["thresholds"], prep["lref"], prep["k"]
+        record = self._team_record
         parsed = parse_batch(raw, [m["agent_key"] for m, _ in candidates]) if raw is not None else None
         if parsed is None:
             code = err or "bad_json"
             for m, feats in candidates:
-                record(m, "silent", code=code, feats=feats, ledger_ref=lref, thr=thresholds.get(m["agent_key"]))
-            self._close_reasons(reason_ids, now)
-            self._finish_waits(st, wait_ids, now)
-            return out
+                record(prep, m, "silent", code=code, feats=feats, ledger_ref=lref, thr=thresholds.get(m["agent_key"]))
+            self._team_close(prep)
+            return prep["out"]
         speakers, pending = [], {}
         for m, feats in candidates:
             key = m["agent_key"]
             r = parsed.get(key)
             thr = thresholds[key]
             if r is None:
-                record(m, "silent", code="policy_error", feats=feats, ledger_ref=lref, thr=thr)
+                record(prep, m, "silent", code="policy_error", feats=feats, ledger_ref=lref, thr=thr)
                 continue
             if r["verdict"] == "speak" and r["score"] >= thr:
                 speakers.append((key, r["score"], int(m.get("order") or 0)))
                 pending[key] = (m, feats, r)
             elif r["verdict"] == "speak":
-                record(m, "silent", code="below_threshold", score=r["score"], thr=thr, reason=r["reason"], feats=feats,
-                       ledger_ref=lref)
+                record(prep, m, "silent", code="below_threshold", score=r["score"], thr=thr, reason=r["reason"],
+                       feats=feats, ledger_ref=lref)
             elif r["verdict"] == "wait":
                 if dkind == "wait" or self._already_waited(st, cref, root, key):
-                    record(m, "silent", code="rejudge_limit", score=r["score"], thr=thr, reason=r["reason"],
+                    record(prep, m, "silent", code="rejudge_limit", score=r["score"], thr=thr, reason=r["reason"],
                            feats=feats, ledger_ref=lref)
                 else:
                     kinds = r["wait_for"] or ["owner_message", "speaker_done"]
                     until = now + WAIT_MAX_S
-                    d = record(m, "wait", score=r["score"], thr=thr, reason=r["reason"], feats=feats, ledger_ref=lref,
-                               wait_until={"kinds": kinds, "until_ts": until}, ask_clarify=r["ask_clarify"])
+                    d = record(prep, m, "wait", score=r["score"], thr=thr, reason=r["reason"], feats=feats,
+                               ledger_ref=lref, wait_until={"kinds": kinds, "until_ts": until},
+                               ask_clarify=r["ask_clarify"])
                     st.add_wait(decision_id=d["decision_id"], agent_key=key, context_ref=cref, root_ref=root,
                                 source_event=src, until_kinds=kinds, until_ts=until,
                                 job_refs=[j.get("id") for j in m.get("open_jobs") or [] if j.get("id")]
-                                + list(ctx.get("job_refs") or []),
-                                payload={"message_id": msg.get("id"), "kind": dkind}, now=now)
+                                + list(prep["job_refs"]),
+                                payload={"message_id": prep["msg"].get("id"), "kind": dkind}, now=now)
             else:
-                record(m, "silent", code="model_silent", score=r["score"], thr=thr, reason=r["reason"], feats=feats,
-                       ledger_ref=lref)
+                record(prep, m, "silent", code="model_silent", score=r["score"], thr=thr, reason=r["reason"],
+                       feats=feats, ledger_ref=lref)
         if speakers:
             if k <= 0:
                 chosen, rest = [], [s[0] for s in speakers]
@@ -797,15 +864,14 @@ class Judge:
                 chosen, rest = select_volunteers(speakers, k, already)
             for key in chosen:
                 m, feats, r = pending[key]
-                record(m, "speak", score=r["score"], thr=thresholds[key], reason=r["reason"], feats=feats,
+                record(prep, m, "speak", score=r["score"], thr=thresholds[key], reason=r["reason"], feats=feats,
                        ledger_ref=lref, volunteer=True)
             for key in rest:
                 m, feats, r = pending[key]
-                record(m, "silent", code="k_zero" if k <= 0 else "not_selected", score=r["score"],
+                record(prep, m, "silent", code="k_zero" if k <= 0 else "not_selected", score=r["score"],
                        thr=thresholds[key], reason=r["reason"], feats=feats, ledger_ref=lref)
-        self._close_reasons(reason_ids, now)
-        self._finish_waits(st, wait_ids, now)
-        return out
+        self._team_close(prep)
+        return prep["out"]
 
     @staticmethod
     def _already_volunteered(st: JudgeStore, cref: str, root: str, src: str, dkind: str) -> int:
@@ -874,28 +940,48 @@ class Judge:
                               rejudge_of: Optional[int] = None) -> dict:
         """Nói/chờ/im cho một tin CHỦ ĐỘNG (lượt quét `say` của P, `ask_back`/`revise` của L) ở chat riêng hay nhóm. Lỗi,
         hết giờ, JSON sai: `silent` có lý do, KHÔNG gửi (người gọi giữ lý do của mình, không mất gì). Ở chat riêng lượt
-        phán xử hỏi `agent_daily_calls` (phần L) trước khi giữ chỗ; trong nhóm lượt tính vào `judge_daily` của nhóm."""
+        phán xử hỏi `agent_daily_calls` (phần L) trước khi giữ chỗ; trong nhóm lượt tính vào `judge_daily` của nhóm.
+        Phần kho chạy ở luồng phụ; bị huỷ ngay sau khi giữ chỗ thì dòng sổ được hoàn."""
+        prep = await run_io(self._proactive_prepare, agent_key=agent_key, context_ref=context_ref, draft=draft,
+                            source_event=source_event, origin=origin, payload=payload, rejudge_of=rejudge_of,
+                            undo=self._undo_reserve)
+        if prep.get("done"):
+            return prep["out"]
+        raw, err = await self._run_engine(prep["prompt"], prep["cid"], engine or self.ask, ledger=prep["ledger"],
+                                          label=prep["label"])
+        return await run_io(self._proactive_finish, prep, raw, err)
+
+    def _proactive_record(self, prep: dict, verdict: str, *, code: str = "", score=None, thr=None, reason: str = "",
+                          lref: str = "", wait_until=None, ask_clarify: str = "") -> dict:
+        st = prep["st"]
+        did = st.add_decision({"agent_key": prep["agent_key"], "context_ref": prep["context_ref"],
+                               "source_event": prep["source_event"], "root_ref": prep["root"], "kind": prep["kind"],
+                               "verdict": verdict, "address": "none", "score": score, "threshold": thr,
+                               "reason": reason, "silence_code": code, "wait_until": wait_until or {},
+                               "ask_clarify": ask_clarify, "ledger_ref": lref,
+                               "features": {"origin": prep["origin"], "excerpt": clip(prep["draft"], 200)},
+                               "excerpt": clip(prep["draft"], 200)}, now=prep["now"])
+        return public_decision(st.get_decision(did))
+
+    def _proactive_prepare(self, *, agent_key: str, context_ref: str, draft: str, source_event: str, origin: str,
+                           payload: Optional[dict], rejudge_of: Optional[int]) -> dict:
+        """Phần ĐỒNG BỘ trước model của một tin chủ động (luồng phụ): ngưỡng, hạn mức, giữ chỗ, prompt."""
         st = self.store(True)
         now = self.clock()
         is_dm = str(context_ref).startswith("dm:")
         kind = "wait" if rejudge_of else "proactive"
-        root = str(source_event)
-
-        def record(verdict: str, *, code: str = "", score=None, thr=None, reason: str = "", lref: str = "",
-                   wait_until=None, ask_clarify: str = "") -> dict:
-            did = st.add_decision({"agent_key": agent_key, "context_ref": context_ref, "source_event": source_event,
-                                   "root_ref": root, "kind": kind, "verdict": verdict, "address": "none", "score": score,
-                                   "threshold": thr, "reason": reason, "silence_code": code,
-                                   "wait_until": wait_until or {}, "ask_clarify": ask_clarify, "ledger_ref": lref,
-                                   "features": {"origin": origin, "excerpt": clip(draft, 200)},
-                                   "excerpt": clip(draft, 200)}, now=now)
-            return public_decision(st.get_decision(did))
-
+        prep = {"st": st, "now": now, "agent_key": agent_key, "context_ref": context_ref, "draft": draft,
+                "source_event": source_event, "origin": origin, "payload": payload, "rejudge_of": rejudge_of,
+                "kind": kind, "root": str(source_event), "is_dm": is_dm, "done": False, "cid": None, "ledger": None,
+                "label": None}
         thr, eag, _off = self._threshold(st, agent_key, context_ref, now)
+        prep["thr"] = thr
         if is_dm and not rejudge_of:
             ok, why = self.try_spend(agent_key, "proactive_judge")
             if not ok:
-                return record("silent", code="waiting_quota", thr=thr, reason=why)
+                prep.update(done=True, out=self._proactive_record(prep, "silent", code="waiting_quota", thr=thr,
+                                                                  reason=why))
+                return prep
         cap = "skip"
         if not is_dm:
             cap = (payload or {}).get("judge_daily", DEFAULT_JUDGE_DAILY)
@@ -903,37 +989,50 @@ class Judge:
         res = self._reserve(ref=ref, context_ref=context_ref, agent_key=agent_key if is_dm else "", team_cap=cap,
                             now=now)
         if not res["ok"]:
-            return record("silent", code=res["code"] if res["code"] != "duplicate" else "policy_error", thr=thr)
-        cid = res["cid"]
-        lref = f"call:{cid}" if cid else ""
+            prep.update(done=True, out=self._proactive_record(
+                prep, "silent", code=res["code"] if res["code"] != "duplicate" else "policy_error", thr=thr))
+            return prep
+        prep["cid"] = cid = res["cid"]
+        prep["ledger"] = self.ledger() if cid is not None else None
+        prep["label"] = self._engine_label_safe()
+        prep["lref"] = f"call:{cid}" if cid else ""
         meta = self.agent_meta(agent_key) or {}
         prof = st.profile(agent_key)
-        prompt = build_proactive_prompt(name=meta.get("name") or agent_key,
-                                        role_text=meta.get("role_text") or prof.get("role_text") or "", eagerness=eag,
-                                        draft=draft, source_event=source_event, history=self.history(context_ref),
-                                        cases=st.cases(agent_key, context_ref, CASES_IN_PROMPT),
-                                        context_kind="dm" if is_dm else "team")
-        raw, err = await self._run_engine(prompt, cid, engine or self.ask)
+        prep["prompt"] = build_proactive_prompt(name=meta.get("name") or agent_key,
+                                                role_text=meta.get("role_text") or prof.get("role_text") or "",
+                                                eagerness=eag, draft=draft, source_event=source_event,
+                                                history=self.history(context_ref),
+                                                cases=st.cases(agent_key, context_ref, CASES_IN_PROMPT),
+                                                context_kind="dm" if is_dm else "team")
+        return prep
+
+    def _proactive_finish(self, prep: dict, raw: Optional[str], err: str) -> dict:
+        """Phần ĐỒNG BỘ sau model của một tin chủ động (luồng phụ): đọc JSON, ngưỡng, ghi quyết định, chờ."""
+        st, now, thr, lref = prep["st"], prep["now"], prep["thr"], prep["lref"]
+        record = self._proactive_record
         r = parse_one(raw) if raw is not None else None
         if r is None:
-            return record("silent", code=err or "bad_json", thr=thr, lref=lref)
+            return record(prep, "silent", code=err or "bad_json", thr=thr, lref=lref)
         if r["verdict"] == "speak" and r["score"] >= thr:
-            return record("speak", score=r["score"], thr=thr, reason=r["reason"], lref=lref)
+            return record(prep, "speak", score=r["score"], thr=thr, reason=r["reason"], lref=lref)
         if r["verdict"] == "speak":
-            return record("silent", code="below_threshold", score=r["score"], thr=thr, reason=r["reason"], lref=lref)
+            return record(prep, "silent", code="below_threshold", score=r["score"], thr=thr, reason=r["reason"],
+                          lref=lref)
         if r["verdict"] == "wait":
-            if rejudge_of or self._already_waited(st, context_ref, root, agent_key):
-                return record("silent", code="rejudge_limit", score=r["score"], thr=thr, reason=r["reason"], lref=lref)
+            if prep["rejudge_of"] or self._already_waited(st, prep["context_ref"], prep["root"], prep["agent_key"]):
+                return record(prep, "silent", code="rejudge_limit", score=r["score"], thr=thr, reason=r["reason"],
+                              lref=lref)
+            payload = prep["payload"]
             kinds = r["wait_for"] or ["owner_message"]
             until = now + WAIT_MAX_S
-            d = record("wait", score=r["score"], thr=thr, reason=r["reason"], lref=lref,
+            d = record(prep, "wait", score=r["score"], thr=thr, reason=r["reason"], lref=lref,
                        wait_until={"kinds": kinds, "until_ts": until}, ask_clarify=r["ask_clarify"])
-            st.add_wait(decision_id=d["decision_id"], agent_key=agent_key, context_ref=context_ref, root_ref=root,
-                        source_event=source_event, until_kinds=kinds, until_ts=until,
+            st.add_wait(decision_id=d["decision_id"], agent_key=prep["agent_key"], context_ref=prep["context_ref"],
+                        root_ref=prep["root"], source_event=prep["source_event"], until_kinds=kinds, until_ts=until,
                         job_refs=list((payload or {}).get("job_refs") or []),
-                        payload=dict(payload or {}, draft=draft, origin=origin), now=now)
+                        payload=dict(payload or {}, draft=prep["draft"], origin=prep["origin"]), now=now)
             return d
-        return record("silent", code="model_silent", score=r["score"], thr=thr, reason=r["reason"], lref=lref)
+        return record(prep, "silent", code="model_silent", score=r["score"], thr=thr, reason=r["reason"], lref=lref)
 
     # ───────────── chờ và gỡ chờ (7.4) ─────────────
 
@@ -992,6 +1091,8 @@ class Judge:
                     d = await self._expire_dm(w)
                 if d:
                     out.append(d)
+            except asyncio.CancelledError:
+                raise
             except Exception as ex:  # noqa: BLE001
                 log.warning("process released wait %s failed: %s: %s", w.get("id"), type(ex).__name__, ex)
         if team and self._team_handler is not None:
@@ -1001,14 +1102,15 @@ class Judge:
             out.extend(got or [])
         return out
 
+    def _wait_by_reason(self, reason_id: int) -> Optional[dict]:
+        st = self.store(False)
+        return st.wait_by_reason(int(reason_id)) if st is not None else None
+
     async def serve_reason(self, reason_id: int) -> Optional[dict]:
         """Phục vụ một lý do `wait_unblocked`/`related_review` do bộ phán xử tạo. Phần P (vòng pulse) gọi hàm này cho hai
         loại đó thay vì tự chạy lượt (điểm nối, xem tài liệu J). Lý do của nhóm chuyển cho bộ chạy nhóm; của chat riêng
         xét lại bản nháp đúng một lần."""
-        st = self.store(False)
-        if st is None:
-            return None
-        w = st.wait_by_reason(int(reason_id))
+        w = await run_io(self._wait_by_reason, int(reason_id))
         if w is None:
             return None
         if not str(w["context_ref"]).startswith("dm:"):
@@ -1020,36 +1122,55 @@ class Judge:
             return None
         return await self._rejudge_dm(w, int(reason_id))
 
-    async def _rejudge_dm(self, w: dict, reason_id: Optional[int]) -> Optional[dict]:
+    def _rejudge_dm_prepare(self, w: dict, reason_id: Optional[int]) -> dict:
+        """Phần ĐỒNG BỘ đầu của lần xét lại ở chat riêng (luồng phụ): đọc lại lần chờ, hạn mức, nhận lý do (CAS, giữ chỗ
+        dòng sổ). `skip` = không xét lại lần này."""
         st = self.store(True)
         if w.get("status") != "released":
             w = st.get_wait(w["id"]) or w
             if w.get("status") != "released":
-                return None
-        payload = w.get("payload") or {}
-        ok, why = self.try_spend(w["agent_key"], "wait_unblocked")
+                return {"skip": True}
+        ok, _why = self.try_spend(w["agent_key"], "wait_unblocked")
         if not ok:
             # Hết hạn mức: lý do giữ `pending` (phần L hiện "Chờ hạn mức"); lần chờ vẫn `released`, xét lại sau.
-            return None
+            return {"skip": True}
+        out = {"skip": False, "w": w, "claimed": None, "wake": None, "reason_id": reason_id}
         wake = self.wake()
         if wake is not None and reason_id:
             # Nhận lý do (CAS) cũng là giữ chỗ dòng sổ lượt của lần xét lại: hai người gọi cùng lúc chỉ một người chạy.
             claimed = wake.claim(int(reason_id), purpose="judge_batch", obligation=False, now=self.clock())
             if claimed.get("outcome") != "claimed":
-                return None
-            d = await self._rejudge_with_call(w, claimed)
+                return {"skip": True}
+            out.update(claimed=claimed, wake=wake)
+        return out
+
+    def _undo_claim(self, pre: Optional[dict]) -> None:
+        """Bị huỷ ngay sau khi nhận lý do: trả lý do về hàng chờ, hoàn dòng sổ vừa giữ (luồng phụ)."""
+        if pre and pre.get("claimed") is not None and pre.get("wake") is not None:
+            pre["wake"].settle(int(pre["reason_id"]), "refunded", now=self.clock())
+
+    def _move_wait(self, wait_id: int, to: str, frm: str) -> Any:
+        return self.store(True).move_wait(int(wait_id), to, frm=frm, now=self.clock())
+
+    async def _rejudge_dm(self, w: dict, reason_id: Optional[int]) -> Optional[dict]:
+        pre = await run_io(self._rejudge_dm_prepare, w, reason_id, undo=self._undo_claim)
+        if pre.get("skip"):
+            return None
+        w = pre["w"]
+        payload = w.get("payload") or {}
+        if pre["claimed"] is not None:
+            d = await self._rejudge_with_call(w, pre["claimed"])
         else:
             d = await self.judge_proactive(agent_key=w["agent_key"], context_ref=w["context_ref"],
                                            draft=str(payload.get("draft") or ""), source_event=w["source_event"],
                                            origin=str(payload.get("origin") or ""), payload=payload,
                                            rejudge_of=int(w["decision_id"]))
-        st.move_wait(w["id"], "rejudged", frm="released", now=self.clock())
+        await run_io(self._move_wait, w["id"], "rejudged", "released")
         if d and d["verdict"] == "speak":
             await self._send(d, payload, "send")
         return d
 
-    async def _rejudge_with_call(self, w: dict, claimed: dict) -> dict:
-        """Xét lại ở chat riêng dùng dòng sổ lượt đã giữ khi nhận lý do (không giữ chỗ lần hai)."""
+    def _rejudge_call_prepare(self, w: dict, claimed: dict) -> dict:
         st = self.store(True)
         now = self.clock()
         payload = w.get("payload") or {}
@@ -1061,8 +1182,11 @@ class Judge:
                                         source_event=w["source_event"], history=self.history(w["context_ref"]),
                                         cases=st.cases(w["agent_key"], w["context_ref"], CASES_IN_PROMPT),
                                         context_kind="dm")
-        # Dòng sổ do `claim` giữ; `WakeReasons.settle` chốt nó theo kết cục, nên ở đây không tự chốt lần hai.
-        raw, err = await self._run_engine_claimed(prompt, cid)
+        return {"st": st, "now": now, "payload": payload, "cid": cid, "thr": thr, "prompt": prompt, "w": w,
+                "ledger": self.ledger() if cid is not None else None, "label": self._engine_label_safe()}
+
+    def _rejudge_call_finish(self, prep: dict, raw: Optional[str], err: str) -> dict:
+        st, now, w, thr, cid, payload = prep["st"], prep["now"], prep["w"], prep["thr"], prep["cid"], prep["payload"]
         r = parse_one(raw) if raw is not None else None
         wake = self.wake()
         rid = int(w.get("reason_id") or 0)
@@ -1088,46 +1212,47 @@ class Judge:
                                "excerpt": clip(payload.get("draft"), 200)}, now=now)
         return public_decision(st.get_decision(did))
 
-    async def _run_engine_claimed(self, prompt: str, cid: Optional[int]) -> tuple:
-        """Như `_run_engine` nhưng không chốt dòng sổ (người nhận lý do chốt qua `WakeReasons.settle`); chỉ ghi mốc engine."""
-        ledger = self.ledger()
+    async def _rejudge_with_call(self, w: dict, claimed: dict) -> dict:
+        """Xét lại ở chat riêng dùng dòng sổ lượt đã giữ khi nhận lý do (không giữ chỗ lần hai). Dòng sổ do `claim` giữ;
+        `WakeReasons.settle` chốt nó theo kết cục, nên ở đây không tự chốt lần hai."""
+        prep = await run_io(self._rejudge_call_prepare, w, claimed)
+        raw, err = await self._run_engine_claimed(prep["prompt"], prep["cid"], ledger=prep["ledger"],
+                                                  label=prep["label"])
+        return await run_io(self._rejudge_call_finish, prep, raw, err)
+
+    async def _run_engine_claimed(self, prompt: str, cid: Optional[int], ledger: Any = None,
+                                  label: Optional[tuple] = None) -> tuple:
+        """Như `_run_engine` nhưng không chốt dòng sổ (người nhận lý do chốt qua `WakeReasons.settle`); chỉ ghi mốc
+        engine (ở luồng phụ)."""
         if self.ask is None:
             return None, "engine_unavailable"
-        sem = _slots(self.concurrency)
-        try:
-            await asyncio.wait_for(sem.acquire(), timeout=self.timeout_s)
-        except (asyncio.TimeoutError, TimeoutError):
-            return None, "engine_unavailable"
-        eng, model = ("", "")
-        try:
-            eng, model = self.engine_label() or ("", "")
-        except Exception:  # noqa: BLE001
-            pass
-        marked = {"v": False}
+        if ledger is None and cid is not None:
+            ledger = await run_io(self.ledger)
+        has = ledger is not None and cid is not None
+        eng, model = label if label is not None else await run_io(self._engine_label_safe)
+        marker = LoopMarker((lambda: ledger.mark_engine(cid, eng, model)) if has else (lambda: None))
 
-        def started() -> None:
-            if not marked["v"]:
-                marked["v"] = True
-                if ledger is not None and cid is not None:
-                    ledger.mark_engine(cid, eng, model)
+        async def on_cancel() -> None:
+            try:
+                await marker.wait()
+            except asyncio.CancelledError:
+                pass
 
-        try:
-            raw = await asyncio.wait_for(self.ask(prompt, "agent_judge", started), timeout=self.timeout_s)
-        except EngineUnavailable:
+        outcome, raw = await self._ask(prompt, self.ask, marker, on_cancel)
+        await marker.wait()
+        if outcome == "judge_busy":
             return None, "engine_unavailable"
-        except (asyncio.TimeoutError, TimeoutError):
-            started()
-            return None, "timeout"
-        except Exception as ex:  # noqa: BLE001
-            log.warning("agent judge engine error: %s: %s", type(ex).__name__, str(ex)[:200])
-            started()
-            return None, "policy_error"
-        finally:
-            sem.release()
-        started()
+        if outcome == "engine_unavailable":
+            return None, outcome
+        if not marker.marked:
+            marker.marked = True
+            if has:
+                await run_io(ledger.mark_engine, cid, eng, model)
+        if outcome != "ok":
+            return None, outcome
         return str(raw or ""), ""
 
-    async def _expire_dm(self, w: dict) -> Optional[dict]:
+    def _expire_dm_record(self, w: dict) -> tuple:
         st = self.store(True)
         now = self.clock()
         d0 = st.get_decision(int(w["decision_id"])) or {}
@@ -1140,20 +1265,25 @@ class Judge:
                                "ask_clarify": d0.get("ask_clarify") or "",
                                "features": {"expired_wait": w["id"]}, "excerpt": clip(payload.get("draft"), 200)},
                               now=now)
-        d = public_decision(st.get_decision(did))
+        return public_decision(st.get_decision(did)), mode, dict(payload, ask_clarify=d0.get("ask_clarify"))
+
+    async def _expire_dm(self, w: dict) -> Optional[dict]:
+        d, mode, payload = await run_io(self._expire_dm_record, w)
         if mode:
-            await self._send(d, dict(payload, ask_clarify=d0.get("ask_clarify")), "ask_clarify")
+            await self._send(d, payload, "ask_clarify")
         return d
 
     async def _send(self, decision: dict, payload: dict, mode: str) -> None:
+        """Gửi qua người gửi đã đăng ký. Hàm thường (thường ghi kho, như `_judge_send` của host) chạy ở luồng phụ;
+        coroutine function chạy trên loop (`io_offload.call_hook`)."""
         if not self._senders:
-            self.demote(decision["decision_id"], "no_sender")
+            await run_io(self.demote, decision["decision_id"], "no_sender")
             return
         for fn in list(self._senders):
             try:
-                got = fn(decision, payload, mode)
-                if asyncio.iscoroutine(got):
-                    await got
+                await call_hook(fn, decision, payload, mode)
+            except asyncio.CancelledError:
+                raise
             except Exception as ex:  # noqa: BLE001
                 log.warning("judge sender failed: %s: %s", type(ex).__name__, ex)
 
