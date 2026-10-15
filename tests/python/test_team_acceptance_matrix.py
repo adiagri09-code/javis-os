@@ -42,7 +42,8 @@ MATRIX = [
      [("test_team_t1_goal_host.py", ["H7 đổi tag: thành viên, vai, trạng thái"]),
       ("test_agent_judge_scope.py", ["prompt lô nhóm B không chứa ca hay lịch sử của nhóm A",
                                      "ca của nhóm A chỉ đọc được trong nhóm A"]),
-      ("test_agent_lessons.py", [])], "L", None),
+      ("test_agent_lessons.py", ["lượt nhóm A nạp team:A + * (không team:B, không dm, không trợ lý khác)",
+                                 "chat riêng nạp dm:<agent_key> + * (không bài học nhóm nào)"])], "L", None),
     ("2", "T3", "Gọi trực tiếp được trả lời; tự tham gia khi phù hợp, im khi không đóng góp; không ép cả nhóm nói",
      "agent_judge.judge_team_message, team_runner.run_message",
      [("test_agent_judge_team.py", ["được @ trực tiếp: một quyết định address=certain",
@@ -53,7 +54,8 @@ MATRIX = [
      "team_runner (bước, bản), agent_peer_feedback (L)",
      [("test_team_t1_review.py", ["R7 kế hoạch: yêu cầu mới KHÔNG bị chốt bằng kết quả bản cũ"]),
       ("test_team_queue.py", ["TC18 bị chặn: rời chỗ chạy"]),
-      ("test_team_peer_feedback.py", [])], "L", None),
+      ("test_team_peer_feedback.py", ["trưởng nhóm góp ý: host gán nguồn leader",
+                                      "góp ý ở nhóm 1 không hiện ở nhóm 2"])], "L", None),
     ("4", "T2", "Sáu reaction ở chat riêng và nhóm: chọn/đổi/bỏ, hash nội dung, nguồn, nhiều tab, restart",
      "sessions.dm_reactions, team_store.team_reactions, dashboard/reactions.js",
      [("test_dm_reactions.py", ["khuôn R đúng hợp đồng", "seen_sha lệch: stale true, vẫn nhận",
@@ -64,7 +66,8 @@ MATRIX = [
     ("5", "T2/T3", "Auto bật: phản hồi mở lần xem xét có tác động; tắt: chỉ lưu, không học nền",
      "feedback_projector, agent_ledger.WakeReasons",
      [("test_feedback_wake.py", ["Cộng hưởng tắt: KHÔNG lý do thức nào, không lượt model",
-                                 "6 lần bấm trên 6 tin: MỘT lý do chờ gom 6 nguồn"])], None, None),
+                                 "6 lần bấm trên 6 tin: MỘT lý do chờ gom 6 nguồn"]),
+      ("test_t3_integration.py", ["reaction trên tin của trợ lý bật Auto tạo lý do reaction_review"])], None, None),
     ("6", "T3", "Phản hồi hữu ích lặp lại đổi nhịp dài hạn có giới hạn; ít nhu cầu giảm nhịp; im đúng không bị phạt",
      "agent_pulse (pulse.v1)",
      [("test_agent_pulse_policy.py", ["5 ❤️/3 ngày: đúng một lần lên bậc",
@@ -120,7 +123,8 @@ MATRIX = [
     ("17", "T3", "Phán xử và tự rà soát có sổ lượt, nguồn, phạm vi thay đổi, quay lại",
      "agent_judge (nhãn, changes), agent_review (L)",
      [("test_agent_judge_labels.py", ["nhật ký changes ghi trước/sau của lần dịch"]),
-      ("test_agent_judge_review.py", [])], "L", None),
+      ("test_agent_judge_review.py", ["sổ lượt: purpose review, obligation 0, giữ chỗ trước engine",
+                                      "lỗi phán xử tăng quá 0,15"])], "L", None),
     ("18", "T3/T4", "Desktop, màn hẹp, hai ngôn ngữ, số đo hiệu năng, trạng thái hiển thị khớp kho thật",
      "dashboard/teams.js, agent-judge-ui.js, agent-pulse.js, tools/team_adaptive_bench.py",
      [("test_agent_judge_ui.js", []), ("test_teams_ui.js", []), ("test_team_t4_perf.py", []),
@@ -156,7 +160,10 @@ MATRIX = [
       ("test_team_t4_ops.py", ["bật lại Auto: phản hồi cũ không bị phát lại (vẫn stored_only)"])], None, None),
     ("26", "T3", "Tự áp một điều chỉnh được phép, lưu trước/sau, nhận phản hồi, quay lại; vòng học khép kín",
      "agent_review.maybe_self_review (L), agent_lessons (L), agent_pulse.apply_policy_change",
-     [("test_agent_judge_review.py", []), ("test_agent_lessons.py", [])], "L", None),
+     [("test_agent_judge_review.py", ["tự rà soát chạy và áp 1 thay đổi",
+                                      "quay lại: độ lệch về trước thay đổi"]),
+      ("test_agent_lessons.py", ["thu hồi: revoked, không nạp nữa"]),
+      ("test_t3_integration.py", ["lượt xem xét qua main.py: chốt chặn engine thật"])], "L", None),
     ("27", "T3", "Tín hiệu đồng đội mở đúng lượt xem xét; tag trong trích dẫn không mở lượt; chờ có sự kiện gỡ chờ",
      "agent_judge (related_review, release_waits)",
      [("test_related_review.py", ["trích dẫn bị bỏ trước khi phán xử",
@@ -172,6 +179,12 @@ MATRIX = [
       ("test_agent_pulse_policy.py", ["lệch đồng hồ: tuổi âm kẹp về 0"]),
       ("test_team_t4_ops.py", ["dòng nhật ký giữ pending để chiếu lại",
                                "đồng hồ lùi 1 giờ: đánh giá nhịp không lỗi"])], None, None),
+    ("T3.fix", "T3", "Sửa sau ba vòng review T3: chốt engine thật trong Judge, huỷ và phạm vi của nhịp, học, phán xử",
+     "agent_judge, agent_pulse_host, agent_review, server/io_offload.py",
+     [(f, []) for f in ("test_t3_fix_judge_guard.py", "test_t3_fix_judge_main.py", "test_t3_fix_judge_p3.py",
+                        "test_t3_fix_judge_retry.py", "test_t3_fix_pulse_cancel.py", "test_t3_fix_pulse_judge.py",
+                        "test_t3_fix_pulse_main.py", "test_t3_fix_pulse_p3.py", "test_t3_fix_pulse_scope.py",
+                        "test_t3_fix_review_learn.py")], None, None),
     ("T4.a", "T4", "Lịch sử dài: nhóm 5.000 tin giữ yêu cầu, quyết định, nguồn đóng góp, phản hồi; số đọc kho có trần",
      "team_long_memory, team_runner._older_summary",
      [("test_team_t4_long_history.py", ["số lần đọc kho mỗi lượt KHÔNG tăng theo độ dài lịch sử",
@@ -183,6 +196,7 @@ MATRIX = [
 ]
 
 REVIEW = {"T1": "đã review (T1)", "T2": "đã review (T2 vòng 2)"}
+T3_REVIEW = "đã review (T3: ba vòng review và một vòng sửa; review xác minh đang chạy)"
 
 
 def test_path(name):
@@ -301,7 +315,14 @@ def status_label(case, ms, ev):
         return f"đã code một phần, chờ phần {ev['pending_on']} của T3"
     if ev["status"] == "broken":
         return "thiếu test"
-    rev = REVIEW.get(ms) if ms in REVIEW else ("chưa review" if "T3" in ms or "T4" in ms else "đã review")
+    if "T3" in ms and "T4" in ms:
+        rev = "phần T3 đã review, phần T4 chưa review"
+    elif "T4" in ms:
+        rev = "chưa review"
+    elif "T3" in ms:
+        rev = T3_REVIEW
+    else:
+        rev = REVIEW.get(ms, "đã review (T1, T2)")
     return f"đã code, đã test, {rev}, chưa pilot"
 
 
@@ -324,8 +345,8 @@ def render(ev, results, sha, when):
     pend = [c for c, e in ev.items() if e["status"] == "pending"]
     lines += ["", "## Còn chờ", "",
               (f"- Ca {', '.join(pend)}: chờ phần L của T3 (bài học có phạm vi `agent_lessons`, góp ý đồng đội, tự rà "
-               "soát `agent_review`, `agent_budget`). File test thiết kế nêu chưa có: test_agent_lessons.py, "
-               "test_team_peer_feedback.py, test_agent_judge_review.py." if pend else "- Không ca nào chờ phần T3."),
+               "soát `agent_review`, `agent_budget`)." if pend else "- Không ca nào chờ phần T3 (P, J, L đã ghép)."),
+              "- Review xác minh của T3 đang chạy; sửa nhỏ có thể còn vào nhánh T3.",
               "- Ca 18: chưa có smoke trình duyệt thật (Playwright cho Python không có trong .venv); chi phí vẽ đo bằng "
               "hàm vẽ thuần dưới node (tools/team_adaptive_ui_bench.js).",
               "- Mọi ca: chưa pilot trên model thật (gói pilot: docs/dev/team-chat-pilot-package.md, chưa chạy).", ""]

@@ -7,7 +7,7 @@ engine giả KHÔNG chứng minh chất lượng thảo luận, phán xử hay h
 ## 1. Điều kiện trước khi xin duyệt
 
 - Head đã chốt: SHA của nhánh tích hợp T1-T4 có CI xanh trên đúng head đó; ghi SHA vào báo cáo. Phần L của T3 (bài học, góp ý
-  đồng đội, tự rà soát) đã ghép, nếu không thì các kịch bản P6 và P7 dưới đây bỏ khỏi lần chạy và ghi "chưa có mã".
+  đồng đội, tự rà soát) đã ghép ở nhánh T3 `7e8b96f5`; review xác minh của T3 phải xong trước khi xin duyệt pilot.
 - Checkout sạch (`git status` rỗng), `.venv` của repo, state MỚI trong thư mục tạm (không dùng state thật của chủ), brain pilot
   riêng gồm 4 trợ lý có vai khác nhau: điều phối (Lan), số liệu (Minh), nội dung (Hoa), kiểm chứng (Tuấn).
 - Server sandbox trên cổng 7788 (không bao giờ 7777), `JAVIS_STATE_DIR` trỏ state tạm. Tắt bằng cổng
@@ -51,7 +51,7 @@ Thêm: `daily_turns` của nhóm pilot 40, `judge_daily` 20, `agent_daily_calls`
 | P3 | Thả sáu emoji ở nhóm và chat riêng, đổi, bỏ; sửa một ca im thành "Đáng lẽ nên nói", một ca nói thành "chen ngang" | 4, 21, 9 | đúng |
 | P4 | Bật Auto cho Minh, Hoa; để nhịp chạy 4 tick; một nhóm có việc, một nhóm im | 6, 7, 23, 24 | đúng (đồng hồ giả) |
 | P5 | Chat riêng với Hoa: hỏi trực tiếp; để Hoa có lượt chủ động | 20 | đúng |
-| P6 | Phản hồi có lý do chất lượng cho Hoa; chờ lượt xem xét; lượt kế tiếp đổi cách làm | 5, 17, 25, 26 | L chưa ghép: chưa có |
+| P6 | Phản hồi có lý do chất lượng cho Hoa; chờ lượt xem xét; lượt kế tiếp đổi cách làm | 5, 17, 25, 26 | đúng (L đã ghép ở nhánh T3 `7e8b96f5`) |
 | P7 | Thả ❤️ trên bản tổng hợp của P2 | 8, 28 | đúng |
 
 ## 5. Điều kiện dừng (dừng ngay, không thử lại)

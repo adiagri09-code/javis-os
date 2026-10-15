@@ -1,7 +1,7 @@
 # Nhóm chat thích nghi T4: lịch sử dài, vận hành, quay về bản cũ (0.157.0)
 
 Thiết kế: [2026-10-15-team-adaptive-design.md](../superpowers/specs/2026-10-15-team-adaptive-design.md) mục 11, 12, 13. Chồng
-trên T2 (0.154.0) và T3 (0.156.0: phần P nhịp và phần J phán xử; phần L học trong đội chưa ghép). Số đo:
+trên T2 (0.154.0) và T3 (0.156.0: phần P nhịp, phần J phán xử, phần L học trong đội; nhánh T3 ở `7e8b96f5`). Số đo:
 [team-chat-t4-bench.md](team-chat-t4-bench.md). Ma trận nghiệm thu: [team-chat-acceptance-matrix.md](team-chat-acceptance-matrix.md).
 Gói pilot (chưa chạy): [team-chat-pilot-package.md](team-chat-pilot-package.md).
 
@@ -25,7 +25,8 @@ bằng nhau, dưới 40. EXPLAIN QUERY PLAN của sáu truy vấn đều dùng �
 
 Chat riêng `agent:<slug>`: khối phản hồi đã có từ T2 (`feedback_projector.dm_feedback_block`, truy vấn theo
 `dm_reactions_agent(agent_key, updated_at)` có trần), T4 không lặp lại. Bài học có phạm vi `dm:<agent_key>` là việc của phần
-L (`agent_lessons.for_prompt`), chưa ghép: chờ L.
+L (`agent_lessons.for_prompt`, kiểm ở `test_agent_lessons.py`: chat riêng nạp `dm:<agent_key>` và `*`, không bài học
+nhóm nào); T4 không lặp lại.
 
 ## 2. Vận hành (đã kiểm qua host thật)
 
