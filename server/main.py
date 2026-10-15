@@ -10622,15 +10622,22 @@ async def push_to_chat(session_id, text, viec=None, card="") -> bool:
     card, report = _resonance_card(card)
     if card:
         clean = clean + "\n" + card
+    mid = None
     try:
         if not report:
-            get_store().append_message(sid, "assistant", clean)
+            mid = get_store().append_message(sid, "assistant", clean)
         else:
-            get_store().append_message(sid, "assistant", clean, report=report)
+            mid = get_store().append_message(sid, "assistant", clean, report=report)
     except Exception as e:
         print(f"[push_to_chat] lưu phiên lỗi: {type(e).__name__}: {e}", file=sys.stderr)
     try:
-        await _CHAT_RUNTIME.publish({"type": "push", "content": clean, "session_id": sid})
+        # Mã tin và hash nội dung (0.168.0): bong bóng đẩy về (tin báo goal, kết quả việc nền) có ngay hàng sáu cảm xúc,
+        # không phải đợi F5. Tin báo goal không còn hàng Hữu ích / Chưa ổn của A3 (quyết định của chủ).
+        ev = {"type": "push", "content": clean, "session_id": sid}
+        if mid is not None:
+            ev["message_id"] = int(mid)
+            ev["content_sha"] = sessions.content_sha(clean)
+        await _CHAT_RUNTIME.publish(ev)
     except Exception as e:
         print(f"[push_to_chat] bắn WebSocket lỗi: {type(e).__name__}: {e}", file=sys.stderr)
     return True

@@ -1111,6 +1111,11 @@ function handleMessage(data) {
     if (isActive) {
       const el = appendJavisMessage(data.content || "");
       recordTurn("javis", data.content || "", null, null);
+      // Tin đẩy về có mã tin (0.168.0): gắn hàng sáu cảm xúc ngay, kể cả tin báo goal (không còn hàng A3 riêng).
+      if (el && data.message_id != null && window.JavisChatReactions && window.JavisChatReactions.attach) {
+        window.JavisChatReactions.attach(el, { sid: data.session_id, mid: data.message_id, sha: data.content_sha || "",
+          reaction: null, entry: null });
+      }
       scrollBottom();
       // Đọc tin nền chỉ khi người dùng KHÔNG đang nói hay đang nghe Javis nói dở (Voice V1):
       // chen một bản tin vào giữa câu người dùng là cắt ngang họ. Hoãn tới lúc rảnh.
