@@ -170,15 +170,31 @@ class World:
     def send(self, text, mentions=()):
         """Chủ gửi tin qua đúng đường của route (submit rồi run_message), chờ mọi việc nền."""
         self._cm += 1
-        sub = self.runner.submit(self.team_id, text, mentions=[self.keys[m] for m in mentions],
-                                 client_msg_id=f"c{self._cm}-{time.time()}")
+        box = {}
 
         async def go():
+            # Như route: submit chạy ở luồng phụ khi bộ chạy đã biết event loop (gỡ chờ xếp việc nền về đúng loop).
+            self.runner._bind_loop()
+            box["sub"] = sub = await asyncio.to_thread(
+                self.runner.submit, self.team_id, text, mentions=[self.keys[m] for m in mentions],
+                client_msg_id=f"c{self._cm}-{time.time()}")
             if sub["replies"] or sub.get("judge"):
                 await self.runner.run_message(sub)
             await self.runner.wait_background()
         asyncio.run(go())
-        return sub
+        return box["sub"]
+
+    def do(self, fn, *args, **kw):
+        """Gọi một thao tác đồng bộ của bộ chạy ở luồng phụ (như route), rồi chờ mọi việc nền nó sinh ra."""
+        box = {}
+
+        async def go():
+            self.runner._bind_loop()
+            box["v"] = await asyncio.to_thread(fn, *args, **kw)
+            await asyncio.sleep(0)
+            await self.runner.wait_background()
+        asyncio.run(go())
+        return box.get("v")
 
     def drain(self):
         async def go():

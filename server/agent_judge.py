@@ -56,6 +56,7 @@ DEFAULT_K = 1
 RECENT_CONTRIB_S = 1800.0
 HINT_WINDOW_S = 24 * 3600.0
 PRUNE_EVERY_S = 3600.0
+RELEASED_STALE_S = 120.0
 
 # Mã im do code (giao diện dịch qua `judge.code.<mã>`). Không có câu tiếng Việt cứng ở đây.
 SILENCE_CODES = ("no_signal", "code_only", "policy_error", "timeout", "bad_json", "engine_unavailable", "judge_busy",
@@ -1164,6 +1165,10 @@ class Judge:
             return []
         items = self.release_waits("*", {"kind": "tick"})
         now = self.clock()
+        # Lần chờ đã gỡ mà chưa được xét lại (việc nền mất do restart hay không có event loop lúc gỡ): xét lại ở đây. Một
+        # lần xét lại xong trong vài chục giây (hạn 25 giây cộng chờ chỗ), nên quá RELEASED_STALE_S là chắc bị bỏ dở.
+        for w in st.stale_released(now - RELEASED_STALE_S):
+            items.append({"wait": w, "action": "released", "reason_id": w.get("reason_id")})
         if now - self._last_prune >= PRUNE_EVERY_S:
             self._last_prune = now
             try:

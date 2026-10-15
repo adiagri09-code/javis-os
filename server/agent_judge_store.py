@@ -402,6 +402,12 @@ class JudgeStore:
         with closing(self._conn()) as c:
             return [self._wait(r) for r in c.execute(q + " ORDER BY id", args).fetchall()]
 
+    def stale_released(self, before: float) -> list:
+        """Lần chờ đã gỡ (`released`) mà chưa xét lại, gỡ trước mốc `before`."""
+        with closing(self._conn()) as c:
+            return [self._wait(r) for r in c.execute("SELECT * FROM waits WHERE status='released' AND updated_at<? "
+                                                     "ORDER BY id", (float(before),)).fetchall()]
+
     def waits_of(self, agent_key: str, context_ref: Optional[str] = None) -> list:
         q, args = "SELECT * FROM waits WHERE agent_key=?", [agent_key]
         if context_ref:
