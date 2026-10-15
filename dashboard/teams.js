@@ -61,6 +61,9 @@
   // Bảng giới hạn (GOAL T1 mục 9): bốn nhóm theo ai đổi được, nhãn từng dòng. Khoá viết trọn cho bộ kiểm i18n.
   var LIMIT_CATS = [{ id: "owner", key: "teams.limits.owner" }, { id: "leader", key: "teams.limits.leader" },
     { id: "server", key: "teams.limits.server" }, { id: "provider", key: "teams.limits.provider" }];
+  // Nhãn bậc nhịp (T3) viết trọn khoá để bộ kiểm i18n đọc được.
+  var PULSE_TIER_KEY = ["pulse.tier_0", "pulse.tier_1", "pulse.tier_2", "pulse.tier_3", "pulse.tier_4", "pulse.tier_5",
+    "pulse.tier_6", "pulse.tier_7", "pulse.tier_8"];
   var LIMIT_KEY = { running_jobs: "teams.limits.running_jobs", max_parallel_teams: "teams.limits.max_parallel_teams",
     agent_one_turn: "teams.limits.agent_one_turn", busy_lease: "teams.limits.busy_lease", no_progress: "teams.limits.no_progress",
     turn_timeout: "teams.limits.turn_timeout", step_timeout: "teams.limits.step_timeout",
@@ -814,8 +817,8 @@
       return x.value >= 60 && x.value % 60 === 0 ? tw("teams.limits.minutes", { n: x.value / 60 })
         : tw("teams.limits.seconds", { n: x.value });
     }
-    if (x.unit === "percent") return tw("teams.limits.percent", { n: x.value });
-    if (x.unit === "tier") return tw("pulse.tier_" + x.value);
+    if (x.unit === "percent") return tw("pulse.percent", { n: x.value });
+    if (x.unit === "tier") return tw(PULSE_TIER_KEY[x.value] || "pulse.tier_1");
     return String(x.value);
   }
 

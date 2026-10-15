@@ -279,15 +279,35 @@ for j in range(3):
 check("quét giới hạn tối đa một lần mỗi ngày mỗi ngữ cảnh", len(eng.calls) == 1, len(eng.calls))
 
 # ═════ say: luôn qua bộ phán xử; thiếu bộ phán xử thì silent, không gửi ═════
-st, (k,), clock, eng, box, host = world(text='{"action": "say", "source_ref": "goal:g1", "text": "Anh xem giúp mục tiêu"}')
-ctx = f"dm:{k}"
-AP.ensure_row(st, k, ctx, at=T0)
-box["opps"][(k, ctx)] = [opp("goal:g1", kind="goal_waiting")]
-clock.t = T0 + D + 1
-run(tick_all(host))
-res = AP.events(st, k, ctx, kinds=("scan",))[0]["payload"]["result"]
+import sys as _sys  # noqa: E402
+
+
+def say_world():
+    st_, (k_,), clock_, eng_, box_, host_ = world(
+        text='{"action": "say", "source_ref": "goal:g1", "text": "Anh xem giúp mục tiêu"}')
+    ctx_ = f"dm:{k_}"
+    AP.ensure_row(st_, k_, ctx_, at=T0)
+    box_["opps"][(k_, ctx_)] = [opp("goal:g1", kind="goal_waiting")]
+    clock_.t = T0 + D + 1
+    run(tick_all(host_))
+    return AP.events(st_, k_, ctx_, kinds=("scan",))[0]["payload"]["result"], box_
+
+
+# Thiếu hẳn module phán xử (bản P đứng một mình): giả lập bằng cách chặn import.
+_saved_judge = _sys.modules.get("agent_judge")
+_sys.modules["agent_judge"] = None
+res, box = say_world()
+if _saved_judge is not None:
+    _sys.modules["agent_judge"] = _saved_judge
+else:
+    _sys.modules.pop("agent_judge", None)
 check("chưa có agent_judge: say thành silent (judge_unavailable), không gửi gì",
       res == {"action": "say", "verdict": "silent", "reason": "judge_unavailable", "decision_id": None}
+      and box["sent"] == [], res)
+# Có module (sau khi ghép phần J) nhưng chưa được main.py nối: lỗi phán xử cũng là silent có lý do, không gửi gì.
+res, box = say_world()
+check("có agent_judge mà chưa nối (lỗi phán xử): say thành silent có lý do, không gửi gì",
+      res.get("verdict") == "silent" and str(res.get("reason", "")).startswith(("judge_error", "judge_unavailable"))
       and box["sent"] == [], res)
 judged = []
 

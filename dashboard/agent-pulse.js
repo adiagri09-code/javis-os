@@ -29,22 +29,33 @@
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
-  var STATES = ["active", "awake", "slowed", "hibernating", "waiting_owner", "paused", "off"];
-  var WHYS = ["direct_call", "owner_message", "owner_reply", "new_job", "reaction", "manual", "related_event"];
-  var REASONS = ["helpful", "unhelpful", "low_demand", "wake", "max_tier"];
-  var EVENT_KINDS = ["tier_change", "revert", "reset", "max_tier", "on", "off", "paused", "resume", "policy_change",
-    "policy_revert"];
-  var FB_KINDS = ["reaction", "reaction_reason", "host_event", "seen_ignored"];
-  var FB_STATUS = ["live", "superseded", "void"];
+  // Khoá viết TRỌN (không ghép chuỗi) để bộ kiểm i18n đọc được từng khoá đang dùng.
+  var TIER_KEY = ["pulse.tier_0", "pulse.tier_1", "pulse.tier_2", "pulse.tier_3", "pulse.tier_4", "pulse.tier_5",
+    "pulse.tier_6", "pulse.tier_7", "pulse.tier_8"];
+  var STATE_KEY = { active: "pulse.state.active", awake: "pulse.state.awake", slowed: "pulse.state.slowed",
+    hibernating: "pulse.state.hibernating", waiting_owner: "pulse.state.waiting_owner", paused: "pulse.state.paused",
+    off: "pulse.state.off" };
+  var WHY_KEY = { direct_call: "pulse.why.direct_call", owner_message: "pulse.why.owner_message",
+    owner_reply: "pulse.why.owner_reply", new_job: "pulse.why.new_job", reaction: "pulse.why.reaction",
+    manual: "pulse.why.manual", related_event: "pulse.why.related_event" };
+  var REASON_KEY = { helpful: "pulse.reason.helpful", unhelpful: "pulse.reason.unhelpful",
+    low_demand: "pulse.reason.low_demand", wake: "pulse.reason.wake", max_tier: "pulse.reason.max_tier" };
+  var EV_KEY = { tier_change: "pulse.ev.tier_change", revert: "pulse.ev.revert", reset: "pulse.ev.reset",
+    max_tier: "pulse.ev.max_tier", on: "pulse.ev.on", off: "pulse.ev.off", paused: "pulse.ev.paused",
+    resume: "pulse.ev.resume", policy_change: "pulse.ev.policy_change", policy_revert: "pulse.ev.policy_revert" };
+  var FB_KIND_KEY = { reaction: "pulse.fb.kind.reaction", reaction_reason: "pulse.fb.kind.reaction_reason",
+    host_event: "pulse.fb.kind.host_event", seen_ignored: "pulse.fb.kind.seen_ignored" };
+  var FB_STATUS_KEY = { live: "pulse.fb.status.live", superseded: "pulse.fb.status.superseded",
+    void: "pulse.fb.status.void" };
 
-  function has(list, v) { return list.indexOf(v) >= 0; }
+  function pick(map, v, dflt) { return Object.prototype.hasOwnProperty.call(map, v) ? map[v] : dflt; }
 
   function tierLabel(tier) {
     var n = Number(tier);
-    return n >= 0 && n <= 8 ? tw("pulse.tier_" + n) : "";
+    return n >= 0 && n <= 8 ? tw(TIER_KEY[n]) : "";
   }
 
-  function stateLabel(st) { return tw(has(STATES, st) ? "pulse.state." + st : "pulse.state.awake"); }
+  function stateLabel(st) { return tw(pick(STATE_KEY, st, "pulse.state.awake")); }
 
   function contextLabel(ctx, teamNames) {
     var c = String(ctx || "");
@@ -67,15 +78,14 @@
   /* Một lần đổi nhịp: trước/sau, lý do, nguồn. */
   function changeLine(ev) {
     var e = ev || {};
-    var kind = has(EVENT_KINDS, e.kind) ? e.kind : "tier_change";
     var parts = [];
     if (e.kind === "tier_change" || e.kind === "revert" || e.kind === "reset") {
       var b = (e.before || {}).tier, a = (e.after || {}).tier;
       if (b != null && a != null) parts.push(tw("pulse.change_line", { before: tierLabel(b), after: tierLabel(a) }));
     }
-    parts.unshift(tw("pulse.ev." + kind));
-    if (e.reason && has(REASONS, e.reason)) parts.push(tw("pulse.reason." + e.reason));
-    if (e.source) parts.push(tw("pulse.source", { s: has(WHYS, e.source) ? tw("pulse.why." + e.source) :
+    parts.unshift(tw(pick(EV_KEY, e.kind, "pulse.ev.tier_change")));
+    if (e.reason && pick(REASON_KEY, e.reason, "")) parts.push(tw(REASON_KEY[e.reason]));
+    if (e.source) parts.push(tw("pulse.source", { s: pick(WHY_KEY, e.source, "") ? tw(WHY_KEY[e.source]) :
       (e.source === "owner" ? tw("pulse.by_owner") : e.source === "schedule" ? tw("pulse.by_schedule") :
         e.source === "auto" ? tw("pulse.by_auto") : e.source) }));
     return parts.join(" · ");
@@ -90,8 +100,8 @@
 
   function feedbackLine(f) {
     var x = f || {};
-    var kind = tw(has(FB_KINDS, x.kind) ? "pulse.fb.kind." + x.kind : "pulse.fb.kind.host_event");
-    var status = tw(has(FB_STATUS, x.status) ? "pulse.fb.status." + x.status : "pulse.fb.status.live");
+    var kind = tw(pick(FB_KIND_KEY, x.kind, "pulse.fb.kind.host_event"));
+    var status = tw(pick(FB_STATUS_KEY, x.status, "pulse.fb.status.live"));
     var mark = x.kind === "reaction" || x.kind === "reaction_reason" ? emojiOf(x.emoji) : "";
     var share = Number(x.share) < 0.999 ? " " + tw("pulse.fb.share", { p: Math.round(Number(x.share) * 100) }) : "";
     return (mark ? mark + " " : "") + kind + share + " · " + contextLabel(x.context_ref) + " · " + status;
@@ -105,7 +115,7 @@
       tw("pulse.next_review", { t: c.next_due_at == null ? tw("pulse.none_scheduled") : when(c.next_due_at) })
     ];
     if (c.last_wake_why) {
-      lines.push(tw("pulse.wake_reason", { r: has(WHYS, c.last_wake_why) ? tw("pulse.why." + c.last_wake_why)
+      lines.push(tw("pulse.wake_reason", { r: pick(WHY_KEY, c.last_wake_why, "") ? tw(WHY_KEY[c.last_wake_why])
         : c.last_wake_why }));
     }
     lines.push(tw("pulse.usefulness", { u: num(c.u, 2), c: num(c.confidence, 2) }));

@@ -10,6 +10,11 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.156.0] - 2026-10-15
 ### Added
+- **Agents pace themselves:** assistants with Auto on review their own work on a pace from 15 minutes to 1 month. Praise and used results speed them up (by default no faster than 1 hour, only you can raise it); low demand slows them down until they hibernate. A direct call wakes them at once.
+- **Assigned work is never slowed:** the pace only covers self-started work. Team jobs, deadlines, goals and direct calls still run while an assistant sleeps or is paused.
+- **Pulse panel on the assistant card and team member rows:** state per place, last and next review, why the pace changed, feedback counted. Buttons to Wake, Pause, Reset and Revert.
+- **Self-wakes only call the AI when there is real work:** stale team jobs, blocked jobs with new messages, goals waiting for you. Without permission it only proposes; any message it wants to send passes the judge first.
+- **Credit goes to the right people:** praise on a synthesis mostly goes to whoever did the parts, not all to the team leader.
 - **Assistants know when to speak up in a team:** when nobody calls them, each assistant weighs speaking, waiting or staying silent; at most one speaks up per message (adjustable). @ calls and assigned jobs are always answered; an assistant can ask a teammate to look at its message without looping back and forth.
 - **Correct speak or silence decisions:** open a member in the Team panel to see when it spoke, waited or stayed silent (silences too) and tap "Should have spoken" or "Should stay silent (interrupting)". With Auto on, the assistant learns for that team only.
 - **New team limits:** judge calls per day (default 40, Unlimited available), people who may speak up per message, and how judging works when an assistant's Auto is off.

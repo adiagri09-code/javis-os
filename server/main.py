@@ -22615,7 +22615,32 @@ def _agent_judge():
             engine_label=_agent_judge_engine_label, resonance_on=_agent_judge_resonance_on,
             resumed_at=_agent_judge_resumed_at, history=_agent_judge_history, agent_meta=_agent_judge_meta))
         _register_judge_view_part()
+        _wire_judge_with_pulse()
     return _AGENT_JUDGE[0]
+
+
+def _judge_send(decision, payload, mode):
+    """Hàm gửi của bộ phán xử (điểm nối P và J): một tin chủ động đang chờ được xét lại thành "nói", hay một câu hỏi
+    làm rõ khi hết chờ, đi đúng đường gửi tin chủ động của nhịp (`_pulse_send`: tin có `proactive`, `decision_id`)."""
+    key = decision.get("agent_key") or (payload or {}).get("agent_key") or ""
+    ctx = decision.get("context_ref") or (payload or {}).get("context_ref") or ""
+    text = (payload or {}).get("ask_clarify") if mode == "ask_clarify" else (payload or {}).get("draft")
+    if not key or not ctx or not str(text or "").strip():
+        return None
+    return _pulse_send(key, ctx, str(text), {"source_ref": (payload or {}).get("source_ref") or
+                                             decision.get("source_event") or "",
+                                             "decision_id": decision.get("decision_id")})
+
+
+def _wire_judge_with_pulse():
+    """Nối bộ phán xử vào nhịp lớp 3 (hợp đồng T3 mục 1b, 2): vòng pulse giao lý do `related_review` và `wait_unblocked`
+    cho `agent_judge.serve_reason` (bộ phán xử tự xét, không mở lượt riêng), và bộ phán xử gửi tin qua `_judge_send`."""
+    try:
+        agent_judge.register_sender(_judge_send)
+        for code in ("related_review", "wait_unblocked"):
+            agent_pulse_host.register_reason_handler(code, lambda _host, r: agent_judge.serve_reason(int(r["id"])))
+    except Exception as _e:  # noqa: BLE001
+        print(f"[agent judge wire pulse] {type(_e).__name__}: {_e}", file=sys.stderr)
 
 
 def _judge_contexts(root, agent_key):
@@ -22651,7 +22676,9 @@ def _register_judge_view_part():
     if reg is None:
         return False
     try:
-        reg("judge", lambda agent_key, **_kw: _judge_view_for(agent_key))
+        # Sổ của phần P gọi `fn(store, agent_key)` (agent_pulse_host.view): nhận đúng chữ ký đó, vẫn gọi được bằng
+        # `fn(agent_key)` như test của phần J.
+        reg("judge", lambda *args, **kw: _judge_view_for(kw.get("agent_key") or args[-1]))
         _JUDGE_VIEW_REGISTERED[0] = True
         return True
     except Exception as _e:  # noqa: BLE001
@@ -23359,6 +23386,12 @@ def _pulse_host():
             can_enqueue=_pulse_can_enqueue, enqueue=_pulse_enqueue, propose=_pulse_propose, send=_pulse_send,
             notify=_pulse_notify, interacted=_pulse_interacted, project_pending=_feedback_pulse_tick,
             brain_of=_pulse_brain_of))
+        # Dựng bộ phán xử cùng lúc (đăng ký hàm phục vụ lý do related_review/wait_unblocked và hàm gửi), để sau khởi động
+        # lại các lý do còn chờ có người phục vụ ngay, không phải đợi tới tin nhóm đầu tiên.
+        try:
+            _agent_judge()
+        except Exception as _e:  # noqa: BLE001
+            print(f"[pulse host judge] {type(_e).__name__}: {_e}", file=sys.stderr)
     return _PULSE_HOST[0]
 
 
