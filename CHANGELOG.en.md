@@ -8,6 +8,12 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.157.0] - 2026-10-15
+### Improved
+- **Teams with thousands of messages still remember what matters:** every assistant turn still sees pinned decisions, the original request and status of open jobs, who contributed to the latest result, and your feedback still waiting for review, however far back they are in the history.
+- **Long teams do not slow each turn:** each of those items is read once with a limit, so a 5,000 message team costs as much to read as a team with a few dozen.
+- **Steadier with many tabs, lost connections or restarts:** reactions, retry, cancel, leader changes and authority revoke all keep the right state; a blocked team never holds the slot of a team with work.
+
 ## [0.156.0] - 2026-10-15
 ### Added
 - **Agents pace themselves:** assistants with Auto on review their own work on a pace from 15 minutes to 1 month. Praise and used results speed them up (by default no faster than 1 hour, only you can raise it); low demand slows them down until they hibernate. A direct call wakes them at once.
@@ -18,10 +24,6 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 - **Assistants know when to speak up in a team:** when nobody calls them, each assistant weighs speaking, waiting or staying silent; at most one speaks up per message (adjustable). @ calls and assigned jobs are always answered; an assistant can ask a teammate to look at its message without looping back and forth.
 - **Correct speak or silence decisions:** open a member in the Team panel to see when it spoke, waited or stayed silent (silences too) and tap "Should have spoken" or "Should stay silent (interrupting)". With Auto on, the assistant learns for that team only.
 - **New team limits:** judge calls per day (default 40, Unlimited available), people who may speak up per message, and how judging works when an assistant's Auto is off.
-
-## [0.157.0] - 2026-10-15
-### Added
-- **Team chat holds up with long history and many tabs** (in progress).
 
 ## [0.154.0] - 2026-10-15
 ### Added

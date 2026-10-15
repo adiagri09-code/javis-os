@@ -221,4 +221,18 @@ check("việc của agent đang ngủ đông vẫn chạy xong (nghĩa vụ gi�
 check("không nhóm bị chặn nào giữ chỗ trong pool sau lượt", not runner._pool, runner._pool)
 check("pulse ngủ đông không giữ khoá bận của agent", api.teams().busy_of(KC["lan"]) is None)
 
+# ═════ kịch bản đo VPS: chuẩn bị sẵn, không tự chạy ═════
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+VPS = Path(__file__).resolve().parents[2] / "tools" / "team_adaptive_vps_measure.py"
+p1 = subprocess.run([sys.executable, "-X", "utf8", str(VPS)], capture_output=True, text=True, encoding="utf-8", timeout=60)
+check("kịch bản VPS không có duyệt của chủ: dừng mã 2, không đo gì", p1.returncode == 2 and "duyệt" in p1.stderr,
+      p1.stderr[-300:])
+p2 = subprocess.run([sys.executable, "-X", "utf8", str(VPS), "--owner-approved", "x", "--base-url", "https://vps.example"],
+                    capture_output=True, text=True, encoding="utf-8", timeout=60)
+check("kịch bản VPS trỏ ra ngoài container: dừng mã 2 trước khi kết nối", p2.returncode == 2 and "127.0.0.1" in p2.stderr,
+      p2.stderr[-300:])
+check("kịch bản VPS ghi rõ CHƯA CHẠY và chỉ GET", VPS.read_text(encoding="utf-8").startswith('"""CHƯA CHẠY')
+      and 'method="GET"' in VPS.read_text(encoding="utf-8"))
+
 finish()

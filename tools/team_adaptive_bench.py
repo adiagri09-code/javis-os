@@ -251,6 +251,10 @@ class StallWatch:
             key = (" < ".join(f"{Path(f.filename).name}:{f.lineno} {f.name}" for f in reversed(mine[-4:])) if mine else
                    f"{Path(stack[-1].filename).name}:{stack[-1].lineno} {stack[-1].name}")
             self.hits[key] = self.hits.get(key, 0) + 1
+            # Một mẫu mỗi lần bị giữ: chờ nhịp tim đổi rồi mới canh tiếp (chụp liên tục sẽ tranh GIL với chính loop).
+            stalled_at = self.beat
+            while not self._stop.is_set() and self.beat == stalled_at:
+                time.sleep(self.limit)
 
     def start(self):
         threading.Thread(target=self.run, daemon=True).start()
@@ -376,6 +380,33 @@ def main_bench(argv=None) -> dict:
                 tm.set_reaction_ex(team_id=t["team_id"], session_id=t["session_id"], message_id=mid, agent_key=key,
                                    task_id=None, content_sha="seed", value=vals[n % 6], reasons=[], comment="",
                                    nonce=f"seed-r-{n}")
+            # Outbox: reaction seed thẳng vào kho còn `pending` như sau một lần kho lỗi kéo dài. Đo thời gian bộ chiếu
+            # xả hết hàng tồn (mỗi lần tối đa 200 dòng), rồi chi phí một lần chiếu ở trạng thái ổn định (chỉ còn đối soát
+            # trạng thái các reaction đang chờ xem xét). Phần L chưa ghép thì các reaction "Chờ xem xét" không bao giờ
+            # được phục vụ, nên lần đối soát này lặp lại ở MỌI nhịp 30 giây.
+            proj = M._feedback_projector()
+            drain_rounds, t_d = 0, time.perf_counter()
+            while drain_rounds < 200:
+                drain_rounds += 1
+                await asyncio.to_thread(proj.project_pending)
+                with sqlite3.connect(Path(os.environ["JAVIS_STATE_DIR"]) / "team.sqlite3") as cx:
+                    left = cx.execute("SELECT COUNT(*) FROM team_reaction_log WHERE effect_state='pending'").fetchone()[0]
+                if not left:
+                    break
+            drain_s = time.perf_counter() - t_d
+            steady = []
+            for _ in range(3):
+                s_ = time.perf_counter()
+                await asyncio.to_thread(proj.project_pending)
+                steady.append((time.perf_counter() - s_) * 1000.0)
+            with sqlite3.connect(Path(os.environ["JAVIS_STATE_DIR"]) / "team.sqlite3") as cx:
+                open_n = cx.execute("SELECT COUNT(*) FROM team_reactions WHERE status IN ('pending_review','reviewing')"
+                                    ).fetchone()[0]
+            report["outbox"] = {"seeded_pending": min(a.reactions, len(agent_msgs)), "drain_rounds": drain_rounds,
+                                "drain_seconds": round(drain_s, 2), "open_reactions_after": open_n,
+                                "steady_project_pending_ms": [round(x, 1) for x in steady],
+                                "note": "chi phí một lần chiếu mỗi nhịp khi còn reaction 'Chờ xem xét' (tối đa 200 dòng "
+                                        "đối soát mỗi nhịp)"}
             # Agent ngủ/thức: nửa số ngữ cảnh nhóm ngủ đông, nửa đến hạn ngay (lượt quét giả khi tick).
             ps = M._pulse_store()
             AP.ensure(ps)
@@ -506,6 +537,7 @@ def main_bench(argv=None) -> dict:
                                    "lag_max_ms": round(max(lg_) if lg_ else 0.0, 2), "samples": len(lg_)}
             mixed_ms.clear()
             ticks.clear()
+            tick_ms.clear()
             calls0 = (fakes.team_calls, fakes.judge_calls, fakes.scan_calls)
             stop, lags = asyncio.Event(), []
             probe = asyncio.create_task(lag_probe(stop, lags))
@@ -533,6 +565,7 @@ def main_bench(argv=None) -> dict:
                                          "pulse_scans": calls1[2] - calls0[2]},
                     "judge_messages": a.judge_messages, "pulse_ticks": a.pulse_ticks,
                     "pulse_claims": sum(int((x or {}).get("claims") or 0) for x in ticks),
+                    "pulse_tick_ms": [round(x, 1) for x in tick_ms],
                     "pulse_note": ("lần thức chạy code trước; không có cơ hội mới thì không gọi model "
                                    "(thiết kế 5.5), nên pulse_scans có thể bằng 0 dù có lần thức"),
                 },

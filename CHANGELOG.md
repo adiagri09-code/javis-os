@@ -6,6 +6,12 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.157.0] - 2026-10-15
+### Cải thiện
+- **Nhóm nhiều nghìn tin vẫn nhớ điều quan trọng:** mỗi lượt trả lời trợ lý vẫn thấy quyết định đã ghim, yêu cầu gốc và trạng thái các việc đang mở, ai đã góp vào kết quả gần nhất và phản hồi của bạn còn chờ xem xét, dù chúng nằm rất xa trong lịch sử.
+- **Nhóm dài không làm chậm từng lượt:** mỗi mục trên chỉ đọc một lần, có giới hạn, nên nhóm 5.000 tin tốn công đọc như nhóm vài chục tin.
+- **Ổn định hơn khi mở nhiều tab, mất mạng hay khởi động lại:** thả cảm xúc, thử lại, huỷ, đổi trưởng nhóm, thu hồi quyền đều giữ đúng trạng thái; nhóm đang bị chặn không giữ chỗ của nhóm có việc.
+
 ## [0.156.0] - 2026-10-15
 ### Thêm mới
 - **Trợ lý tự điều nhịp:** trợ lý bật Auto tự xem lại việc của mình theo nhịp, từ 15 phút tới 1 tháng. Được khen, được dùng kết quả thì nhanh dần (mặc định tối đa 1 giờ, chỉ bạn nâng được), ít ai cần thì chậm dần rồi ngủ. Gọi trực tiếp là thức ngay.
@@ -16,10 +22,6 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - **Trợ lý tự biết lúc nên lên tiếng trong nhóm:** khi không ai gọi, mỗi trợ lý tự cân nhắc nói, chờ hay im; mỗi tin tối đa một người tự lên tiếng (chỉnh được). Lời gọi @ và việc giao vẫn luôn được trả lời; trợ lý nhờ được đồng đội xem tin mà không gọi nhau vòng tròn.
 - **Sửa quyết định nói hay im:** mở một thành viên trong ngăn Nhóm để xem các lần nói, chờ, im (cả lúc im lặng) và bấm "Đáng lẽ nên nói" hay "Nên im (chen ngang)". Bật Auto thì trợ lý học theo đúng nhóm đó.
 - **Giới hạn mới cho nhóm:** lượt phán xử mỗi ngày (mặc định 40, có Không giới hạn), số người tự lên tiếng mỗi tin, và cách phán xử khi Auto của trợ lý tắt.
-
-## [0.157.0] - 2026-10-15
-### Thêm mới
-- **Nhóm chat bền với lịch sử dài và nhiều tab** (đang làm).
 
 ## [0.154.0] - 2026-10-15
 ### Thêm mới
