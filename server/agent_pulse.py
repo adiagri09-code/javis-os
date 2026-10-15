@@ -347,12 +347,21 @@ def ensure(store, force: bool = False) -> None:
     if key in _READY and not force:
         return
     with closing(store._conn()) as c:
-        c.executescript(_SCHEMA)
+        names = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        cols = {r[1] for r in c.execute("PRAGMA table_info(agent_pulse)").fetchall()}
+        done = c.execute("SELECT value FROM pulse_meta WHERE name=?", (UPGRADE_MARK,)).fetchone()             if "pulse_meta" in names else None
+    if set(T3_TABLES) <= names and all(col in cols for col, _ in _PULSE_COLS) and done is not None:
+        # Kho đã đủ: chỉ đọc, không ghi (mở kho không tốn lần ghi đĩa nào, kể cả khi mở trong event loop).
+        _READY.add(key)
+        return
+    # Tạo bảng, thêm cột và nâng cấp trong MỘT giao dịch (một lần ghi đĩa).
+    with store._Tx(store) as c:
+        for stmt in [x.strip() for x in _SCHEMA.split(";") if x.strip()]:
+            c.execute(stmt)
         cols = {r[1] for r in c.execute("PRAGMA table_info(agent_pulse)").fetchall()}
         for col, decl in _PULSE_COLS:
             if col not in cols:
                 c.execute(f"ALTER TABLE agent_pulse ADD COLUMN {col} {decl}")
-    with store._Tx(store) as c:
         if c.execute("SELECT 1 FROM pulse_meta WHERE name=?", (UPGRADE_MARK,)).fetchone() is None:
             now = time.time()
             for r in c.execute("SELECT agent_key, enabled, status FROM resonance_agents").fetchall():
