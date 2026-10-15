@@ -856,11 +856,11 @@ def register(app, deps: PulseRouteDeps) -> None:
             return {"ok": True, "recorded": 0, "agent": False}
 
         def _do():
-            n = 0
+            recorded = 0
             got = deps.seen_resolve(ctx, ids, str(b.get("session_id") or "")) or []
             for c, mid, key, sid in got:
-                n += AP.mark_seen(store, c, [mid], agent_key=key, session_id=sid)
-            return n, bool(got)
+                recorded += AP.mark_seen(store, c, [mid], agent_key=key, session_id=sid)
+            return recorded, bool(got)
         n, agent = await asyncio.to_thread(_do)
         # `agent: false`: không phải tin của trợ lý (vd. trang Trò chuyện chính): trang thôi gửi cho ngữ cảnh này.
         return {"ok": True, "recorded": n, "agent": agent}
