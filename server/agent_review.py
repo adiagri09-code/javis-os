@@ -550,7 +550,9 @@ class ReviewHost:
             finally:
                 self._running.discard(rid)
         finally:
-            release()
+            # Nhả khoá bận ghi kho nhóm: luồng phụ (bị huỷ thêm vẫn chờ nhả xong).
+            from io_offload import run_io_quiet
+            await run_io_quiet(release)
 
     async def _review_claimed(self, store, W, ledger, reason, cl, now) -> dict:
         rid, key, ctx = int(reason["id"]), reason["agent_key"], reason["context_ref"]

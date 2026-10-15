@@ -169,3 +169,9 @@ hạn), `tests/js/test_teams_ui.js` (hộp cấp quyền 6 dòng trần).
 - Cùng lúc sửa: `team_runner.run_io` quay mãi khi chính tác vụ luồng phụ bị huỷ lúc event loop đóng (treo `test_team_api`);
   `TeamRunner.wait_jobs` chờ cả việc nền của bộ phán xử.
 
+
+## 10. Hiệu năng
+
+Lô phán xử không còn đọc/ghi kho trên event loop (phần chuẩn bị và phần chốt chạy qua `run_io`, chỉ lời gọi model chờ trên
+loop; huỷ ngay sau giữ chỗ thì hoàn dòng sổ). Chi tiết, số đo trước/sau và test: [team-chat-t3-pulse.md](team-chat-t3-pulse.md)
+mục 9.

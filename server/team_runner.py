@@ -602,7 +602,7 @@ class TeamRunner:
                 else:
                     await self._io(self.judge.demote, d["decision_id"], "turn_blocked")
             return out
-        team = self._team(team_id)
+        team = await self._io(self._team, team_id)
         role = "leader_reply" if key == team["leader_key"] else "member_reply"
         body = (f"Chủ nhóm vừa nhắn (tin #{mid}):\n{text}\n\n"
                 "Trả lời ngắn gọn, đúng vai của bạn trong nhóm.")

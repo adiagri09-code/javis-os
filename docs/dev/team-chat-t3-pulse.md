@@ -163,3 +163,73 @@ Engine giả ở mọi nơi; không lời gọi model thật. (Phiên làm việ
 - Soi giao diện (khung tĩnh dùng đúng `console.css`, `style.css`, `agent-pulse.js`, i18n; phục vụ cục bộ; 375x812): tối và
   sáng, vi và en, không cuộn ngang (scrollWidth 375), chữ nhỏ nhất 16px, nút và ô chọn cao 44px. Chưa soi trên dashboard thật
   (sandbox cổng 7788) và chưa soi trên điện thoại thật.
+
+## 9. Hiệu năng (sửa sau bench T4)
+
+GOAL mục 10: học, lưu lịch, tìm kiếm hay tự rà soát không được làm lag các tab. Quy ước R5 của T1: mọi đọc/ghi SQLite và
+file trong đường async chạy ở luồng phụ (`run_io` / `asyncio.to_thread`). Bench T4 thấy hai chỗ vi phạm: lô phán xử ghi kho
+ngay trên event loop, và nhịp pulse 0,5 tới 3,4 giây mỗi nhịp, trễ loop tới 217 ms chỉ với nhịp.
+
+### 9.1 Đã chuyển khỏi event loop
+
+- `io_offload.py` (mới): `run_io` (dời từ `team_runner`, tên `team_runner.run_io` giữ nguyên), `run_io_quiet` cho bước dọn ở
+  nhánh huỷ, `call_hook` (hàm móc thường chạy ở luồng phụ, coroutine function chạy trên loop), `LoopMarker` (mốc engine do
+  engine gọi đồng bộ được ghi ở luồng phụ, chờ xong trước khi chốt dòng sổ).
+- Bộ phán xử: `judge_team_message`, `judge_proactive`, xét lại chat riêng (`serve_reason`, `_rejudge_dm`,
+  `_rejudge_with_call`), hết hạn chờ (`_expire_dm`) tách thành phần ĐỒNG BỘ `_..._prepare` / `_..._finish` chạy qua `run_io`;
+  coroutine chỉ còn phần chờ model. Kho phán xử, `resonance_on` (`agent_any`), giữ chỗ/mốc/chốt/hoàn sổ lượt, lý do thức,
+  lịch sử, hạn mức, chờ, người gửi thường (`_judge_send`) đều ở luồng phụ. Ngữ nghĩa giữ nguyên: giữ chỗ TRƯỚC engine, hoàn
+  khi engine chưa dựng được hay chờ chỗ quá hạn, `interrupted` khi bị huỷ sau mốc engine. Mới: bị huỷ ngay sau khi giữ chỗ
+  (đang ở bước chuẩn bị, hay đang chờ chỗ trong 2 lô) thì dòng sổ được hoàn (`_undo_reserve`, như mẫu `undo` của `run_io`);
+  bị huỷ ngay sau khi nhận lý do thì lý do được trả về (`_undo_claim`).
+- Nhịp pulse: `tick` kiểm kho ở luồng phụ và chạy hàm `project_pending` thường ở luồng phụ; `wake_step` gom toàn bộ phần code
+  (cơ hội, ước lượng, đếm lý do, nhả lịch) vào MỘT lần chuyển luồng (`_wake_code`); hạn mức, `engine_for`, `persona`,
+  `can_enqueue` và lần ghi cuối của lượt quét ở luồng phụ. `_learn_tick` đọc danh sách agent ở luồng phụ; lượt xem xét
+  reaction và tự rà soát (`agent_review`) đọc kho, hạn mức, nguồn, sự kiện và nhả khoá bận ở luồng phụ. Gỡ chờ khi chủ nhắn
+  chat riêng (`_judge_dm_owner_message`) chạy nền ở luồng phụ, lượt chat không chờ. `_reply_turn` đọc nhóm qua `_io`.
+- `_pulse_busy`: trước đây mỗi agent tới hạn quét lại MỌI việc nhóm hai lần. Nay `busy_snapshot` (dep mới của `PulseHostDeps`,
+  `main._pulse_busy_snapshot`) đọc khoá bận (`team_store.busy_keys`), việc nhóm đang chạy/xếp hàng và goal đang chạy MỘT lần
+  mỗi nhịp.
+
+### 9.2 Bộ chiếu: có làm lại việc không
+
+Đã kiểm: `project_pending` CHỈ chiếu dòng `effect_state = 'pending'` (dòng `pending_author` của chat riêng đi
+`_dm_resolve_pending_authors` trước rồi mới về `pending`); dòng `done` không bao giờ được chiếu lại; ghi ngược trạng thái chỉ
+ghi khi trạng thái tính ra khác trạng thái đang có. Phần lặp là ĐỌC: mỗi nhịp 30 giây, với tối đa 200 reaction đang "Chờ xem
+xét"/"Đang xem xét", đọc lại từng dòng (dòng nhật ký, nguồn lý do, reaction hiện tại: ba kết nối SQLite mỗi dòng). Nay đối soát
+theo lô (`_refresh_open`): một câu đọc reaction (`open_reaction_rows`), một câu đọc nhật ký (`reaction_log_rows`), một câu đọc
+nguồn (`WakeReasons.sources_by_ref`), rồi chỉ ghi reaction có trạng thái lý do đổi. Kho không có hàm đọc theo lô (kho giả của
+test cũ) đi đường từng dòng như trước. Giới hạn 200 dòng mỗi nhịp giữ nguyên (đã có từ T2: quá 200 reaction mở thì các dòng
+sau không được đối soát; đọc theo lô làm việc nâng giới hạn này về sau rẻ).
+
+### 9.3 Số đo (bench T4, engine giả)
+
+Điều kiện: `tools/team_adaptive_bench.py` của nhánh `claude/team-adaptive-t4-work` (không commit vào nhánh này), chạy ngoài
+repo bằng wrapper trỏ `ROOT` vào mã cần đo; tham số mặc định (12 nhóm x 1.500 tin, 1.500 reaction seed, 8 trợ lý, 30 lần mỗi
+API, 8 luồng, 24 tin mở lô phán xử, 5 nhịp, engine giả 5 ms), `--no-ui`. Máy local Windows 11, Python 3.12.10, 8 CPU; KHÔNG
+phải số đo VPS. Gốc = mã `server/` của `origin/claude/team-adaptive-t3` (`92202224`), nhánh = `46b49f1f`. Hai vòng chạy xen kẽ
+gốc/nhánh liền nhau trên cùng máy (máy có tải nền từ phiên khác, nên so trong cùng vòng):
+
+| Chỉ số | Gốc v1 | Nhánh v1 | Gốc v2 | Nhánh v2 |
+|---|---|---|---|---|
+| Một lần chiếu outbox ổn định (ms) | 788-837 | 13-16 | 1.408-2.069 | 12-13 |
+| Nhịp pulse riêng: thời gian mỗi nhịp (ms) | 3.198-6.093 | 237-3.197 | 6.011-8.230 | 321-2.718 |
+| Nhịp pulse riêng: trễ loop lớn nhất (ms) | 172 | 68 | 715 | 51 |
+| Pha đồng thời: trễ loop lớn nhất (ms) | 477 | 103 | 331 | 139 |
+| Pha đồng thời: request p95 (ms) | 1.572 | 822 | 1.454 | 966 |
+| Sóng lô phán xử riêng: trễ loop lớn nhất (ms) | 36 | 116 | 40 | 53 |
+| Chỉ request: trễ loop lớn nhất (ms) | 31 | 46 | 62 | 29 |
+
+Nhịp đầu tiên của mỗi lần chạy dài hơn (làm mới phạm vi `CONTEXT_REFRESH_S` cho mọi agent). Chẩn đoán `--stall-watch` (chụp
+ngăn xếp luồng loop mỗi lần bị giữ quá 50 ms, một lần chạy mỗi bên): gốc có 40 lần trong mã phán xử và sổ lượt (`add_decision`,
+`get_decision`, `agent_any`, `_reserve`, `mark_engine`, `settle`, `cases`, `get_offset`); nhánh không còn lần nào trong mã phán
+xử hay nhịp. Còn lại ngoài phạm vi: `team_runner._reply_turn` và nhả khoá trong `agent_review` (đã chuyển sau lần đo, commit
+kế tiếp) và route `POST /sessions/{id}/messages/{mid}/reaction` (ghi kho trên loop, chưa sửa ở đây). Trễ loop còn lại ở pha
+đồng thời (khoảng 100 tới 140 ms, một hai mẫu) không có ngăn xếp trong mã Javis: tranh GIL giữa nhiều luồng phụ cùng chạy.
+Sóng lô phán xử riêng dao động (một lần 116 ms) cùng lý do. Số lô phán xử giả trong pha đồng thời có lúc dưới 24 vì bench chỉ
+chờ việc nền của bộ phán xử, không chờ tác vụ `run_message` do route sinh ra (cửa sổ đo, không phải mất lượt).
+
+Test hồi quy: `tests/python/test_t3_event_loop.py` (kho phán xử và kho resonance chậm ở MỖI lần mở kết nối 110 ms và ở hàm kho
+chính 250 ms: lô nhóm có lượt tự lên tiếng, tin chủ động + chờ + gỡ chờ + xét lại + gửi ở chat riêng, nhịp pulse với mọi hàm
+host chậm: khoảng trống loop < 100 ms và không hàm kho nào chạy trên luồng loop; huỷ ngay sau giữ chỗ thì hoàn; bộ chiếu hai
+nhịp không chiếu lại, không ghi lại, đọc theo lô). Trên mã gốc test này đỏ (trễ 4,1 giây ở lô nhóm, 2,8 giây ở chat riêng).
