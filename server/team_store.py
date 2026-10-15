@@ -87,6 +87,9 @@ CREATE TABLE IF NOT EXISTS team_turns(
   created_at REAL NOT NULL, settled_at REAL);
 CREATE INDEX IF NOT EXISTS team_turns_team ON team_turns(team_id, created_at);
 CREATE INDEX IF NOT EXISTS team_turns_task ON team_turns(task_id);
+CREATE INDEX IF NOT EXISTS team_turns_created ON team_turns(created_at, turn_id);
+CREATE INDEX IF NOT EXISTS team_turns_settled ON team_turns(settled_at);
+CREATE INDEX IF NOT EXISTS team_turns_status ON team_turns(status);
 CREATE TABLE IF NOT EXISTS agent_busy(
   agent_key TEXT PRIMARY KEY, team_id TEXT NOT NULL, turn_id TEXT NOT NULL, lease_until REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS team_reactions(

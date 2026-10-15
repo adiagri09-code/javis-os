@@ -22605,7 +22605,7 @@ def _dm_resolve_pending_authors(limit: int = 200) -> int:
     """Reaction chat riêng lưu lúc kho resonance lỗi (`pending_author`): tra lại tác giả rồi trả dòng về hàng chờ chiếu.
     Kho vẫn lỗi thì để nguyên, nhịp sau thử lại. Trả số dòng đã gắn tác giả."""
     store = get_store()
-    n = 0
+    n = streak = 0
     for row in store.pending_author_dm_logs(limit):
         sess = store.get_session(row["session_id"])
         if not sess:
@@ -22613,8 +22613,14 @@ def _dm_resolve_pending_authors(limit: int = 200) -> int:
         try:
             key, ver = _dm_reaction_author(sess)
         except Exception as _e:   # noqa: BLE001
+            # Một dòng lỗi mãi không được chặn các dòng sau (review T2 vòng 2): bỏ qua dòng đó; chỉ dừng nhịp này khi lỗi
+            # liền ba dòng (kho resonance có lẽ đang hỏng), nhịp sau thử lại.
             print(f"[dm reaction author retry] {type(_e).__name__}: {_e}", file=sys.stderr)
-            return n
+            streak += 1
+            if streak >= 3:
+                return n
+            continue
+        streak = 0
         store.set_dm_reaction_author(row["id"], key, ver)
         n += 1
     return n
