@@ -139,7 +139,15 @@ check("seen_sha lệch: stale true, vẫn nhận", r.status_code == 200 and r.js
 page = c.get(f"/sessions/{S_LAN}/messages").json()["messages"]
 check("lịch sử mang reaction (F5)", next(m for m in page if m["id"] == a2)["reaction"]["value"] == "sad")
 full = c.get(f"/sessions/{S_LAN}?limit=10").json()["messages"]
-check("GET /sessions/{id}?limit= cũng mang reaction", next(m for m in full if m["id"] == a2)["reaction"]["value"] == "sad")
+check("GET /sessions/{id}?limit= (mở phiên từ lịch sử) cũng mang reaction và content_sha mọi tin",
+      next(m for m in full if m["id"] == a2)["reaction"]["value"] == "sad"
+      and all(m.get("content_sha") for m in full)
+      and next(m for m in full if m["id"] == a2)["content_sha"] == sha_a2
+      and "reaction" not in next(m for m in full if m["id"] == u1)
+      and next(m for m in full if m["id"] == a1)["reaction"] is None, full[:2])
+whole = c.get(f"/sessions/{S_LAN}").json()["messages"]
+check("GET /sessions/{id} (không limit) cũng vậy", next(m for m in whole if m["id"] == a2)["reaction"]["value"] == "sad"
+      and all(m.get("content_sha") for m in whole))
 ev = [e for e in sent if e.get("type") == "chat_reaction" and e.get("message_id") == a2]
 check("gói WS chat_reaction sau mỗi lần ghi, mang R", len(ev) == 2 and ev[-1]["session_id"] == S_LAN
       and ev[-1]["reaction"]["value"] == "sad", ev)
@@ -165,6 +173,16 @@ check("_persist_turn trả mã tin câu trả lời", isinstance(mid_saved, int)
 check("gói turn_saved {session_id, message_id, content_sha của nội dung đã lưu}", len(ts_ev) == 1
       and ts_ev[0]["session_id"] == S_LAN and ts_ev[0]["message_id"] == mid_saved
       and ts_ev[0]["content_sha"] == sessions.content_sha(saved["content"]), ts_ev)
+_pt = inspect.getsource(main._persist_turn)
+check("turn_saved được CHỜ gửi xong trong _persist_turn (không create_task), nên luôn đi trước turn_done",
+      'await _CHAT_RUNTIME.publish({"type": "turn_saved"' in _pt)
+_body = inspect.getsource(main)
+_rt = _body.index("async def run_turn(")
+_end = min(x for x in (_body.find("\nasync def ", _rt + 10), _body.find("\ndef ", _rt + 10)) if x != -1)
+_seg = _body[_body.index("async def _do_turn("):_end]   # _do_turn lưu lượt, run_turn gửi turn_done sau khi nó trả về
+_persists = [i for i in range(len(_seg)) if _seg.startswith("await _persist_turn(", i)]
+check("mọi chỗ lưu lượt trong _do_turn có gói turn_done ĐI SAU (turn_saved trước turn_done)",
+      _persists and all(_seg.find('"turn_done"', i) != -1 for i in _persists), len(_persists))
 check("_persist_turn rỗng: không lưu, trả None", asyncio.run(main._persist_turn(store, S_LAN, str(BR), "u", "")) is None)
 
 # khối phản hồi ở lượt agent:<slug> kế tiếp, chỉ đúng trợ lý
@@ -180,8 +198,11 @@ S_LAN2 = store.create_session(brain=str(BR), channel="agent:lan")
 check("phiên chat riêng khác của cùng trợ lý dùng chung ngữ cảnh dm:<agent_key>",
       "Sai số liệu" in main._agent_turn_system_prompt(str(BR), "lan", S_LAN2))
 src = inspect.getsource(main)
-check("lượt chat trợ lý dựng prompt qua _agent_turn_system_prompt (có khối phản hồi)",
-      "sysprompt = _agent_turn_system_prompt(brain, _persona[1], conv_sid)" in src)
+check("lượt chat trợ lý ghép khối phản hồi giống hệt _agent_turn_system_prompt",
+      "sysprompt = (_agent_chat_prompt(brain, _persona[1]) + _session_block(conv_sid)\n" in src
+      and "+ _dm_feedback_prompt(brain, _persona[1], conv_sid))" in src
+      and "return _agent_chat_prompt(brain, slug) + _session_block(conv_sid) + _dm_feedback_prompt(brain, slug, conv_sid)"
+      in src)
 
 # Cộng hưởng bật: route của chủ ghi resumed_at; phản hồi mới tạo một lý do
 r = c.post(f"/resonance/agents/toggle{Q}", json={"slug": "lan", "enabled": True})

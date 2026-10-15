@@ -38,12 +38,14 @@ Tài liệu này chốt mặt tiếp giáp giữa phần máy chủ và phần g
   - 400 thân sai (giá trị lạ, quá dài, nonce rỗng hay dài hơn 100); 404 không có phiên hay tin; 409 tin không phải câu trả lời
     (chỉ tin `role = assistant` nhận reaction), hay nonce đã dùng cho tin khác. Thân lỗi: `{"ok": false, "error": "..."}`.
 - `GET /sessions/{session_id}/messages` (đã có): mỗi tin có `id` (đã có) và thêm `content_sha`; tin `assistant` thêm
-  `reaction: R|null`.
+  `reaction: R|null`. `GET /sessions/{session_id}` (có hay không `?limit=`, dùng khi mở phiên từ lịch sử) cũng vậy: mọi tin
+  trong `messages` có `content_sha`, tin `assistant` có `reaction`.
 - Gói WS (gửi mọi tab dashboard qua `_CHAT_RUNTIME.publish`):
   - `{"type": "chat_reaction", "session_id": "...", "message_id": 123, "reaction": R|null}` sau mỗi lần ghi và mỗi lần host đổi
     trạng thái (bộ chiếu, lượt xem xét).
   - `{"type": "turn_saved", "session_id": "...", "message_id": 123, "content_sha": "..."}` ngay sau khi lưu câu trả lời của một
-    lượt (`_persist_turn` trả mã tin). Gói tới sau `response`, trước hoặc cùng lúc `turn_done`. Bong bóng vừa trả lời nhận
+    lượt (`_persist_turn` trả mã tin và CHỜ gửi xong gói này trước khi trả về, nên gói luôn tới trước `turn_done` của
+    lượt đó). Gói tới sau `response`, trước `turn_done`. Bong bóng vừa trả lời nhận
     `data-mid` từ gói này; chưa có mã thì chưa hiện nút reaction.
 - Tác giả: phiên kênh `agent:<slug>` (hay có dòng `session_agents`) là agent đó, `agent_key` do host tra; phiên Javis chính là
   `agent_key` rỗng (lưu và hiện, không vào học hay phán xử của agent nào, `status` luôn `received`).

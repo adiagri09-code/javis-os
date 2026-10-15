@@ -8,7 +8,11 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.154.0] - 2026-10-15
 ### Thêm mới
-- **Thả cảm xúc cho tin của trợ lý** ở cả chat riêng lẫn nhóm (đang làm).
+- **Thả cảm xúc cho câu trả lời ở chat riêng:** sáu cảm xúc, lý do, "nên nói / nên im" và góp ý được lưu bền, giữ qua F5 và khởi động lại, đồng bộ mọi tab.
+- **Trợ lý bật Cộng hưởng nhận phản hồi để xem xét:** nhiều lần bấm gom thành một lần xem xét, không tốn lượt model nào; trợ lý tắt Cộng hưởng thì chỉ lưu. Bật lại không phát lại phản hồi cũ.
+- **Trợ lý trong nhóm thả cảm xúc cho nhau** (trưởng nhóm, thành viên), hiện riêng với cảm xúc của bạn; không ai tự thả cho mình.
+### Sửa lỗi
+- **Trần lượt chung của máy chủ nay tính cả lượt nhóm:** chạm trần thì lượt nhóm dừng trước khi gọi model và báo rõ lý do, nút "Cho thêm lượt" không vượt được trần này.
 
 ## [0.152.0] - 2026-10-15
 ### Sửa lỗi

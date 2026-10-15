@@ -65,3 +65,119 @@ Kết luận "Ready with fixes": 1 Important, 6 Minor. Xếp lại theo tác đ�
 Bốn lỗi phía server có test đỏ trước rồi xanh (`test_team_reactions.py`, `test_team_api.py`). Ba lỗi giao diện kiểm bằng test nguồn trong `test_teams_ui.js` viết sau khi sửa (hành vi DOM chưa chạy được dưới node; chưa soi lại trên trình duyệt).
 
 Phần reviewer không kết luận: nhấn giữ trên iOS Safari, Android Chrome thật; trình đọc màn hình đọc chip; `de.json` chưa có khoá `teams.*` (rơi về tiếng Anh, có từ trước T2).
+
+---
+
+## Team chat T2 (0.154.0), phần máy chủ: reaction hai nơi, sổ lượt chung, lý do thức, bộ chiếu phản hồi
+
+Thiết kế gốc: `docs/superpowers/specs/2026-10-15-team-adaptive-design.md` mục 2, 3.1-3.5, 4.1-4.4, 9, 9.1, 12, 13. Hợp
+đồng với giao diện: `docs/dev/team-chat-t2-contract.md`. Phần giao diện (reactions.js, app.js, teams.js, mobile-chat.js)
+do nhánh UI làm riêng; tài liệu này chỉ nói phần máy chủ.
+
+### 1. Làm gì
+
+- **Sổ lượt chung và trần máy chủ (3.1, 9.1).** Bảng `agent_calls` trong `resonance.sqlite3`. Một phép đếm
+  `_ceiling_used(c)` = `SUM(goals.calls_used)` + `COUNT(call_ledger used)` + `COUNT(agent_calls counted = 1, chưa hoàn)`.
+  Lượt nghĩa vụ (goal A2, phép thử, bộ lập mục tiêu, lượt nhóm) dùng cả trần; lượt tự phát (`obligation = 0`) chỉ tới
+  `floor(trần * 0.8)`. Trần tính trên toàn bộ thời gian sống của kho, không theo ngày. Chỉ mục duy nhất từng phần
+  `UNIQUE(reason_ref) WHERE status IN ('reserved','running','ok')`.
+- **Lượt nhóm giữ chỗ trước engine.** `TeamRunner` có phụ thuộc `ceiling` (`agent_ledger.TeamCeiling`). Ngay sau khi giữ
+  chỗ `team_turns`, lượt giữ một dòng `counted = 1`, `mirror_ref = team_turn:<id>`. Trần đầy: hoàn `team_turns`, kết cục
+  `{"status": "cap", "cap": "server_ceiling"}`, không gọi engine. Lượt trả lời lỗi với lý do `server_ceiling`; bước việc
+  bị chặn với `block_kind = server_ceiling` (nút "Cho thêm lượt" không gỡ được). Mọi đường hoàn/mốc/chốt (`busy_long`,
+  lỗi trước engine, huỷ, hết giờ, `lease_lost` trước engine của T1, phục hồi) đi qua `_refund_if_unmarked`,
+  `_mark_engine`, `_settle_turn`, nên dòng sổ chốt theo. Lỗi kho chung lúc mốc/chốt không làm hỏng lượt nhóm.
+- **Đối soát** (`TeamCeiling.reconcile`): lúc khởi động (cuối `TeamRunner.recover`) và mỗi 60 giây (vòng của
+  `TeamApi.tick`). Dòng `team_turn:*` chỉ theo trạng thái của chính lượt nhóm (đã hoàn/không còn thì hoàn, đã chốt thì
+  chốt theo, còn `reserved`/`running` thì để nguyên), không bao giờ theo tuổi. Dòng và lượt mới hơn 120 giây bị bỏ qua.
+  Lượt nhóm đã tới mốc engine mà thiếu dòng sổ thì dựng lại dòng tính. Quy tắc 10 phút chỉ cho dòng `mirror_ref = ''`.
+- **Lý do thức theo agent (3.2-3.4).** `agent_wake_reasons` và `agent_wake_sources` với đủ vòng đời (pending, claimed,
+  served, superseded, failed). API ở `agent_ledger.WakeReasons`: `add_source`, `remove_source`, `remove_group`, `claim`
+  (thử khoá bận trước, bận không tốn lần thử; CAS và giữ chỗ sổ lượt trong một giao dịch), `settle`, `retry_failed`.
+  Chỉ T3 phục vụ lý do; T2 tạo chúng và có test đủ vòng đời.
+- **Bộ chiếu phản hồi (3.5)** `server/feedback_projector.py`: idempotent theo `source_ref`, chiếu theo thứ tự nhật ký,
+  trạng thái ròng, dòng cũ `superseded`. Chạy ngay sau khi ghi (lỗi nuốt và ghi log), mỗi nhịp scheduler và lúc khởi
+  động (`_feedback_pulse_tick` trong main.py). Định tuyến: tin gắn goal chỉ vào lý do `feedback` của A2; tin khác vào lý
+  do `reaction_review` ở `team:<id>` hay `dm:<agent_key>`; chỉ khi agent bật Cộng hưởng và sự kiện sau `resumed_at`.
+  Cộng hưởng tắt: `stored_only`. Trang Trò chuyện chính: `received`. Trạng thái reaction ghi ngược theo lý do.
+  Điểm nối để trống cho T3: `FeedbackProjector.record_pulse_signal`.
+- **`resumed_at`.** Bảng `agent_pulse` (đủ cột của mục 5.4). Mốc ghi trong `GoalStore.agent_set_enabled` cùng giao dịch
+  với công tắc, nên cả route của chủ lẫn lệnh `set_resonance` của trưởng nhóm đều có mốc. Nâng cấp: agent đang bật nhận
+  `resumed_at = lúc nâng cấp`.
+- **Reaction chat riêng (4.1, hợp đồng mục 4).** `dm_reactions`, `dm_reaction_log` trong `conversations.db`. Route
+  `POST /sessions/{session_id}/messages/{message_id}/reaction`. `GET /sessions/{id}/messages` và `GET /sessions/{id}` có
+  `content_sha` trên mọi tin và `reaction` trên tin `assistant`. Gói WS `chat_reaction` sau mỗi lần ghi và mỗi lần host đổi
+  trạng thái. `_persist_turn` trả mã tin và đẩy `turn_saved` ngay sau khi lưu (mọi đường gọi: dashboard, Telegram, giọng,
+  quy trình).
+- **Reaction nhóm mở rộng (4.1, hợp đồng mục 5).** Cột mới cho `team_reactions`/`team_reaction_log` (ALTER idempotent, có
+  mặc định). Gửi lại cùng nonce trả trạng thái hiện tại; nonce của tin khác: 409. Lệnh `react` của agent trong lượt nhóm
+  (mọi vai, tối đa 5 mỗi lượt, nonce `<turn_id>#rx<i>`): host gán `leader`/`member`, không thả lên tin của chính mình.
+  Tin mang `agent_reactions` và `content_sha`.
+- **Hiệu lực (4.3).** Emoji không chốt đạt, không đổi ưu tiên, không cấp gì, không đổi trạng thái việc hay goal (test cả
+  chat riêng). Khối phản hồi vào lượt kế tiếp đúng ngữ cảnh: nhóm (`_feedback_lines`, thêm trục nói/im) và chat riêng
+  (`_agent_turn_system_prompt` thêm `feedback_projector.dm_feedback_block`, chỉ của đúng agent đó).
+
+### 2. Ở đâu
+
+| File | Nội dung |
+|---|---|
+| `server/agent_ledger.py` (mới) | `CallLedger`, `TeamCeiling`, `WakeReasons` |
+| `server/feedback_projector.py` (mới) | bộ chiếu phản hồi, khối phản hồi chat riêng |
+| `server/reaction_values.py` (mới) | sáu giá trị, lý do, trục, kiểm đầu vào, khuôn R |
+| `server/resonance_store.py` | `_ceiling_used`, `ceiling_limit`, bảng T2, `resumed_at`, `agent_any`, A2 supersede |
+| `server/team_store.py` | cột reaction mới, `set_reaction_ex`, outbox, `NonceConflict`, `turns_since` |
+| `server/team_runner.py` | phụ thuộc `ceiling`/`projector`, lệnh `react`, `server_ceiling`, góp ý đồng đội |
+| `server/team_api.py` | nối phụ thuộc, nhịp đối soát, route reaction (axis, seen_sha, 409) |
+| `server/sessions.py` | `dm_reactions`, `dm_reaction_log`, `content_sha` trên tin |
+| `server/main.py` | route reaction chat riêng, `turn_saved`, khối phản hồi, nhịp bộ chiếu, nối trần |
+| `dashboard/i18n/{vi,en}.json` | `teams.reply.why.server_ceiling`, `teams.block.server_ceiling` |
+
+### 3. Di trú
+
+- `resonance.sqlite3`: chụp `resonance.sqlite3.pre-0.154.0` lần đầu (chưa có `agent_calls`), rồi tạo bảng mới. Không đổi
+  bảng cũ.
+- `team.sqlite3`: chụp `team.sqlite3.pre-0.154.0` lần đầu (chưa có cột `axis`), rồi ALTER thêm cột có mặc định. Dòng nhật
+  ký cũ có `effect_state = 'done'` (không backfill tác động).
+- `conversations.db`: chụp `conversations.db.pre-0.154.0` lần đầu (chưa có `dm_reactions`), rồi tạo hai bảng mới.
+
+### 4. Quay về bản cũ
+
+Bản 0.153.x bỏ qua bảng và cột mới, nên hạ phiên bản chạy được không cần khôi phục. Reaction của trưởng nhóm/thành viên
+(reactor `agent:...`) sẽ hiện như reaction thường ở bản cũ (ảnh hưởng đã biết, không mất dữ liệu). Muốn khôi phục hẳn:
+tắt Javis, chép ba file `.pre-0.154.0` đè lên kho tương ứng trong `JAVIS_STATE_DIR` (mất mọi thay đổi sau lúc nâng).
+`tools/team_chat_restore_pre.py` chưa biết hậu tố `.pre-0.154.0` (xem mục 6).
+
+### 5. Quyết định khi làm
+
+1. **Mã emoji `love`, không `heart`.** Thiết kế 4.1 ghi `heart`; hợp đồng giữ `love` để dữ liệu cũ đọc được. Theo hợp đồng.
+2. **Nonce của tin khác trong nhóm trả 409** (0.120.0 chọn 400, xem phần trên) để khớp hợp đồng T2 mục 4 và chat riêng; sửa `test_team_api.py` theo.
+3. **Chưa ghi dòng phản chiếu `goal_call:<id>` (`counted = 0`) cho lượt A2.** Chúng chỉ để quan sát; A2 không đổi hành vi.
+   T3 thêm khi `agent_daily_calls` cần.
+4. **Đối soát theo bản sửa thiết kế của điều phối (d408d89a):** dòng nhóm chỉ theo trạng thái lượt nhóm, ân hạn 120 giây,
+   quy tắc 10 phút chỉ cho `mirror_ref = ''`. Bản đầu của nhánh này có hoàn theo tuổi lúc khởi động; đã bỏ.
+5. **Kho chung lỗi lúc giữ chỗ:** có đặt trần thì hoàn lượt nhóm và báo lỗi `internal` (không chạy khi không kiểm được
+   trần); không đặt trần thì chạy tiếp, đối soát dựng lại dòng tính khi lượt tới mốc engine.
+6. **Tác giả chat riêng:** route cấp mã bền cho trợ lý (`agent_register`, Cộng hưởng vẫn tắt) và ghim phiên
+   (`session_agent`), như nhóm chat cấp mã cho thành viên. Không tra được thì `agent_key` rỗng.
+7. **Tin gắn goal đã kết thúc:** không tạo lý do, trạng thái `no_change` "Mục tiêu đã kết thúc".
+8. **Lý do A2 đã phục vụ:** trạng thái `no_change` kèm "Mục tiêu đã đọc phản hồi ở lượt việc kế tiếp" (A2 không báo kết
+   quả theo từng phản hồi). Lý do lớp 3 đã phục vụ và tiêu thụ: `no_change` mặc định; T3 ghi `adjusted`/`no_change` thật và
+   bộ chiếu không ghi đè.
+9. **`revision`** của R là số dòng nhật ký của cặp (tin, người phản hồi).
+10. **Reaction của agent vào lượt kế tiếp** của tác giả thành khối riêng "Góp ý của đồng đội"; khối "Phản hồi gần đây
+    của chủ nhóm" nay chỉ lấy reaction của chủ.
+11. **`agent_wake_sources.group_ref`** (cột thêm ngoài thiết kế) để gỡ nguồn theo cặp (tin, người phản hồi).
+12. **`attempt` của lý do tăng lúc nhận;** lượt hoàn không tốn lần thử; đủ 3 lần lỗi thì `failed`.
+13. **`waiting_quota`** chưa được ghi ở T2 (thuộc lượt xem xét của T3).
+14. **`content_sha`** thêm vào mọi dict tin của kho phiên (`_tin`, `_team_msg`).
+15. Câu `FIXED_LIMITS["server_call_ceiling"]` đổi thành "mục tiêu Auto và lượt nhóm".
+
+### 6. Còn mở
+
+- Mở rộng `tools/team_chat_restore_pre.py` cho hậu tố `.pre-0.154.0` (hiện khôi phục tay).
+- Khi gộp T1 `d408d89a`: `_REPLY_REASON` hai bên cùng thêm khoá (`lease_lost`, `server_ceiling`), gộp cả hai. Đường
+  `lease_lost` trước engine của T1 gọi `_refund_if_unmarked`, nên dòng sổ tự hoàn (test của nhánh này kiểm đúng hàm đó).
+
+### Bằng chứng
+
+Xem mục cuối của file này sau lần chạy test (được cập nhật khi đẩy nhánh).
