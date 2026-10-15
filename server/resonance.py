@@ -2586,7 +2586,8 @@ def _reconcile(goal: GoalRecord, deps: GoalDeps, now: float) -> None:
                     "error_detail": "lượt bị ngắt trước khi có đầu ra; model có thể đã được gọi nên lượt vẫn tính vào hạn mức"})
                 # A2: lần thức đã mở lượt này chết trước khi ghi sổ. Ghi thay nó một dòng lượt lỗi `interrupted`, để chuỗi
                 # lỗi tính đúng (lượt bị ngắt là một lượt lỗi, mục 4). Mở bởi tin mới hay bước đầu thì bắt đầu chuỗi mới.
-                served = [r for r in store.reasons(p, goal.id, state="served") if r.get("settled_by") == a["id"]]
+                served = [r for r in store.reasons(p, goal.id, state="served")
+                          if r.get("settled_by") in (a["id"], "reaction_changed:" + a["id"])]
                 store.log_wake(p, goal.id, {
                     "revision": a["revision"], "wake_kind": "work", "decision": "work", "action_id": a["id"],
                     "model_calls": 1, "met_count": None, "error_code": "interrupted", "served": [r["id"] for r in served],

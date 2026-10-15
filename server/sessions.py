@@ -91,11 +91,14 @@ def content_sha(text: Any) -> str:
 
 
 class DmReactionError(Exception):
-    """Lỗi của thao tác reaction chat riêng kèm mã HTTP (400 thân sai, 404 không có tin, 409 xung đột)."""
+    """Lỗi của thao tác reaction chat riêng kèm mã HTTP (400 thân sai, 404 không có tin, 409 xung đột). `en`: bản tiếng
+    Anh của câu lỗi (route hiện theo ngôn ngữ giao diện)."""
 
-    def __init__(self, code: int, message: str):
+    def __init__(self, code: int, message: str, en: str = ""):
         super().__init__(message)
         self.code = int(code)
+        self.vi = message
+        self.en = en or message
 
 
 def loc_brain(brain, cot: str = "s.brain"):
@@ -921,7 +924,8 @@ class SessionStore:
     def set_dm_reaction(self, session_id: str, message_id: int, *, value: Any, reasons: Any = None, axis: Any = "",
                         comment: Any = "", nonce: Any = "", seen_sha: Optional[str] = None, agent_key: str = "",
                         agent_config_version: int = 0, goal_id: str = "", reactor: str = "owner",
-                        source_kind: str = "owner") -> Dict[str, Any]:
+                        source_kind: str = "owner", effect_state: str = "pending",
+                        status: str = "received", status_reason: str = "") -> Dict[str, Any]:
         """Đặt trọn trạng thái phản hồi của `reactor` trên một câu trả lời của chat riêng. Trả
         {"state": dòng reaction (None khi đã bỏ hết), "log_id", "replayed"}.
 
@@ -932,7 +936,7 @@ class SessionStore:
         try:
             n = RV.normalize(value, reasons, axis, comment, nonce)
         except RV.ReactionInputError as ex:
-            raise DmReactionError(400, str(ex))
+            raise DmReactionError(400, ex.vi, ex.en)
         if source_kind not in RV.SOURCE_KINDS:
             raise DmReactionError(400, "nguồn phản hồi không hợp lệ")
         mid = int(message_id)
@@ -943,14 +947,14 @@ class SessionStore:
             msg = conn.execute("SELECT role, content FROM messages WHERE id = ? AND session_id = ?",
                                (mid, session_id)).fetchone()
             if msg is None:
-                raise DmReactionError(404, "không có tin này trong phiên")
+                raise DmReactionError(404, "không có tin này trong phiên", "no such message in this session")
             if msg["role"] != "assistant":
-                raise DmReactionError(409, "chỉ câu trả lời mới nhận reaction")
+                raise DmReactionError(409, "chỉ câu trả lời mới nhận reaction", "only replies take reactions")
             sha = content_sha(msg["content"])
             hit = conn.execute("SELECT id, session_id, message_id, reactor FROM dm_reaction_log WHERE nonce = ?",
                                (n["nonce"],)).fetchone()
             if hit is not None and (hit["session_id"], int(hit["message_id"]), hit["reactor"]) != key:
-                raise DmReactionError(409, "nonce đã dùng cho một tin khác")
+                raise DmReactionError(409, "nonce đã dùng cho một tin khác", "this nonce was used for another message")
             log_id = int(hit["id"]) if hit is not None else None
             if hit is None:
                 now = time.time()
@@ -964,7 +968,7 @@ class SessionStore:
                     "prev_json, next_json, nonce, effect_state, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (session_id, mid, reactor, agent_key or "", goal_id or "", source_kind,
                      json.dumps(self._dm_state_json(old), ensure_ascii=False) if old is not None else None,
-                     json.dumps(nxt, ensure_ascii=False) if nxt is not None else None, n["nonce"], "pending", now))
+                     json.dumps(nxt, ensure_ascii=False) if nxt is not None else None, n["nonce"], effect_state, now))
                 log_id = int(cur.lastrowid)
                 rev = int(conn.execute("SELECT COUNT(*) FROM dm_reaction_log WHERE session_id = ? AND message_id = ? "
                                        "AND reactor = ?", key).fetchone()[0])
@@ -986,11 +990,39 @@ class SessionStore:
                         "updated_at=excluded.updated_at",
                         (session_id, mid, reactor, source_kind, agent_key or "", int(agent_config_version or 0),
                          n["value"], json.dumps(n["reasons"], ensure_ascii=False), n["axis"], n["comment"], sha, seen,
-                         1 if seen and seen != sha else 0, goal_id or "", rev, log_id, "received", "", now, now))
+                         1 if seen and seen != sha else 0, goal_id or "", rev, log_id, status, status_reason, now,
+                         now))
             r = conn.execute("SELECT * FROM dm_reactions WHERE session_id = ? AND message_id = ? AND reactor = ?",
                              key).fetchone()
             return {"state": self._dm_reaction(r) if r else None, "log_id": log_id, "replayed": hit is not None}
         return self._write(_do)
+
+    def dm_nonce_owner(self, nonce: str) -> Optional[Tuple[str, int, str]]:
+        """(session_id, message_id, reactor) đã dùng `nonce`, None khi chưa dùng (route kiểm gửi lại TRƯỚC khi tra tác giả)."""
+        rows = self._read("SELECT session_id, message_id, reactor FROM dm_reaction_log WHERE nonce = ?",
+                          (str(nonce or "").strip(),))
+        return (rows[0]["session_id"], int(rows[0]["message_id"]), rows[0]["reactor"]) if rows else None
+
+    def pending_author_dm_logs(self, limit: int = 200) -> List[Dict[str, Any]]:
+        """Dòng nhật ký chờ tra tác giả (`effect_state = 'pending_author'`: kho resonance lỗi lúc thả reaction)."""
+        return [self._dm_log(r) for r in self._read(
+            "SELECT * FROM dm_reaction_log WHERE effect_state = 'pending_author' ORDER BY id LIMIT ?", (int(limit),))]
+
+    def set_dm_reaction_author(self, log_id: int, agent_key: str, agent_config_version: int = 0) -> None:
+        """Gắn tác giả đã tra được cho một dòng `pending_author` (và reaction nếu còn ở đúng lần đổi đó), rồi đưa dòng về
+        `pending` để bộ chiếu áp tác động."""
+        def _do(conn):
+            r = conn.execute("SELECT * FROM dm_reaction_log WHERE id = ? AND effect_state = 'pending_author'",
+                             (int(log_id),)).fetchone()
+            if r is None:
+                return
+            conn.execute("UPDATE dm_reaction_log SET agent_key = ?, effect_state = 'pending' WHERE id = ?",
+                         (agent_key or "", int(log_id)))
+            conn.execute("UPDATE dm_reactions SET agent_key = ?, agent_config_version = ? WHERE session_id = ? "
+                         "AND message_id = ? AND reactor = ? AND log_id = ?",
+                         (agent_key or "", int(agent_config_version or 0), r["session_id"], int(r["message_id"]),
+                          r["reactor"], int(log_id)))
+        self._write(_do)
 
     def dm_reaction_of(self, session_id: str, message_id: int, reactor: str = "owner") -> Optional[Dict[str, Any]]:
         rows = self._read("SELECT * FROM dm_reactions WHERE session_id = ? AND message_id = ? AND reactor = ?",
