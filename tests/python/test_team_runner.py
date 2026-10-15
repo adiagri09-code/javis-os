@@ -576,7 +576,7 @@ j = r.submit(T["team_id"], "Việc", as_job=True, client_msg_id="z1")
 run(r.dispatch_once(wait=True))
 plan = [m for m in msgs(ss, T) if m["meta"].get("role") == "plan"][0]
 notes = " ".join(plan["meta"].get("notes", []))
-# Pilot 2026-10-16 (0.171.1): tên lệnh model tự bịa không chép vào ghi chú cho chủ đọc; hai lệnh lạ chỉ một dòng.
+# Pilot 2026-10-16 (0.171.3): tên lệnh model tự bịa không chép vào ghi chú cho chủ đọc; hai lệnh lạ chỉ một dòng.
 check("khối hỏng, op lạ, giao người ngoài nhóm: bỏ op, ghi chú; op đúng vẫn chạy",
       "JSON" in notes and "ag_nguoi_ngoai" in notes and "fly" not in notes and "peter_feedback" not in notes
       and plan["meta"].get("notes", []).count(TR.UNKNOWN_OP_NOTE) == 1
