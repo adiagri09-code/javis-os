@@ -15,6 +15,9 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - **Thu quyền là thu cả lượt đang chạy.** Người điều phối đang trả lời dở mà bạn thu lại rồi cho lại, hay mới cho quyền tự quyết, thì lệnh quản trị của lượt đó bị bỏ kèm ghi chú; lượt sau mới dùng quyền mới.
 - **Việc dài không bị chen ngang:** trợ lý đang làm một bước dài giữ chỗ tới khi xong, nhóm khác không giành được trợ lý đó giữa chừng.
 - Người điều phối bật lại Auto cho trợ lý do nhóm quản lý thì mục tiêu của trợ lý chạy tiếp ngay, không phải chờ tới 6 giờ.
+- **Trợ lý mất chỗ giữa chừng thì kết quả không được dùng:** nếu một lượt mất quyền giữ trợ lý hay việc (vd. máy chủ trục trặc lâu), tin vẫn hiện để bạn xem nhưng không đổi gì trong nhóm. Việc đang chờ trợ lý bận cũng không bị mất chỗ.
+- Người điều phối bật Auto mà bước đánh thức trục trặc thì nhóm ghi rõ "Auto đã bật, chưa đánh thức ngay" thay vì báo cả lệnh thất bại.
+- Ô giới hạn từ chối số không hợp lệ (vô cực, NaN) thay vì báo lỗi máy chủ.
 ### Cải thiện
 - **Bảng giới hạn trong Nâng cao của nhóm:** mọi giới hạn chia theo bạn chỉnh được, người điều phối chỉnh được, máy chủ cố định và nhà cung cấp quyết. Số lần trả lời, số bước, số lần nhờ nhau có lựa chọn **Không giới hạn** ngay ở mục Giới hạn của nhóm.
 

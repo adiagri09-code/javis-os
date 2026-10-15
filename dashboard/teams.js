@@ -40,7 +40,8 @@
     work: "teams.role.work", help: "teams.role.help", synthesize: "teams.role.synthesize" };
   // Khoá viết TRỌN (không ghép chuỗi) để bộ kiểm i18n đọc được từng khoá đang dùng.
   var STATUS_KEY = { done: "teams.status.done", late_cancelled: "teams.status.late_cancelled", late: "teams.status.late",
-    old_revision: "teams.status.old_revision", member_left: "teams.status.member_left", leader_changed: "teams.status.leader_changed" };
+    old_revision: "teams.status.old_revision", member_left: "teams.status.member_left", leader_changed: "teams.status.leader_changed",
+    lease_lost: "teams.status.lease_lost" };
   var TEAM_STATUS_KEY = { active: "teams.status_active", paused: "teams.status_paused", archived: "teams.status_archived" };
   var BLOCK_KEY = { failed: "teams.block.failed", interrupted: "teams.block.interrupted", no_leader: "teams.block.no_leader",
     assignee_removed: "teams.block.assignee_removed", no_progress: "teams.block.no_progress", cap_reached: "teams.block.cap_reached",
@@ -48,7 +49,7 @@
   var CAP_KEY = { task_turns: "teams.cap.task_turns", task_steps: "teams.cap.task_steps", daily_turns: "teams.cap.daily_turns",
     mentions: "teams.cap.mentions", help_depth: "teams.cap.help_depth", busy_wait_s: "teams.cap.busy_wait_s" };
   var TAB_KEY = { jobs: "teams.tab_jobs", team: "teams.tab_team" };
-  var LATE = ["late_cancelled", "late", "old_revision", "member_left", "leader_changed"];
+  var LATE = ["late_cancelled", "late", "old_revision", "member_left", "leader_changed", "lease_lost"];
   // Trần chủ nhóm chỉnh được (team_store.OWNER_CAPS). Bốn trần đầu có "Không giới hạn" (lưu null, GOAL T1 mục 9).
   var CAP_FIELDS = ["task_turns", "task_steps", "help_depth", "daily_turns", "mentions", "busy_wait_s"];
   var OWNER_UNL = ["task_turns", "task_steps", "help_depth", "daily_turns"];
@@ -2138,18 +2139,39 @@
     });
   }
 
-  function saveCaps() {
+  // Dựng thân POST /caps từ form (hàm thuần, test được dưới node). `read(k)` trả {checked: bool|null, value: chuỗi};
+  // checked null là trần không có ô Không giới hạn. Trả {caps, missing}: `missing` là trần vừa bỏ tích Không giới hạn mà
+  // chưa nhập số, khi đó KHÔNG gửi gì (review T1 #1: không báo "Đã lưu" khi không đổi gì).
+  function capsPayload(current, read) {
     var caps = {};
+    var missing = null;
     CAP_FIELDS.forEach(function (k) {
-      var cur = (S.team.caps || {})[k];
-      var box = S.el.querySelector('[name="tm-cap-' + k + '-unl"]');
-      if (box && box.checked) {
+      var cur = (current || {})[k];
+      var f = read(k) || {};
+      if (f.checked === true) {
         if (cur !== null) caps[k] = { unlimited: true };
         return;
       }
-      var v = val("tm-cap-" + k);
+      var v = f.value == null ? "" : String(f.value);
+      if (v === "" && cur === null && f.checked === false && !missing) missing = k;
       if (v !== "" && (cur === null || Number(v) !== Number(cur))) caps[k] = Number(v);
     });
+    return missing ? { caps: {}, missing: missing } : { caps: caps, missing: null };
+  }
+
+  function saveCaps() {
+    var built = capsPayload(S.team.caps, function (k) {
+      var box = S.el.querySelector('[name="tm-cap-' + k + '-unl"]');
+      return { checked: box ? !!box.checked : null, value: val("tm-cap-" + k) };
+    });
+    var caps = built.caps;
+    var missing = built.missing;
+    if (missing) {
+      setNote(tw("teams.cap_need_number", { name: tw(CAP_KEY[missing]) }));
+      var miss = S.el.querySelector('[name="tm-cap-' + missing + '"]');
+      if (miss && miss.focus) miss.focus();
+      return;
+    }
     if (!Object.keys(caps).length) { setNote(tw("teams.saved")); return; }
     call("POST", teamUrl("/caps"), { caps: caps }).then(function (r) {
       if (r.code === 200) setNote(tw("teams.saved"));
@@ -2364,7 +2386,7 @@
     jobStripHtml: jobStripHtml, blockedAction: blockedAction, jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
     mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, mentionScan: mentionScan, removeMention: removeMention,
     callsHtml: callsHtml, foldName: foldName, emailBefore: emailBefore, composerHint: composerHint, newClientId: newClientId,
-    membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
+    membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, capsPayload: capsPayload, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
     levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml,
     bannersHtml: bannersHtml, reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,

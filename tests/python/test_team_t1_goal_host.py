@@ -181,5 +181,44 @@ check("H7 đổi tag: trưởng nhóm, chế độ quyền và dòng Toàn quy�
 check("H7 đổi tag: không tạo hay ghép nhóm nào, mã bền của trợ lý giữ nguyên",
       after["teams"] == before["teams"] and after["keys"] == before["keys"], (before, after))
 
+# ═════ H8 (review T1 #5): bật Auto được ghi mà đánh thức lỗi, qua host thật ═════
+c.post(f"/resonance/agents/toggle{Q}", json={"slug": "minh", "enabled": False})
+
+
+def _boom_wake(brain_id, agent_key, *a, **k):
+    raise RuntimeError("database is locked")
+
+
+rs.wake_agent_goals = _boom_wake
+script[(K["lan"], "leader_reply")] = ["Bật lại Auto cho Minh." + directive(op="set_resonance", agent="minh", on=True)]
+c.post(f"/teams/{TID}/messages{Q}", json={"text": "Bật lại Auto cho Minh", "client_msg_id": "h8"})
+drain()
+rs.wake_agent_goals = _rec_wake
+evs = api.teams().events(TID)
+last_lan = [m for m in c.get(f"/teams/{TID}/messages{Q}").json()["messages"]
+            if m["author_kind"] == "agent" and m["author_ref"] == K["lan"]][-1]
+check("H8 đánh thức lỗi: Auto của Minh VẪN bật (trạng thái thật, không cuộn lại)", agents()["minh"]["enabled"],
+      agents()["minh"])
+check("H8 nhật ký nhóm có agent_set_resonance và agent_wake_failed kèm nguyên nhân",
+      [e["kind"] for e in evs].count("agent_wake_failed") == 1 and "agent_set_resonance" in [e["kind"] for e in evs]
+      and "locked" in next(e for e in evs if e["kind"] == "agent_wake_failed")["after"]["error"],
+      [(e["kind"], e.get("after")) for e in evs[:4]])
+check("H8 ghi chú trên tin nói Auto đã bật, không báo lệnh thất bại",
+      any("Auto đã bật" in n for n in last_lan["meta"]["notes"])
+      and not any("Không áp được lệnh" in n or "lỗi" == n for n in last_lan["meta"]["notes"]), last_lan["meta"]["notes"])
+
+# ═════ H9 (review T1 #7): NaN và vô cực qua route caps trả 4xx, không lưu, JSON trả về hợp lệ ═════
+caps0 = c.get(f"/teams/{TID}{Q}").json()["team"]["caps"]
+for raw in ('{"caps": {"busy_wait_s": NaN}}', '{"caps": {"task_turns": Infinity}}', '{"caps": {"daily_turns": -Infinity}}',
+            '{"caps": {"mentions": 1e400}}', '{"caps": ["task_turns"]}'):
+    r = c.post(f"/teams/{TID}/caps{Q}", content=raw, headers={"content-type": "application/json"})
+    try:
+        body_ok = r.json().get("ok") is False
+    except ValueError:
+        body_ok = False
+    check(f"H9 caps {raw}: trả 4xx kèm JSON lỗi hợp lệ", 400 <= r.status_code < 500 and body_ok, (r.status_code, r.text))
+caps1 = c.get(f"/teams/{TID}{Q}").json()["team"]["caps"]
+check("H9 không giá trị hỏng nào được lưu", caps1 == caps0, (caps0, caps1))
+
 print(f"\n{len(fails)} FAIL" if fails else "\nALL OK")
 raise SystemExit(1 if fails else 0)

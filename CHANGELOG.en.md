@@ -17,6 +17,9 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 - **Taking back the right to decide alone now covers a turn already running.** If the coordinator is mid-reply when you take it back and give it again, or give it for the first time, that turn's admin commands are dropped with a note; only the next turn uses the new permission.
 - **Long jobs are not cut in on:** an assistant working on a long step keeps its slot until done, so another team cannot grab it midway.
 - When the coordinator turns Auto back on for an assistant the team manages, that assistant's goals resume right away instead of waiting up to 6 hours.
+- **An assistant that loses its place midway no longer changes anything:** if a turn loses its hold on the assistant or the job (for example a long server hiccup), the message still shows but nothing in the team changes. A job waiting for a busy assistant keeps its place too.
+- When the coordinator turns Auto on and waking the goals hiccups, the team log now says Auto is on but not yet woken, instead of reporting the whole command as failed.
+- Limit fields reject invalid numbers (infinity, NaN) instead of returning a server error.
 ### Improved
 - **Limits table under the team's Advanced section:** every limit, grouped by what you can change, what the coordinator can change, what the server fixes and what the provider decides. Replies, steps and nested help can be set to **Unlimited** right in Team limits.
 

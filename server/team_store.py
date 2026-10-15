@@ -16,6 +16,7 @@ cùng một giao dịch. Kho này giữ phần còn lại.
 from __future__ import annotations
 
 import json
+import math
 import secrets
 import sqlite3
 import time
@@ -317,6 +318,8 @@ class TeamStore:
     def set_caps(self, team_id: str, caps: dict, by: str = "owner") -> dict:
         """Chủ nhóm đổi trần (spec 12.3). Chỉ nhận khoá trong OWNER_CAPS, giá trị số không âm; trần trong UNLIMITED_CAPS
         nhận thêm `None` hay {"unlimited": true} là "Không giới hạn" (GOAL T1 mục 9). Trần máy chủ cố định bị từ chối."""
+        if caps is not None and not isinstance(caps, dict):
+            raise TeamError("trần phải là một bảng tên trần và giá trị")
         bad = set(caps or {}) - set(DEFAULT_CAPS)
         if bad:
             raise TeamError(f"trần không có: {sorted(bad)}")
@@ -334,8 +337,12 @@ class TeamStore:
                 raise TeamError(f"trần {k} phải là số")
             try:
                 num = float(v)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 raise TeamError(f"trần {k} phải là số")
+            # NaN và vô cực (JSON của trình duyệt có thể gửi) bị từ chối TRƯỚC khi ghi: int() của chúng là lỗi 500, còn
+            # busy_wait_s giữ nguyên float sẽ làm hỏng caps_json và JSON trả về (review T1 #7).
+            if not math.isfinite(num):
+                raise TeamError(f"trần {k} phải là số hữu hạn")
             if num < 0:
                 raise TeamError(f"trần {k} không được âm")
             clean[k] = num if k == "busy_wait_s" else int(num)
@@ -862,6 +869,12 @@ class TeamStore:
         with self._Tx(self) as c:
             return c.execute("UPDATE agent_busy SET lease_until=? WHERE agent_key=? AND turn_id=?",
                              (t + float(lease_s), agent_key, turn_id)).rowcount == 1
+
+    def busy_turn(self, agent_key: str) -> Optional[str]:
+        """Lượt đang ghi trên dòng khoá bận của agent (kể cả dòng đã hết hạn mà chưa ai lấy), None khi không có dòng."""
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT turn_id FROM agent_busy WHERE agent_key=?", (agent_key,)).fetchone()
+            return str(r["turn_id"]) if r else None
 
     def release_busy(self, agent_key: str, turn_id: str) -> None:
         with self._Tx(self) as c:

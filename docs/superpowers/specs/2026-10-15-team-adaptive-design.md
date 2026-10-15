@@ -74,19 +74,22 @@ phiên bản**, không phải kết luận nghiên cứu; chúng được kiểm
 
 ### 3.1 `agent_calls` (resonance.sqlite3)
 
-`id, agent_key, brain_id, context_ref, purpose (reply|step|judge_batch|review|proactive|scan|reaction_review), reason_ref,
-attempt, engine, model, status (reserved|running|ok|error|refunded|interrupted), tokens_in, tokens_out, cost_usd, mirror_ref,
-created_at, settled_at`. Chỉ mục duy nhất **từng phần**: `UNIQUE(reason_ref) WHERE status IN ('reserved','running','ok')`. Một lý
-do chỉ có tối đa một lượt đang hoặc đã chạy thành công; lượt `refunded`/`interrupted`/`error` không giữ khoá nên thử lại được
-(attempt + 1).
+`id, agent_key, brain_id, context_ref, purpose (reply|step|judge_batch|review|proactive|scan|reaction_review|goal), reason_ref,
+attempt, engine, model, status (reserved|running|ok|error|refunded|interrupted), counted (0|1), obligation (0|1), tokens_in,
+tokens_out, cost_usd, mirror_ref, created_at, settled_at`. Chỉ mục duy nhất **từng phần**: `UNIQUE(reason_ref) WHERE status IN
+('reserved','running','ok')`. Một lý do chỉ có tối đa một lượt đang hoặc đã chạy thành công; lượt `refunded`/`interrupted`/`error`
+không giữ khoá nên thử lại được (attempt + 1).
 
-- Lượt nhóm (trả lời, bước việc) ghi `team_turns` như hiện nay (trần ngày nhóm giữ nguyên) và ghi **bản phản chiếu** sau khi chốt
-  (`mirror_ref = team_turn:<id>`). Ghi phản chiếu lỗi **không** làm hỏng lượt nhóm; lúc khởi động có bước đối soát dựng lại phản
-  chiếu thiếu từ `team_turns`. Lượt goal A2 phản chiếu `mirror_ref = goal_call:<id>` theo cùng cách.
-- Trần chung server `_under_ceiling` hiện cộng `goals.calls_used` và `call_ledger`; nay cộng thêm `agent_calls WHERE mirror_ref = ''
-  AND status IN ('reserved','running','ok')` (lượt chỉ có ở sổ mới: phán xử, xem xét, chủ động, quét), để không đếm hai lần lượt goal và
-  không đếm lượt đã hoàn.
-
+- **Một sổ duy nhất cho trần chung** (sửa sau review T1, xem 9.1): mọi lượt thuộc phạm vi trần được **giữ chỗ trong sổ này TRƯỚC khi
+  gọi engine**, cùng giao dịch `BEGIN IMMEDIATE` với phép đếm, nên kiểm trần và giữ chỗ nguyên tử kể cả khi nhiều lượt (nhiều luồng,
+  nhiều tiến trình cùng kho) chạy đồng thời. Cột `counted` nói dòng có cộng vào trần không, thay cho quy tắc cũ "`mirror_ref = ''`".
+- Lượt nhóm (trả lời, bước việc): `team_turns` giữ trần ngày của nhóm như hiện nay, **và** giữ chỗ một dòng `counted = 1`,
+  `mirror_ref = team_turn:<id>` ở sổ này ngay sau khi giữ chỗ `team_turns`, trước khoá bận và trước engine. Trần chung đầy thì hoàn
+  dòng `team_turns` vừa giữ và lượt nhận kết cục `cap` với `cap = "server_ceiling"` (không gọi engine). Lượt nhóm hoàn (lỗi trước mốc
+  gọi engine, hết lượt chờ, huỷ) thì dòng sổ cũng `refunded`; chốt `ok`/`error`/`interrupted` thì dòng sổ chốt theo.
+- Lượt goal A2 và bộ lập mục tiêu đã được đếm ở `goals.calls_used` và `call_ledger` (không đổi hành vi A2): bản phản chiếu của chúng ở
+  sổ này mang `counted = 0`, `mirror_ref = goal_call:<id>` (chỉ để quan sát và để `agent_daily_calls` biết lượt nào đã chạy).
+- Lượt chỉ có ở sổ mới (phán xử theo lô, xem xét, chủ động, quét, xem xét reaction) mang `counted = 1`, `mirror_ref = ''`.
 ### 3.2 Vòng đời lý do thức theo agent (`agent_wake_reasons`)
 
 `id, agent_key, context_ref, code (reaction_review|related_review|proactive_due|scan_due|wait_unblocked), status (pending|claimed|
@@ -431,8 +434,8 @@ chứng.
 | Chế độ phán xử khi Cộng hưởng tắt | lọc code + lô | chủ | "chỉ lọc code" = không lượt model cho agent tắt Cộng hưởng |
 | Lượt chủ động/xem xét/quét/tự rà soát mỗi agent/ngày `agent_daily_calls` | 6 | chủ; có "Không giới hạn" | Toàn quyền không chỉnh (không phải trần nhóm) |
 | `max_tier` (nhịp nhanh nhất) | B1 | chủ (tới B0) | trưởng nhóm không nâng được, kể cả Toàn quyền |
-| Dự trữ nghĩa vụ trong trần chung server | 20% | server | lượt chủ động/xem xét/quét không dùng phần dự trữ; goal A2, việc giao, lời gọi trực tiếp dùng được |
-| Trần chung `JAVIS_RESONANCE_CALL_CEILING` | env | server | cố định với Toàn quyền |
+| Dự trữ nghĩa vụ trong trần chung server | 20% | server | lượt tự phát (chủ động, xem xét, quét, phán xử theo lô) chỉ dùng tới 80% trần; goal A2, việc giao, lời gọi trực tiếp dùng được cả trần (9.1) |
+| Trần chung `JAVIS_RESONANCE_CALL_CEILING` | env | server | cố định với Toàn quyền; phạm vi ở 9.1 |
 
 `agent_daily_calls` tiêu theo thứ tự ưu tiên `reaction_review` > `related_review` > `wait_unblocked` > tin chủ động/quét, và luôn
 giữ 2 lượt/ngày cho hai loại xem xét đầu (quét/chủ động không dùng phần giữ). Lượt phán xử cho tin chủ động trong chat riêng tính vào
@@ -440,6 +443,37 @@ giữ 2 lượt/ngày cho hai loại xem xét đầu (quét/chủ động không
 
 Hết trần: lần thức chỉ chạy code, lý do giữ `pending`, trạng thái "Chờ hạn mức"; qua ngày mỗi lý do tối đa một lượt (không bù hàng loạt).
 Các trần mới vào **bảng giới hạn** của T1 (loại: chủ chỉnh, Toàn quyền chỉnh, server cố định, nhà cung cấp).
+
+### 9.1 Phạm vi và thực thi trần chung (`JAVIS_RESONANCE_CALL_CEILING`)
+
+Sửa sau review T1: bản trước chỉ cộng `goals.calls_used` và `call_ledger`, nên lượt nhóm (lưu ở `team_turns`, kho khác) nằm ngoài trần.
+
+- **Phạm vi:** mọi lượt engine cấp host do Javis tự chạy ở đường nhóm và Cộng hưởng: lượt goal A2 và phép thử, bộ lập mục tiêu, lượt
+  nhóm (trả lời tin nhóm, bước việc nhóm), phán xử theo lô, lượt chủ động, quét, xem xét, xem xét reaction, gỡ chờ. **Ngoài phạm vi:**
+  lượt chat riêng chủ tự gõ (chủ đang ngồi đó, không phải lượt tự chạy), loop và nhắc hẹn (có trần riêng). Đây là trần của pilot có
+  hạn mức do chủ duyệt; không đặt biến thì không có trần chung.
+- **Phép đếm** (một hàm `_ceiling_used(c)` dùng chung): `SUM(goals.calls_used) + COUNT(call_ledger WHERE status = 'used') +
+  COUNT(agent_calls WHERE counted = 1 AND status <> 'refunded')`. Dòng `reserved`, `running`, `ok`, `error`, `interrupted` đều tính
+  (lượt đã hoặc có thể đã tới model); chỉ `refunded` (chắc chắn chưa gọi model) được trả lại. Lượt phản chiếu goal có `counted = 0`
+  nên không đếm hai lần.
+- **Nguyên tử:** kiểm và giữ chỗ trong cùng một giao dịch `BEGIN IMMEDIATE` của `resonance.sqlite3` (SQLite tuần tự hoá mọi giao dịch
+  ghi, kể cả từ tiến trình khác), giống `reserve_ledger_call` hiện có.
+- **Dự trữ nghĩa vụ 20%:** dòng có `obligation = 1` (goal A2, phép thử, bộ lập mục tiêu, bước việc nhóm, trả lời tin nhóm, lời gọi
+  trực tiếp @) giữ chỗ khi `dùng + n <= trần`. Dòng `obligation = 0` (phán xử theo lô, chủ động, quét, xem xét, xem xét reaction, gỡ
+  chờ) chỉ giữ chỗ khi `dùng + n <= floor(trần * 0.8)`. Phép đếm `dùng` gồm cả hai loại, nên lượt tự phát không bao giờ ăn vào 20%
+  cuối, còn nghĩa vụ vẫn dùng được phần đó.
+- **Thử lại, lỗi, hoàn:** mỗi lần thử là một dòng mới (`attempt + 1`) và giữ chỗ lại từ đầu (kiểm trần lại). Lỗi sau mốc gọi engine
+  (`error`, `interrupted`) vẫn tính, không hoàn. Hoàn chỉ khi chắc chắn chưa gọi model (mốc `engine_started` chưa ghi).
+- **Khởi động lại và đối soát** (chạy lúc khởi động và mỗi nhịp pulse, idempotent): dòng `reserved` mà lượt nhóm tương ứng đã hoàn
+  hay không có thì `refunded`; dòng `reserved`/`running` mà lượt nhóm đã chốt thì chốt theo; dòng `reserved` không có mốc engine, quá
+  hạn một lượt (10 phút) thì `refunded`, có mốc engine thì `interrupted` (tính). Lượt nhóm đã tới mốc engine mà **thiếu** dòng sổ (tiến
+  trình chết giữa hai kho, hay bản trước nâng cấp) thì dựng lại dòng `counted = 1` (có thể tạm vượt trần: không làm mất lượt đã tính);
+  lượt nhóm `reserved` chưa tới mốc engine mà thiếu dòng sổ thì hoàn lượt nhóm (chưa gọi model).
+- **Thứ tự hai kho:** giữ chỗ `team_turns` (kho nhóm) rồi mới giữ chỗ sổ chung; sổ chung từ chối thì hoàn `team_turns` ngay. Mọi lần
+  hoàn hay chốt của lượt nhóm đi qua một hàm gọi cả hai kho; lỗi kho chung lúc chốt không làm hỏng lượt nhóm (đối soát sửa sau).
+- **Test bắt buộc:** trần sát giới hạn (trần N: lượt thứ N được, N+1 bị chặn trước engine), nhiều lượt đồng thời (luồng và hai kết
+  nối khác nhau, không vượt trần), dự trữ 20% (tự phát bị chặn ở 80% còn nghĩa vụ chạy tới 100%), đối soát phản chiếu thiếu và dư,
+  khởi động lại giữa giữ chỗ và chốt, thử lại sau lỗi tính đúng số.
 
 ## 10. Giao diện (mục 11 GOAL)
 
@@ -543,3 +577,7 @@ Review vòng 3 (PASS WITH CHANGES, không còn chặn; người review xác nh�
 vectơ người dùng lẫn và vectơ 5 ❤️ rải 2 tuần sát ngưỡng: 5.3; (2) lỗi lượt khi đã có lý do chờ mới hơn: 3.2; (3) thử khoá trước khi
 nhận lý do, bận không tốn lần thử: 3.4; (4) chia đều theo tập đầu vào của host, phần vượt trần cho người khác trước: 6.5; (5) phạm vi
 chat riêng theo agent (`dm:<agent_key>`), không theo phiên: 2, 8.1; (nhỏ) ghi chú UNIQUE, bảng `pulse_opportunities`: 2, 3.5, 5.5, 6.1.
+
+Sửa sau review T1 (trần chung, 2026-10-15): bản trước loại dòng `agent_calls` có `mirror_ref` khỏi trần mà phép đếm cũ chỉ có
+`goals.calls_used` và `call_ledger`, nên lượt nhóm nằm ngoài trần. Nay: một sổ duy nhất, cột `counted` và `obligation`, lượt nhóm giữ
+chỗ trước engine, dự trữ 20% thực thi bằng `floor(trần * 0.8)`, quy tắc thử lại, hoàn và đối soát: 3.1, 9, 9.1.

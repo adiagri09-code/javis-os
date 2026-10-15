@@ -17,9 +17,11 @@ Host kiểm từng op theo vai của lượt; op sai bị bỏ kèm ghi chú tr�
 """
 from __future__ import annotations
 
+import logging
 import asyncio
 import hashlib
 import json
+import math
 import os
 import re
 import threading
@@ -27,8 +29,11 @@ import time
 import unicodedata
 from typing import Any, Awaitable, Callable, Optional
 
+import resonance_store
 from team_store import (DEFAULT_CAPS, FIXED_CAPS, OWNER_CAPS, REACTION_EMOJI, UNLIMITED_CAPS, TeamError,
                         TurnCapReached)
+
+log = logging.getLogger("javis.team_runner")
 
 DIRECTIVE_RE = re.compile(r"<!--\s*JAVIS_TEAM:\s*(.*?)-->", re.S)
 # Op được phép theo vai của lượt (spec 15.2, Quyền giới hạn). Lượt trò chuyện không mở việc, không nhờ ai.
@@ -674,9 +679,10 @@ class TeamRunner:
             return "aux"
 
     def effective_caps(self, team_id: str, provider: str = "aux", team: Optional[dict] = None) -> dict:
-        """Trần đang áp cho nhóm (spec 13.2). Quyền giới hạn: trần của nhóm (chủ đặt, luôn là số). Toàn quyền còn hiệu
-        lực: trần trong hộp cấp quyền đè lên; "Không giới hạn" trả `None` (KHÔNG thay bằng số lớn). Không giới hạn lượt
-        model chỉ cho provider chủ tích (D6); provider khác dùng trần của nhóm."""
+        """Trần đang áp cho nhóm (spec 13.2). Quyền giới hạn: trần của nhóm do chủ đặt, là số hoặc `None` khi chủ chọn
+        "Không giới hạn" (GOAL T1 mục 9, áp cho MỌI provider). Toàn quyền còn hiệu lực: trần trong hộp cấp quyền đè lên;
+        "Không giới hạn" của hộp quyền trả `None` (KHÔNG thay bằng số lớn) nhưng với trần lượt model chỉ cho provider chủ
+        tích (D6); provider khác giữ trần của nhóm (có thể chính là `None` do chủ đặt)."""
         team = team or self._team(team_id)
         caps = {k: team["caps"][k] for k in team["caps"]}
         auth = self.teams.active_authority(team_id)
@@ -711,7 +717,8 @@ class TeamRunner:
         """Chuẩn hoá một giá trị trần trong hộp cấp quyền: số >= 0, hay {"unlimited": True}. Sai khuôn thì lỗi."""
         if isinstance(v, dict) and v.get("unlimited") is True:
             return {"unlimited": True}
-        if isinstance(v, bool) or not isinstance(v, (int, float)) or int(v) < 0:
+        # NaN và vô cực (review T1 #7): int() của chúng là lỗi 500, nên chặn trước.
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or int(v) < 0:
             raise TeamError("trần phải là số không âm hay Không giới hạn")
         return int(v)
 
@@ -792,7 +799,9 @@ class TeamRunner:
             rows.append({"key": k, "category": "leader", "value": value, "unit": "count", "unlimited_ok": True,
                          "granted": bool(auth), "editable": bool(auth) and ce is not None,
                          "model_turns": k in MODEL_TURN_CAPS})
-        ceiling = os.environ.get("JAVIS_RESONANCE_CALL_CEILING", "").strip()
+        # Cùng hàm mà sổ lượt đang thực thi (review T1 #2): không đặt là None (không có trần chung), giá trị hỏng hay âm
+        # là 0 (chặn hết), không phải "chưa đặt".
+        ceiling = resonance_store.call_ceiling()
         server = [
             ("running_jobs", FIXED_CAPS["running_jobs"], "count"),
             ("max_parallel_teams", self.max_parallel_teams, "count"),
@@ -804,7 +813,7 @@ class TeamRunner:
             ("admin_ops_per_turn", ADMIN_OPS_PER_TURN, "count"),
             ("history_window", NEW_MSG_LIMIT, "count"),
             ("text_only", None, "rule"),
-            ("server_call_ceiling", int(ceiling) if ceiling.isdigit() else None, "count" if ceiling.isdigit() else "rule"),
+            ("server_call_ceiling", ceiling, "count" if ceiling is not None else "rule"),
         ]
         rows += [{"key": k, "category": "server", "value": v, "unit": u, "unlimited_ok": False} for k, v, u in server]
         rows += [{"key": k, "category": "provider", "value": None, "unit": "rule", "unlimited_ok": False}
@@ -926,8 +935,10 @@ class TeamRunner:
                 info = self.agent_info(root, key) or {}
                 slug = info.get("slug") or m["slug_at_join"]
                 others = [t["name"] for t in self.teams.teams_with_member(key) if t["team_id"] != team_id]
+                wake_error = ""
                 if kind == "set_resonance":
-                    admin.set_resonance(root, slug, bool(op.get("on")), by)
+                    got = admin.set_resonance(root, slug, bool(op.get("on")), by)
+                    wake_error = str((got or {}).get("wake_error") or "") if isinstance(got, dict) else ""
                     what = f"{'bật' if op.get('on') else 'tắt'} Auto cho {info.get('name') or slug}"
                 else:
                     prompt = str(op.get("prompt") or "").strip()
@@ -938,6 +949,12 @@ class TeamRunner:
                 self.teams.log_event(team_id, "agent_" + kind, by, None, {"agent_key": key, "other_teams": others})
                 tail = f" Thay đổi này cũng áp cho nhóm: {', '.join(others)}." if others else ""
                 self._system(team, f"Trưởng nhóm {lead} đã {what}.{tail}", "agent_" + kind)
+                if wake_error:
+                    # Auto đã bật thật; chỉ bước đánh thức mục tiêu ngay lỗi. Ghi rõ, không báo cả lệnh là chưa áp dụng.
+                    self.teams.log_event(team_id, "agent_wake_failed", by, None,
+                                         {"agent_key": key, "error": wake_error})
+                    notes.append(f"Auto đã bật nhưng chưa đánh thức được mục tiêu ngay ({wake_error[:120]}); "
+                                 "lần kiểm lại định kỳ sẽ đánh thức")
             elif kind == "set_cap":
                 cap = str(op.get("cap") or "")
                 if cap not in AUTH_CAPS:
@@ -1234,17 +1251,27 @@ class TeamRunner:
                                      undo=self.teams.refund_turn)
         except TurnCapReached as cap:
             return {"status": "cap", "cap": cap.cap}
+        # Trạng thái quyền giữ của lượt (review T1 #3, #4): `lost` là lý do mất quyền giữ agent hay việc, None khi còn giữ.
+        lease = {"lost": None, "busy_ok": time.monotonic(), "job_ok": time.monotonic()}
+        # Bước của việc nhóm: hạn giữ việc được gia hạn NGAY trong lúc chờ khoá bận (chờ có thể tới busy_wait_s), nhưng
+        # chưa đụng khoá agent vì lượt chưa sở hữu nó.
+        job_keeper = (asyncio.ensure_future(self._keep_job_lease(task_id, lease)) if task_id else None)
         try:
             got = await self._acquire(team, agent_key, turn_id, on_wait=on_wait)
         except BaseException:
+            if job_keeper is not None:
+                job_keeper.cancel()
             await self._io(self._refund_if_unmarked, turn_id)
             raise
+        if job_keeper is not None:
+            job_keeper.cancel()
         if not got:
             await self._io(self._refund_if_unmarked, turn_id)
             return {"status": "busy_long", "turn_id": turn_id}
         marked = False
+        lease["busy_ok"] = time.monotonic()
         # Gia hạn khoá bận và hạn giữ việc suốt lượt (GOAL T1): lời gọi engine của một bước có thể dài hơn cả hai hạn.
-        renewer = asyncio.ensure_future(self._keep_leases(agent_key, turn_id, task_id))
+        renewer = asyncio.ensure_future(self._keep_leases(agent_key, turn_id, task_id, lease))
         self._lease_tasks.add(renewer)
         renewer.add_done_callback(self._lease_tasks.discard)
         try:
@@ -1317,29 +1344,90 @@ class TeamRunner:
             # Dừng gia hạn TRƯỚC khi nhả khoá. Một lần gia hạn đang chạy dở ở luồng phụ chỉ UPDATE đúng dòng của lượt này,
             # nên sau khi khoá đã nhả nó không tạo lại dòng nào (renew_busy không giành khoá).
             renewer.cancel()
+            # Kiểm lần cuối, trước khi nhả: dòng khoá vẫn là của lượt này chưa (lượt khác có thể đã lấy sau khi hạn hết
+            # trong lúc kho lỗi kéo dài). Kho lỗi ngay lúc này thì giữ kết luận của nhịp gia hạn.
+            if lease["lost"] is None:
+                try:
+                    holder = await self._io(self.teams.busy_turn, agent_key)
+                    if holder != turn_id:
+                        self._lease_lost(lease, "busy_taken", agent_key, turn_id)
+                except Exception:  # noqa: BLE001
+                    pass
             await self._release(agent_key, turn_id)
-        return await self._io(self._accept, team_id, agent_key, role, task, step, turn_id, res, reply_to, vet)
+        return await self._io(self._accept, team_id, agent_key, role, task, step, turn_id, res, reply_to, vet,
+                              lease["lost"])
 
-    async def _keep_leases(self, agent_key: str, turn_id: str, task_id: Optional[str]) -> None:
-        """Nhịp gia hạn của một lượt: khoá bận của agent (BUSY_LEASE_S) và, với bước của việc nhóm, hạn giữ việc
-        (JOB_LEASE_S), để tiến trình khác không giành cùng agent hay cùng việc giữa lượt. Chạy tới khi bị huỷ."""
+    def _renew_every(self) -> float:
+        return max(0.01, min(float(self.lease_renew_s), float(self.busy_lease_s) / 3, float(self.job_lease_s) / 3))
+
+    def _lease_lost(self, lease: dict, why: str, agent_key: str, turn_id: str) -> None:
+        if lease["lost"] is None:
+            lease["lost"] = why
+            log.warning("team turn %s lost its hold (%s) on agent %s; its output will not be applied",
+                        turn_id, why, agent_key)
+
+    async def _keep_job_lease(self, task_id: str, lease: dict) -> None:
+        """Gia hạn hạn giữ việc trong lúc lượt còn CHỜ khoá bận (review T1 #4). Không đụng khoá agent."""
         while True:
-            every = max(0.01, min(float(self.lease_renew_s), float(self.busy_lease_s) / 3, float(self.job_lease_s) / 3))
-            await asyncio.sleep(every)
+            await asyncio.sleep(self._renew_every())
             try:
-                await self._io(self._renew_leases, agent_key, turn_id, task_id)
+                ok = await self._io(self.tasks.team_heartbeat, task_id, self.worker_id, lease_s=self.job_lease_s)
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 - kho lỗi tạm: chỉ mất quyền khi quá cả kỳ hạn không gia hạn được
+                if time.monotonic() - lease["job_ok"] > float(self.job_lease_s):
+                    self._lease_lost(lease, "store_error", "?", task_id)
+                    return
+                continue
+            if ok:
+                lease["job_ok"] = time.monotonic()
+            else:
+                self._lease_lost(lease, "job_lost", "?", task_id)
+                return
+
+    async def _keep_leases(self, agent_key: str, turn_id: str, task_id: Optional[str],
+                           lease: Optional[dict] = None) -> None:
+        """Nhịp gia hạn của một lượt: khoá bận của agent (BUSY_LEASE_S) và, với bước của việc nhóm, hạn giữ việc
+        (JOB_LEASE_S), để tiến trình khác không giành cùng agent hay cùng việc giữa lượt. Chạy tới khi bị huỷ.
+
+        Phân biệt (review T1 #3): gia hạn trả False là MẤT quyền giữ thật (dòng khoá đã thuộc lượt khác hay việc đã đổi
+        người giữ), ghi `lease["lost"]` và dừng; kho lỗi một nhịp là lỗi tạm, chỉ thành mất quyền khi cả kỳ hạn trôi
+        qua mà không gia hạn được lần nào (hạn đã hết, tiến trình khác có thể đã lấy)."""
+        lease = lease if lease is not None else {"lost": None, "busy_ok": time.monotonic(),
+                                                 "job_ok": time.monotonic()}
+        while True:
+            await asyncio.sleep(self._renew_every())
+            try:
+                busy_ok, job_ok = await self._io(self._renew_leases, agent_key, turn_id, task_id)
             except asyncio.CancelledError:
                 raise
             except Exception:  # noqa: BLE001 - kho bận một nhịp: hạn còn thời gian, nhịp sau thử lại
-                pass
+                now_m = time.monotonic()
+                if now_m - lease["busy_ok"] > float(self.busy_lease_s) or (
+                        task_id and now_m - lease["job_ok"] > float(self.job_lease_s)):
+                    self._lease_lost(lease, "store_error", agent_key, turn_id)
+                    return
+                continue
+            now_m = time.monotonic()
+            if not busy_ok:
+                self._lease_lost(lease, "busy_taken", agent_key, turn_id)
+                return
+            lease["busy_ok"] = now_m
+            if task_id:
+                if not job_ok:
+                    self._lease_lost(lease, "job_lost", agent_key, turn_id)
+                    return
+                lease["job_ok"] = now_m
 
-    def _renew_leases(self, agent_key: str, turn_id: str, task_id: Optional[str]) -> None:
-        self.teams.renew_busy(agent_key, turn_id, self.busy_lease_s)
+    def _renew_leases(self, agent_key: str, turn_id: str, task_id: Optional[str]) -> tuple:
+        busy_ok = self.teams.renew_busy(agent_key, turn_id, self.busy_lease_s)
+        job_ok = True
         if task_id:
-            self.tasks.team_heartbeat(task_id, self.worker_id, lease_s=self.job_lease_s)
+            job_ok = self.tasks.team_heartbeat(task_id, self.worker_id, lease_s=self.job_lease_s)
+        return busy_ok, job_ok
 
     def _accept(self, team_id: str, agent_key: str, role: str, task: Optional[dict], step: Optional[dict],
-                turn_id: str, res: dict, reply_to, vet) -> dict:
+                turn_id: str, res: dict, reply_to, vet, lease_lost: Optional[str] = None) -> dict:
         """Pha chấp nhận đầu ra (luồng phụ). Kiểm còn hợp lệ và ghi bài học bền nằm trong cùng `accept_lock` (R3): đầu
         ra đến muộn (thành viên rời, huỷ, sửa yêu cầu, đổi trưởng nhóm, agent đã xoá hay tạo lại cùng slug) chỉ là bằng
         chứng trên tin nhóm, không ghi gì vào bộ nhớ agent. Bài học ghi đúng một lần mỗi lượt (`claim_commit`)."""
@@ -1348,6 +1436,10 @@ class TeamRunner:
         commit = res.get("commit")
         with self.accept_lock:
             status = self._still_valid(team_id, agent_key, role, task, step)
+            # Lượt đã mất quyền giữ agent hay việc giữa chừng (review T1 #3): đầu ra chỉ là bằng chứng trên tin, không
+            # ghi bài học, không áp lệnh quản trị hay lệnh của bước.
+            if status == "done" and lease_lost:
+                status = "lease_lost"
             applied = status == "done"
             # Bước của việc nhóm: bài học ghi ở pha ÁP DỤNG (`_apply_step`), nơi kiểm lại hiệu lực lần cuối trong cùng
             # khoá (review T1 R7). Lượt trò chuyện không có pha áp dụng: ghi ở đây.
@@ -1382,6 +1474,9 @@ class TeamRunner:
             kept = []
         meta = {"role": role, "status": status, "applied": applied, "turn_id": turn_id, "notes": notes,
                 "sha": _sha(raw)}
+        if status == "lease_lost":
+            meta["lease_lost"] = lease_lost
+            notes.append("Lượt này mất quyền giữ trợ lý hoặc việc giữa chừng nên kết quả không được áp dụng")
         held = list(res.get("lessons") or [])
         if held and not applied:
             # Bằng chứng: bài học của đầu ra không được chấp nhận nằm trên tin, KHÔNG vào bộ nhớ agent.
@@ -1396,7 +1491,8 @@ class TeamRunner:
                          step_id=step["step_id"] if step else None, meta=meta)
         return {"status": status, "applied": applied, "ops": kept, "notes": notes, "message_id": mid,
                 "text": clean, "sha": meta["sha"], "turn_id": turn_id, "extra": extra,
-                "commit": commit if applied and step is not None else None, "lessons": held}
+                "commit": commit if applied and step is not None else None, "lessons": held,
+                "lease_lost": lease_lost if status == "lease_lost" else None}
 
     def _commit_once(self, turn_id: str, commit: Any, notes: list) -> None:
         """Ghi bài học của lượt đúng một lần (gọi trong `accept_lock`, sau khi đã kiểm đầu ra còn hiệu lực)."""
@@ -1746,6 +1842,13 @@ class TeamRunner:
             self.teams.finish_step(sid, "failed", note=out["error"])
             return self._block(task["id"], "failed", f"Trợ lý gặp lỗi khi làm: {out['error']}")
         mid = out.get("message_id")
+        if st == "lease_lost":
+            # Mất quyền giữ giữa lượt (review T1 #3). Việc đã sang tiến trình khác: không đụng bước, dừng vòng này.
+            # Chỉ mất khoá agent (việc vẫn của mình): bước chạy lại ở lượt sau, kết quả cũ chỉ là bằng chứng.
+            if out.get("lease_lost") == "job_lost":
+                return "lease_lost"
+            self.teams.requeue_step(sid)
+            return None
         if st in ("late_cancelled", "late"):
             self.teams.finish_step(sid, "cancelled", mid, False, "đến sau khi huỷ, không áp dụng")
             return None  # vòng run_job đọc lại trạng thái việc rồi dừng

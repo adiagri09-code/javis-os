@@ -50,7 +50,7 @@ Output đầy đủ kèm lệnh và mã thoát: `exports/reviews/team-adaptive/t
 | Lệnh quản trị mỗi lần trả lời của trưởng nhóm | 10 | Máy chủ cố định | Không |
 | Tin gần đây trợ lý đọc mỗi lượt | 20 tin, 8000 ký tự | Máy chủ cố định | Không |
 | Lượt nhóm chỉ chữ, không công cụ | luật | Máy chủ cố định | Không |
-| Trần lượt toàn máy (`JAVIS_RESONANCE_CALL_CEILING`, chỉ mục tiêu Auto) | chưa đặt | Máy chủ (biến môi trường) | Không |
+| Trần lượt toàn máy (`JAVIS_RESONANCE_CALL_CEILING`, đọc bằng `resonance_store.call_ceiling()`; giá trị hỏng hay âm là 0, chặn hết) | chưa đặt | Máy chủ (biến môi trường) | Không |
 | Hạn mức gói thuê bao hay nhà cung cấp | luật | Nhà cung cấp | Không |
 | Quyền của tài khoản model | luật | Nhà cung cấp | Không |
 
@@ -61,3 +61,13 @@ Không chế độ nào được mô tả là "bỏ mọi giới hạn": nhóm m
 - `tests/python/test_team_t1_goal.py` (bộ chạy và kho thật, engine giả, Event có hạn chờ): G1 ghim quyền (bốn ca, gồm bước plan), G2 ưu tiên, G3 gia hạn khoá bận và hạn giữ việc (xong và huỷ), G4 `running_jobs`, G5 bảng giới hạn và Không giới hạn, G6 luật `set_resonance`. Trên head cũ `75e17400`: 24 ca đỏ (G1, G3, G4, G5), G2 và G6 xanh vì hành vi đã đúng (chặn hồi quy).
 - `tests/python/test_team_t1_goal_host.py` (main.py, TestClient, engine giả, chốt chặn engine thật): H5 bảng giới hạn và Không giới hạn qua route, H6 `set_resonance` đánh thức mục tiêu và luật quản lý, H7 đổi tag. Trên head cũ: 4 ca đỏ (H5, đánh thức của H6), H7 xanh.
 - `tests/js/test_teams_ui.js`: ô Không giới hạn của trần chủ, bảng giới hạn, i18n, CSS 16px.
+- `tests/python/test_team_t1_review_fixes.py` (review độc lập T1, sau `af85ad71`): F1 mất quyền giữ (khoá sang lượt khác, việc đổi người giữ, kho lỗi quá kỳ hạn; đối chứng kho lỗi tạm một nhịp), F2 gia hạn hạn giữ việc khi còn chờ khoá bận, F3 trần máy chủ trong bảng bằng `call_ceiling()`, F4 bật Auto được mà đánh thức lỗi, F5 `set_caps` chặn NaN và vô cực. Host: H8 (đánh thức lỗi qua `main._TeamAdmin`), H9 (route caps trả 4xx với NaN, Infinity, 1e400). JS: `capsPayload` bỏ tích Không giới hạn mà chưa nhập số thì không gửi gì.
+
+## 5. Sửa theo review độc lập T1
+
+- **Mất quyền giữ giữa lượt** (`team_runner._keep_leases`, `_accept`): gia hạn trả False là mất quyền thật (`busy_taken`, `job_lost`); kho lỗi chỉ thành mất quyền (`store_error`) khi cả kỳ hạn trôi qua mà không gia hạn được lần nào. Trước khi nhả khoá còn kiểm lần cuối `TeamStore.busy_turn`. Lượt mất quyền có kết quả `lease_lost`: tin vẫn đăng làm bằng chứng, không ghi bài học, không áp lệnh quản trị hay kết quả bước. Việc đã sang tiến trình khác thì không đụng bước và dừng vòng; chỉ mất khoá agent thì bước chạy lại.
+- **Chờ khoá bận** (`_keep_job_lease`): hạn giữ việc được gia hạn ngay trong lúc chờ, không đụng khoá agent của lượt khác.
+- **Bảng giới hạn** đọc trần máy chủ bằng đúng `resonance_store.call_ceiling()`.
+- **Bật Auto mà đánh thức lỗi** (`main._TeamAdmin.set_resonance` trả `wake_error`): Auto giữ bật, nhật ký nhóm có `agent_set_resonance` và `agent_wake_failed`, ghi chú nói rõ Auto đã bật.
+- **`set_caps`** từ chối NaN, vô cực, kiểu sai trước khi ghi (cả `busy_wait_s` và trần trong hộp quyền), trả 4xx.
+- **Câu chữ:** docstring `effective_caps` và ghi chú trần của người điều phối nói đúng khi chủ đặt trần Không giới hạn.
