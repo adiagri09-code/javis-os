@@ -42,7 +42,8 @@
     below_threshold: "judge.code.below_threshold", not_selected: "judge.code.not_selected", k_zero: "judge.code.k_zero",
     batch_full: "judge.code.batch_full", rejudge_limit: "judge.code.rejudge_limit", wait_expired: "judge.code.wait_expired",
     depth_limit: "judge.code.depth_limit", loop: "judge.code.loop", waiting_quota: "judge.code.waiting_quota",
-    no_sender: "judge.code.no_sender", turn_blocked: "judge.code.turn_blocked", model_silent: "judge.code.model_silent" };
+    no_sender: "judge.code.no_sender", turn_blocked: "judge.code.turn_blocked", model_silent: "judge.code.model_silent",
+    wait_cancelled: "judge.code.wait_cancelled" };
   var EFFECT_KEY = { applied: "judge.effect.applied", stored_only: "judge.effect.stored_only",
     stored_before_resume: "judge.effect.stored_before_resume", stored_direct: "judge.effect.stored_direct" };
   var LABEL_KEY = { should_speak: "judge.label.should_speak", should_silent: "judge.label.should_silent" };

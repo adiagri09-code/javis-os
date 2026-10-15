@@ -4470,6 +4470,7 @@
   "judge.code.waiting_quota": "Chờ hạn mức",
   "judge.code.no_sender": "Không có đường gửi tin chủ động",
   "judge.code.turn_blocked": "Lượt tự lên tiếng không chạy được",
+  "judge.code.wait_cancelled": "Huỷ chờ: nhóm hay tin gốc không còn",
   "judge.code.model_silent": "Không có gì đáng nói",
   "judge.hint": "Gợi ý: xem quyết định im gần nhất của {name}",
   "teams.cap.judge_daily": "Lượt phán xử mỗi ngày của nhóm",

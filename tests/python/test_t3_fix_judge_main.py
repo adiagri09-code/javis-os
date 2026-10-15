@@ -67,6 +67,58 @@ check("mode send vẫn gửi bản nháp của chính agent",
                        {"draft": "Bản nháp của Lan", "ask_clarify": EVIL}, "send") is not None
       and main.get_store().get_messages(S)[-1]["content"] == "Bản nháp của Lan")
 
+# ═════ vòng 2 P3: chốt engine nhóm thật, khoá dựng lười ═════
+import asyncio  # noqa: E402
+import threading  # noqa: E402
+
+check("_paths đặt chốt JAVIS_NO_REAL_TEAM_ENGINE=1", os.environ.get("JAVIS_NO_REAL_TEAM_ENGINE") == "1")
+main.team_engine.build = main._TEAM_ENGINE_BUILD_REAL      # như một test quên thay engine
+sandbox_built = []
+orig_sandbox = main._reply_policy_sandbox_engine
+
+
+def _sandbox_trap(*a, **k):
+    sandbox_built.append(a)
+    raise RealEngineUsed("dựng hộp cát engine thật")
+
+main._reply_policy_sandbox_engine = _sandbox_trap
+_prov, _model, team_fn = main._team_engine_for({"brain_id": BK, "team_id": "tm_guardtest"}, KEY, "member_reply")
+started = []
+
+
+async def run_team():
+    async def eng_started():
+        started.append(1)
+    try:
+        await team_fn({"team_id": "tm_guardtest", "turn_id": "t1", "system": "s", "prompt": "p",
+                       "engine_started": eng_started})
+        return None
+    except Exception as ex:  # noqa: BLE001
+        return ex
+
+ex_t = asyncio.run(run_team())
+check("test quên thay team_engine.build: lượt nhóm dừng ở chốt (EngineUnavailable), không dựng engine, không mốc engine",
+      ex_t is not None and "JAVIS_NO_REAL_TEAM_ENGINE" in str(ex_t) and not sandbox_built and not started,
+      (ex_t, sandbox_built))
+main.team_engine.build = _no_real_engine
+main._reply_policy_sandbox_engine = orig_sandbox
+
+main._AGENT_JUDGE[0] = None
+seen, barrier = [], threading.Barrier(8)
+
+
+def grab():
+    barrier.wait()
+    seen.append(main._agent_judge())
+
+ths = [threading.Thread(target=grab) for _ in range(8)]
+for t_ in ths:
+    t_.start()
+for t_ in ths:
+    t_.join()
+check("8 luồng dựng bộ phán xử cùng lúc: đúng MỘT bộ, đã nối người gửi",
+      len({id(x) for x in seen}) == 1 and main._judge_send in seen[0]._senders, len({id(x) for x in seen}))
+
 if fails:
     print(f"\n{len(fails)} FAIL")
     raise SystemExit(1)

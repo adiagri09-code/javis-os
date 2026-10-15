@@ -4470,6 +4470,7 @@
   "judge.code.waiting_quota": "Waiting for quota",
   "judge.code.no_sender": "No way to send the proactive message",
   "judge.code.turn_blocked": "The speak-up turn could not run",
+  "judge.code.wait_cancelled": "Wait cancelled: the team or source message is gone",
   "judge.code.model_silent": "Nothing worth saying",
   "judge.hint": "Hint: see the latest silent decision of {name}",
   "teams.cap.judge_daily": "Team judge calls per day",

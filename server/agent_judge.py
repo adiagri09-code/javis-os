@@ -68,7 +68,7 @@ RELEASED_STALE_S = 120.0
 SILENCE_CODES = ("no_signal", "code_only", "policy_error", "timeout", "bad_json", "engine_unavailable", "judge_busy",
                  "judge_cap", "server_ceiling", "below_threshold", "not_selected", "k_zero", "batch_full",
                  "rejudge_limit", "wait_expired", "depth_limit", "loop", "self", "waiting_quota", "no_sender",
-                 "turn_blocked", "model_silent")
+                 "turn_blocked", "model_silent", "wait_cancelled")
 
 
 class EngineUnavailable(RuntimeError):
@@ -1145,7 +1145,8 @@ class Judge:
         out, team = [], []
         for it in items or []:
             w = it.get("wait") or {}
-            if not str(w.get("context_ref") or "").startswith("dm:"):
+            dm = str(w.get("context_ref") or "").startswith("dm:")
+            if not dm and not (it.get("action") == "released" and self._proactive_wait(w)):
                 team.append(it)
                 continue
             try:
@@ -1179,7 +1180,7 @@ class Judge:
         w = await run_io(self._wait_by_reason, int(reason_id))
         if w is None:
             return None
-        if not str(w["context_ref"]).startswith("dm:"):
+        if not str(w["context_ref"]).startswith("dm:") and not self._proactive_wait(w):
             if self._team_handler is not None and w["status"] == "released":
                 got = self._team_handler([{"wait": w, "action": "released", "reason_id": int(reason_id)}])
                 if asyncio.iscoroutine(got):
@@ -1188,15 +1189,30 @@ class Judge:
             return None
         return await self._rejudge_dm(w, int(reason_id))
 
+    @staticmethod
+    def _proactive_wait(w: dict) -> bool:
+        """Lần chờ của một TIN CHỦ ĐỘNG (lượt quét `say`, `ask_back`/`revise` của L): có bản nháp, không có tin nhóm làm mốc.
+        Ở chat riêng hay trong nhóm đều được xét lại bản nháp đúng một lần (7.4, review T3 vòng 2 P2-1); lần chờ của lô nhóm
+        (có `message_id`) đi bộ chạy nhóm."""
+        payload = (w or {}).get("payload") or {}
+        return bool(str(payload.get("draft") or "").strip()) and not payload.get("message_id")
+
     def _rejudge_dm_prepare(self, w: dict, reason_id: Optional[int]) -> dict:
-        """Phần ĐỒNG BỘ đầu của lần xét lại ở chat riêng (luồng phụ): đọc lại lần chờ, hạn mức, nhận lý do (CAS, giữ chỗ
-        dòng sổ). `skip` = không xét lại lần này."""
+        """Phần ĐỒNG BỘ đầu của lần xét lại một tin chủ động (luồng phụ): đọc lại lần chờ, hạn mức, nhận lý do (CAS, giữ chỗ
+        dòng sổ). `skip` = không xét lại lần này. Trong nhóm: CAS lần chờ `released -> rejudged` ngay (một người xét lại),
+        khép lý do, rồi xét lại qua `judge_proactive` với trần `judge_daily` của nhóm (không hỏi hạn mức ngày của agent)."""
         st = self.store(True)
         if w.get("status") != "released":
             w = st.get_wait(w["id"]) or w
             if w.get("status") != "released":
                 return {"skip": True}
         out = {"skip": False, "w": w, "claimed": None, "wake": None, "reason_id": reason_id}
+        if not str(w["context_ref"]).startswith("dm:"):
+            if not st.move_wait(int(w["id"]), "rejudged", frm="released", now=self.clock()):
+                return {"skip": True}
+            if reason_id:
+                self._close_reasons([reason_id], self.clock())
+            return out
         wake = self.wake()
         if wake is not None and reason_id:
             # Nhận lý do (CAS) TRƯỚC khi hỏi hạn mức (review T3 J P3): hai người gọi cùng lúc chỉ một người nhận được, người

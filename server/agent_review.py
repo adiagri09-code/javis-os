@@ -126,6 +126,12 @@ SELF_RULES = (
 )
 
 
+def _next_day(now: float) -> float:
+    """Mốc 0 giờ của ngày kế tiếp (giờ máy), như phép đếm hạn mức."""
+    import agent_budget
+    return agent_budget.day_start(agent_budget.day_start(float(now)) + 86400.0 + 3600.0)
+
+
 def _chu(vi: str, en: str) -> str:
     try:
         import localefmt
@@ -558,6 +564,18 @@ class ReviewHost:
                 await asyncio.to_thread(self._event, store, key, ctx, "quota", why or "agent_daily_calls",
                                         {"reason_id": rid, "purpose": "reaction_review"}, now)
                 return {"outcome": "quota", "reason": why}
+            if str(ctx).startswith("team:") and not await asyncio.to_thread(self._team_judge_room, store, ctx, now):
+                # Trần phán xử trong ngày của NHÓM đã hết (đối ứng của units=2 ở chat riêng, review T3 vòng 2 P2-2): không
+                # nhận lý do, không gọi model; phản hồi giữ nguyên, mở lại vào ngày mới.
+                self._backoff[rid] = _next_day(now)
+                if now - self._quota_noted.get(rid, -1e18) >= QUOTA_BACKOFF_S:
+                    self._quota_noted[rid] = now
+                    live = [s["source_ref"] for s in await asyncio.to_thread(W.sources, rid, True)]
+                    await self._astatus(live, "waiting_quota", _chu("Đã chạm trần phán xử hôm nay của nhóm",
+                                                                    "The team's judge limit for today is reached"))
+                    await asyncio.to_thread(self._event, store, key, ctx, "quota", "judge_cap",
+                                            {"reason_id": rid, "purpose": "reaction_review"}, now)
+                return {"outcome": "quota", "reason": "judge_cap"}
             cl = await asyncio.to_thread(lambda: W.claim(rid, purpose="reaction_review", obligation=False, now=now))
             if cl["outcome"] != "claimed":
                 if cl["outcome"] == "quota":
@@ -575,6 +593,24 @@ class ReviewHost:
             # Nhả khoá bận ghi kho nhóm: luồng phụ (bị huỷ thêm vẫn chờ nhả xong).
             from io_offload import run_io_quiet
             await run_io_quiet(release)
+
+    def _team_judge_room(self, store, ctx: str, now: float) -> bool:
+        """Còn chỗ trong trần `judge_daily` của nhóm hôm nay cho lượt phán xử tin mới (đếm như `Judge._reserve`: dòng
+        `judge_batch` của nhóm, `agent_key` rỗng, không hoàn). None là Không giới hạn; đọc lỗi thì coi như còn chỗ (bộ phán xử
+        vẫn tự chặn ở trần)."""
+        try:
+            payload = dict(self.deps.judge_payload(ctx) or {})
+        except Exception:  # noqa: BLE001
+            return True
+        cap = payload.get("judge_daily", 40) if "judge_daily" in payload else 40
+        if cap is None:
+            return True
+        import agent_budget
+        with closing(store._conn()) as c:
+            used = int(c.execute("SELECT COUNT(*) FROM agent_calls WHERE purpose='judge_batch' AND context_ref=? "
+                                 "AND agent_key='' AND status<>'refunded' AND created_at>=?",
+                                 (ctx, agent_budget.day_start(now))).fetchone()[0])
+        return used < int(cap)
 
     async def _review_claimed(self, store, W, ledger, reason, cl, now) -> dict:
         rid, key, ctx = int(reason["id"]), reason["agent_key"], reason["context_ref"]
@@ -625,9 +661,12 @@ class ReviewHost:
         if eff.get("requeue"):
             # Tin mới chưa phán xử được vì hết hạn mức: nguồn về lý do chờ (không tiêu thụ), lượt sau xem lại.
             requeued = await asyncio.to_thread(lambda: W.requeue(rid, consumed, now=now))
-            self._backoff[rid] = now + QUOTA_BACKOFF_S
+            # Trần phán xử của nhóm hay trần chung: chỉ mở lại vào ngày mới (giờ máy), không chạy lại lượt xem xét (một lời
+            # gọi model) mỗi 10 phút để rồi lại chạm trần (review T3 vòng 2 P2-2). Hết hạn mức ngày của agent: 10 phút.
+            until = _next_day(now) if eff.get("silence") in ("judge_cap", "server_ceiling") else now + QUOTA_BACKOFF_S
+            self._backoff[rid] = until
             if requeued:
-                self._backoff[int(requeued)] = now + QUOTA_BACKOFF_S
+                self._backoff[int(requeued)] = until
         await self._astatus(consumed, eff["status"], eff.get("status_reason", ""))
         payload = {"reason_id": rid, "call_id": cid, "outcome": res["outcome"], "consumed": consumed,
                    "moved_to": settled.get("moved_to"), "status": eff["status"], "reason": res["reason"]}
@@ -667,6 +706,7 @@ class ReviewHost:
             # Bộ phán xử dừng vì hết hạn mức hay chạm trần (chưa phán xử gì): KHÔNG phải "phán xử chọn im". Phản hồi không
             # được mất (GOAL 8.3, review T3 L P2-1): người gọi trả nguồn về lý do chờ, trạng thái "Chờ hạn mức".
             return {"status": "waiting_quota", "requeue": True, "verdict": verdict, "decision_id": did,
+                    "silence": str(dec.get("silence_code") or ""),
                     "status_reason": _chu("Hết hạn mức lượt hôm nay của trợ lý, sẽ xem lại sau",
                                           "The assistant's daily turns are used up; it will review again later")}
         if verdict != "speak":

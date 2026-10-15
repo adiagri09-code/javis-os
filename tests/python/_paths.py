@@ -32,6 +32,8 @@ if str(SERVER) not in sys.path:
 import os as _os  # noqa: E402
 _os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
 _os.environ["JAVIS_NO_REAL_REVIEW_ENGINE"] = "1"
+# Lượt nhóm, lượt quét, lượt học (`main._team_engine_for`): test quên thay `team_engine.build` thì dừng, không dựng CLI thật.
+_os.environ["JAVIS_NO_REAL_TEAM_ENGINE"] = "1"
 
 
 def moi_route(app):
