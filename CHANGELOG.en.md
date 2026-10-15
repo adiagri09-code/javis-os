@@ -12,6 +12,10 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 ### Added
 - **Agents pace themselves and judge when to speak** (in progress).
 
+## [0.157.0] - 2026-10-15
+### Added
+- **Team chat holds up with long history and many tabs** (in progress).
+
 ## [0.154.0] - 2026-10-15
 ### Added
 - **React to an agent's messages** in private and team chat (in progress).

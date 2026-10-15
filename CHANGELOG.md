@@ -10,6 +10,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 ### Thêm mới
 - **Trợ lý tự điều nhịp và tự biết lúc nên nói** (đang làm).
 
+## [0.157.0] - 2026-10-15
+### Thêm mới
+- **Nhóm chat bền với lịch sử dài và nhiều tab** (đang làm).
+
 ## [0.154.0] - 2026-10-15
 ### Thêm mới
 - **Thả cảm xúc cho tin của trợ lý** ở cả chat riêng lẫn nhóm (đang làm).
