@@ -101,6 +101,8 @@ class RealEngineUsed(AssertionError):
 REAL_ATTEMPTS: list = []   # mỗi lần có đường nào thử dựng engine thật (đã bị chặn) ghi một dòng; báo cáo đếm thật
 
 
+REQ_PHASE_MIN_S = 1.5   # pha chỉ có request chạy tối thiểu chừng này giây (đủ khoảng 150 mẫu của bộ hẹn giờ 10 ms)
+
 def _no_real_engine(*a, **k):
     REAL_ATTEMPTS.append(time.time())
     raise RealEngineUsed("a REAL engine was built or called; T4 harnesses only run fake engines")
@@ -555,8 +557,17 @@ def main_bench(argv=None) -> dict:
 
             # Từng nguồn tải riêng (để biết nguồn nào giữ event loop), rồi tất cả cùng lúc.
             isolated = {}
-            for label, make in (("requests_only", lambda: asyncio.gather(*(worker(w, 500000) for w in
-                                                                         range(a.concurrency)))),
+
+            async def requests_wave():
+                # Lặp đợt request tới khi đủ ít nhất REQ_PHASE_MIN_S giây: máy nhanh (CI) xong một đợt trong nửa giây chỉ
+                # có vài chục mẫu của bộ hẹn giờ 10 ms, không đủ để nói về p95. Số mẫu tăng, ngưỡng giữ nguyên.
+                s0 = time.perf_counter()
+                while True:
+                    await asyncio.gather(*(worker(w, 500000) for w in range(a.concurrency)))
+                    if time.perf_counter() - s0 >= REQ_PHASE_MIN_S:
+                        return
+
+            for label, make in (("requests_only", requests_wave),
                                 ("judge_wave_only", lambda: judge_wave("iso")),
                                 ("pulse_ticks_only", pulse_wave)):
                 st_, lg_ = asyncio.Event(), []
