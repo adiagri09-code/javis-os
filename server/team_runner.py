@@ -31,7 +31,7 @@ from typing import Any, Awaitable, Callable, Optional
 
 import reaction_values as RV
 import resonance_store
-from team_store import (DEFAULT_CAPS, FIXED_CAPS, OWNER_CAPS, REACTION_EMOJI, UNLIMITED_CAPS, TeamError,
+from team_store import (CAP_MAX, DEFAULT_CAPS, FIXED_CAPS, OWNER_CAPS, REACTION_EMOJI, UNLIMITED_CAPS, TeamError,
                         TurnCapReached)
 
 log = logging.getLogger("javis.team_runner")
@@ -1207,6 +1207,11 @@ class TeamRunner:
         grant = dict(grant or {})
         ceilings = {k: self._cap_value(v) for k, v in (grant.get("ceilings") or {}).items() if k in AUTH_CAPS}
         caps = {k: self._cap_value(v) for k, v in (grant.get("caps") or {}).items() if k in AUTH_CAPS}
+        for box in (ceilings, caps):
+            # K (T3 J) không có "Không giới hạn" và tối đa 5 người, như trần của chủ (team_store.CAP_MAX).
+            if "volunteer_k" in box and (isinstance(box["volunteer_k"], dict)
+                                         or int(box["volunteer_k"]) > CAP_MAX["volunteer_k"]):
+                raise TeamError(f"trần volunteer_k phải là số từ 0 tới {CAP_MAX['volunteer_k']}")
         for k, v in caps.items():
             # Không có trần tối đa: chủ đặt trần cố định, trưởng nhóm không đổi được (kiểm ở `set_cap`).
             if k in ceilings and not self._within(v, ceilings[k]):
@@ -1432,6 +1437,8 @@ class TeamRunner:
                 if cap not in AUTH_CAPS:
                     raise TeamError(f"không có trần '{cap}'")
                 value = {"unlimited": True} if op.get("unlimited") else self._cap_value(op.get("value"))
+                if cap in CAP_MAX and (isinstance(value, dict) or int(value) > CAP_MAX[cap]):
+                    raise TeamError(f"trần {cap} phải là số từ 0 tới {CAP_MAX[cap]}")
                 if not self._within(value, (grant.get("ceilings") or {}).get(cap)):
                     raise TeamError(f"trần {cap} vượt trần trần chủ đặt")
                 if not self.teams.update_authority_caps(auth["id"], {cap: value}, by):
