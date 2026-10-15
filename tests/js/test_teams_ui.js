@@ -680,5 +680,37 @@ check("khoá chữ ghim có ở vi và en", ["teams.pin_team", "teams.unpin_team
         && /\.tm-limits\[hidden\]/.test(css));
   check("GOAL T1 tích Không giới hạn ở trần của chủ thì ô số tắt (cùng nhánh với hộp Toàn quyền)",
         teamsJs.includes("/^tm-(auth-(cap|ceil)|cap)-[a-z_]+-unl$/") && teamsJs.includes("if (cur !== null) caps[k] = { unlimited: true };"));
+  // Review T1 #1 (af85ad71): bỏ tích Không giới hạn mà chưa nhập số thì không gửi gì và chỉ ra trần thiếu số.
+  (function () {
+    var cur = { task_turns: null, task_steps: 8, help_depth: 2, daily_turns: 100, mentions: 3, busy_wait_s: 1800 };
+    function form(over) {
+      return function (k) {
+        var f = { checked: ["task_turns", "task_steps", "help_depth", "daily_turns"].indexOf(k) >= 0 ? false : null,
+          value: cur[k] == null ? "" : String(cur[k]) };
+        return Object.assign(f, (over || {})[k] || {});
+      };
+    }
+    var miss = TM.capsPayload(cur, form());
+    check("review T1 #1 bỏ tích Không giới hạn, ô số trống: báo thiếu số, không gửi trần nào",
+          miss.missing === "task_turns" && Object.keys(miss.caps).length === 0, JSON.stringify(miss));
+    var mixed = TM.capsPayload(cur, form({ task_steps: { value: "9" } }));
+    check("review T1 #1 có trần khác đổi mà một trần thiếu số: vẫn không gửi phần nào (không lưu nửa vời)",
+          mixed.missing === "task_turns" && Object.keys(mixed.caps).length === 0, JSON.stringify(mixed));
+    var fixed = TM.capsPayload(cur, form({ task_turns: { value: "15" } }));
+    check("review T1 #1 nhập số sau khi bỏ tích: gửi đúng số đó", !fixed.missing && fixed.caps.task_turns === 15,
+          JSON.stringify(fixed));
+    var keep = TM.capsPayload(cur, form({ task_turns: { checked: true } }));
+    check("review T1 #1 vẫn tích Không giới hạn như đang lưu: không gửi gì, không báo thiếu",
+          !keep.missing && Object.keys(keep.caps).length === 0, JSON.stringify(keep));
+    var unl = TM.capsPayload(cur, form({ task_turns: { checked: true }, daily_turns: { checked: true } }));
+    check("review T1 #1 tích Không giới hạn mới: gửi {unlimited: true}", unl.caps.daily_turns && unl.caps.daily_turns.unlimited === true
+          && !("task_turns" in unl.caps), JSON.stringify(unl));
+    check("review T1 #1 saveCaps báo bằng khoá i18n và focus ô số thiếu, có ở vi và en",
+          teamsJs.includes('tw("teams.cap_need_number"') && teamsJs.includes("miss.focus()") &&
+          !!vi["teams.cap_need_number"] && !!en["teams.cap_need_number"]);
+    check("review T1 #3 nhãn kết quả mất quyền giữ có ở vi và en, nằm trong nhóm đến muộn",
+          teamsJs.includes('lease_lost: "teams.status.lease_lost"') && teamsJs.includes('"leader_changed", "lease_lost"]') &&
+          !!vi["teams.status.lease_lost"] && !!en["teams.status.lease_lost"]);
+  })();
   process.exit(fails ? 1 : 0);
 })();
