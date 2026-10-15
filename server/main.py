@@ -22502,6 +22502,7 @@ import agent_judge_store  # noqa: E402
 
 _AGENT_JUDGE = [None]
 _AGENT_JUDGE_STORE = [None]
+_JUDGE_VIEW_REGISTERED = [False]
 
 
 def _agent_judge_store(create=True):
@@ -22631,7 +22632,9 @@ def _judge_view_for(agent_key, root=None):
 
 def _register_judge_view_part():
     """Góp phần "judge" vào `GET /agents/{slug}/pulse` của phần P (`agent_pulse_host.register_view_part`). Nhánh chưa có
-    phần P thì không làm gì; `GET /agents/{slug}/judge` vẫn trả đúng phần này."""
+    phần P thì không làm gì; `GET /agents/{slug}/judge` vẫn trả đúng phần này. Đăng ký một lần."""
+    if _JUDGE_VIEW_REGISTERED[0]:
+        return True
     try:
         import agent_pulse_host  # type: ignore
     except ImportError:
@@ -22641,6 +22644,7 @@ def _register_judge_view_part():
         return False
     try:
         reg("judge", lambda agent_key, **_kw: _judge_view_for(agent_key))
+        _JUDGE_VIEW_REGISTERED[0] = True
         return True
     except Exception as _e:  # noqa: BLE001
         print(f"[agent judge view part] {type(_e).__name__}: {_e}", file=sys.stderr)
@@ -22678,6 +22682,8 @@ _TEAM_API = team_api.register(app, team_api.TeamApiDeps(
     broadcast=lambda ev: _CHAT_RUNTIME.publish(ev), notify=_team_notify, admin=_TeamAdmin(),
     owner_name=lambda: ((cfgmod.read_settings().get("auth") or {}).get("username") or ""),
     ceiling=_team_ceiling, projector=_feedback_projector, judge=lambda: _agent_judge()))
+# T3 phần J: góp phần "judge" vào khung nhịp của phần P ngay lúc nạp (không có phần P thì không làm gì).
+_register_judge_view_part()
 
 
 # ── Reaction chat riêng (T2, 0.154.0; hợp đồng docs/dev/team-chat-t2-contract.md mục 4) ──

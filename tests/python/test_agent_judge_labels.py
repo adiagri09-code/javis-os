@@ -150,4 +150,22 @@ check("POST label thiếu mã: 400", r.status_code == 400)
 r = c.post(f"/agents/lan/judge/label{Q}", json={"decision_id": sil, "label": ""})
 check("POST label rỗng: bỏ nhãn", r.status_code == 200 and st.get_decision(sil)["label"] == "")
 
+# ═════ bộ chuyển đăng ký phần "judge" vào khung nhịp của phần P ═════
+import sys as _sys  # noqa: E402
+import types as _types  # noqa: E402
+
+check("chưa có phần P (agent_pulse_host): bộ chuyển không làm gì, không lỗi",
+      "agent_pulse_host" in _sys.modules or main._register_judge_view_part() is False)
+fake = _types.ModuleType("agent_pulse_host")
+parts = {}
+fake.register_view_part = lambda name, fn: parts.__setitem__(name, fn)
+_sys.modules["agent_pulse_host"] = fake
+main._JUDGE_VIEW_REGISTERED[0] = False
+check("có phần P: đăng ký đúng một phần tên 'judge'", main._register_judge_view_part() is True and list(parts) == ["judge"])
+pv = parts["judge"](a_lan["agent_key"])
+check("phần 'judge' trả khung nhìn quyết định của đúng agent", pv["name"] == "judge" and pv["agent_key"] == a_lan["agent_key"]
+      and any(c["context_ref"] == "team:tm_x" for c in pv["contexts"]), pv)
+check("đăng ký một lần (gọi lại không đăng ký thêm)", main._register_judge_view_part() is True and len(parts) == 1)
+del _sys.modules["agent_pulse_host"]
+
 finish()
