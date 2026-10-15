@@ -585,7 +585,7 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 return err
             if not _own_task(team_id, task_id):
                 return _err(404, "Không có việc này trong nhóm", "No such job in this team")
-            prev = api.runner().cancel_job(task_id)
+            prev = api.runner().cancel_job(task_id, owner_cancel=True)
             if prev is None:
                 return _err(409, "Việc đã kết thúc", "The job has already ended")
             api.kick()

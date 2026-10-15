@@ -2926,17 +2926,21 @@ class TeamRunner:
 
     # ───────────── lệnh của chủ, phục hồi ─────────────
 
-    def cancel_job(self, task_id: str, reason: str = "chủ nhóm huỷ") -> Optional[str]:
+    def cancel_job(self, task_id: str, reason: str = "chủ nhóm huỷ", owner_cancel: bool = False) -> Optional[str]:
         """Huỷ việc (spec 7.6). Lượt đang gọi engine bị ngắt (tính một lần, `interrupted`); bước chưa chạy huỷ theo.
         Trả trạng thái trước khi huỷ, None nếu việc đã kết thúc hay không thuộc làn team. Gọi được từ luồng phụ: phần
-        ghi kho chạy ngay, phần huỷ task asyncio xếp về event loop."""
+        ghi kho chạy ngay, phần huỷ task asyncio xếp về event loop.
+
+        `owner_cancel=True` CHỈ từ route chủ huỷ việc: khi đó mới ghi tín hiệu -0,4 (6.1). Trưởng nhóm ngắt (kể cả Toàn
+        quyền), lưu trữ nhóm, huỷ việc treo khi tạm dừng không phải phản hồi của chủ về kết quả, nên không ghi gì (review
+        T3 P P2-2: agent không tạo tín hiệu cho agent, lưu trữ nhóm không phạt người đã nộp kết quả)."""
         before = self.tasks.get_task(task_id)
-        authors = self.result_authors(before) if before else []
+        authors = self.result_authors(before) if (before and owner_cancel) else []
         prev = self._cancel_records(task_id, reason)
         if prev is not None:
             self._on_loop(self._cancel_task, task_id)
-            if before:
-                # T3 (6.1): huỷ sau khi đã có kết quả là bằng chứng chưa hữu ích (-0.4) cho người nộp kết quả đó.
+            if before and owner_cancel:
+                # T3 (6.1): chủ huỷ sau khi đã có kết quả là bằng chứng chưa hữu ích (-0.4) cho người nộp kết quả đó.
                 self.pulse_task_event("cancel", before["team_id"], authors, f"cancel:{task_id}")
         return prev
 
