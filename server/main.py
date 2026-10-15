@@ -22686,7 +22686,31 @@ _TEAM_API = team_api.register(app, team_api.TeamApiDeps(
     agents_meta=_resonance_agents_meta, agent_info=_team_agent_info, engine_for=_team_engine_for,
     broadcast=lambda ev: _CHAT_RUNTIME.publish(ev), notify=_team_notify, admin=_TeamAdmin(),
     owner_name=lambda: ((cfgmod.read_settings().get("auth") or {}).get("username") or ""),
-    ceiling=_team_ceiling, projector=_feedback_projector, judge=lambda: _agent_judge()))
+    ceiling=_team_ceiling, projector=_feedback_projector, judge=lambda: _agent_judge(),
+    contrib_reader=lambda ref: _team_contrib_reader(ref)))
+
+
+def _team_contrib_reader(result_ref):
+    """Lịch sử dài của nhóm (T4, 0.157.0): phân bổ ghi nhận còn hiệu lực của một bản tổng hợp `step:<id>` từ
+    `pulse_contrib` (phần nhịp T3). Chưa có kho resonance thì không tạo kho chỉ để đọc. Một truy vấn theo chỉ mục
+    `pulse_contrib_result` (tạo một lần mỗi tiến trình), có trần dòng."""
+    st = _pulse_store()
+    if st is None:
+        return []
+    from contextlib import closing as _closing
+    with _closing(st._conn()) as c:
+        if not _TEAM_CONTRIB_INDEXED[0]:
+            if not c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pulse_contrib'").fetchone():
+                return []
+            c.execute("CREATE INDEX IF NOT EXISTS pulse_contrib_result ON pulse_contrib(result_ref, status)")
+            c.commit()
+            _TEAM_CONTRIB_INDEXED[0] = True
+        return [dict(r) for r in c.execute(
+            "SELECT agent_key, share, role FROM pulse_contrib WHERE result_ref=? AND status='live' "
+            "ORDER BY share DESC, id LIMIT 8", (str(result_ref),)).fetchall()]
+
+
+_TEAM_CONTRIB_INDEXED = [False]
 # T3 phần J: góp phần "judge" vào khung nhịp của phần P ngay lúc nạp (không có phần P thì không làm gì).
 _register_judge_view_part()
 

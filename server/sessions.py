@@ -57,6 +57,8 @@ KENH_TEAM = ("team:", "teammate:")
 # T2 (0.154.0, thiết kế 2026-10-15 mục 4.1): reaction trên câu trả lời của chat riêng. Kho có từ trước được chụp một bản
 # `conversations.db.pre-0.154.0` trước khi tạo bảng (khôi phục khi hạ phiên bản; bản cũ bỏ qua hai bảng mới).
 DM_REACTION_SNAPSHOT_SUFFIX = ".pre-0.154.0"
+# Tin nhóm được ghim làm quyết định: `meta_json` do json.dumps mặc định ghi `"decision": true` (T4, 0.157.0).
+TEAM_DECISION_LIKE = '%"decision": true%'
 _DM_REACTION_SQL = """
 CREATE TABLE IF NOT EXISTS dm_reactions (
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -528,6 +530,15 @@ class SessionStore:
             self._conn.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client "
                 "ON messages(session_id, client_msg_id) WHERE client_msg_id IS NOT NULL")
+            # Lịch sử dài của nhóm (T4, 0.157.0): sổ quyết định ghim và "tin mới nhất của agent X" là truy vấn theo chỉ
+            # mục, không quét cả phiên nhóm hàng nghìn tin mỗi lượt. Chỉ mục từng phần: chat thường (author_ref NULL,
+            # không có quyết định ghim) không vào chỉ mục. Chỉ thêm chỉ mục, bản cũ bỏ qua.
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_messages_team_author "
+                "ON messages(session_id, author_ref, id) WHERE author_ref IS NOT NULL")
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_messages_team_decision "
+                f"ON messages(session_id, id) WHERE meta_json LIKE '{TEAM_DECISION_LIKE}'")
             # Hướng dẫn riêng của project, ghép vào system prompt mỗi lượt chat trong đó.
             cols_p = {r[1] for r in self._conn.execute(
                 "PRAGMA table_info(projects)").fetchall()}
@@ -773,8 +784,9 @@ class SessionStore:
 
     def team_decisions(self, session_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Tin chủ nhóm ghim làm quyết định ("Sổ quyết định", spec 11.2), cũ trước, tối đa `limit` tin gần nhất."""
-        rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND meta_json LIKE ? "
-                          "ORDER BY id DESC LIMIT ?", (session_id, '%"decision": true%', max(1, int(limit))))
+        # Mẫu LIKE viết thẳng (không qua tham số) để SQLite dùng được chỉ mục từng phần `idx_messages_team_decision`.
+        rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND meta_json LIKE "
+                          f"'{TEAM_DECISION_LIKE}' ORDER BY id DESC LIMIT ?", (session_id, max(1, int(limit))))
         return [m for m in (self._team_msg(r) for r in reversed(rows)) if m["meta"].get("decision") is True]
 
     def update_team_message_meta(self, session_id: str, message_id: int, patch: Dict[str, Any]) -> bool:

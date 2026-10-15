@@ -53,6 +53,7 @@ class TeamApiDeps:
     ceiling: Optional[Callable[[], Any]] = None        # () -> agent_ledger.TeamCeiling (T2, trần lượt chung) | None
     projector: Optional[Callable[[], Any]] = None      # () -> feedback_projector.FeedbackProjector (T2) | None
     judge: Optional[Callable[[], Any]] = None          # () -> agent_judge.Judge (T3 phần J) | None
+    contrib_reader: Optional[Callable[[str], list]] = None  # result_ref -> pulse_contrib còn hiệu lực (T4, lịch sử dài)
 
 
 async def _body(request: Request) -> dict:
@@ -141,7 +142,8 @@ class TeamApi:
                 publish=publish, notify=notify, worker_id="team-runner", admin=self.deps.admin,
                 ceiling=self.deps.ceiling() if self.deps.ceiling is not None else None,
                 projector=self.deps.projector() if self.deps.projector is not None else None,
-                judge=self.deps.judge() if self.deps.judge is not None else None)
+                judge=self.deps.judge() if self.deps.judge is not None else None,
+                contrib_reader=self.deps.contrib_reader)
             if self._loop is not None:
                 self._runner._loop, self._runner._loop_thread = self._loop, self._loop_thread
         return self._runner

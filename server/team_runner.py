@@ -307,8 +307,11 @@ class TeamRunner:
                  agent_info: Callable[[str, str], Optional[dict]], publish: Optional[Callable[[dict], Any]] = None,
                  notify: Optional[Callable[[str, str], Any]] = None, worker_id: str = "team-runner",
                  max_parallel_teams: int = 2, clock: Callable[[], float] = time.time, admin: Any = None,
-                 ceiling: Any = None, projector: Any = None, judge: Any = None):
+                 ceiling: Any = None, projector: Any = None, judge: Any = None, contrib_reader: Any = None):
         self.teams = teams
+        # T4 (0.157.0): đọc tỷ lệ ghi nhận đóng góp của một bản tổng hợp (`pulse_contrib` của phần nhịp T3), dùng ở khối
+        # lịch sử dài. `contrib_reader(result_ref) -> [{agent_key, share, role}]`. None: chỉ liệt kê đầu vào do host ghi.
+        self.contrib_reader = contrib_reader
         # T3 phần J (0.156.0): bộ phán xử theo agent (`agent_judge.Judge`). None: hành vi T2 (không ai tự lên tiếng, tin
         # của agent không mở lượt xem xét liên quan).
         self.judge = judge
@@ -1478,12 +1481,18 @@ class TeamRunner:
 
     # ───────────── lịch sử dài (T4, spec mục 19) ─────────────
 
-    def _older_summary(self, team: dict, shown: int) -> list:
+    def _older_summary(self, team: dict, shown: int, agent_key: str = "", current_task: str = "") -> list:
         """Khối "Tóm tắt phần cũ" do CODE dựng (không gọi model): số tin cũ hơn cửa sổ lịch sử, các việc đã xong gần đây
-        kèm trích kết quả. Chỉ dữ liệu của chính nhóm này; có trần ký tự. Rỗng khi cửa sổ đã phủ hết phiên."""
+        kèm trích kết quả, và (T4 0.157.0) phần luôn giữ: việc đang mở với yêu cầu gốc, nguồn đóng góp của kết quả gần
+        nhất, phản hồi chưa xem xét (`team_long_memory`). Chỉ dữ liệu của chính nhóm này; mỗi mục một truy vấn có chỉ mục
+        và trần dòng, có trần ký tự. Rỗng khi cửa sổ đã phủ hết phiên."""
         older = self.sessions.team_message_count(team["session_id"]) - int(shown)
         if older <= 0:
             return []
+        import team_long_memory
+        kept = team_long_memory.always_kept_lines(
+            team=team, agent_key=agent_key, tasks=self.tasks, teams=self.teams, sessions=self.sessions,
+            name_of=lambda k: self._name(team, k), contrib_reader=self.contrib_reader, current_task=current_task)
         lines = [f"\n## Tóm tắt phần cũ của nhóm (máy tự tóm, không phải model)",
                  (f"Có {older} tin cũ hơn phần lịch sử ở dưới." if shown else f"Có {older} tin cũ; tin gần nhất quá dài nên không hiện.")
                  + " Quyết định đã ghim vẫn ở Sổ quyết định."]
@@ -1502,7 +1511,7 @@ class TeamRunner:
         if rows:
             lines.append("Việc đã xong gần đây (mới trước):")
             lines.extend(rows)
-        return lines
+        return lines + kept
 
     def search(self, team_id: str, query: str, limit: int = 50) -> list:
         """Tìm tin trong CHÍNH nhóm này (không lẫn phiên khác); trả tin kèm đoạn trích quanh chỗ khớp."""
@@ -1756,7 +1765,7 @@ class TeamRunner:
             rendered.append(row)
             size += len(row)
         # Lịch sử dài (T4): phần cũ hơn cửa sổ được tóm bằng code, đặt trước phần lịch sử gần đây.
-        lines.extend(self._older_summary(team, len(rendered)))
+        lines.extend(self._older_summary(team, len(rendered), agent_key, (task or {}).get("id") or ""))
         if rendered:
             lines.append(f"\n## Lịch sử gần đây của nhóm (tối đa {NEW_MSG_LIMIT} tin, cũ trước; "
                          "\"mới\" là tin sau lượt trước của bạn)")
