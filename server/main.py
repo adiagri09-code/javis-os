@@ -46,6 +46,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from claude_cli import CodexCLI, claude_engine, find_claude_cli, find_codex_cli, cancel_all, _empty_mcp_file, auth_status as claude_auth_status, auth_login as claude_auth_login, auth_logout as claude_auth_logout, auth_login_ui_start, auth_login_ui_code, mcp_native_add, mcp_native_remove, mcp_native_status, mcp_open_auth_terminal, mcp_native_list, codex_mcp_native_list, codex_mcp_native_add, codex_mcp_native_remove, codex_mcp_native_status, codex_mcp_open_login_terminal
 import claude_cli   # binary `claude`: tìm đường, auth, và danh mục model nhúng sẵn trong CLI
 import codex_models   # thang effort mà CHÍNH Codex khai cho từng model (model/list)
+import fast_mode   # composer Fast mode bolt: per-turn choice and per-brain parameters (0.163.0)
 import config as cfgmod
 import update_state
 _ver_tuple = update_state.ver_tuple
@@ -3887,6 +3888,31 @@ def _cli_do_sau_khac(cli, mod, reasoning, message):
             return _nhac_suy_nghi(reasoning, message)
         return message
     return _nhac_suy_nghi(reasoning, message)
+
+
+def _cli_fast(cli):
+    """Fast mode for Claude Code (0.163.0): `settings='{"fastMode": true}'` on the SDK options
+    when this turn has the bolt on and the model supports it (Opus 5.5, Opus 5, Opus 4.8)."""
+    try:
+        cli.fast_settings = fast_mode.claude_sdk_settings(getattr(cli, "model", "") or "", fast_mode.current())
+    except Exception:  # noqa: BLE001 - an engine without this attribute just runs at the normal tier
+        pass
+
+
+def _codex_fast(cli):
+    """Fast mode for Codex CLI (0.163.0): `-c service_tier=...`, replacing any earlier tier entry.
+
+    On asks for `priority` when the model declares it. Off forces `default`, because some Codex
+    models default to `priority` and the user's config.toml may set it (owner approved)."""
+    try:
+        model = getattr(cli, "model", "") or ""
+        override = fast_mode.codex_override(model, fast_mode.current(), codex_models.tiers_for(model))
+        extra = [x for x in (cli.extra_config or []) if not str(x).startswith("service_tier=")]
+        if override:
+            extra.append(override)
+        cli.extra_config[:] = extra
+    except Exception:  # noqa: BLE001 - never break a turn over the speed tier
+        pass
 
 
 def _codex_do_sau(cli, reasoning, message):
@@ -14633,6 +14659,7 @@ async def websocket_endpoint(ws: WebSocket):
                 return ""
             prov, kind, api_key, api_model = _chat_provider_for_session(mcfg, _row0)
             reasoning = _reasoning_level(mcfg)
+            fast_mode.use(mcfg.get("fast") is True)
             _CONTEXT_RUNTIME.set_route(
                 runtime_trace,
                 "codex" if prov == "openai-oauth" else prov,
@@ -15035,6 +15062,7 @@ async def websocket_endpoint(ws: WebSocket):
                         "use Claude Code or OpenRouter for stability (change it on the Models page).")}))
                 else:
                     _codex_current = _codex_do_sau(ccli, reasoning, user_message)
+                    _codex_fast(ccli)
                     _codex_raw = [{"role": _m["role"], "content": _m["content"]}
                                   for _m in store.get_messages(conv_sid)[:-1]
                                   if _m["role"] in ("user", "assistant") and _m.get("content")]
@@ -15500,6 +15528,7 @@ async def websocket_endpoint(ws: WebSocket):
                 _cli_sid = None
                 _cost = None
                 _cli_prompt = _cli_do_sau(cli, reasoning, user_message)
+                _cli_fast(cli)
                 if not cli.session_id:
                     # Bỏ --resume là Claude Code mất sạch mạch cũ. Mở mạch mới mà không mang
                     # theo gì thì đó không phải tiết kiệm, đó là làm hỏng hội thoại: người
@@ -19889,6 +19918,7 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
     sess["last"] = text
     sess["sent"] = set()    # lượt mới → reset dedupe (endpoint /telegram/send-file add vào đây)
     reasoning = _reasoning_level(mcfg)
+    fast_mode.use(mcfg.get("fast") is True)
     runtime_trace = context_runtime.current_trace()
 
     # NGÔN NGỮ cho lượt này. Dính theo TỪNG CUỘC CHAT (chat_id), không theo tiến trình: một
@@ -20280,6 +20310,7 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
             except Exception:
                 _raw = []
         _hien_tai = _codex_do_sau(ccli, reasoning, text)
+        _codex_fast(ccli)
         thread_cu = (getattr(ccli, "session_id", None) or "")
         # Chưa có thread (phiên mới, hoặc vừa bị xoá liên kết vì provider khác chen vào) thì
         # seed transcript đúng một lượt; có thread rồi thì resume native, khỏi gửi lại lịch sử.
@@ -20388,6 +20419,7 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
         loi = []
         _pinged = False
         _cli_prompt = _cli_do_sau(cli, reasoning, text)
+        _cli_fast(cli)
         if not getattr(cli, "session_id", None):
             # Chưa có mạch native (phiên mới, hoặc vừa restart nên object engine dựng lại từ
             # đầu) thì mồi transcript đã lưu vào ĐÚNG MỘT lượt, y như dashboard vẫn làm. Có mạch
