@@ -22891,15 +22891,14 @@ async def sessions_message_reaction(session_id: str, message_id: int, request: R
     if not isinstance(body, dict):
         return JSONResponse({"ok": False, "error": localefmt.chu("Thân yêu cầu không hợp lệ", "Invalid request body")},
                             status_code=400)
-    store = get_store()
-    sess = store.get_session(session_id)
-    if not sess:
-        return JSONResponse({"ok": False, "error": localefmt.chu("Không có phiên này", "No such session")},
-                            status_code=404)
-
     def _do():
+        # Mọi đọc/ghi kho (phiên, tin, nonce, reaction, bộ chiếu) ở luồng phụ: route này chạy trên event loop (GOAL mục 10).
         # Thứ tự (review T2 P3): kiểm thân, tin và nonce gửi lại TRƯỚC khi tra tác giả, nên request bị từ chối hay gửi
         # lại không cấp mã trợ lý, không ghim phiên, không tạo kho resonance.
+        store = get_store()
+        sess = store.get_session(session_id)
+        if not sess:
+            raise sessions.DmReactionError(404, "Không có phiên này", "No such session")
         try:
             n = reaction_values.normalize(body.get("value"), body.get("reasons"), body.get("axis"), body.get("comment"),
                                           body.get("nonce"))
@@ -23594,8 +23593,30 @@ async def _pulse_tick():
         _PULSE_TICK_BUSY[0] = False
 
 
+_PULSE_WAKE_TASKS = set()
+
+
 def _pulse_wake_dm(brain, slug, why="owner_message"):
-    """Chủ nhắn trực tiếp trợ lý trong chat riêng: thức lại nhịp ngữ cảnh `dm:<agent_key>` (5.2). Không có kho thì thôi."""
+    """Chủ nhắn trực tiếp trợ lý trong chat riêng: thức lại nhịp ngữ cảnh `dm:<agent_key>` (5.2). Không có kho thì thôi.
+
+    Gọi từ cuối lượt chat (trong `websocket_endpoint`, trên event loop): phần kho (giao dịch BEGIN IMMEDIATE, có thể chờ tới
+    10 giây khi kho bận) chạy nền ở luồng phụ, lượt chat không chờ (review T3 P P2-3). Ngoài event loop thì chạy luôn."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is None:
+        _pulse_wake_dm_sync(brain, slug, why)
+        return
+    try:
+        t = asyncio.ensure_future(asyncio.to_thread(_pulse_wake_dm_sync, brain, slug, why))
+        _PULSE_WAKE_TASKS.add(t)
+        t.add_done_callback(_PULSE_WAKE_TASKS.discard)
+    except Exception as e:  # noqa: BLE001
+        print(f"[pulse wake dm] {slug}: {type(e).__name__}: {e}", file=sys.stderr)
+
+
+def _pulse_wake_dm_sync(brain, slug, why="owner_message"):
     try:
         st = _pulse_store()
         if st is None:

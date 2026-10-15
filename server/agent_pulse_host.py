@@ -701,7 +701,7 @@ def register(app, deps: PulseRouteDeps) -> None:
         root, key, e = await asyncio.to_thread(resolve, slug, brain)
         if e:
             return e
-        store = deps.store()
+        store = await asyncio.to_thread(deps.store)
         if not key or store is None:
             return empty(slug)
         out = await asyncio.to_thread(view, store, key)
@@ -712,7 +712,7 @@ def register(app, deps: PulseRouteDeps) -> None:
         root, key, e = await asyncio.to_thread(resolve, slug, brain)
         if e:
             return e
-        store = deps.store()
+        store = await asyncio.to_thread(deps.store)
         if not key or store is None:
             return err(409, "Trợ lý chưa có nhịp (chưa bật Auto lần nào)", "This assistant has no pulse yet")
         b = await body_of(request)
@@ -824,7 +824,7 @@ def register(app, deps: PulseRouteDeps) -> None:
             ids = sorted({int(x) for x in ids})
         except (TypeError, ValueError):
             return err(400, "Mã tin không hợp lệ", "Invalid message id")
-        store = deps.store()
+        store = await asyncio.to_thread(deps.store)
         if store is None:
             return {"ok": True, "recorded": 0, "agent": False}
 

@@ -12,6 +12,8 @@ còn I/O nào chạy trên luồng event loop thì khoảng trống lớn nhất
 3. Nhịp pulse (chiếu outbox, bước code, lần thức, lượt quét, đề xuất) với mọi hàm của host chậm: loop không bị giữ.
 4. Bộ chiếu: hai nhịp liền nhau không chiếu lại dòng đã `done`, không ghi lại trạng thái không đổi, không đọc từng dòng;
    lý do đổi trạng thái thì chỉ dòng đó được ghi.
+5. Qua main.py (review T3 P P2-3): route reaction chat riêng `POST /sessions/{id}/messages/{mid}/reaction` và lần thức
+   nhịp chat riêng cuối lượt chat (`_pulse_wake_dm`) với kho chậm: không hàm kho nào chạy trên luồng event loop.
 """
 from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
@@ -326,5 +328,49 @@ check("bộ chiếu: lý do đổi trạng thái thì chỉ các reaction của 
       cl["outcome"] == "claimed" and counts.get("set_reaction_status") == len(same_reason)
       and all(by[lid] == ("reviewing" if lid in same_reason else "pending_review") for lid in log_ids)
       and len(ev3) == len(same_reason), (cl["outcome"], counts, by, same_reason, len(ev3)))
+
+# ═════ 5. qua main.py: route reaction chat riêng và lần thức nhịp cuối lượt chat (review T3 P P2-3) ═════
+import httpx  # noqa: E402
+import main  # noqa: E402
+
+
+def _no_real_engine(*a, **k):
+    raise AssertionError("test không được dựng engine thật")
+
+main.team_engine.build = _no_real_engine
+main._team_engine_for = _no_real_engine
+main._pulse_engine_for = _no_real_engine
+mss = main.get_store()
+dsid = mss.create_session(brain="brain", channel="web")
+dmid = mss.append_message(dsid, "assistant", "Câu trả lời để thả cảm xúc")
+names = ("get_session", "message_row", "dm_nonce_owner", "set_dm_reaction", "dm_reaction_of",
+         "report_receipt_by_message")
+ON_LOOP.clear()
+
+
+async def reaction_flow():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://127.0.0.1:8080") as cl_:
+        return await cl_.post(f"/sessions/{dsid}/messages/{dmid}/reaction",
+                              json={"value": "like", "reasons": [], "nonce": "loop-react-1"})
+
+with Many([patch.object(mss, n, side_effect=slow(getattr(mss, n), name=n)) for n in names]):
+    gap, resp = asyncio.run(max_gap(reaction_flow))
+check("route reaction chat riêng: trả 200 và ghi reaction", resp.status_code == 200 and resp.json().get("ok"),
+      resp.text[:300])
+check("route reaction chat riêng với kho chậm: event loop không bị giữ quá 100 ms", gap < LIMIT_MS, gap)
+check("route reaction chat riêng: không hàm kho nào chạy trên luồng event loop", not ON_LOOP, ON_LOOP[:8])
+
+ON_LOOP.clear()
+
+
+async def wake_flow():
+    main._pulse_wake_dm("brain", "khong-co")   # gọi đồng bộ từ cuối lượt chat, như trong websocket_endpoint
+    await asyncio.sleep(0.4)
+    return True
+
+with patch.object(main, "_pulse_store", side_effect=slow(main._pulse_store, name="pulse_store")):
+    gap, _w = asyncio.run(max_gap(wake_flow))
+check("thức nhịp chat riêng cuối lượt chat: kho chạy ở luồng phụ, event loop không bị giữ", gap < LIMIT_MS and
+      not ON_LOOP, (gap, ON_LOOP[:4]))
 
 finish()
