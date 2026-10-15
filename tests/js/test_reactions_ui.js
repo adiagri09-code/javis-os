@@ -20,6 +20,7 @@ const teamsJs = fs.readFileSync(path.join(D, "teams.js"), "utf8");
 const mobileJs = fs.readFileSync(path.join(D, "mobile-chat.js"), "utf8");
 const indexHtml = fs.readFileSync(path.join(D, "index.html"), "utf8");
 const css = fs.readFileSync(path.join(D, "style.css"), "utf8");
+const EM = String.fromCharCode(0x2014), EN = String.fromCharCode(0x2013);   // em dash, en dash (không viết thẳng ký tự)
 
 let fails = 0;
 function check(name, cond, extra) {
@@ -114,7 +115,8 @@ check("chip agent: tên agent đã escape, chỉ đọc (span, không nút), b�
       && !/<button/.test(h) && !h.includes("Rỗng") && h.includes("\u{1F62E}"), h);
 check("chip agent: không có thì không vẽ", JR.agentChipsHtml([]) === "" && JR.agentChipsHtml(null) === "");
 check("chip agent: nhãn đọc màn hình có ở vi và en", vi["react.agent_chip"] && en["react.agent_chip"]
-      && h.includes('aria-label="Lan &lt;b&gt;: ' + vi["teams.react.wow"]));
+      && h.includes('<span class="jr-react-sr">Lan &lt;b&gt;: ' + vi["teams.react.wow"] + "</span>")
+      && /<span aria-hidden="true">/.test(h) && !/<span[^>]*aria-label/.test(h));
 
 // ───────────── nhấn giữ 500 ms ─────────────
 (function () {
@@ -264,6 +266,94 @@ check("bỏ hết reaction: chip biến mất, nút còn", !hist.row().includes(
   check("Bỏ phản hồi gửi none, lý do rỗng, trục rỗng, góp ý rỗng", calls[3].body.value === "none" && calls[3].body.reasons.length === 0
         && calls[3].body.axis === "" && calls[3].body.comment === "");
 
+  // ───────────── review T2 UI: thứ tự gói, refresh đủ tin, Esc, lỗi cũ ─────────────
+  const realNow = Date.now;
+  let clock = realNow();
+  Date.now = function () { return clock; };
+  const vb = fakeBubble(); bubblesInDom.push(vb);
+  const vEntry = { role: "javis", text: "giọng" };
+  check("P2-1 turn_saved tới TRƯỚC response (làn giọng): chưa có bong bóng thì giữ lại",
+        CR.onFrame({ type: "turn_saved", session_id: "v1", message_id: 300, content_sha: "s300" }) === false);
+  CR.expect("v1", vb, vEntry);
+  check("P2-1 response tới sau: expect ghép ngay mã đã giữ, convo có mã (F5 còn nút)", vb.dataset.mid === "300"
+        && vb.dataset.sha === "s300" && vEntry.mid === 300 && vb.row().includes("jr-react-btn"), vb.row());
+  const vb2 = fakeBubble(); bubblesInDom.push(vb2);
+  CR.expect("v1", vb2, null);
+  check("P2-1 mã đã dùng không bị ghép lần hai cho bong bóng sau", !vb2.dataset.mid);
+  CR.turnDone("v1"); clock += 4000;
+  check("P2-1 bong bóng chờ quá hạn sau turn_done không nhận mã của lượt sau",
+        CR.onFrame({ type: "turn_saved", session_id: "v1", message_id: 301 }) === false && !vb2.dataset.mid);
+  const vb3 = fakeBubble(); bubblesInDom.push(vb3);
+  CR.expect("v1", vb3, null);
+  check("P2-1 lượt sau: mã giữ lại ghép đúng bong bóng của lượt đó", vb3.dataset.mid === "301");
+  CR.onFrame({ type: "turn_saved", session_id: "v2", message_id: 310 });
+  CR.turnDone("v2"); clock += 4000;
+  const vb4 = fakeBubble(); bubblesInDom.push(vb4);
+  CR.expect("v2", vb4, null);
+  check("P2-1 mã giữ lại của lượt đã khép (phiên nền) không gán cho bong bóng mới", !vb4.dataset.mid);
+  const dEntry = { role: "javis", text: "bản sửa lại" };
+  CR.expect("v1", vb3, dEntry);
+  check("P2-1 hai khung response (JAVIS_LESSON): bong bóng đã có mã thì chỉ chép mã vào convo, không chờ thêm",
+        dEntry.mid === 301 && CR.onFrame({ type: "turn_saved", session_id: "v1", message_id: 302 }) === false && vb3.dataset.mid === "301");
+  const pc = fakeBubble(), pd = fakeBubble(); bubblesInDom.push(pc, pd);
+  CR.expect("v3", pc, null);
+  CR.attach(pc, { sid: "v3", mid: 320 });
+  check("P2-1 bong bóng chờ đã có mã (gắn đường khác): bỏ qua, dùng bong bóng của lượt",
+        CR.onFrame({ type: "turn_saved", session_id: "v3", message_id: 321 }, { bubble: pd }) === true && pc.dataset.mid === "320"
+        && pd.dataset.mid === "321");
+  Date.now = realNow;
+
+  // P2-2: refresh hỏi đủ số tin vừa dựng, gắn mã còn thiếu bằng cách khớp từ cuối lên, sửa reaction theo server.
+  const r1 = fakeBubble(), r2 = fakeBubble(), r3 = fakeBubble(), r4 = fakeBubble();
+  bubblesInDom.push(r1, r2, r3, r4);
+  const e2 = { role: "javis", mid: 81, text: "Hai", reaction: { value: "sad", status: "received" } };
+  CR.attach(r2, { sid: "rf", mid: 81, reaction: e2.reaction, entry: e2 });
+  const items = [{ el: r4, entry: { role: "javis", text: "Không khớp" } }, { el: r1, entry: { role: "javis", text: "Một\n\n<!-- JAVIS_VIEC: {} -->" } },
+    { el: r2, entry: e2 }, { el: r3, entry: { role: "javis", text: "  Ba " } }];
+  const srv = [{ id: 79, role: "user", content: "hỏi" }, { id: 80, role: "assistant", content: "Một", content_sha: "h80", reaction: null },
+    { id: 81, role: "assistant", content: "Hai", reaction: { value: "sad", status: "adjusted", status_reason: "" } },
+    { id: 82, role: "assistant", content: "Ba", reaction: { value: "like", status: "received" } }];
+  let gotUrl = "";
+  global.fetch = function (u) { gotUrl = u; return Promise.resolve({ json: function () { return Promise.resolve({ messages: srv }); } }); };
+  await CR.refresh("rf", items);
+  check("P2-2 hỏi đủ số tin vừa dựng (không chỉ 30)", gotUrl === "/sessions/rf/messages?limit=18", gotUrl);
+  check("P2-2 gắn mã cho bong bóng khôi phục còn thiếu, khớp từ cuối lên theo nội dung", r1.dataset.mid === "80" && r3.dataset.mid === "82"
+        && items[1].entry.mid === 80 && items[3].entry.mid === 82 && r3.row().includes("\u{1F44D}"));
+  check("P2-2 không khớp nội dung thì không gán bừa", !r4.dataset.mid);
+  check("P2-2 tin đã có mã nhận trạng thái mới của server", r2.row().includes(vi["react.status.adjusted"]) && e2.reaction.status === "adjusted");
+  const many = Array.from({ length: 150 }, () => ({ el: fakeBubble(), entry: { role: "javis", text: "x" } }));
+  await CR.refresh("rf", many);
+  check("P2-2 trần 200 tin mỗi lần hỏi", /limit=200$/.test(gotUrl), gotUrl);
+  let release;
+  global.fetch = function () { return new Promise(function (ok) { release = ok; }); };
+  const pend = CR.refresh("rf", items);
+  CR.onFrame({ type: "chat_reaction", session_id: "rf", message_id: 82, reaction: { value: "angry", status: "received" } });
+  release({ json: function () { return Promise.resolve({ messages: srv }); } });
+  await pend;
+  check("P3 kết quả refresh cũ hơn lần ghi mới (WS/POST) bị bỏ, không đè", r3.row().includes("\u{1F621}") && !r3.row().includes("\u{1F44D}"));
+  check("P2-2 socket nối lại thì hỏi lại reaction của phiên đang mở",
+        /if \(_daChao\) \{ try \{ if \(window\.JavisChatReactions && savedSessionId\) window\.JavisChatReactions\.refresh\(savedSessionId\); \} catch \(e\) \{\} \}/.test(appJs));
+  check("P2-2 F5 đưa danh sách câu trả lời vừa dựng cho refresh", appJs.includes("_traLoi.push({ el, entry: t });")
+        && appJs.includes("window.JavisChatReactions.refresh(savedSessionId, _traLoi)"));
+  check("P2-1 turn_done khép mục chờ của lượt", /window\.JavisChatReactions\.turnDone\(sid\)/.test(appJs));
+
+  // P3: Esc không lọt ra phím Esc chung; lỗi cũ xoá khi host xác nhận; i18n; focus; nhấn giữ; chữ ẩn cho trình đọc màn hình.
+  live._jr.open = true;
+  let stopped = false, prevented2 = false;
+  listeners.keydown({ key: "Escape", target: target({}, live).target, preventDefault: function () { prevented2 = true; },
+    stopPropagation: function () { stopped = true; } });
+  check("P3 Esc đóng bộ chọn và dừng lan (không tắt loa, rảnh tay)", stopped && prevented2 && live._jr.open === false);
+  live._jr.error = { text: "cũ", retry: true };
+  CR.onFrame({ type: "chat_reaction", session_id: "s1", message_id: 123, reaction: { value: "wow", status: "received" } });
+  check("P3 gói chat_reaction xác nhận thì xoá dòng lỗi cũ", !live.row().includes("jr-react-err") && live._jr.error === null);
+  check("P3 đổi ngôn ngữ vẽ lại hàng reaction", chatJs.includes('window.addEventListener("javis:i18n", rerenderAll)'));
+  check("P3 lưu xong trả focus về nút mặt cười", /focusBtn\(el\);\s+\/\/ bảng vừa đóng/.test(chatJs));
+  check("P3 bỏ đường rbrain không ai đặt", !chatJs.includes("rbrain"));
+  check("P3 máy chạm: tắt menu chạm giữ của iOS trên bong bóng có mã", /@media \(hover: none\) \{[\s\S]{0,300}\.msg-javis\[data-mid\] \{ -webkit-touch-callout: none; \}/.test(css));
+  check("P3 nhấn giữ hạ cờ ở lần chạm sau (iOS không bắn contextmenu)", /var down = function \(e\) \{[\s\S]{0,200}held = false;\s*if \(e\.pointerType === "mouse"\) return;/.test(reactJs));
+  check("P3 chữ ẩn cho trình đọc màn hình có CSS ở cả hai trang", css.includes(".jr-react-sr {")
+        && fs.readFileSync(path.join(D, "console.css"), "utf8").includes(".tm-react-sr {"));
+
   // ───────────── chỗ nối ─────────────
   check("app.js: lịch sử gắn mã tin (m.id), content_sha và reaction vào bong bóng trả lời",
         /function veTinDaLuu\(m, brainCua, sidCua\)/.test(appJs)
@@ -309,7 +399,7 @@ check("bỏ hết reaction: chip biến mất, nút còn", !hist.row().includes(
     const ks = Object.keys(vi); const i = ks.indexOf("teams.react_saved");
     return added.every((k) => { const j = ks.indexOf(k); return j > i && j <= i + added.length; });
   })());
-  check("không em dash, en dash trong file mới và chuỗi mới", [reactJs, chatJs].every((s) => s.indexOf("—") < 0 && s.indexOf("–") < 0)
-        && added.every((k) => (vi[k] + en[k]).indexOf("—") < 0 && (vi[k] + en[k]).indexOf("–") < 0));
+  check("không em dash, en dash trong file mới và chuỗi mới", [reactJs, chatJs].every((s) => s.indexOf(EM) < 0 && s.indexOf(EN) < 0)
+        && added.every((k) => (vi[k] + en[k]).indexOf(EM) < 0 && (vi[k] + en[k]).indexOf(EN) < 0));
   process.exit(fails ? 1 : 0);
 })().catch(function (e) { console.log("FAIL ném lỗi: " + (e && e.stack)); process.exit(1); });

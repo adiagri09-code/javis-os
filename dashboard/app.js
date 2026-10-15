@@ -1015,6 +1015,8 @@ function handleMessage(data) {
     // Nhóm chat (0.142.0): gói team_message/team_replies lỡ trong lúc mất kết nối không được gửi lại, nên trang Nhóm
     // tự tải lại tin và kết cục lượt trả lời của nhóm đang mở khi socket nối lại.
     if (_daChao) { try { window.dispatchEvent(new CustomEvent("javis:team-event", { detail: { type: "team_resync" } })); } catch (e) {} }
+    // T2: gói chat_reaction (trạng thái host đổi) lỡ trong lúc mất kết nối: hỏi lại reaction của phiên đang mở.
+    if (_daChao) { try { if (window.JavisChatReactions && savedSessionId) window.JavisChatReactions.refresh(savedSessionId); } catch (e) {} }
     _daChao = true;
     adaptiveCapable = (data.capabilities || []).includes("adaptive_voice_v1");
     stopTag = data.stop_tag || null;
@@ -1315,6 +1317,8 @@ function handleMessage(data) {
     // `response` nào, nên trước đây chip đứng lại đếm giờ mãi dù kết quả đã in xong. Gọi thêm
     // một lần ở đây vô hại với lượt thường - hideActivity() là thao tác không cộng dồn.
     if (isActive) { hideActivity(); veKhoiBuoc(t, false); syncActiveUI(); runActions(turn.turnDone()); cum.reset(); }
+    // T2: bong bóng hay mã tin còn chờ ghép của lượt này chỉ sống thêm một quãng ngắn (xem chat-reactions.js).
+    try { if (window.JavisChatReactions) window.JavisChatReactions.turnDone(sid); } catch (e) {}
     if (sid) delete turns[sid];
     if (isActive && _tinChoLuot) guiTinCho();   // câu người dùng chen ngang: lượt cũ dừng hẳn rồi thì gửi
     if (isActive) guiCauChoLuot();               // câu nói lúc đang trả lời (cuộc gọi): gửi nếu loa đã im
@@ -1797,6 +1801,7 @@ function restoreSession() {
   // khôi phục để handler không xoá trắng khung chat và ghi đè localStorage bằng phiên rỗng.
   if (savedSessionId && s.brain) _lastBrain = s.brain;
   // Dựng lại bong bóng hội thoại
+  const _traLoi = [];   // T2: các câu trả lời vừa dựng lại, để refresh() sửa reaction và gắn mã còn thiếu
   convo.forEach((t, i) => {
     // t.ts vắng mặt ở tin lưu từ trước bản này -> truyền 0 để ẩn giờ thay vì hiện giờ F5.
     if (t.role === "user") { appendUserMessage(t.text, t.atts || [], t.ts || 0); return; }
@@ -1805,6 +1810,7 @@ function restoreSession() {
     if (t.buoc && window.JavisSteps && window.JavisSteps.tomTat(t.buoc).hien)
       chatAppend(window.JavisSteps.ve(null, t.buoc, false));
     const el = appendJavisMessage(t.text, t.ts || 0, t.brain || s.brain);
+    _traLoi.push({ el, entry: t });
     // T2: tin đã có mã (lịch sử hay gói turn_saved) mang lại hàng reaction; tin lưu trước bản này không có mã thì không có nút.
     try {
       if (t.mid != null && window.JavisChatReactions) window.JavisChatReactions.attach(el, { sid: savedSessionId, mid: t.mid,
@@ -1813,8 +1819,8 @@ function restoreSession() {
     // Chip chỉ sống lại ở tin CUỐI: có tin sau nó nghĩa là câu hỏi đã được trả lời rồi.
     if (t.ask) window.JavisAsk.render(el, t.ask, i === convo.length - 1);
   });
-  // Bản lưu cục bộ có thể giữ reaction cũ (đổi ở máy khác): hỏi lại khúc tin cuối của phiên.
-  try { if (window.JavisChatReactions && savedSessionId) window.JavisChatReactions.refresh(savedSessionId); } catch (e) {}
+  // Bản lưu cục bộ có thể giữ reaction cũ (đổi ở máy khác) hay thiếu mã tin: hỏi lại đủ số tin vừa dựng (tối đa 200).
+  try { if (window.JavisChatReactions && savedSessionId) window.JavisChatReactions.refresh(savedSessionId, _traLoi); } catch (e) {}
   if (convo.length) { scrollBottom(true); ghimDay(sessionOpenSeq); }
   // Con trỏ tin cũ sống sót qua F5 → vẫn cuộn lên đọc tiếp được, không phải bấm lại vào
   // hội thoại trong danh sách mới có.

@@ -2695,6 +2695,8 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .tm-react-agents[hidden] { display: none; }
 .tm-react-agent { display: inline-flex; align-items: center; border: 1px dashed var(--border); border-radius: 999px; padding: 1px 10px;
   font-size: 16px; line-height: 1.4; color: var(--text2); cursor: default; }
+.tm-react-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap; }
 .tm-pin { display: inline-flex; align-items: center; }
 /* T4: tìm trong nhóm, nhảy tới tin cũ. */
 .tm-search { padding: 6px 10px; border-bottom: 1px solid var(--border); }

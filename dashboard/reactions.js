@@ -154,9 +154,11 @@
       (a.reasons || []).forEach(function (x) { var rr = find(REASONS, x); if (rr) what.push(tw(rr.key)); });
       if (a.comment) what.push(String(a.comment).slice(0, COMMENT_MAX));
       var label = tw("react.agent_chip", { name: name, what: what.join(", ") });
-      return '<span class="' + p + '-react-agent" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
+      // Trình đọc màn hình đọc chữ ẩn (aria-label trên span trơn không chắc được đọc); phần nhìn thấy thì ẩn khỏi nó.
+      return '<span class="' + p + '-react-agent" title="' + esc(label) + '"><span aria-hidden="true">' +
         (r ? '<span class="' + p + '-react-emoji">' + r.emoji + "</span>" : "") + esc(name) +
-        ((a.reasons || []).length && !r ? " " + esc(tw("teams.react_reasons_n", { n: a.reasons.length })) : "") + "</span>";
+        ((a.reasons || []).length && !r ? " " + esc(tw("teams.react_reasons_n", { n: a.reasons.length })) : "") +
+        '</span><span class="' + p + '-react-sr">' + esc(label) + "</span></span>";
     }).join("") + "</div>";
   }
 
@@ -224,6 +226,8 @@
     var hold = null, hx = 0, hy = 0, held = false;
     var stop = function () { clearTimeout(hold); hold = null; };
     var down = function (e) {
+      // iOS không bắn contextmenu sau lần giữ: hạ cờ ở lần chạm kế tiếp để không nuốt menu của lần sau.
+      held = false;
       if (e.pointerType === "mouse") return;
       var el = e.target && e.target.closest && e.target.closest(selector);
       if (!el || e.target.closest("button, a, input, textarea, select, label")) return;
