@@ -378,6 +378,16 @@ def dat_rang_buoc(sid: str, *, thu_muc_id: Optional[str] = None, nhanh: Optional
         return dict(cu)
 
 
+def sessions_using(tid: str) -> List[str]:
+    """Session ids whose binding still lists folder `tid` (main or extra), 0.159.0."""
+    out = []
+    for sid, rb in _load()["phien"].items():
+        ids = rb.get("thu_mucs") if isinstance(rb.get("thu_mucs"), list) else [rb.get("thu_muc") or ""]
+        if tid and (tid in ids or rb.get("thu_muc") == tid):
+            out.append(sid)
+    return out
+
+
 def xoa_rang_buoc(sid: str) -> None:
     with _lock:
         d = _load()

@@ -92,6 +92,49 @@ try:
     off = c.post("/coding/session/s-api/pin", data={"path": "", "brain": brain}).json()
     check("empty path unpins", off.get("ok") and off.get("folder") is None and coding_store.cwd_cua_phien("s-api") == "", off)
 
+    # 3b. Small follow-ups (0.159.0).
+    for i in range(40):
+        open(os.path.join(brain, "shop-note-%d.md" % i), "w", encoding="utf-8").write("x")
+    s = c.get("/files/search", params={"brain": brain, "q": "shop", "mode": "name", "only_dirs": "true", "limit": 30}).json()
+    items = s.get("items") or []
+    check("folder search with only_dirs lists folders even when many files match",
+          items and all(x.get("type") == "dir" for x in items) and any(x.get("name") == "shop-site" for x in items), items[:3])
+
+    extra_dir = os.path.join(brain, "docs-extra")
+    os.makedirs(extra_dir)
+    rec3 = coding_store.them_thu_muc(extra_dir, brain=brain)
+    c.post("/coding/session/s-x/pin", data={"path": proj, "brain": brain})
+    coding_store.dat_rang_buoc("s-x", thu_muc_ids=[coding_store.rang_buoc("s-x")["thu_muc"], rec3["id"]])
+    gx = c.get("/coding/session/s-x", params={"brain": brain}).json()
+    check("session reports its extra folders so the chip can show +N",
+          gx.get("extra_folders") == ["docs-extra"], gx.get("extra_folders"))
+
+    solo = os.path.join(brain, "solo")
+    os.makedirs(solo)
+    js = c.post("/coding/session/s-solo/pin", data={"path": solo, "brain": brain}).json()
+    solo_id = (js.get("folder") or {}).get("id")
+    c.post("/coding/session/s-solo/pin", data={"path": "", "brain": brain})
+    check("unpinning a folder no other conversation uses forgets it from the registry",
+          solo_id and coding_store.thu_muc(solo_id) is None, solo_id)
+    proj_id = coding_store.rang_buoc("s-in")["thu_muc"]
+    c.post("/coding/session/s-rel/pin", data={"path": "", "brain": brain})
+    check("a folder still used by another conversation stays registered", coding_store.thu_muc(proj_id) is not None)
+
+    import routes.coding as coding_routes  # noqa: E402
+    keep = coding_routes._DEPS.resolve_path
+
+    def _outside(b, rel):
+        raise ValueError("outside the browse ceiling")
+    coding_routes._DEPS.resolve_path = _outside
+    try:
+        r_out = c.post("/coding/session/s-y/pin", data={"path": "anything", "brain": brain})
+    finally:
+        coding_routes._DEPS.resolve_path = keep
+    check("a path the ceiling rejects returns 400 with that message",
+          r_out.status_code == 400 and "outside the browse ceiling" in r_out.text, r_out.text)
+    src = open(os.path.join(SERVER, "routes", "coding.py"), encoding="utf-8").read()
+    check("GET session and /pin run git and disk work off the event loop", src.count("run_in_threadpool(") >= 2)
+
     # 4. Folder deleted from disk: the turn falls back to the brain, the block disappears.
     shutil.rmtree(outside)
     check("folder deleted from disk: empty block", coding_store.pinned_folder_prompt("s-out", brain) == "")

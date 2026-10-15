@@ -7374,7 +7374,7 @@ def _fold_accents(s: str) -> str:
 
 @app.get("/files/search")
 async def files_search(brain: str = Query("brain"), q: str = Query(""), limit: int = Query(50),
-                       mode: str = Query("all"), include_dirs: bool = False):
+                       mode: str = Query("all"), include_dirs: bool = False, only_dirs: bool = False):
     """Tìm note trong GỐC BRAIN (KHÔNG phải trần duyệt - tránh quét cả ổ đĩa trên localhost).
     `mode=name` khớp TÊN file (mọi loại, không phân biệt dấu tiếng Việt), `mode=content` tìm
     trong NỘI DUNG file text, còn `mode=all` giữ hành vi cũ là tìm cả hai; bỏ file >1MB
@@ -7401,7 +7401,7 @@ async def files_search(brain: str = Query("brain"), q: str = Query(""), limit: i
         out = []
         for dirpath, dirnames, filenames in os.walk(broot):
             dirnames[:] = [dn for dn in dirnames if not dn.startswith(".") and dn not in SKIP_DIRS]
-            if include_dirs and mode in ("name", "all"):
+            if (include_dirs or only_dirs) and mode in ("name", "all"):
                 for dn in sorted(dirnames):
                     if len(out) >= limit:
                         return out
@@ -7413,6 +7413,8 @@ async def files_search(brain: str = Query("brain"), q: str = Query(""), limit: i
                         continue
                     out.append({"path": rel, "name": dn, "type": "dir", "ext": "",
                                 "snippet": "", "line": 0, "match": "name"})
+            if only_dirs:          # 0.159.0, folder picker: files must not use up the limit
+                continue
             for fn in sorted(filenames):
                 if len(out) >= limit:
                     return out
