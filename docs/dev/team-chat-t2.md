@@ -148,6 +148,11 @@ dùng công cụ ở mục dưới, đừng chép tay (chép thô file `.sqlite3
 
 #### Khôi phục về trước 0.154.0
 
+**Thường không cần khôi phục.** Mọi di trú của 0.154.0 chỉ THÊM (bảng mới, cột mới có mặc định), nên chạy lại bản 0.152.0
+hay 0.153.0 trên kho đã nâng vẫn được: bản cũ bỏ qua bảng mới, không thấy trạng thái reaction mới, reaction của agent
+(`reactor` dạng `agent:...`) hiện như reaction thường. Chỉ dùng công cụ dưới đây khi muốn kho về ĐÚNG trạng thái trước lúc
+nâng (mất mọi tin và thay đổi sau lúc đó).
+
 Công cụ nội bộ `tools/team_adaptive_restore_pre.py` (không ghi CHANGELOG). Chạy khi Javis ĐÃ TẮT hẳn:
 
 ```
