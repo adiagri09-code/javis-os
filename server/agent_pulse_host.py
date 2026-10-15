@@ -712,11 +712,14 @@ def register(app, deps: PulseRouteDeps) -> None:
             return err(400, "Mã tin không hợp lệ", "Invalid message id")
         store = deps.store()
         if store is None:
-            return {"ok": True, "recorded": 0}
+            return {"ok": True, "recorded": 0, "agent": False}
 
         def _do():
             n = 0
-            for c, mid, key, sid in deps.seen_resolve(ctx, ids, str(b.get("session_id") or "")) or []:
+            got = deps.seen_resolve(ctx, ids, str(b.get("session_id") or "")) or []
+            for c, mid, key, sid in got:
                 n += AP.mark_seen(store, c, [mid], agent_key=key, session_id=sid)
-            return n
-        return {"ok": True, "recorded": await asyncio.to_thread(_do)}
+            return n, bool(got)
+        n, agent = await asyncio.to_thread(_do)
+        # `agent: false`: không phải tin của trợ lý (vd. trang Trò chuyện chính): trang thôi gửi cho ngữ cảnh này.
+        return {"ok": True, "recorded": n, "agent": agent}

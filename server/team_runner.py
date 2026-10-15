@@ -822,6 +822,11 @@ class TeamRunner:
         for k in OWNER_CAPS:
             rows.append({"key": k, "category": "owner", "value": caps.get(k, DEFAULT_CAPS.get(k)),
                          "unit": "seconds" if k == "busy_wait_s" else "count", "unlimited_ok": k in UNLIMITED_CAPS})
+        # T3 (thiết kế 9): nhịp chủ động nhanh nhất của trợ lý. Chủ chỉnh từng trợ lý ở bảng Nhịp (tới B0, 15 phút);
+        # trưởng nhóm, kể cả Toàn quyền, không nâng được. Giá trị ở đây là mặc định (B1, 1 giờ).
+        import agent_pulse
+        rows.append({"key": "max_tier", "category": "owner", "value": agent_pulse.DEFAULT_MAX_TIER, "unit": "tier",
+                     "unlimited_ok": False, "seconds": agent_pulse.TIERS[agent_pulse.DEFAULT_MAX_TIER]})
         ceilings = ((auth or {}).get("grant") or {}).get("ceilings") or {}
         for k in AUTH_CAPS:
             ce = ceilings.get(k)
@@ -844,6 +849,9 @@ class TeamRunner:
             ("history_window", NEW_MSG_LIMIT, "count"),
             ("text_only", None, "rule"),
             ("server_call_ceiling", ceiling, "count" if ceiling is not None else "rule"),
+            # T3 (thiết kế 9, 9.1): lượt tự phát (chủ động, quét, xem xét, phán xử theo lô) chỉ dùng tới 80% trần chung;
+            # 20% cuối để dành cho nghĩa vụ (goal, việc giao, lời gọi trực tiếp).
+            ("autonomous_reserve", 20, "percent"),
         ]
         rows += [{"key": k, "category": "server", "value": v, "unit": u, "unlimited_ok": False} for k, v, u in server]
         rows += [{"key": k, "category": "provider", "value": None, "unit": "rule", "unlimited_ok": False}
