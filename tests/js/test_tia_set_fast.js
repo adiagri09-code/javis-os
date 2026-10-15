@@ -30,9 +30,18 @@ cases.forEach(([p, mo, sup, note]) => {
 ["fast.claude", "fast.codex", "fast.api", "fast.none", "fast.model_none"].forEach(k =>
   check("key " + k + " in vi and en", !!vi[k] && !!en[k]));
 check("the tooltip starts with 'Fast mode' and no on/off text shows on the page", src.indexOf('"Fast mode\\n" + window.t(') !== -1);
-// Spec: between the two releases the bolt saves but does not change speed yet; the tooltip says so.
-check("the tooltip says the choice is saved and takes effect in the next update",
-  src.indexOf('window.t("fast.pending")') !== -1 && !!vi["fast.pending"] && !!en["fast.pending"]);
+// 0.163.0: Fast mode is wired into the engines, so the "takes effect in the next update" line is gone,
+// and the tooltip shows the last real state the brain reported (GET /model/fast-state).
+check("the pending line is gone now that Fast mode is wired", src.indexOf("fast.pending") === -1 && !vi["fast.pending"] && !en["fast.pending"]);
+check("the bolt reads the real state from /model/fast-state", src.indexOf('"/model/fast-state"') !== -1);
+check("cooldown and fallback states have their own tooltip line",
+  /fast\.state_cooldown/.test(src) && /fast\.state_fallback/.test(src) && !!vi["fast.state_cooldown"] && !!en["fast.state_fallback"]);
+const stateLine = (src.match(/\/\/ FAST_STATE_BEGIN[\s\S]*?\/\/ FAST_STATE_END/) || [""])[0];
+check("the state line is a pure function that can be tested", !!stateLine);
+const fastStateKey = new Function(stateLine + "\nreturn fastStateKey;")();
+check("cooldown maps to its line", fastStateKey({ state: "cooldown" }) === "fast.state_cooldown");
+check("fallback maps to its line", fastStateKey({ state: "fallback" }) === "fast.state_fallback");
+check("on or unknown adds no line", fastStateKey({ state: "on" }) === "" && fastStateKey(null) === "");
 check("clicking the bolt saves settings.model.fast", src.indexOf("saveModel({ fast: state.fast })") !== -1);
 check("the dimmed bolt uses aria-disabled, not disabled", src.indexOf('setAttribute("aria-disabled"') !== -1 && src.indexOf("fb.disabled") === -1);
 

@@ -120,8 +120,28 @@
     const n = fastNote(eff.provider, eff.model);
     fb.setAttribute("aria-pressed", n.supported && state.fast ? "true" : "false");
     fb.setAttribute("aria-disabled", n.supported ? "false" : "true");
-    // This release only stores the choice; engine wiring comes next. The spec requires the tooltip to say so (drop it then).
-    fb.title = "Fast mode\n" + window.t(n.note) + (n.supported ? "\n" + window.t("fast.pending") : "");
+    // 0.163.0: the last real state this brain reported (cooldown, provider refusal) as an extra line.
+    const key = n.supported && state.fast ? fastStateKey(fastStates[eff.provider]) : "";
+    fb.title = "Fast mode\n" + window.t(n.note) + (key ? "\n" + window.t(key) : "");
+  }
+  // FAST_STATE_BEGIN
+  // Tooltip line for the last Fast mode state a brain reported (server: fast_mode.states()).
+  function fastStateKey(st) {
+    const s = st && st.state;
+    if (s === "cooldown") return "fast.state_cooldown";
+    if (s === "fallback") return "fast.state_fallback";
+    return "";
+  }
+  // FAST_STATE_END
+  let fastStates = {};
+  // Read on hover/focus: cheap, and always fresh after the last turn.
+  async function refreshFastState() {
+    try {
+      const r = await fetch("/model/fast-state");
+      const d = r.ok ? await r.json() : null;
+      fastStates = (d && d.states) || {};
+    } catch (e) {}
+    renderFast();
   }
 
   // Màn cảm ứng (điện thoại, máy tính bảng): focus một ô nhập là bật bàn phím ảo.
@@ -255,6 +275,11 @@
     if (kq.length > 1) return { kind: "many", ds: kq.slice(0, 6).map((x) => (provShort(x.label) + " " + x.model)) };
     return { kind: "none" };
   }
+
+  // Hovering or focusing the bolt refreshes its tooltip with the brain's last real Fast mode state.
+  ["mouseover", "focusin"].forEach((t) => document.addEventListener(t, (e) => {
+    if (e.target && e.target.closest && e.target.closest("#fastBtn") && state.fast) refreshFastState();
+  }));
 
   document.addEventListener("click", async (e) => {
     if (e.target.closest("#mbOpen")) { isOpen() ? close() : open(); return; }

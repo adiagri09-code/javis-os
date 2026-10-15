@@ -100,6 +100,12 @@ from claude_cli import CodexCLI  # noqa: E402
 tm = team_engine.codex_text_only(CodexCLI(cwd=".", tag="team", model="gpt-x"))
 check("team Codex turns force the normal tier", 'service_tier="default"' in tm.extra_config, tm.extra_config)
 
+# The bolt tooltip reads the remembered states.
+from fastapi.testclient import TestClient  # noqa: E402
+_r = TestClient(srv.app, base_url="http://localhost").get("/model/fast-state")
+check("GET /model/fast-state returns the remembered states",
+      _r.status_code == 200 and _r.json().get("states", {}).get("anthropic-cli", {}).get("state") == "cooldown", _r.text[:200])
+
 # 3. Wiring: both chat entry points set the per-turn choice next to the thinking level, and call the helpers.
 src = open(os.path.join(SERVER, "main.py"), encoding="utf-8").read()
 check("dashboard and Telegram turns set fast_mode next to the thinking level",

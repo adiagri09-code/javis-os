@@ -22708,6 +22708,12 @@ async def agent_jobs_assign(slug: str, request: Request, brain: str = "brain"):
     return await asyncio.to_thread(_do)
 
 
+@app.get("/model/fast-state")
+async def model_fast_state():
+    """Last Fast mode state each brain reported (on, cooldown, fallback), for the bolt tooltip (0.163.0)."""
+    return {"states": fast_mode.states()}
+
+
 if __name__ == "__main__":
     import uvicorn
     # 127.0.0.1: chỉ máy này truy cập được (an toàn - tránh người khác trong mạng LAN

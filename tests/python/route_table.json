@@ -4518,5 +4518,15 @@
    "POST"
   ],
   "trong": null
+ },
+ {
+  "order": 454,
+  "type": "APIRoute",
+  "path": "/model/fast-state",
+  "name": "model_fast_state",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
  }
 ]
