@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.171.1] - 2026-10-16
+### Sửa lỗi
+- **Nhóm chat không còn hiện tên lệnh lạ do trợ lý tự bịa.** Khi câu trả lời của một trợ lý có lệnh Javis không hỗ trợ, nhóm chỉ ghi "Câu trả lời có một lệnh Javis không hỗ trợ, đã bỏ", thay vì chép nguyên một mã khó hiểu ra bong bóng tin.
+
 ## [0.170.0] - 2026-10-15
 ### Cải thiện
 - **Nhóm nhiều nghìn tin vẫn nhớ điều quan trọng:** mỗi lượt trả lời trợ lý vẫn thấy quyết định đã ghim, yêu cầu gốc và trạng thái các việc đang mở, ai đã góp vào kết quả gần nhất và phản hồi của bạn còn chờ xem xét, dù chúng nằm rất xa trong lịch sử.

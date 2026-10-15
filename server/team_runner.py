@@ -107,6 +107,10 @@ MODEL_TURN_CAPS = ("task_turns", "daily_turns", "judge_daily")
 ADMIN_OPS_PER_TURN = 10   # trần lệnh quản trị mỗi lượt (review T3)
 ADMIN_OPS = ("open_job", "reprioritize", "add_member", "remove_member", "create_agent", "set_cap", "set_resonance",
              "edit_agent", "interrupt")
+# Mọi tên lệnh Javis biết (0.171.1). Lệnh ngoài danh sách là chữ model tự bịa (pilot 2026-10-16 gặp
+# `peter_feedback_placeholder_removed`): vẫn bỏ như cũ, nhưng ghi chú cho chủ không chép lại tên lạ đó.
+KNOWN_OPS = frozenset(set().union(*OPS_BY_ROLE.values()) | set(ADMIN_OPS) | {REACT_OP, PEER_OP, ASK_PEER_OP})
+UNKNOWN_OP_NOTE = "Câu trả lời có một lệnh Javis không hỗ trợ, đã bỏ"
 CAP_LABEL = {"task_turns": "lượt mỗi việc", "task_steps": "bước mỗi việc", "help_depth": "độ sâu nhờ hỗ trợ",
              "daily_turns": "lượt mỗi ngày của nhóm", "judge_daily": "lượt phán xử mỗi ngày của nhóm",
              "volunteer_k": "số người tự lên tiếng mỗi tin (K)"}
@@ -2386,7 +2390,11 @@ class TeamRunner:
         allowed = OPS_BY_ROLE.get(role, set())
         kept = []
         for op in ops:
-            if op["op"] not in allowed:
+            if op["op"] not in KNOWN_OPS:
+                log.info("team turn %s: dropped unknown op %r", turn_id, str(op["op"])[:80])
+                if UNKNOWN_OP_NOTE not in notes:
+                    notes.append(UNKNOWN_OP_NOTE)
+            elif op["op"] not in allowed:
                 notes.append(f"Lệnh '{op['op']}' không dùng được ở lượt này, đã bỏ")
             else:
                 kept.append(op)
