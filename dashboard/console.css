@@ -3194,3 +3194,4 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 @media (max-width: 480px) {
   .pulse-acts .ws-btn { flex: 1 1 auto; }
 }
+.tm-proposal-state { font-size: 16px; color: var(--text2); margin-top: 6px; }

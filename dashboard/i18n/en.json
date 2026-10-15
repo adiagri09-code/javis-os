@@ -4338,5 +4338,13 @@
   "pulse.done": "Saved",
   "teams.limits.max_tier": "Fastest proactive pace of an assistant (default; set per assistant in its Pulse panel, down to 15 minutes)",
   "teams.limits.autonomous_reserve": "Share of the server call ceiling kept for obligations (autonomous turns use at most 80%)",
-  "pulse.percent": "{n}%"
+  "pulse.percent": "{n}%",
+  "pulse.proposals_title": "Assistant proposals",
+  "pulse.btn.accept": "Turn into a job",
+  "pulse.btn.reject": "Reject",
+  "pulse.prop.status.pending": "Waiting for you",
+  "pulse.prop.status.accepted": "Turned into a job",
+  "pulse.prop.status.rejected": "Rejected",
+  "teams.proposal_accepted": "A job was created from this proposal",
+  "teams.proposal_rejected": "You rejected this proposal"
 }

@@ -4338,5 +4338,13 @@
   "pulse.done": "Đã lưu",
   "teams.limits.max_tier": "Nhịp chủ động nhanh nhất của trợ lý (mặc định; chỉnh từng trợ lý ở bảng Nhịp, tới 15 phút)",
   "teams.limits.autonomous_reserve": "Phần trần lượt chung để dành cho việc bắt buộc (lượt tự phát chỉ dùng tới 80%)",
-  "pulse.percent": "{n}%"
+  "pulse.percent": "{n}%",
+  "pulse.proposals_title": "Đề xuất của trợ lý",
+  "pulse.btn.accept": "Nhận thành việc",
+  "pulse.btn.reject": "Bác",
+  "pulse.prop.status.pending": "Chờ bạn quyết",
+  "pulse.prop.status.accepted": "Đã nhận thành việc",
+  "pulse.prop.status.rejected": "Đã bác",
+  "teams.proposal_accepted": "Đã tạo việc từ đề xuất này",
+  "teams.proposal_rejected": "Bạn đã bác đề xuất này"
 }

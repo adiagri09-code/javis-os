@@ -23107,7 +23107,44 @@ def _pulse_propose(key, ctx, item, src):
         got = _pulse_post(key, ctx, localefmt.chu(f"Đề xuất: {item['title']}\n{item.get('brief') or ''}\n(Nguồn: {src})",
                                                   f"Proposal: {item['title']}\n{item.get('brief') or ''}\n(Source: {src})"),
                           {"pulse_source": src})
-    return f"msg:{got['message_id']}" if got else None
+    return got
+
+
+def _pulse_proposal_action(prop, decision):
+    """Chủ quyết một đề xuất của lượt quét từ bảng Nhịp. Nhóm: đi đúng thẻ đề xuất của nhóm (Tạo việc xếp vào hàng đợi
+    chung của nhóm; Bỏ qua là bác), tín hiệu do bộ chạy nhóm ghi. Chat riêng: chấp nhận thành việc giao cho trợ lý như nút
+    Giao việc (Kanban, báo về chat riêng, khoá chống trùng theo đề xuất), rồi ghi tín hiệu +0.6; bác thì -0.4."""
+    ctx = str(prop["context_ref"])
+    team = _pulse_team(ctx)
+    if team is not None:
+        runner = _TEAM_API.runner()
+        if prop.get("message_id") is None:
+            raise ValueError("đề xuất không gắn tin của nhóm")
+        try:
+            if decision == "accepted":
+                tid = runner.accept_proposal(team["team_id"], int(prop["message_id"]))
+                _TEAM_API.kick()
+                return {"task_id": tid}
+            runner.reject_proposal(team["team_id"], int(prop["message_id"]))
+        except team_api.TeamError as ex:
+            raise ValueError(str(ex))
+        return {"rejected": True}
+    st = _pulse_store()
+    if decision == "rejected":
+        return agent_pulse.decide_proposal(st, prop["id"], "rejected", by="owner") and {"rejected": True}
+    reg = _pulse_sql("SELECT brain_id, slug FROM resonance_agents WHERE agent_key=?", (prop["agent_key"],))
+    if not reg:
+        raise ValueError("trợ lý không còn")
+    root, slug = reg[0]["brain_id"], reg[0]["slug"]
+    sid = prop.get("session_id") or _pulse_dm_session(prop["agent_key"])[0]
+    name = (_team_agent_info(root, prop["agent_key"]) or {}).get("name") or slug
+    tid = tasks_feature.enqueue(root, agent_jobs.assign_title(name, prop["title"]),
+                                agent_jobs.brief(f"{prop['title']}\n{prop.get('brief') or ''}".strip()),
+                                chat_id=f"{WEB_CHAT_PREFIX}{sid}",
+                                idempotency_key=agent_jobs.assign_key(prop["agent_key"], slug, f"pp{prop['id']}"),
+                                dedupe_title=False)
+    agent_pulse.decide_proposal(st, prop["id"], "accepted", by="owner", task_id=str(tid or ""))
+    return {"task_id": tid}
 
 
 def _pulse_send(key, ctx, text, meta):
@@ -23217,7 +23254,8 @@ def _pulse_seen_resolve(ctx, ids, session_id):
 # Route của nhịp: đăng ký SAU route cuối để bảng route cũ giữ nguyên thứ tự.
 agent_pulse_host.register(app, agent_pulse_host.PulseRouteDeps(
     brain_key=lambda b: _brain_key(b), agent_exists=lambda root, slug: _agent_md_path(root, slug) is not None,
-    agent_key=lambda root, slug: _agent_jobs_key(root, slug), store=_pulse_store, seen_resolve=_pulse_seen_resolve))
+    agent_key=lambda root, slug: _agent_jobs_key(root, slug), store=_pulse_store, seen_resolve=_pulse_seen_resolve,
+    proposal_action=lambda prop, decision: _pulse_proposal_action(prop, decision)))
 
 
 if __name__ == "__main__":

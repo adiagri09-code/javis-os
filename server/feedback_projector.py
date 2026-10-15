@@ -202,6 +202,20 @@ class FeedbackProjector:
             log.warning("pulse wake %s %s: %s", agent_key, context_ref, ex)
             return False
 
+    def pulse_proposal_decided(self, context_ref: str, message_id: int, decision: str, task_id: str = "") -> None:
+        """Thẻ đề xuất trong nhóm do lượt quét tạo được chủ quyết ở thẻ: cập nhật sổ đề xuất của nhịp (không ghi tín hiệu
+        lần hai: thẻ nhóm đã ghi theo nguồn của nó)."""
+        try:
+            res = self._resonance()
+            if res is None:
+                return
+            import agent_pulse as AP
+            prop = AP.proposal(res, context_ref=context_ref, message_id=int(message_id))
+            if prop is not None and prop["status"] == "pending":
+                AP.decide_proposal(res, prop["id"], decision, by="owner", task_id=task_id, signal=False)
+        except Exception as ex:  # noqa: BLE001
+            log.warning("pulse proposal %s %s: %s", context_ref, message_id, ex)
+
     def void_task_event(self, source_ref_: str) -> None:
         """Chủ gỡ một sự kiện đã ghi (bỏ ghim quyết định): tín hiệu của nguồn đó thành `void`."""
         try:

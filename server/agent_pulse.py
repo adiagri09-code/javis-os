@@ -317,6 +317,14 @@ CREATE TABLE IF NOT EXISTS pulse_policy_changes(
   window_until REAL NOT NULL, decided_at REAL, decided_reason TEXT NOT NULL DEFAULT '',
   CHECK (status IN ('observing','kept','reverted')));
 CREATE INDEX IF NOT EXISTS pulse_policy_changes_open ON pulse_policy_changes(status, agent_key);
+CREATE TABLE IF NOT EXISTS pulse_proposals(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, agent_key TEXT NOT NULL, context_ref TEXT NOT NULL, source_ref TEXT NOT NULL,
+  version TEXT NOT NULL DEFAULT '', title TEXT NOT NULL, brief TEXT NOT NULL DEFAULT '', session_id TEXT NOT NULL DEFAULT '',
+  message_id INTEGER, status TEXT NOT NULL DEFAULT 'pending', task_id TEXT NOT NULL DEFAULT '',
+  decided_by TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL, decided_at REAL,
+  CHECK (status IN ('pending','accepted','rejected')));
+CREATE INDEX IF NOT EXISTS pulse_proposals_src ON pulse_proposals(agent_key, context_ref, source_ref, version);
+CREATE INDEX IF NOT EXISTS pulse_proposals_msg ON pulse_proposals(context_ref, message_id);
 """
 # Cột thêm cho `agent_pulse` (bảng T2, mục 5.4 đã đủ). Chỉ thêm, đều có mặc định: bản 0.154.x vẫn đọc ghi được.
 _PULSE_COLS = (
@@ -336,7 +344,7 @@ _PULSE_COLS = (
 )
 UPGRADE_MARK = "pulse_v1_upgraded_at"
 T3_TABLES = ("pulse_meta", "agent_pulse_events", "pulse_signals", "pulse_contrib", "message_seen",
-             "pulse_opportunities", "pulse_proactive", "pulse_policy_changes")
+             "pulse_opportunities", "pulse_proactive", "pulse_policy_changes", "pulse_proposals")
 _READY: set = set()
 
 
@@ -967,6 +975,74 @@ def consume_opportunities(store, agent_key: str, context_ref: str, items: Iterab
     return n
 
 
+# ───────────── đề xuất của lượt quét (5.5, 6.1) ─────────────
+
+def record_proposal(store, *, agent_key: str, context_ref: str, source_ref: str, version: str, title: str,
+                    brief: str = "", session_id: str = "", message_id: Optional[int] = None,
+                    at: Optional[float] = None) -> int:
+    ensure(store)
+    with store._Tx(store) as c:
+        cur = c.execute("INSERT INTO pulse_proposals(agent_key,context_ref,source_ref,version,title,brief,session_id,"
+                        "message_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                        (str(agent_key), str(context_ref), str(source_ref), str(version or ""), str(title)[:160],
+                         str(brief or "")[:4000], str(session_id or ""), message_id, _now(at)))
+        return int(cur.lastrowid)
+
+
+def proposal_blocked(store, agent_key: str, context_ref: str, source_ref: str, version: str) -> bool:
+    """Đề xuất không mở lại khi không có dữ kiện mới (5.5): đã có đề xuất (chờ, đã bác hay đã nhận) cho cùng nguồn và
+    cùng phiên bản thì không đề xuất lần nữa. Nguồn có phiên bản mới thì được."""
+    ensure(store)
+    with closing(store._conn()) as c:
+        return c.execute("SELECT 1 FROM pulse_proposals WHERE agent_key=? AND context_ref=? AND source_ref=? AND "
+                         "version=? LIMIT 1", (str(agent_key), str(context_ref), str(source_ref),
+                                               str(version or ""))).fetchone() is not None
+
+
+def proposal(store, proposal_id: Optional[int] = None, *, context_ref: str = "",
+             message_id: Optional[int] = None) -> Optional[dict]:
+    ensure(store)
+    with closing(store._conn()) as c:
+        if proposal_id is not None:
+            r = c.execute("SELECT * FROM pulse_proposals WHERE id=?", (int(proposal_id),)).fetchone()
+        else:
+            r = c.execute("SELECT * FROM pulse_proposals WHERE context_ref=? AND message_id=? ORDER BY id DESC LIMIT 1",
+                          (str(context_ref), int(message_id))).fetchone()
+        return dict(r) if r else None
+
+
+def decide_proposal(store, proposal_id: int, decision: str, by: str = "owner", task_id: str = "",
+                    signal: bool = True, at: Optional[float] = None) -> Optional[dict]:
+    """Chủ (hay trưởng nhóm có quyền) chấp nhận (+0.6 w 0.8) hay bác (-0.4 w 0.8) MỘT đề xuất còn chờ (CAS). `signal`:
+    False khi nơi gọi đã ghi tín hiệu theo nguồn của chính nó (thẻ đề xuất trong nhóm). Đã quyết rồi: None."""
+    if decision not in ("accepted", "rejected"):
+        raise ValueError("quyết định không hợp lệ")
+    ensure(store)
+    t = _now(at)
+    with store._Tx(store) as c:
+        n = c.execute("UPDATE pulse_proposals SET status=?, decided_by=?, decided_at=?, task_id=? WHERE id=? AND "
+                      "status='pending'", (decision, str(by), t, str(task_id or ""), int(proposal_id))).rowcount
+        if not n:
+            return None
+        row = dict(c.execute("SELECT * FROM pulse_proposals WHERE id=?", (int(proposal_id),)).fetchone())
+        on = _agent_on(c, row["agent_key"])
+        _event(c, row["agent_key"], row["context_ref"], "proposal_" + ("accept" if decision == "accepted" else "reject"),
+               source=str(by), reason=row["source_ref"], payload={"proposal_id": row["id"], "task_id": task_id}, at=t)
+    if signal and on:
+        ev = "accept" if decision == "accepted" else "reject"
+        record_host_event(store, event=ev, source_ref=f"{ev}:pp:{row['id']}", agents={row["agent_key"]: 1.0},
+                          context_ref=row["context_ref"], at=t, subject_ref=f"proposal:{row['id']}")
+    return row
+
+
+def proposals(store, agent_key: str, limit: int = 20) -> list:
+    ensure(store)
+    with closing(store._conn()) as c:
+        return [dict(r) for r in c.execute("SELECT * FROM pulse_proposals WHERE agent_key=? ORDER BY "
+                                           "CASE status WHEN 'pending' THEN 0 ELSE 1 END, id DESC LIMIT ?",
+                                           (str(agent_key), int(limit))).fetchall()]
+
+
 # ───────────── đã xem, tin chủ động (6.2, 6.1) ─────────────
 
 def mark_seen(store, context_ref: str, message_ids: Iterable[int], agent_key: str = "", session_id: str = "",
@@ -1198,4 +1274,4 @@ def view(store, agent_key: str, at: Optional[float] = None) -> dict:
                          "share": s["share"], "status": s["status"], "superseded_by": s["superseded_by"], "at": s["at"]})
     return {"agent_key": key, "resonance": on, "policy_version": POLICY_VERSION, "tiers": list(TIERS),
             "aggregate": star, "contexts": per, "changes": changes, "recent": recent, "feedback": feedback,
-            "policy_changes": policy_changes(store, key, 10)}
+            "policy_changes": policy_changes(store, key, 10), "proposals": proposals(store, key, 10)}

@@ -175,6 +175,43 @@ r.accept_proposal(tid, mp)
 acc = [s for s in AP.signals(gs, K["lan"]) if s["source_ref"] == f"accept:{tid}:{mp}"]
 check("chấp nhận đề xuất: +0.6 w0.8 cho agent đề xuất, bấm lại không thêm", len(acc) == 1 and acc[0]["value"] == 0.6
       and acc[0]["w"] == 0.8, acc)
+check("thẻ đã nhận thành việc: trạng thái ghi lên tin (mọi tab thấy), không bác được nữa",
+      (ss.team_message(tsid, mp)["meta"] or {}).get("proposal_status") == "accepted")
+try:
+    r.reject_proposal(tid, mp)
+    check("bác thẻ đã thành việc: từ chối", False)
+except team_store.TeamError:
+    check("bác thẻ đã thành việc: từ chối", True)
+mq, _ = ss.append_team_message(tsid, "assistant", "Đề xuất 2", author_kind="agent", author_ref=K["lan"],
+                               meta={"proposal": {"title": "Khảo sát", "brief": "x"}})
+check("bác đề xuất (nút Bỏ qua): lần đầu đổi trạng thái, bấm lại không ghi lần hai",
+      r.reject_proposal(tid, mq) is True and r.reject_proposal(tid, mq) is False
+      and (ss.team_message(tsid, mq)["meta"] or {}).get("proposal_status") == "rejected")
+rj = [s for s in AP.signals(gs, K["lan"]) if s["source_ref"] == f"reject:{tid}:{mq}"]
+check("bác đề xuất: -0.4 w0.8 cho agent đề xuất, đúng một dòng", len(rj) == 1 and rj[0]["value"] == -0.4
+      and rj[0]["w"] == 0.8, rj)
+try:
+    r.accept_proposal(tid, mq)
+    check("thẻ đã bác: không tạo việc được", False)
+except team_store.TeamError:
+    check("thẻ đã bác: không tạo việc được", True)
+# Đề xuất do lượt quét tạo trong nhóm: chủ quyết ở thẻ thì sổ đề xuất của nhịp cập nhật, không ghi tín hiệu lần hai.
+mr, _ = ss.append_team_message(tsid, "assistant", "Đề xuất 3", author_kind="agent", author_ref=K["lan"],
+                               meta={"proposal": {"title": "Cập nhật", "brief": "x"}})
+pid = AP.record_proposal(gs, agent_key=K["lan"], context_ref=ctx, source_ref="task:t9", version="5", title="Cập nhật",
+                         session_id=tsid, message_id=mr)
+r.reject_proposal(tid, mr)
+check("thẻ nhóm do lượt quét tạo: sổ đề xuất thành rejected, chỉ một tín hiệu (của thẻ)",
+      AP.proposal(gs, pid)["status"] == "rejected" and not [s for s in AP.signals(gs, K["lan"])
+                                                              if s["source_ref"] == f"reject:pp:{pid}"])
+check("không mở lại đề xuất khi không có dữ kiện mới: cùng nguồn cùng phiên bản bị chặn, phiên bản mới thì được",
+      AP.proposal_blocked(gs, K["lan"], ctx, "task:t9", "5") and not AP.proposal_blocked(gs, K["lan"], ctx, "task:t9", "6"))
+pd = AP.record_proposal(gs, agent_key=K["minh"], context_ref=f"dm:{K['minh']}", source_ref="goal:g", version="1",
+                        title="Hỏi lại mục tiêu")
+row = AP.decide_proposal(gs, pd, "accepted", task_id="t_x")
+check("đề xuất chat riêng được nhận: +0.6 w0.8, nguồn accept:pp:<id>, lần hai không quyết được",
+      row and row["status"] == "accepted" and AP.decide_proposal(gs, pd, "rejected") is None
+      and [s["value"] for s in AP.signals(gs, K["minh"]) if s["source_ref"] == f"accept:pp:{pd}"] == [0.6])
 authors = r.result_authors(ts.get_task(task))
 check("người nộp kết quả của bản hiện tại: bước làm và tổng hợp đã áp", set(authors) == set(K.values()), authors)
 r.pulse_task_event("revise", tid, authors, f"revise:{task}:2")
