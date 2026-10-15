@@ -476,7 +476,7 @@ Sửa sau review T1: bản trước chỉ cộng `goals.calls_used` và `call_le
     không mốc engine quá 10 phút (dài hơn mọi lượt loại này) thì `refunded`, có mốc engine thì `interrupted` (tính).
   - Lượt nhóm đã tới mốc engine mà **thiếu** dòng sổ (tiến trình chết giữa hai kho, hay bản trước nâng cấp) thì dựng lại dòng
     `counted = 1` (có thể tạm vượt trần: không làm mất lượt đã tính); lượt nhóm `reserved` chưa tới mốc engine mà thiếu dòng sổ (quá
-    khoảng ân hạn) thì hoàn lượt nhóm (chưa gọi model).
+    khoảng ân hạn, đo từ `created_at` của chính lượt nhóm vì chưa có dòng sổ) thì hoàn lượt nhóm (chưa gọi model).
 - **Trần tính trọn đời, không theo ngày:** phép đếm cộng mọi dòng còn hiệu lực từ trước tới nay (như `goals.calls_used` hiện có), nên
   khi chạm trần thì mọi lượt trong phạm vi bị chặn (kể cả trả lời tin nhóm và bước việc) tới khi chủ nâng biến môi trường. Đây là
   trần của pilot có hạn mức, không phải hạn mức hằng ngày; trần theo ngày vẫn là `daily_turns` của nhóm và `agent_daily_calls`.

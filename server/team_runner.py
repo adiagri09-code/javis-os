@@ -1847,6 +1847,12 @@ class TeamRunner:
     def _apply_step_locked(self, team: dict, task: dict, step: dict, out: dict) -> Optional[str]:
         sid = step["step_id"]
         st = out["status"]
+        # Việc đã sang tiến trình khác (review T1 vòng 3 #1): không nhánh nào (lỗi, quá giờ, bận lâu, hết trần) được đụng
+        # bước hay chặn một việc tiến trình này không còn giữ.
+        owner = (self.tasks.get_task(task["id"]) or {}).get("claimed_by")
+        if out.get("lease_lost") == "job_lost" or owner not in (None, "", self.worker_id):
+            self._lease_requeues.pop(sid, None)
+            return "lease_lost"
         if st == "cap":
             self.teams.requeue_step(sid)
             why = ("Nhóm đã dùng hết số lần trả lời hôm nay" if out["cap"] == "daily_turns"
@@ -1866,11 +1872,15 @@ class TeamRunner:
             # Chỉ mất khoá agent (việc vẫn của mình): bước chạy lại, tối đa LEASE_REQUEUE_MAX lần mỗi bước rồi chặn,
             # để mất quyền lặp lại không thành vòng chạy lại tốn lượt (kể cả khi chủ đặt Không giới hạn).
             cur = self.tasks.get_task(task["id"]) or {}
-            if out.get("lease_lost") == "job_lost" or cur.get("claimed_by") not in (None, "", self.worker_id):
-                return "lease_lost"
+            if cur.get("status") != "team_running":
+                # Việc đã bị huỷ, chặn hay xong trong lúc kho lỗi (các thao tác đó xoá người giữ): không đụng bước nữa
+                # (review T1 vòng 3 #2), vòng run_job đọc lại trạng thái việc rồi dừng.
+                self._lease_requeues.pop(sid, None)
+                return None
             n = self._lease_requeues.get(sid, 0) + 1
             self._lease_requeues[sid] = n
             if n > LEASE_REQUEUE_MAX:
+                self._lease_requeues.pop(sid, None)
                 self.teams.finish_step(sid, "failed", out.get("message_id"), False, "mất quyền giữ trợ lý nhiều lần")
                 return self._block(task["id"], "failed",
                                    f"{self._name(team, step['agent_key'])} mất quyền giữ nhiều lần liên tiếp, đã dừng")
