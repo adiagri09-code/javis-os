@@ -360,7 +360,7 @@ class TeamStore:
             self._event(c, team_id, "updated", by, before, fields)
         return self.get(team_id)
 
-    # Bảng gắn với một nhóm, xoá khi chủ xoá hẳn nhóm (0.172.0). `team_events` cũng xoá: nhóm đã mất thì không còn chỗ xem.
+    # Bảng gắn với một nhóm, xoá khi chủ xoá hẳn nhóm (0.173.0). `team_events` cũng xoá: nhóm đã mất thì không còn chỗ xem.
     # Sổ lượt chung, quyết định phán xử và bài học nằm ở kho khác, giữ lại làm bằng chứng (không còn nhóm nào trỏ tới).
     _TEAM_TABLES = ("team_members", "team_events", "team_steps", "team_turns", "team_reactions", "team_authority",
                     "team_replies", "team_reaction_log", "agent_busy")

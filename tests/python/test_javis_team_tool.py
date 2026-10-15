@@ -1,4 +1,4 @@
-"""Tool `javis_team` (0.172.0): Javis tạo, sửa, lưu trữ, xoá nhóm chat và tạo trợ lý có model riêng, ngay từ chat.
+"""Tool `javis_team` (0.173.0): Javis tạo, sửa, lưu trữ, xoá nhóm chat và tạo trợ lý có model riêng, ngay từ chat.
 
     python tests/run.py javis_team_tool
 

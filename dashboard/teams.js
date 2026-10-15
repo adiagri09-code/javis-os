@@ -1503,7 +1503,7 @@
     });
   }
 
-  // Nhóm đang mở vừa bị xoá (0.172.0: Javis xoá bằng công cụ javis_team, hay tab khác bấm xoá): đóng khung chat về trạng
+  // Nhóm đang mở vừa bị xoá (0.173.0: Javis xoá bằng công cụ javis_team, hay tab khác bấm xoá): đóng khung chat về trạng
   // thái trống thay vì giữ một nhóm không còn, ô soạn vẫn mở mà gửi tin nào cũng lỗi.
   function closeGone(id) {
     if (!S || S.activeId !== id) return;

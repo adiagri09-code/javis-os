@@ -16,7 +16,7 @@ Một plugin là **một thư mục** gồm 2 file:
 Plugin cho Javis hai thứ:
 
 - **Tool**: một công cụ engine gọi được, ví dụ `javis_now` (hỏi bây giờ mấy giờ theo giờ Việt Nam) hay `javis_generate_image` (tạo ảnh). Tool của plugin đi qua MCP Hub nên **mọi engine đều dùng được**, không riêng Claude Code.
-- **Hook**: đoạn mã chạy **quanh mỗi lần gọi tool**. Bản hiện tại hỗ trợ hai sự kiện: `pre_tool_call` (trước khi tool chạy) và `post_tool_call` (sau khi tool chạy xong). Khi không plugin nào đăng ký hook thì Javis không bọc gì cả, nên không tốn thêm gì.
+- **Hook**: đoạn mã chạy **quanh mỗi lần gọi tool**. Bản hiện tại hỗ trợ hai sự kiện quanh tool: `pre_tool_call` (trước khi tool chạy) và `post_tool_call` (sau khi tool chạy xong). Khi không plugin nào đăng ký hook thì Javis không bọc gì cả, nên không tốn thêm gì. Sự kiện thứ ba, `chatbot_turn_context`, chạy một lần mỗi lượt bot chuyên trách và cho plugin thêm một dòng ngữ cảnh (xem [bên dưới](#hook-ngữ-cảnh-lượt-chatbot-chatbot_turn_context)).
 
 Tool của plugin **tôn trọng đúng 3 mức quyền** của Javis y như tool khác, nên một loop đang ở chế độ chỉ-đọc sẽ không tự gọi được tool ghi của plugin.
 
@@ -119,7 +119,7 @@ Nếu tool bị chặn vì mức quyền, câu trả lời sẽ chứa nguyên v
 Từng cái làm được gì:
 
 - **Giao việc Kanban**: giao một việc nền vào hàng đợi ngay từ chat (`op=add`) và xem việc đang chạy tới đâu (`op=list`). Có từ 0.17.1. Trước đó đường duy nhất để giao việc là `POST /kanban/task`, mà gọi được nó thì phải chạy được lệnh máy - nên chỉ Claude Code với Codex làm được, dù tài liệu vẫn hứa mọi bộ não đều làm được. Tool này gọi thẳng vào hàng đợi in-process, không mở thêm cửa HTTP nào. Mặc định giao việc ở mức `full` (tự thao tác ra ngoài như lúc chat); nói rõ nếu muốn việc chỉ ghi nháp (`auto`) hay chỉ đọc (`suggest`). Trước 0.55.62 tool này từ chối mức full và mặc định `suggest`. Chuyển cột, huỷ việc, duyệt việc chờ phê duyệt vẫn làm ở trang Việc. Từ 0.107.0 nhận thêm `route`: `auto` (một worker chung làm) hoặc `wf:<slug>` để chạy đúng một quy trình có thật; slug sai bị từ chối, còn route auto mà tên việc nhắc tới một quy trình có thật thì tool cảnh báo.
-- **Quản lý nhóm chat**: nhờ Javis ngay trong chat tạo nhóm chat, đổi tên, thêm bớt trợ lý, chọn trưởng nhóm, lưu trữ hay xoá nhóm, và tạo trợ lý mới với model riêng rồi ghép vào nhóm trong một lần ("tạo nhóm thử gồm ba trợ lý, mỗi người một model"). Có từ 0.172.0. Tool gọi thẳng cùng bộ thao tác mà trang Nhóm dùng, nên luật y như bấm tay. Xoá chỉ nhận nhóm đã lưu trữ và chỉ khi bạn nói rõ là xoá; file trợ lý không bị xoá theo. Bot chăm khách không thấy tool này.
+- **Quản lý nhóm chat**: nhờ Javis ngay trong chat tạo nhóm chat, đổi tên, thêm bớt trợ lý, chọn trưởng nhóm, lưu trữ hay xoá nhóm, và tạo trợ lý mới với model riêng rồi ghép vào nhóm trong một lần ("tạo nhóm thử gồm ba trợ lý, mỗi người một model"). Có từ 0.173.0. Tool gọi thẳng cùng bộ thao tác mà trang Nhóm dùng, nên luật y như bấm tay. Xoá chỉ nhận nhóm đã lưu trữ và chỉ khi bạn nói rõ là xoá; file trợ lý không bị xoá theo. Bot chăm khách không thấy tool này.
 - **Đấu thêm MCP**: nhờ Javis ngay trong chat đấu một nguồn MCP mới, và nó **hiện ra trang Kết nối** ở khu "Đã kết nối" như tài khoản bạn tự thêm bằng tay, dùng chung cho mọi bộ não. Trước plugin này Javis không có đường nào ghi vào kho kết nối, nên nó chỉ còn cách chạy `claude mcp add` - server đó rơi vào cấu hình riêng của Claude Code, sáu bộ não còn lại không thấy, và trên trang Kết nối nó không nằm ở khu "Đã kết nối" mà lọt xuống khu gập "Kết nối sẵn của Claude Code và Codex" (mặc định đóng), nên nhìn vào tưởng như chẳng có gì được thêm. Ba rào an toàn: mức quyền mặc định là **chỉ đọc** (muốn cho ghi thì bạn tự nâng ở trang Kết nối); nguồn chạy bằng **lệnh trên máy** (stdio) được thêm ở trạng thái **tắt** để bạn tự đọc lệnh rồi mới bật; dịch vụ đã có sẵn trong Kho kết nối (Gmail, Lịch, POS...) thì Javis chỉ tay sang đúng card chứ không đẻ một bản tự khai song song. Thử kết nối hỏng thì mục đó **vẫn nằm lại** trang Kết nối kèm lý do, chứ không biến mất im lặng.
 - **Zalo mở rộng (gói `javis.zalo` trên Javis Store)**: từ 0.73.0 các tool Zalo bù chỗ MCP chuẩn còn thiếu không còn đi sẵn trong app nữa, để ai không dùng Zalo thì không phải mang theo. Gói gồm gửi ảnh và file (`zalo_send_image`), tag đúng người, ghi chú, nhắc hẹn, poll trong nhóm (`zalo_group_members`, `zalo_send_mention`, `zalo_create_note`, `zalo_create_reminder`, `zalo_create_poll`) và đọc ảnh trong nhóm (`zalo_read_images`). Quét QR Zalo xong là Javis mời cài; máy đã dùng Zalo từ trước thì trang Kết nối hiện nút cài. Chi tiết ở [Zalo](12-zalo.md).
 - **Thời gian & ngày (VN)**: cho Javis biết hôm nay là ngày nào, mấy giờ, thứ mấy theo giờ Việt Nam (UTC+7), và tính ngày tương đối ("3 ngày nữa", "tuần trước"). Thuần thư viện chuẩn, không cần mạng. Đây cũng là plugin mẫu đơn giản nhất để đọc khi bạn muốn tự viết plugin.
@@ -268,6 +268,46 @@ Ngoài tool, plugin còn đăng ký được hook. Bản hiện tại có hai s�
 
 Hook bọc **mọi** tool call, kể cả tool của MCP và tool lõi, chứ không riêng tool của plugin đó. Dùng để ghi nhật ký, đếm, cảnh báo. Khi không plugin nào đăng ký hook, Javis không bọc gì nên không mất thêm hiệu năng. Plugin `tool-audit` là ví dụ chạy được: bật nó lên là mỗi lượt gọi tool được đếm vào một file riêng của plugin.
 
+## Hook ngữ cảnh lượt chatbot (`chatbot_turn_context`)
+
+Sự kiện thứ ba không bọc tool call mà chạy **một lần mỗi lượt bot chuyên trách trả lời**, ngay trước khi engine soạn câu. Nó giải một việc mà mô hình tự làm không được: biết **tài khoản nào** đang nhắn. Mô hình chỉ thấy tên hiển thị, mà tên thì ai cũng gõ được ("em là mẹ bé An"). Lớp kênh thì biết mã tài khoản thật, và hook này chuyển mã đó cho plugin, không cho mô hình.
+
+Callback nhận các khoá sau (luôn khai `**kwargs`, khoá mới có thể thêm về sau):
+
+| Khoá | Ý nghĩa |
+|---|---|
+| `channel` | Kênh của lượt: `zalo_personal`, `telegram`, `zalo`, `messenger`... |
+| `account_id` | Tài khoản kênh mà bot đang trực, rỗng nếu bot chưa gắn tài khoản |
+| `bot_id` | Mã bot chuyên trách |
+| `chat_type` | `private` hoặc `group` |
+| `chat_id` | Cuộc trò chuyện (trong nhóm là mã nhóm) |
+| `sender_id` | Mã tài khoản do nền tảng cấp cho người gửi tin này, không bao giờ là tên hiển thị. Trong nhóm vẫn là người gửi. Sự kiện có người vào nhóm thì rỗng |
+| `vault_root` | Đường dẫn brain của bot |
+| `trial` | `true` ở lượt **Thử bot** |
+
+Callback trả về **một dòng chữ ngắn** hoặc `None`. Javis đặt dòng đó vào prompt hệ thống của đúng lượt này, trong một khối có nhãn và rào `<operator_context>`, ghi rõ đây là thông tin từ hệ thống của chủ bot chứ không phải lời người nhắn tự khai.
+
+```python
+def register(ctx):
+    def _ngu_canh(sender_id="", chat_type="", **kwargs):
+        if chat_type != "private":
+            return None                      # nhóm: không nói gì
+        return "Khách quen" if sender_id in KHACH_QUEN else None
+    ctx.register_hook("chatbot_turn_context", _ngu_canh)
+```
+
+Rào Javis tự giữ, plugin không nới được:
+
+- **Không plugin nào nghe thì prompt giống hệt từng byte** như trước khi có hook này.
+- Lõi **không bao giờ tự ghi mã người gửi vào prompt**. Chỉ dòng plugin trả về mới vào, nên plugin nên trả kết luận ("đã xác nhận") chứ đừng trả lại mã.
+- Mỗi dòng bị ép về **một dòng**: xuống dòng, ký tự điều khiển, ký tự đảo chiều và ký tự vô hình thành dấu cách; cắt ở **300 ký tự**. Nhiều plugin thì mỗi plugin một dòng, tổng **900 ký tự**. Chữ `<operator_context>` trong dòng bị gỡ để không ai đóng được khối.
+- Callback ném lỗi hoặc chạy quá **2 giây** thì bị bỏ qua và ghi log, lượt trả lời vẫn đi tiếp. Callback đồng bộ chạy ở luồng riêng nên không chặn các cuộc chat khác.
+- Mỗi callback nhận **bản sao riêng** của các khoá: plugin trước sửa gì cũng không đổi thứ plugin sau thấy.
+
+Ba loại lượt đều bắn hook: lượt thật, lượt **Trả lời giúp tin này / Gợi ý câu trả lời** ở Hộp thư (người gửi là người nhắn tin cuối của cuộc chat), và lượt **Thử bot**. Lượt thử mang `trial: true` và người gửi giả của trang thử (`javis-try-user`, cuộc chat `javis-try`), cùng người gửi giả mà lượt thử vẫn dùng cho mọi kiểm tra theo người. Mã giả đó không khớp ai thật, nên plugin kiểu sổ danh sách sẽ cho thấy nhánh "người lạ". Muốn xử lý lượt thử khác đi thì plugin tự đọc `trial`.
+
+Plugin dùng hook này vẫn chịu đúng rào chung: plugin người dùng tự cài chỉ chạy khi đặt `JAVIS_ENABLE_USER_PLUGINS=true`, plugin của Gói đi qua trình cài, và nên khai `min_mode: readonly` nếu nó chỉ đọc.
+
 ## Trang riêng và đường HTTP (từ 0.64.26)
 
 Plugin mở được đường web của riêng nó, dưới `/ext/<slug>/`. Dùng cho trang cài đặt, hoặc cho dịch vụ bên ngoài gọi vào (webhook, cửa OAuth). Gói "Javis trong ChatGPT" trong kho là ví dụ chạy thật.
@@ -298,7 +338,7 @@ def register(ctx):
 | **● bật (chưa nạp)** (cam) | Trạng thái hiếm: đã bật nhưng chưa nạp được vì lý do khác. Tải lại trang, nếu vẫn vậy thì xem log server |
 | Nhãn **Có sẵn** / **Toàn cục** / **Brain này** | Nguồn của plugin (app / thư mục chung mọi brain / một brain) |
 | Chip **🔧 tên** | Một tool plugin cung cấp; đây là tên engine sẽ gọi |
-| Chip **🪝 tên** | Một hook plugin đăng ký (`pre_tool_call` hoặc `post_tool_call`) |
+| Chip **🪝 tên** | Một hook plugin đăng ký (`pre_tool_call`, `post_tool_call` hoặc `chatbot_turn_context`) |
 | "quyền tối thiểu: chỉ đọc / ghi (safe) / toàn quyền" | Mức quyền tối thiểu để tool của plugin được phép chạy |
 | Nút **Bật** | Bật plugin (thẻ đang tắt) |
 | Nút **Tắt** | Tắt plugin (thẻ đang bật) |

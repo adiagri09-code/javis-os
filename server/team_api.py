@@ -330,7 +330,7 @@ class OpError(Exception):
 
 
 class TeamOps:
-    """Thao tác quản lý nhóm dùng chung cho route `/teams/*` và công cụ `javis_team` (0.172.0): một chỗ duy nhất giữ luật
+    """Thao tác quản lý nhóm dùng chung cho route `/teams/*` và công cụ `javis_team` (0.173.0): một chỗ duy nhất giữ luật
     (kiểm trợ lý có thật, khoá `accept_lock`, huỷ việc khi lưu trữ, chạy lại khi mở lại), nên trang web và Javis trong chat
     làm y như nhau. Mọi hàm chạy ở luồng phụ (route qua `api.io`, công cụ qua `asyncio.to_thread`). Lỗi: `OpError` hay
     `TeamError` của kho."""
@@ -461,7 +461,7 @@ class TeamOps:
         return updated
 
     def delete(self, root: str, team_id: str) -> dict:
-        """Xoá hẳn một nhóm ĐÃ LƯU TRỮ (0.172.0): dòng của nhóm trong kho nhóm và phiên chat của nhóm. Trả dòng đã xoá."""
+        """Xoá hẳn một nhóm ĐÃ LƯU TRỮ (0.173.0): dòng của nhóm trong kho nhóm và phiên chat của nhóm. Trả dòng đã xoá."""
         self.team(root, team_id)
         with self.api.runner().accept_lock:
             gone = self.api.teams().delete_team(team_id)
@@ -586,7 +586,7 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
 
     @app.delete("/teams/{team_id}")
     async def teams_delete(team_id: str, brain: str = "brain"):
-        """Xoá hẳn một nhóm đã lưu trữ (0.172.0). Nhóm chưa lưu trữ: 400 kèm lời nhắc lưu trữ trước."""
+        """Xoá hẳn một nhóm đã lưu trữ (0.173.0). Nhóm chưa lưu trữ: 400 kèm lời nhắc lưu trữ trước."""
         def _do():
             team, err = _team(team_id, brain)
             if err:

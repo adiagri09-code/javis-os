@@ -6586,14 +6586,13 @@ def _read_md(path):
         text = Path(path).read_text(encoding="utf-8")
     except Exception:
         return {}, ""
-    if text.startswith("---"):
-        parts = text.split("---", 2)
-        if len(parts) >= 3:
-            try:
-                meta = fastyaml.safe_load(parts[1]) or {}
-            except Exception:
-                meta = {}
-            return (meta if isinstance(meta, dict) else {}), parts[2].strip()
+    parts = fastyaml.split_frontmatter(text)
+    if parts:
+        try:
+            meta = fastyaml.safe_load(parts[0]) or {}
+        except Exception:
+            meta = {}
+        return (meta if isinstance(meta, dict) else {}), parts[1].strip()
     return {}, text
 
 def _write_md(path, meta, body):
@@ -6653,7 +6652,8 @@ def _sua_meta_file(path, sua, chi_ghi_khi=None) -> dict:
         # Frontmatter có mà không đọc được (YAML sửa tay sai): ghi lại lúc này là xoá sạch mọi khoá
         # của nó. Từ chối, để người dùng sửa file trước.
         raw = Path(path).read_text(encoding="utf-8")
-        if raw.startswith("---") and len(raw.split("---", 2)) >= 3 and raw.split("---", 2)[1].strip():
+        parts = fastyaml.split_frontmatter(raw)
+        if parts and parts[0].strip():
             raise ValueError("frontmatter_unreadable")
     meta = dict(meta or {})
     sua(meta)
@@ -8357,16 +8357,15 @@ def _scan_note_md(text):
     trong code fence ``` để không nhặt nhầm task/tag trong ví dụ code. Số dòng của task
     tính theo FILE GỐC (1-based) để /files/taskcheck lật đúng dòng."""
     fm, body = {}, text
-    if text.startswith("---"):
-        parts = text.split("---", 2)
-        if len(parts) >= 3:
-            try:
-                meta = fastyaml.safe_load(parts[1])
-                if isinstance(meta, dict):
-                    fm = _json_safe_fm(meta)
-            except Exception:
-                fm = {}
-            body = parts[2]
+    parts = fastyaml.split_frontmatter(text)
+    if parts:
+        try:
+            meta = fastyaml.safe_load(parts[0])
+            if isinstance(meta, dict):
+                fm = _json_safe_fm(meta)
+        except Exception:
+            fm = {}
+        body = parts[1]
     fm_lines = text[: len(text) - len(body)].count("\n") if body is not text else 0
     tags = set()
     fmt = fm.get("tags") or fm.get("tag")
@@ -21715,6 +21714,21 @@ def _chan_nang_quyen(muc, xac_nhan):
                          "canh_bao": chatbot_store.canh_bao_muc(m)}, status_code=400)
 
 
+def _chan_ngoai_le(raw, cu, xac_nhan):
+    """Same gate as `_chan_nang_quyen`, for per-chat exceptions (0.172.0): an exception that raises a chat to a level
+    needing the risk confirmation answers `can_force` with that level's warnings, so the form asks instead of failing.
+    `xac_nhan` is the exception's OWN flag (`xac_nhan_ngoai_le`), and the answer names it in `co` so a caller knows
+    which flag to resend. A list that does not parse is left to the store, which answers with the reason."""
+    moi, loi = chatbot_store.parse_ngoai_le(raw)
+    if loi or not chatbot_store.can_xac_nhan_ngoai_le(moi, cu, xac_nhan):
+        return None
+    m = "full" if any(e["muc_quyen"] == "full" for e in moi) else "auto"
+    return JSONResponse({"ok": False, "error": chatbot_store._loi(chatbot_store.LOI_CHUA_XAC_NHAN_NGOAI_LE),
+                         "can_force": True, "co": "xac_nhan_ngoai_le", "muc_quyen": m,
+                         "nhan": chatbot_store.nhan_muc(m),
+                         "canh_bao": chatbot_store.canh_bao_muc(m)}, status_code=400)
+
+
 @app.get("/chatbots/chats")
 async def chatbots_chats(account_ids: str = "", bot_id: str = "", q: str = "", limit: int = 60):
     """Các cuộc chat ĐÃ BIẾT (người và nhóm) cho ô "chọn người và nhóm" của form bot.
@@ -21772,12 +21786,15 @@ async def chatbots_create(name: str = Form(...), agent_slug: str = Form(...),
                           channel: str = Form(""), xac_nhan_rui_ro: str = Form(""),
                           ngon_ngu: str = Form(""), account_ids: str = Form(""),
                           account_label: str = Form(""), reply_policy: str = Form(""),
-                          gio_truc: str = Form("")):
+                          gio_truc: str = Form(""), nhuong_tay_phut: str = Form(""),
+                          ngoai_le: str = Form(""), xac_nhan_ngoai_le: str = Form(""),
+                          nhan_ket_ban: str = Form("")):
     # Bot sống TRONG một brain: Agent nó dùng và tài liệu nó đọc là cùng một chỗ. Nhận cả hai
     # tên tham số và tự bù cho nhau, nên người gọi chỉ cần gửi một cái.
     br = (brain or agent_brain or "").strip()
     ack = str(xac_nhan_rui_ro).strip() not in ("", "0", "false")
-    chan = _chan_nang_quyen(muc_quyen, ack)
+    ack_nl = str(xac_nhan_ngoai_le).strip() not in ("", "0", "false")
+    chan = _chan_nang_quyen(muc_quyen, ack) or _chan_ngoai_le(ngoai_le, [], ack_nl)
     if chan is not None:
         return chan
     bid, err = chatbot_store.create_bot({
@@ -21801,6 +21818,14 @@ async def chatbots_create(name: str = Form(...), agent_slug: str = Form(...),
         "reply_policy": reply_policy,
         # Giờ trực (0.130.0): JSON {"tu","den"} HH:MM theo múi giờ cài đặt; rỗng = cả ngày.
         "gio_truc": gio_truc,
+        # Owner yield (0.172.0): minutes, 0 = never yield; blank or invalid = not set (channel default: 10 minutes,
+        # groups stay silent for the whole window as before 0.172.0).
+        "nhuong_tay_phut": nhuong_tay_phut,
+        # Per-chat exceptions (0.172.0): JSON list of {chat_id, ten, muc_quyen, cho_giay}; raised levels need the ack.
+        "ngoai_le": ngoai_le,
+        "xac_nhan_ngoai_le": ack_nl,
+        # Tự nhận lời mời kết bạn và đọc lời giới thiệu (0.172.0, Zalo cá nhân): "1" = bật, mặc định tắt.
+        "nhan_ket_ban": nhan_ket_ban,
     })
     if err:
         return JSONResponse({"ok": False, "error": err}, status_code=400)
@@ -21830,6 +21855,12 @@ async def chatbots_update(bot_id: str, request: Request):
     form["xac_nhan_rui_ro"] = str(form.get("xac_nhan_rui_ro") or "").strip() not in ("", "0", "false")
     if "muc_quyen" in form:
         chan = _chan_nang_quyen(form.get("muc_quyen"), form["xac_nhan_rui_ro"])
+        if chan is not None:
+            return chan
+    if "ngoai_le" in form:
+        form["xac_nhan_ngoai_le"] = str(form.get("xac_nhan_ngoai_le") or "").strip() not in ("", "0", "false")
+        chan = _chan_ngoai_le(form.get("ngoai_le"), (chatbot_store.get_bot(bot_id) or {}).get("ngoai_le"),
+                              form["xac_nhan_ngoai_le"])
         if chan is not None:
             return chan
     ok, err = chatbot_store.update_bot(bot_id, form)
@@ -22647,7 +22678,7 @@ class _TeamAdmin:
 
     def create_agent(self, root, name, role, prompt, model="", model_provider="", tags=None):
         """Tạo trợ lý MỚI, không bao giờ ghi đè: slug trùng thì thêm -2, -3. Gắn tag "Nhóm" (hay `tags` được đưa) để không
-        bị trống nhãn. `model`/`model_provider` (0.172.0, công cụ `javis_team`): model riêng của trợ lý; provider lạ bị bỏ
+        bị trống nhãn. `model`/`model_provider` (0.173.0, công cụ `javis_team`): model riêng của trợ lý; provider lạ bị bỏ
         về "" để `_agent_model_provider` suy như trợ lý cũ."""
         base = _ascii_slug(name) or "tro-ly"
         with _AGENT_META_LOCK:
@@ -22666,7 +22697,7 @@ class _TeamAdmin:
         return slug
 
     def set_model(self, root, slug, model, model_provider=""):
-        """Đổi model riêng của một trợ lý có sẵn (0.172.0). `model` rỗng: về model chính. Không đụng phần còn lại của file."""
+        """Đổi model riêng của một trợ lý có sẵn (0.173.0). `model` rỗng: về model chính. Không đụng phần còn lại của file."""
         with _AGENT_META_LOCK:
             path = _agent_md_path(root, slug)
             if path is None:

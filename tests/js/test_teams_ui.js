@@ -150,7 +150,7 @@ check("nhóm Năng lực chứa teams", /ids: \["workspace", "teams"/.test(conso
 check("icon và tiêu đề trang teams", /teams: "users"/.test(consoleJs) && consoleJs.includes('"teams"') && /id === "teams"/.test(consoleJs));
 check("index.html nạp teams.js", /<script src="\/static\/teams\.js\?v=\d+"><\/script>/.test(indexHtml));
 check("app.js chuyển gói team_message, team_state thành sự kiện trang", appJs.includes('"team_message"') && appJs.includes("javis:team-event"));
-// 0.172.0: nhóm đang mở bị xoá (công cụ javis_team hay tab khác): khung chat đóng về trống, báo bằng chữ, không giữ nhóm ma.
+// 0.173.0: nhóm đang mở bị xoá (công cụ javis_team hay tab khác): khung chat đóng về trống, báo bằng chữ, không giữ nhóm ma.
 check("nhóm đang mở bị xoá: gói team_state deleted và GET nhóm 404 đều đóng khung qua closeGone",
       teamsJs.includes('d.type === "team_state" && d.deleted && d.team_id === S.activeId) closeGone(d.team_id)')
       && teamsJs.includes("if (r.code === 404) return closeGone(forTeam);")

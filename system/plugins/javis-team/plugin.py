@@ -1,4 +1,4 @@
-"""Plugin bundled: tool `javis_team` - quản lý nhóm chat từ MỌI engine (0.172.0).
+"""Plugin bundled: tool `javis_team` - quản lý nhóm chat từ MỌI engine (0.173.0).
 
 Vì sao có tool này
 ==================

@@ -226,16 +226,27 @@ def engine_notice(text: str) -> str:
 # đây là nick chủ dùng hằng ngày nên bạn bè, người nhà, đồng nghiệp đều nhắn vào. Chủ đã chọn
 # (29/09) để bot TỰ QUYẾT có trả lời không thay vì bật công tắc từng người, nên quyết định đó phải
 # được nói cho model biết - và nó là chỉ dẫn duy nhất Javis thêm vào prompt bot, chỉ ở kênh này.
+#
+# 0.172.0: đoạn này là MẶC ĐỊNH, không phải luật đè lên chủ. Bản cũ đứng SAU file Agent và ra lệnh
+# trống ("chuyện riêng tư thì KHÔNG trả lời"), nên nó thắng luật chủ đã viết: Agent của một trung tâm
+# ghi rõ học sinh kể chuyện riêng thì vẫn đáp một câu kéo về việc lớp, vậy mà "Thầy ơi con buồn quá,
+# con mới chia tay người yêu" vẫn ra agent_silent (15/10/2026). Nay nó đứng TRƯỚC file Agent và nói
+# thẳng file Agent thắng; bot không có Agent, hoặc Agent không nói gì về loại tin đó, vẫn im an toàn.
 IM_LANG = "[IM_LANG]"
 _CAU_ZALO_CA_NHAN = f"""
-## Kênh này là Zalo CÁ NHÂN của chủ
+## Kênh này là Zalo CÁ NHÂN của chủ (mặc định của Javis)
 
 Bạn đang trả lời tin nhắn ở tài khoản Zalo cá nhân của chủ, và câu bạn gửi đi mang TÊN CHỦ.
 Người nhắn tới có thể là khách, nhưng cũng có thể là bạn bè, người nhà, đồng nghiệp của chủ.
-Hãy tự quyết định có nên trả lời hay không: chỉ trả lời khi tin nhắn đúng là việc mà vai của bạn
-phụ trách. Nếu đó là chuyện riêng tư, chuyện gia đình bạn bè, một tin không cần hồi đáp, hoặc
-bạn không chắc có nên nhân danh chủ trả lời hay không, thì KHÔNG trả lời: viết đúng một dòng
-`{IM_LANG}` và không thêm chữ nào khác.
+
+Hướng dẫn vai của chủ ở phần dưới LUÔN thắng đoạn này. Khi hướng dẫn vai đã nói cách xử lý một
+loại tin (ví dụ: người nhắn kể chuyện riêng thì vẫn đáp một câu ngắn), làm đúng như hướng dẫn vai,
+kể cả khi đoạn này nói khác.
+
+Chỉ với loại tin mà hướng dẫn vai KHÔNG nói tới: tự quyết định có nên trả lời hay không, chỉ trả
+lời khi tin nhắn đúng là việc mà vai của bạn phụ trách. Nếu đó là chuyện riêng tư, chuyện gia đình
+bạn bè, một tin không cần hồi đáp, hoặc bạn không chắc có nên nhân danh chủ trả lời hay không, thì
+KHÔNG trả lời: viết đúng một dòng `{IM_LANG}` và không thêm chữ nào khác.
 """
 
 # Chế độ "Tự đánh giá" (0.64.82): một tin trong NHÓM mà không ai gọi tên bot. Cùng lý do với đoạn
@@ -290,6 +301,10 @@ def build_bot_prompt(bot: dict) -> str:
                     f"kể cả khi khách nhắn bằng tiếng khác. {_l.nudge}")
     else:
         phan.append("\nNGÔN NGỮ: trả lời bằng ĐÚNG ngôn ngữ khách đang nhắn.")
+    # Kênh của LƯỢT này, do _make_answer_fn gắn vào. Chỉ Zalo cá nhân mới có thêm đoạn này, và nó đứng
+    # TRƯỚC file Agent: mặc định của Javis đọc trước, luật của chủ đọc sau và thắng (0.172.0).
+    if (bot or {}).get("_kenh_luot") == "zalo_personal":
+        phan.append(_CAU_ZALO_CA_NHAN)
     if than.strip():
         phan.append("\n" + than.strip())
     if not meta:
@@ -311,9 +326,10 @@ def build_bot_prompt(bot: dict) -> str:
     if tu_mo:
         phan.append(_TU_MO_TAI_LIEU.format(
             chat=_TU_MO_CHAT if bot.get("nguon_tra_loi") == "tai_lieu" else ""))
-    # Kênh của LƯỢT này, do _make_answer_fn gắn vào. Chỉ Zalo cá nhân mới có thêm đoạn này.
-    if (bot or {}).get("_kenh_luot") == "zalo_personal":
-        phan.append(_CAU_ZALO_CA_NHAN)
+    # Lines a plugin returned from the `chatbot_turn_context` hook for THIS turn (plugin_context). No plugin = no key = no block.
+    nc_plugin = (bot or {}).get("_ngu_canh_plugin")
+    if nc_plugin:
+        phan.append(_NGU_CANH_PLUGIN.format(khoi=nc_plugin))
     # The channel of THIS turn sends files (0.84.3): tell the Agent how to send an image, or it never knows it can.
     if bot_images.channel_sends_files((bot or {}).get("_kenh_luot")):
         phan.append(bot_images.PROMPT_HINT)
@@ -329,6 +345,17 @@ def build_bot_prompt(bot: dict) -> str:
     nc = (bot or {}).get("_ngu_canh_nhom")
     if nc:
         phan.append(_NGU_CANH_NHOM.format(khoi=nc))
+    # Per-chat exception (0.172.0). LAST on purpose: the personal Zalo paragraph above says to stay silent on family
+    # matters, and this chat is often exactly that (the owner's mother). Without this line the model refuses or stays
+    # silent on work the owner allowed for this one chat. Only for a RAISED chat: a chat the owner lowered out of
+    # distrust must not be told "this is not a stranger" (its lower level already reaches the prompt as `muc_quyen`).
+    nl = (bot or {}).get("_ngoai_le")
+    if isinstance(nl, dict) and chatbot_store.ngoai_le_nang(bot):
+        ai = f' ("{nl.get("ten")}")' if nl.get("ten") else ""
+        phan.append(f"\nQUYỀN CỦA CUỘC CHAT NÀY: chủ đã chọn riêng cuộc chat này{ai} cho bạn và cấp mức "
+                    f"\"{chatbot_store.MUC_NHAN.get(nl.get('muc_quyen'), nl.get('muc_quyen'))}\", khác mức chung của bot "
+                    "(các cuộc chat khác vẫn ở mức chung). Đây không phải người lạ: đừng im chỉ vì đó là chuyện riêng hay "
+                    "chuyện gia đình; làm theo hướng dẫn của chủ cho người này.")
     return "\n".join(phan)
 
 
@@ -520,6 +547,42 @@ def ngu_canh_nhom(meta: dict, kenh: str, tai_khoan: str) -> str:
 
 
 # ============================================================
+# Plugin context of a turn (hook `chatbot_turn_context`)
+# ============================================================
+# Operator-provided context, not something the person typed: a plugin on the owner's server computed it from
+# the turn's channel and platform sender id. Fenced and labelled so the model never reads it as the customer's
+# words, and so a customer quoting the label in a message cannot pass as this block.
+_NGU_CANH_PLUGIN = (
+    "\nTHÔNG TIN TỪ HỆ THỐNG CỦA CHỦ BOT cho lượt này (plugin trên máy chủ tự tính từ tài khoản gửi tin, "
+    "KHÔNG phải lời người nhắn tự khai, người nhắn không sửa được):\n<operator_context>\n{khoi}\n</operator_context>")
+_THE_PLUGIN_RE = re.compile(r"</?\s*operator_context\s*>", re.I)
+
+
+async def plugin_context(cfg: dict, meta: dict, kenh: str, aid: str, trial: bool = False) -> str:
+    """Lines plugins return from the `chatbot_turn_context` hook for this turn, one per line, or "".
+
+    The hook hears who sent the turn the same way tool hooks do (`turn_context.from_meta`: the platform
+    sender id, "" for a member-join event), plus the bot, its channel account and its brain. The core
+    never writes the sender id into the prompt itself; only what a plugin chose to return goes in.
+    "" when no plugin listens (the common case: the prompt stays byte-for-byte the same) or when anything
+    fails (a plugin never costs a reply). `trial`: the "Try bot" turn, which carries the synthetic try
+    sender (TRY_USER_ID / TRY_CHAT_ID), the same stand-in it uses for every other per-sender check."""
+    try:
+        import plugins_host
+        import turn_context
+        root = str(_deps["brain_root"](cfg.get("brain") or "brain"))
+        t = turn_context.from_meta(kenh, meta or {}, la_chu=False)
+        payload = {"channel": str(kenh or ""), "account_id": "" if aid == cfg.get("id") else str(aid or ""),
+                   "bot_id": str(cfg.get("id") or ""), "chat_type": t["chat_type"], "chat_id": t["chat_id"],
+                   "sender_id": t["sender_id"], "vault_root": root, "trial": bool(trial)}
+        lines = await plugins_host.chatbot_turn_context(root, payload)
+        return "\n".join(x for x in (_THE_PLUGIN_RE.sub("", ln).strip() for ln in lines) if x)
+    except Exception as e:      # noqa: BLE001
+        print(f"[chatbot plugin context] {type(e).__name__}: {e}", file=sys.stderr)
+        return ""
+
+
+# ============================================================
 # Rào
 # ============================================================
 def _dang_khac(chat_id: str) -> str:
@@ -604,6 +667,10 @@ def _ly_do_im_co_ban(bot_cfg: dict, meta: dict) -> str:
         if aud != "chon":
             return ""
         if _khop_nhom(bot_cfg.get("people") or [], (meta or {}).get("chat_id")):
+            return ""
+        # A chat the owner RAISED with its own exception (0.172.0) is a chosen person by definition. A lowered one is
+        # not: lowering a chat must never widen who the bot answers.
+        if chatbot_store.ngoai_le_nang(chatbot_store.ap_ngoai_le(bot_cfg, meta)):
             return ""
         return "nguoi_chua_chon"
     # Chưa khai nhóm nào thì bot không tự nhận việc trong nhóm lạ. Cùng một lý do với nhóm đã
@@ -1403,11 +1470,29 @@ def _ghi_bo_qua(bot_id: str, cfg: dict, meta: dict, text: str, ma: str, tl: dict
     })
 
 
+def _luot_cu(meta) -> bool:
+    """Lượt Zalo chat riêng mà khách đã nhắn thêm chữ kể từ lúc lượt được giao (xem `zalo_personal_channel.co_tin_moi`)?
+    Chỉ đúng khi lượt mang `seq_cuoi` và chưa bỏ quá `MAX_BO_DO` lần liền; lỗi nào cũng coi là chưa cũ (cứ gửi)."""
+    m = meta or {}
+    if m.get("seq_cuoi") is None:
+        return False
+    try:
+        import zalo_personal_channel as zc
+        if int(m.get("bo_do_n") or 0) >= zc.MAX_BO_DO:
+            return False
+        return zc.co_tin_moi(str(m.get("account_id") or ""), str(m.get("chat_id") or ""), int(m["seq_cuoi"]))
+    except Exception:       # noqa: BLE001 - không kiểm được thì cứ gửi, đừng nuốt câu trả lời
+        return False
+
+
 def _make_answer_fn(bot_id: str):
     async def _answer(text, meta=None, progress=None):
         cfg = chatbot_store.get_bot(bot_id)
         if not cfg:
             return {"text": "", "files": [], "im_lang": True}
+        # Per-chat exception (0.172.0): this private chat may run at its own level. Applied FIRST, so every later
+        # read of `muc_quyen` in this turn (the tool route in `main`, the log, the prompt) sees the same level.
+        cfg = chatbot_store.ap_ngoai_le(cfg, meta)
         meta = _rp_named_meta(cfg, text, meta)
         _nho_neu_khong_goi(bot_id, cfg, meta, text)
         # Lớp thứ HAI của cùng một luật (`precheck_fn` đã chặn ở tầng kênh). Giữ cả hai vì hai
@@ -1478,6 +1563,7 @@ def _make_answer_fn(bot_id: str):
         cfg["_kenh_luot"] = kenh_luot
         cfg["_tu_dong"] = tu_dong
         cfg["_ngu_canh_nhom"] = ngu_canh_nhom(meta, kenh_luot, aid_luot)
+        cfg["_ngu_canh_plugin"] = await plugin_context(cfg, meta or {}, kenh_luot, aid_luot)
         # Trong nhóm Zalo cá nhân cả nhóm dùng CHUNG một mạch hội thoại (khoá theo nhóm), nên
         # model phải biết ai đang nói. Telegram giữ nguyên như cũ.
         text_engine = text
@@ -1487,6 +1573,9 @@ def _make_answer_fn(bot_id: str):
                 text_engine = f"[{ten_nguoi}] {text}"
         cfg.pop("_anh_loi", None)
         text_engine, cfg["_anh"] = await anh_cho_bot(text_engine, gan_anh_cho(bot_id, meta, text), cfg)
+        if (meta or {}).get("ghi_chu_dau"):
+            # Lượt nối tiếp một câu trả lời đã bỏ (0.172.0): ghi chú chỉ cho model, không vào Hộp thư hay nhật ký.
+            text_engine = str(meta["ghi_chu_dau"]) + "\n" + text_engine
 
         # Bản ghi truyền xuống lõi phải có brain và slug - lõi dựa vào đó để đổi brain, đổi
         # khoá phiên và đổi nhãn kênh.
@@ -1552,6 +1641,18 @@ def _make_answer_fn(bot_id: str):
                 "muc_quyen": cfg.get("muc_quyen") or "suggest",
             })
             return {"text": "", "files": [], "im_lang": True}
+        # Zalo chat riêng: khách đã nhắn thêm chữ trong lúc bot soạn thì câu này là CŨ (0.172.0). Không gửi, không vào
+        # Hộp thư như lời bot nói; lượt kế tiếp đọc cả tin mới lẫn tin của lượt này và trả lời một lần.
+        if not loi_ky_thuat and dap and _luot_cu(meta):
+            chatbot_log.ghi(bot_id, {
+                "chat_id": chat_id, "chat_type": (meta or {}).get("chat_type"),
+                "user_name": (meta or {}).get("user_name"), "hoi": text,
+                "dap": "(bỏ câu trả lời vì khách nhắn thêm trong lúc soạn)", "loi": "", "bo_qua": "khach_nhan_them",
+                "co_tai_lieu": bool(tl.get("co")), "nguon": tl.get("nguon"),
+                "chuyen_nguoi": False, "bi": False,
+                "muc_quyen": cfg.get("muc_quyen") or "suggest",
+            })
+            return {"text": "", "files": [], "im_lang": True, "khach_nhan_them": True}
         # Images the Agent asked to send (0.84.3): `![...](path)` inside the bot's own brain becomes a file the
         # channel sends after the text. Only on channels that send files; see bot_images for the gates.
         if not loi_ky_thuat and dap and bot_images.channel_sends_files(kenh_luot):
@@ -1684,6 +1785,9 @@ async def manual_answer(conv: dict, msgs: list, draft: bool = False) -> dict:
                                                                     "The bot is already drafting for this chat, wait a moment")}
     _MANUAL_BUSY.add(conv_id)
     meta = manual_meta(conv, last)
+    # Per-chat exception (0.172.0, review of #653): the owner's "Reply for me" / "Suggest a reply" runs this chat at the
+    # SAME level as the live bot would, never at the bot-wide one. A chat lowered out of distrust stays lowered here too.
+    cfg = chatbot_store.ap_ngoai_le(cfg, meta)
     key = f"bot:{bot_id}:{meta['chat_id']}"
     probe, undo = _deps.get("session_probe"), _deps.get("session_undo")
     sid, keep = "", 0
@@ -1698,6 +1802,7 @@ async def manual_answer(conv: dict, msgs: list, draft: bool = False) -> dict:
         _aid, kenh = _tai_khoan_cua(cfg, meta)
         cfg["_tai_lieu"], cfg["_kenh_luot"], cfg["_tu_dong"] = tl, kenh, False
         cfg["_ngu_canh_nhom"] = ngu_canh_nhom(meta, kenh, _aid)
+        cfg["_ngu_canh_plugin"] = await plugin_context(cfg, meta, kenh, _aid)
         text_engine = text
         if kenh == "zalo_personal" and meta["chat_type"] == "group" and meta["user_name"]:
             text_engine = f"[{meta['user_name']}] {text}"      # cả nhóm chung một mạch: model phải biết ai đang nói
@@ -1891,6 +1996,7 @@ async def try_message(bot_id: str, text: str, chat_type: str = "private", mentio
                 print(f"[chatbot {bot_id}] đọc phiên cho lượt thử lỗi: {type(e).__name__}", file=sys.stderr)
         cfg["_tai_lieu"], cfg["_kenh_luot"], cfg["_tu_dong"] = tl, kenh, chatbot_tu_dong.can_danh_gia(cfg, meta)
         cfg["_ngu_canh_nhom"] = ngu_canh_nhom(meta, kenh, aid)
+        cfg["_ngu_canh_plugin"] = await plugin_context(cfg, meta, kenh, aid, trial=True)
         text_engine = text
         if kenh == "zalo_personal" and grp:
             text_engine = f"[{meta['user_name']}] {text}"
