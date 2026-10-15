@@ -22665,6 +22665,10 @@ def _agent_judge_meta(agent_key):
         return {}
 
 
+def _judge_policy_change_noop(agent_key, context_ref, change):
+    return None
+
+
 def _agent_judge():
     """Bộ phán xử dùng chung (một lần mỗi tiến trình), nối vào `agent_judge.default()` để phần P và L gọi được."""
     if _AGENT_JUDGE[0] is None:
@@ -22672,7 +22676,11 @@ def _agent_judge():
             store=_agent_judge_store, ledger=lambda: agent_ledger.CallLedger(_resonance_store()),
             wake=lambda: agent_ledger.WakeReasons(_resonance_store()), ask=_agent_judge_ask,
             engine_label=_agent_judge_engine_label, resonance_on=_agent_judge_resonance_on,
-            resumed_at=_agent_judge_resumed_at, history=_agent_judge_history, agent_meta=_agent_judge_meta))
+            resumed_at=_agent_judge_resumed_at, history=_agent_judge_history, agent_meta=_agent_judge_meta,
+            # Cửa sổ quan sát 6.4 KHÔNG mở cho dịch ngưỡng do nhãn của chủ ("Đáng lẽ nên nói" / "Nên im"): đó là chủ dạy
+            # trực tiếp, không được tự quay lại (8.3: không đè thiết lập chủ đang giữ). Thay đổi do tự rà soát (offset_set,
+            # eagerness_set) thì phần L tự ghi cửa sổ của mình (agent_review), nên ở đây không ghi lần hai.
+            policy_change=_judge_policy_change_noop))
         _register_judge_view_part()
         _wire_judge_with_pulse()
     return _AGENT_JUDGE[0]

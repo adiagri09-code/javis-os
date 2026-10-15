@@ -103,5 +103,8 @@ check("lượt xem xét qua main.py: chốt chặn engine thật, lượt hoàn,
       res.get("outcome") == "engine_error" and rows and rows[0]["status"] == "refunded"
       and agent_ledger.WakeReasons(rs).get(rr[0]["id"])["status"] == "pending", (res, rows))
 
+check("ghép T3: nhãn của chủ không mở cửa sổ quay lại (móc policy_change của phán xử là no-op có chủ đích)",
+      main._AGENT_JUDGE[0].policy_change is main._judge_policy_change_noop)
+
 print(f"\n{'FAIL' if fails else 'PASS'} - test_t3_integration: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)

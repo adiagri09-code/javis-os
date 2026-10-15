@@ -156,11 +156,12 @@
   }
 
   /* Mục của phần J/L (sổ đăng ký). Mỗi mục tự escape; lỗi của một mục không làm hỏng bảng. */
-  function partsHtml(view, registry) {
+  function partsHtml(view, registry, ctx) {
     var list = registry || (typeof window !== "undefined" ? window.JavisPulseParts : null) || [];
     return list.map(function (p) {
       try {
-        var h = p && typeof p.render === "function" ? p.render(view || {}) : "";
+        // `render(view, null, {slug})`: mục nào cần slug (nút sửa của phán xử, nút thu hồi bài học) lấy từ ngữ cảnh.
+        var h = p && typeof p.render === "function" ? p.render(view || {}, null, ctx || {}) : "";
         return h ? '<div class="pulse-part" data-part="' + esc(p.name || "") + '">' + h + "</div>" : "";
       } catch (e) { return ""; }
     }).join("");
@@ -201,7 +202,7 @@
         fb.slice(0, 8).map(function (f) { return "<li>" + esc(feedbackLine(f)) + "</li>"; }).join("") + "</ul>";
     }
     html += proposalsHtml(v.proposals, o);
-    html += partsHtml(v, o.registry);
+    html += partsHtml(v, o.registry, { slug: o.slug || v.slug || "" });
     if (o.err) html += '<div class="pulse-line pulse-err" role="alert">' + esc(tw("pulse.error", { e: o.err })) + "</div>";
     else if (o.msg) html += '<div class="pulse-line pulse-ok" role="status">' + esc(o.msg) + "</div>";
     return html;
