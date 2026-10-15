@@ -137,9 +137,9 @@ check("server BẢO engine lập kế hoạch rồi dừng ở chế độ Plan"
   const ST = fs.readFileSync(path.join(ROOT, "server", "coding_store.py"), "utf8");
   return /KHOI_PLAN/.test(ST) && /KHÔNG sửa file/.test(ST) && /def khoi_prompt/.test(ST);
 })());
-check("khối đó được nối vào prompt của lượt chat", (() => {
+check("the block is appended to the turn prompt (with the brain, for the pinned-folder block)", (() => {
   const MAIN = fs.readFileSync(path.join(ROOT, "server", "main.py"), "utf8");
-  return (MAIN.match(/\+ _khoi_coding\(_row0\)/g) || []).length >= 2
+  return (MAIN.match(/\+ _khoi_coding\(_row0, brain\)/g) || []).length >= 2
     && /def _khoi_coding\(/.test(MAIN);
 })());
 check("và nói cho engine biết nó đang đứng ở thư mục nào", (() => {

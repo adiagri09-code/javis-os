@@ -1399,6 +1399,17 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 @media (prefers-reduced-motion: reduce) {
   .cp-fast[aria-pressed="true"], .cp-fast[aria-pressed="true"] svg { animation: none; }
 }
+/* Pinned working folder chip, right after the bolt (composer-folder.js, 0.154.0). */
+.cp-pin { display: inline-flex; align-items: center; gap: 5px; height: 30px; max-width: 190px; padding: 0 10px;
+  border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text2);
+  font: inherit; font-size: 12.5px; cursor: pointer; flex: 0 1 auto; min-width: 0; }
+.cp-pin:hover, .cp-pin:focus-visible { border-color: var(--accent); color: var(--text); }
+.cp-pin .cp-ic { width: 14px; height: 14px; flex: none; }
+.cp-pin span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-pin-gone span { text-decoration: line-through; opacity: .7; }
+.cp-pin-err { color: var(--warn-ink); font-size: 12.5px; padding: 4px 10px; }
+.cp-pin-err:empty { display: none; }
+@media (max-width: 860px) { .cp-pin { max-width: 120px; padding: 0 8px; } }
 .mic-big {
   background: transparent; border: 1px solid transparent; color: var(--text2);
   width: 34px; height: 34px; border-radius: 50%; cursor: pointer; flex-shrink: 0;
