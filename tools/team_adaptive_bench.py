@@ -165,6 +165,7 @@ class FakeModels:
 def install_guards(main, fakes: FakeModels | None = None) -> FakeModels:
     """Mọi lối dựng engine thật trong `main` ném lỗi ngay; lượt nhóm, phán xử, quét chạy bằng engine giả `fakes`."""
     fakes = fakes or FakeModels()
+    os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
     main.team_engine.build = _no_real_engine
     main.claude_engine = _no_real_engine
     main.CodexCLI = _no_real_engine
@@ -305,6 +306,7 @@ def main_bench(argv=None) -> dict:
     base = Path(tempfile.mkdtemp(prefix="javis-t4-bench-"))
     os.environ["JAVIS_STATE_DIR"] = str(base / "state")
     os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
+    os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"   # chốt thứ hai: main._agent_judge_ask dừng trước khi dựng engine
     os.environ["JAVIS_PULSE_TICK_PAUSED"] = "1"       # nhịp nền của scheduler không chạy; bench gọi tick trực tiếp
     os.environ["JAVIS_RESONANCE_TICK_PAUSED"] = "1"
     (base / "state").mkdir()
