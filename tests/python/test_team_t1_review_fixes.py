@@ -407,5 +407,99 @@ for bad in (float("nan"), float("inf")):
 check("F5 đối chứng: số hữu hạn hợp lệ vẫn lưu", tm.set_caps(T["team_id"], {"busy_wait_s": 60.5})["caps"]["busy_wait_s"]
       == 60.5)
 
+# ═════ F6 (review vòng 2 #1): huỷ lần hai đúng lúc kiểm khoá lần cuối vẫn nhả khoá ═════
+r, tm, ts, ss, fake, admin, T, _ = world("double-cancel")
+r.busy_lease_s, r.job_lease_s, r.lease_renew_s = 5, 5, 1
+orig_bt = tm.busy_turn
+in_check = {"n": 0}
+
+
+def slow_busy_turn(k):
+    in_check["n"] += 1
+    time.sleep(0.5)
+    return orig_bt(k)
+
+
+tm.busy_turn = slow_busy_turn
+
+
+async def hang(req):
+    await asyncio.sleep(30)
+    return "không tới đây"
+
+fake.say("ag_minh", "work", hang)
+dc = {}
+
+
+async def double_cancel():
+    job = r.submit(T["team_id"], "Việc treo", mentions=["ag_minh"], as_job=True, client_msg_id="f6")["task_id"]
+    await r.dispatch_once(wait=False)
+    await wait_until(lambda: len(fake.calls) >= 1, timeout=WAIT)
+    j = r._jobs[job]
+    j.cancel()
+    await wait_until(lambda: in_check["n"] >= 1, timeout=WAIT)   # đang ở lần kiểm cuối (đọc kho chậm)
+    j.cancel()
+    try:
+        await asyncio.wait_for(asyncio.shield(j), WAIT)
+    except BaseException:  # noqa: BLE001
+        pass
+    await wait_until(lambda: tm.busy_of("ag_minh") is None, timeout=WAIT)
+    lk = r._locks.get("ag_minh")
+    dc["locked"] = bool(lk and lk.locked())
+    dc["row"] = tm.busy_of("ag_minh")
+
+run(double_cancel())
+tm.busy_turn = orig_bt
+check("F6 huỷ lần hai giữa lần kiểm cuối: khoá trong tiến trình và dòng khoá đều đã nhả",
+      in_check["n"] >= 1 and dc.get("locked") is False and dc.get("row") is None, (in_check, dc))
+
+# ═════ F7 (review vòng 2 #3): việc mất người giữ ngay lúc chờ khoá thì không gọi engine ═════
+r, tm, ts, ss, fake, admin, T, new_team = world("lost-in-wait")
+OTHER = new_team("khac4", mem=("minh",), leader=None)
+tm.acquire_busy("ag_minh", OTHER["team_id"], "tu_hold", lease_s=30)
+fake.say("ag_minh", "work", "Không được gọi.")
+job = r.submit(T["team_id"], "Việc mất khi chờ", mentions=["ag_minh"], as_job=True, client_msg_id="f7")["task_id"]
+lw = {}
+
+
+async def lost_in_wait():
+    await r.dispatch_once(wait=False)
+    await wait_until(lambda: (ts.get_task(job) or {}).get("status") == "team_running", timeout=WAIT)
+    with ts._lock:
+        ts._db.execute("UPDATE tasks SET claimed_by='worker-khac' WHERE id=?", (job,))
+        ts._db.commit()
+    await wait_until(lambda: False, timeout=0.3)   # vài nhịp gia hạn thấy việc đã sang người khác
+    tm.release_busy("ag_minh", "tu_hold")
+    await r.wait_jobs()
+    lw["turns"] = [t for t in tm.turns(T["team_id"]) if t["agent_key"] == "ag_minh"]
+
+run(lost_in_wait())
+check("F7 mất việc lúc chờ khoá: engine không được gọi, lượt được hoàn",
+      not fake.calls and all(t["status"] == "refunded" for t in lw["turns"]) and lw["turns"],
+      (len(fake.calls), [t["status"] for t in lw.get("turns", [])]))
+check("F7 khoá agent đã nhả sau khi bỏ lượt", tm.busy_of("ag_minh") is None, tm.busy_of("ag_minh"))
+
+# ═════ F8 (review vòng 2 #4): mất khoá agent lặp lại thì chặn việc, không chạy lại mãi ═════
+r, tm, ts, ss, fake, admin, T, new_team = world("requeue-cap")
+OTHER = new_team("khac5", mem=("minh",), leader=None)
+tm.set_caps(T["team_id"], {"task_turns": {"unlimited": True}})
+steals = []
+
+
+async def always_steal(req):
+    steals.append(req["turn_id"])
+    tm.release_busy("ag_minh", req["turn_id"])
+    tm.acquire_busy("ag_minh", OTHER["team_id"], f"tu_s{len(steals)}", lease_s=0.15)
+    await wait_until(lambda: False, timeout=0.3)
+    return "Bản bị mất."
+
+fake.say("ag_minh", "work", *([always_steal] * 6))
+job = r.submit(T["team_id"], "Việc mất khoá lặp", mentions=["ag_minh"], as_job=True, client_msg_id="f8")["task_id"]
+run(job_main())
+task8 = ts.get_task(job)
+check(f"F8 mất khoá lặp lại: chạy tối đa {TR.LEASE_REQUEUE_MAX + 1} lần rồi chặn việc (Không giới hạn vẫn không chạy mãi)",
+      len(steals) == TR.LEASE_REQUEUE_MAX + 1 and task8["status"] != "team_running" and task8["status"] != "done",
+      (len(steals), task8["status"]))
+
 print(f"\n{len(fails)} FAIL" if fails else "\nALL OK")
 raise SystemExit(1 if fails else 0)

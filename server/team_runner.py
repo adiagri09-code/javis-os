@@ -35,6 +35,7 @@ from team_store import (DEFAULT_CAPS, FIXED_CAPS, OWNER_CAPS, REACTION_EMOJI, UN
                         TurnCapReached)
 
 log = logging.getLogger("javis.team_runner")
+LEASE_REQUEUE_MAX = 2   # số lần một bước được chạy lại vì mất quyền giữ trợ lý trước khi chặn việc
 
 DIRECTIVE_RE = re.compile(r"<!--\s*JAVIS_TEAM:\s*(.*?)-->", re.S)
 # Op được phép theo vai của lượt (spec 15.2, Quyền giới hạn). Lượt trò chuyện không mở việc, không nhờ ai.
@@ -332,6 +333,7 @@ class TeamRunner:
         self._pool_lock = threading.Lock()
         # Nhịp gia hạn khoá bận và hạn giữ việc của các lượt đang chạy (GOAL T1).
         self._lease_tasks: set = set()
+        self._lease_requeues: dict = {}   # step_id -> số lần chạy lại vì mất quyền giữ (review T1 vòng 2 #4)
         # Khoá chấp nhận đầu ra (R3): kiểm "đầu ra còn hợp lệ" và ghi bài học bền nằm trong cùng một khoá với các thao
         # tác làm đầu ra hết hợp lệ (bỏ thành viên, đổi trưởng nhóm, huỷ, sửa yêu cầu, xoá agent). Không có khe nào giữa
         # lúc kiểm và lúc ghi để một thao tác như vậy chen vào.
@@ -597,7 +599,7 @@ class TeamRunner:
 
     # Lý do lỗi của lượt trả lời (mã ngắn lưu bền; dashboard dịch sang lời thường).
     _REPLY_REASON = {"cap": "cap", "busy_long": "busy", "team_paused": "team_paused", "member_left": "member_left",
-                     "superseded": "superseded", "server_ceiling": "server_ceiling"}
+                     "superseded": "superseded", "server_ceiling": "server_ceiling", "lease_lost": "lease_lost"}
 
     def _settle_reply_out(self, team_id: str, mid: int, key: str, attempt: int, out: dict, reason: str = "") -> None:
         st = out.get("status")
@@ -1457,6 +1459,13 @@ class TeamRunner:
         if not got:
             await self._io(self._refund_if_unmarked, turn_id)
             return {"status": "busy_long", "turn_id": turn_id}
+        if lease["lost"] is not None:
+            # Việc đã mất người giữ ngay trong lúc chờ khoá (review T1 vòng 2 #3): không gọi engine, hoàn lượt.
+            try:
+                await self._io(self._refund_if_unmarked, turn_id)
+            finally:
+                await self._release(agent_key, turn_id)
+            return {"status": "lease_lost", "lease_lost": lease["lost"], "before_engine": True, "turn_id": turn_id}
         marked = False
         lease["busy_ok"] = time.monotonic()
         # Gia hạn khoá bận và hạn giữ việc suốt lượt (GOAL T1): lời gọi engine của một bước có thể dài hơn cả hai hạn.
@@ -1535,25 +1544,29 @@ class TeamRunner:
             renewer.cancel()
             # Kiểm lần cuối, trước khi nhả: dòng khoá vẫn là của lượt này chưa (lượt khác có thể đã lấy sau khi hạn hết
             # trong lúc kho lỗi kéo dài). Kho lỗi ngay lúc này thì giữ kết luận của nhịp gia hạn.
-            if lease["lost"] is None:
-                try:
-                    holder = await self._io(self.teams.busy_turn, agent_key)
-                    if holder != turn_id:
-                        self._lease_lost(lease, "busy_taken", agent_key, turn_id)
-                except Exception:  # noqa: BLE001
-                    pass
-            await self._release(agent_key, turn_id)
+            # Nhả khoá nằm trong `finally` của chính lần kiểm: một lần huỷ nữa giữa lúc đọc kho (CancelledError không phải
+            # Exception) vẫn nhả cả dòng khoá lẫn khoá trong tiến trình (review T1 vòng 2 #1).
+            try:
+                if lease["lost"] is None:
+                    try:
+                        holder = await self._io(self.teams.busy_turn, agent_key)
+                        if holder != turn_id:
+                            self._lease_lost(lease, "busy_taken", agent_key, turn_id)
+                    except Exception:  # noqa: BLE001
+                        pass
+            finally:
+                await self._release(agent_key, turn_id)
         return await self._io(self._accept, team_id, agent_key, role, task, step, turn_id, res, reply_to, vet,
                               lease["lost"])
 
     def _renew_every(self) -> float:
         return max(0.01, min(float(self.lease_renew_s), float(self.busy_lease_s) / 3, float(self.job_lease_s) / 3))
 
-    def _lease_lost(self, lease: dict, why: str, agent_key: str, turn_id: str) -> None:
+    def _lease_lost(self, lease: dict, why: str, agent_key: str, turn_id: str, task_id: Optional[str] = None) -> None:
         if lease["lost"] is None:
             lease["lost"] = why
-            log.warning("team turn %s lost its hold (%s) on agent %s; its output will not be applied",
-                        turn_id, why, agent_key)
+            log.warning("team turn %s (agent %s, job %s) lost its hold (%s); its output will not be applied",
+                        turn_id or "?", agent_key or "?", task_id or "-", why)
 
     async def _keep_job_lease(self, task_id: str, lease: dict) -> None:
         """Gia hạn hạn giữ việc trong lúc lượt còn CHỜ khoá bận (review T1 #4). Không đụng khoá agent."""
@@ -1565,13 +1578,13 @@ class TeamRunner:
                 raise
             except Exception:  # noqa: BLE001 - kho lỗi tạm: chỉ mất quyền khi quá cả kỳ hạn không gia hạn được
                 if time.monotonic() - lease["job_ok"] > float(self.job_lease_s):
-                    self._lease_lost(lease, "store_error", "?", task_id)
+                    self._lease_lost(lease, "store_error", "", "", task_id)
                     return
                 continue
             if ok:
                 lease["job_ok"] = time.monotonic()
             else:
-                self._lease_lost(lease, "job_lost", "?", task_id)
+                self._lease_lost(lease, "job_lost", "", "", task_id)
                 return
 
     async def _keep_leases(self, agent_key: str, turn_id: str, task_id: Optional[str],
@@ -1584,29 +1597,34 @@ class TeamRunner:
         qua mà không gia hạn được lần nào (hạn đã hết, tiến trình khác có thể đã lấy)."""
         lease = lease if lease is not None else {"lost": None, "busy_ok": time.monotonic(),
                                                  "job_ok": time.monotonic()}
+        job_lost = lease.get("lost") == "job_lost"
         while True:
             await asyncio.sleep(self._renew_every())
             try:
-                busy_ok, job_ok = await self._io(self._renew_leases, agent_key, turn_id, task_id)
+                busy_ok, job_ok = await self._io(self._renew_leases, agent_key, turn_id,
+                                                 None if job_lost else task_id)
             except asyncio.CancelledError:
                 raise
             except Exception:  # noqa: BLE001 - kho bận một nhịp: hạn còn thời gian, nhịp sau thử lại
                 now_m = time.monotonic()
                 if now_m - lease["busy_ok"] > float(self.busy_lease_s) or (
-                        task_id and now_m - lease["job_ok"] > float(self.job_lease_s)):
-                    self._lease_lost(lease, "store_error", agent_key, turn_id)
+                        task_id and not job_lost and now_m - lease["job_ok"] > float(self.job_lease_s)):
+                    self._lease_lost(lease, "store_error", agent_key, turn_id, task_id)
                     return
                 continue
             now_m = time.monotonic()
             if not busy_ok:
-                self._lease_lost(lease, "busy_taken", agent_key, turn_id)
+                self._lease_lost(lease, "busy_taken", agent_key, turn_id, task_id)
                 return
             lease["busy_ok"] = now_m
-            if task_id:
+            if task_id and not job_lost:
                 if not job_ok:
-                    self._lease_lost(lease, "job_lost", agent_key, turn_id)
-                    return
-                lease["job_ok"] = now_m
+                    # Việc đã sang người khác: thôi gia hạn việc, nhưng VẪN giữ khoá agent tới hết lượt (review T1 vòng 2
+                    # #3), để lượt khác không chen vào agent trong lúc lời gọi engine còn chạy.
+                    self._lease_lost(lease, "job_lost", agent_key, turn_id, task_id)
+                    job_lost = True
+                else:
+                    lease["job_ok"] = now_m
 
     def _renew_leases(self, agent_key: str, turn_id: str, task_id: Optional[str]) -> tuple:
         busy_ok = self.teams.renew_busy(agent_key, turn_id, self.busy_lease_s)
@@ -1627,7 +1645,7 @@ class TeamRunner:
             status = self._still_valid(team_id, agent_key, role, task, step)
             # Lượt đã mất quyền giữ agent hay việc giữa chừng (review T1 #3): đầu ra chỉ là bằng chứng trên tin, không
             # ghi bài học, không áp lệnh quản trị hay lệnh của bước.
-            if status == "done" and lease_lost:
+            if lease_lost and (status == "done" or lease_lost == "job_lost"):
                 status = "lease_lost"
             applied = status == "done"
             # Bước của việc nhóm: bài học ghi ở pha ÁP DỤNG (`_apply_step`), nơi kiểm lại hiệu lực lần cuối trong cùng
@@ -2038,6 +2056,12 @@ class TeamRunner:
     def _apply_step_locked(self, team: dict, task: dict, step: dict, out: dict) -> Optional[str]:
         sid = step["step_id"]
         st = out["status"]
+        # Việc đã sang tiến trình khác (review T1 vòng 3 #1): không nhánh nào (lỗi, quá giờ, bận lâu, hết trần) được đụng
+        # bước hay chặn một việc tiến trình này không còn giữ.
+        owner = (self.tasks.get_task(task["id"]) or {}).get("claimed_by")
+        if out.get("lease_lost") == "job_lost" or owner not in (None, "", self.worker_id):
+            self._lease_requeues.pop(sid, None)
+            return "lease_lost"
         if st == "cap" and out.get("cap") == "server_ceiling":
             # Trần lượt chung của máy chủ (T2): không phải trần của nhóm, nút "Cho thêm lượt" không gỡ được.
             self.teams.requeue_step(sid)
@@ -2058,9 +2082,22 @@ class TeamRunner:
         mid = out.get("message_id")
         if st == "lease_lost":
             # Mất quyền giữ giữa lượt (review T1 #3). Việc đã sang tiến trình khác: không đụng bước, dừng vòng này.
-            # Chỉ mất khoá agent (việc vẫn của mình): bước chạy lại ở lượt sau, kết quả cũ chỉ là bằng chứng.
-            if out.get("lease_lost") == "job_lost":
-                return "lease_lost"
+            # Kho lỗi kéo dài (store_error) có thể che việc đã hết hạn: đọc lại người giữ trước khi đụng bước.
+            # Chỉ mất khoá agent (việc vẫn của mình): bước chạy lại, tối đa LEASE_REQUEUE_MAX lần mỗi bước rồi chặn,
+            # để mất quyền lặp lại không thành vòng chạy lại tốn lượt (kể cả khi chủ đặt Không giới hạn).
+            cur = self.tasks.get_task(task["id"]) or {}
+            if cur.get("status") != "team_running":
+                # Việc đã bị huỷ, chặn hay xong trong lúc kho lỗi (các thao tác đó xoá người giữ): không đụng bước nữa
+                # (review T1 vòng 3 #2), vòng run_job đọc lại trạng thái việc rồi dừng.
+                self._lease_requeues.pop(sid, None)
+                return None
+            n = self._lease_requeues.get(sid, 0) + 1
+            self._lease_requeues[sid] = n
+            if n > LEASE_REQUEUE_MAX:
+                self._lease_requeues.pop(sid, None)
+                self.teams.finish_step(sid, "failed", out.get("message_id"), False, "mất quyền giữ trợ lý nhiều lần")
+                return self._block(task["id"], "failed",
+                                   f"{self._name(team, step['agent_key'])} mất quyền giữ nhiều lần liên tiếp, đã dừng")
             self.teams.requeue_step(sid)
             return None
         if st in ("late_cancelled", "late"):

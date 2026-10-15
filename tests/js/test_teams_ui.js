@@ -740,11 +740,26 @@ check("khoá chữ ghim có ở vi và en", ["teams.pin_team", "teams.unpin_team
     var unl = TM.capsPayload(cur, form({ task_turns: { checked: true }, daily_turns: { checked: true } }));
     check("review T1 #1 tích Không giới hạn mới: gửi {unlimited: true}", unl.caps.daily_turns && unl.caps.daily_turns.unlimited === true
           && !("task_turns" in unl.caps), JSON.stringify(unl));
-    check("review T1 #1 saveCaps báo bằng khoá i18n và focus ô số thiếu, có ở vi và en",
-          teamsJs.includes('tw("teams.cap_need_number"') && teamsJs.includes("miss.focus()") &&
-          !!vi["teams.cap_need_number"] && !!en["teams.cap_need_number"]);
+    // Hành vi thật của nút Lưu (review T1 vòng 2 #7): thiếu số thì nhắc, focus đúng ô, không gọi POST.
+    var log = { notes: [], focus: [], posts: [] };
+    var ui = { note: function (t) { log.notes.push(t); }, focus: function (k) { log.focus.push(k); },
+      post: function (c) { log.posts.push(c); return Promise.resolve(); } };
+    var ret = TM.saveCapsFlow(cur, form(), ui);
+    check("review T1 #1 Lưu khi thiếu số: nhắc, focus ô task_turns, không POST",
+          ret === null && log.posts.length === 0 && log.focus.join() === "task_turns" && log.notes.length === 1 &&
+          log.notes[0] !== "teams.cap_need_number" && log.notes[0].length > 0, JSON.stringify(log));
+    log = { notes: [], focus: [], posts: [] };
+    TM.saveCapsFlow(cur, form({ task_turns: { value: "15" } }), ui);
+    check("review T1 #1 Lưu khi đã nhập số: POST đúng một lần với số đó, không focus",
+          log.posts.length === 1 && log.posts[0].task_turns === 15 && log.focus.length === 0, JSON.stringify(log));
+    log = { notes: [], focus: [], posts: [] };
+    TM.saveCapsFlow(cur, form({ task_turns: { checked: true } }), ui);
+    check("review T1 #1 Lưu khi không đổi gì: báo Đã lưu, không POST", log.posts.length === 0 && log.notes.length === 1,
+          JSON.stringify(log));
+    check("review T1 #1 khoá nhắc nhập số có ở vi và en", !!vi["teams.cap_need_number"] && !!en["teams.cap_need_number"]);
     check("review T1 #3 nhãn kết quả mất quyền giữ có ở vi và en, nằm trong nhóm đến muộn",
           teamsJs.includes('lease_lost: "teams.status.lease_lost"') && teamsJs.includes('"leader_changed", "lease_lost"]') &&
+          teamsJs.includes('lease_lost: "teams.reply.why.lease_lost"') && !!vi["teams.reply.why.lease_lost"] && !!en["teams.reply.why.lease_lost"] &&
           !!vi["teams.status.lease_lost"] && !!en["teams.status.lease_lost"]);
   })();
   process.exit(fails ? 1 : 0);
