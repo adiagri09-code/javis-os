@@ -475,6 +475,9 @@ class GoalStore:
                     c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
             c.executescript(_POST_MIGRATION)
             c.executescript(_T2_SCHEMA)
+            # Mốc nâng lên T2 (review T2 P1, quyết định của chủ): đối soát sổ chung KHÔNG dựng lại lượt nhóm đã chốt trước
+            # mốc này, nên lịch sử nhóm không bao giờ bị tính vào trần chung. Ghi một lần, không ghi đè.
+            c.execute("INSERT OR IGNORE INTO ceiling_state(name, value) VALUES('t2_migrated_at', ?)", (time.time(),))
         self._t2_init_pulse()
         if had_goals and not had_a2:
             self._a2_migrate()
@@ -4749,6 +4752,8 @@ class GoalStore:
                 raise ConflictError("reviewer_" + (r["status"] if r is not None else "missing"))
             if bool(r["enabled"]):
                 return self._agent(r)
+            # T2 (review P2-3): mọi đường bật Cộng hưởng ghi mốc bật lại, kể cả đường bật người review của A5.
+            self._mark_resumed(c, r["agent_key"], now)
             return self._bump_agent(c, r, "enabled", p.by, now, {"via": "team_reviewer_enable", "goal_id": goal_id},
                                     enabled=1)
 
