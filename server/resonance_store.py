@@ -480,6 +480,10 @@ class GoalStore:
             # mốc này, nên lịch sử nhóm không bao giờ bị tính vào trần chung. Ghi một lần, không ghi đè.
             c.execute("INSERT OR IGNORE INTO ceiling_state(name, value) VALUES('t2_migrated_at', ?)", (time.time(),))
         self._t2_init_pulse()
+        # T3 (0.156.0, thiết kế mục 12): bảng của nhịp thích nghi và bước nâng cấp một lần (mọi dòng nhịp về B3,
+        # `resumed_at = lúc nâng cấp`) chạy NGAY lúc mở kho, trước mọi reaction mới, không lười ở lần ghi tín hiệu đầu.
+        import agent_pulse
+        agent_pulse.ensure(self, force=True)
         if had_goals and not had_a2:
             self._a2_migrate()
         self._a4_migrate(freeze=bool(had_goals) and not had_a4)
@@ -586,8 +590,14 @@ class GoalStore:
                   "ON CONFLICT(agent_key, context_ref) DO UPDATE SET resumed_at=excluded.resumed_at, "
                   "state=CASE WHEN agent_pulse.state='off' THEN 'awake' ELSE agent_pulse.state END, "
                   "updated_at=excluded.updated_at", (agent_key, "*", "awake", now, now))
-        c.execute("UPDATE agent_pulse SET resumed_at=?, state=CASE WHEN state='off' THEN 'awake' ELSE state END, "
-                  "updated_at=? WHERE agent_key=?", (now, now, agent_key))
+        # T3 (thiết kế 5.2): từ `off` bật lại thì về B3 (giữ ước lượng cũ) và có lịch chủ động lại sau một ngày.
+        c.execute("UPDATE agent_pulse SET resumed_at=?, "
+                  "tier=CASE WHEN state='off' THEN 3 ELSE tier END, "
+                  "last_change_at=CASE WHEN state='off' THEN ? ELSE last_change_at END, "
+                  "last_change_dir=CASE WHEN state='off' THEN 0 ELSE last_change_dir END, "
+                  "next_due_at=CASE WHEN state='off' AND context_ref<>'*' THEN ? ELSE next_due_at END, "
+                  "state=CASE WHEN state='off' THEN 'awake' ELSE state END, "
+                  "updated_at=? WHERE agent_key=?", (now, now, now + 86400.0, now, agent_key))
 
     @staticmethod
     def _mark_off(c, agent_key: str, now: float) -> None:

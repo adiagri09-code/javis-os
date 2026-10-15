@@ -86,10 +86,103 @@ class FeedbackProjector:
 
     # ───────────── điểm nối cho T3 ─────────────
 
-    def record_pulse_signal(self, kind: str, log_row: dict, agent_key: str, context_ref: str) -> None:
-        """Điểm nối CỐ Ý để trống cho T3: ghi tín hiệu hữu ích (`pulse_signals`, UNIQUE `(source_ref, agent_key)`) của
-        một reaction hợp lệ. T2 không ghi gì (chưa có ước lượng hữu ích)."""
-        return None
+    def record_pulse_signal(self, kind: str, log_row: dict, agent_key: str, context_ref: str) -> Optional[dict]:
+        """T3 (thiết kế 6.1, 6.3, 6.5): ghi tín hiệu hữu ích (`pulse_signals`, UNIQUE `(source_ref, agent_key)`) của một
+        reaction HỢP LỆ của chủ (Cộng hưởng bật, sau `resumed_at`; bộ chiếu đã lọc trước khi gọi) rồi đánh thức nhịp của
+        agent ở ngữ cảnh đó (`min(bậc, B3)`). Lý do chất lượng thắng emoji; chỉ trục nói/im hay chỉ góp ý thì không có tín
+        hiệu (vẫn thức). Reaction trên BẢN TỔNG HỢP của việc nhóm được phân bổ theo tập đầu vào host đã ghi cho bước tổng
+        hợp (`team_steps.input_refs`); tác giả tổng hợp không có thêm tín hiệu trực tiếp riêng. Idempotent. Lỗi kho nhịp
+        không làm hỏng lần chiếu (nuốt, ghi log). Trả {"signal": bool, "alloc": {...}} hay None."""
+        try:
+            return self._record_pulse_signal(kind, log_row, agent_key, context_ref)
+        except Exception as ex:  # noqa: BLE001
+            log.warning("pulse signal %s %s: %s: %s", kind, log_row.get("id"), type(ex).__name__, ex)
+            return None
+
+    def _record_pulse_signal(self, kind: str, log_row: dict, agent_key: str, context_ref: str) -> Optional[dict]:
+        res = self._resonance()
+        if res is None or not agent_key or str(log_row.get("source_kind") or "owner") != "owner":
+            return None
+        import agent_pulse as AP
+        nxt = self._next_state(kind, log_row)
+        if nxt is None:
+            return None
+        src = source_ref(kind, log_row["id"])
+        value, reasons = nxt.get("value"), list(nxt.get("reasons") or [])
+        sig = AP.reaction_signal(value, reasons)
+        at = float(log_row.get("created_at") or self.clock())
+        subject = f"{kind}:{log_row['session_id']}:{int(log_row['message_id'])}"
+        reactor = str(log_row.get("reactor") or "owner")
+        out = {"signal": False, "alloc": {}}
+        if sig is not None:
+            chain = self._synthesis_inputs(log_row) if kind == "team" else None
+            if chain is not None:
+                out["alloc"] = AP.record_contrib(res, source_ref=src, result_ref=chain[0], synth=agent_key,
+                                                 inputs=chain[1], context_ref=context_ref, value=value, reasons=reasons,
+                                                 reactor=reactor, at=at, subject_ref=subject, signal=sig)
+                out["signal"] = bool(out["alloc"])
+            else:
+                out["signal"] = AP.record_reaction(res, source_ref=src, agent_key=agent_key, context_ref=context_ref,
+                                                   value=value, reasons=reasons, reactor=reactor, at=at,
+                                                   subject_ref=subject)
+                out["alloc"] = {agent_key: 1.0}
+        AP.wake(res, agent_key, context_ref, "reaction", at=at)
+        return out
+
+    def _synthesis_inputs(self, log_row: dict) -> Optional[tuple]:
+        """Tin được phản hồi là kết quả của một bước `synthesize`: (result_ref, [agent của từng mục trong tập đầu vào host
+        đã đưa cho bước đó]). Chỉ một tầng: trích dẫn, chuyển tiếp, tổng hợp nhiều tầng không nhân điểm. Không phải bản
+        tổng hợp: None."""
+        tm = self._teams()
+        task_id = log_row.get("task_id")
+        if tm is None or not task_id:
+            return None
+        steps = tm.steps(task_id)
+        mid = int(log_row["message_id"])
+        synth = next((s for s in steps if s.get("kind") == "synthesize" and s.get("result_msg_id") == mid), None)
+        if synth is None:
+            return None
+        by_msg = {s.get("result_msg_id"): s for s in steps if s.get("result_msg_id") and s is not synth}
+        inputs = [by_msg[ref]["agent_key"] for ref in (synth.get("input_refs") or []) if ref in by_msg]
+        return f"step:{synth['step_id']}", inputs
+
+    def record_task_event(self, event: str, *, context_ref: str, agents: dict, source_ref_: str,
+                          subject_ref: str = "", wake_why: str = "") -> list:
+        """Tín hiệu từ sự kiện host của việc (chấp nhận đề xuất, chốt quyết định, sửa yêu cầu sau kết quả, huỷ), chỉ cho
+        agent đang bật Cộng hưởng. `agents`: {agent_key: share}. Lỗi kho không làm hỏng thao tác của chủ (nuốt, ghi log)."""
+        try:
+            res = self._resonance()
+            if res is None or not agents:
+                return []
+            import agent_pulse as AP
+            on = {}
+            for key, share in agents.items():
+                a = res.agent_any(key) if key else None
+                if a and a.get("status") == "active" and a.get("enabled") and share > 0:
+                    on[key] = float(share)
+            if not on:
+                return []
+            total = sum(on.values())
+            on = {k: v / total for k, v in on.items()}
+            done = AP.record_host_event(res, event=event, source_ref=source_ref_, agents=on, context_ref=context_ref,
+                                        subject_ref=subject_ref)
+            if wake_why:
+                for key in on:
+                    AP.wake(res, key, context_ref, wake_why)
+            return done
+        except Exception as ex:  # noqa: BLE001
+            log.warning("pulse task event %s %s: %s: %s", event, source_ref_, type(ex).__name__, ex)
+            return []
+
+    def void_task_event(self, source_ref_: str) -> None:
+        """Chủ gỡ một sự kiện đã ghi (bỏ ghim quyết định): tín hiệu của nguồn đó thành `void`."""
+        try:
+            res = self._resonance()
+            if res is not None:
+                import agent_pulse as AP
+                AP.void_signal(res, source_ref_)
+        except Exception as ex:  # noqa: BLE001
+            log.warning("pulse void %s: %s", source_ref_, ex)
 
     # ───────────── kho ─────────────
 
@@ -174,6 +267,8 @@ class FeedbackProjector:
             return []
         older = [x["id"] for x in pair[:-1]]
         refs = self._apply(kind, newest, older)
+        # T3 (6.3): đổi hay bỏ reaction thì tín hiệu của các lần cũ cùng cặp chuyển `superseded_by` lần mới nhất.
+        self._supersede_signals(kind, newest, older)
         # Đổi hay bỏ: nguồn cũ của cùng cặp trong lý do còn chờ bị gỡ SAU khi nguồn mới đã vào (lý do không bị chốt
         # `superseded` giữa chừng chỉ vì đang thay nguồn).
         self._drop_old(kind, newest, older)
@@ -246,6 +341,20 @@ class FeedbackProjector:
         refs = {"route": "l3", "source_ref": src, "reason_id": rid, "context_ref": ctx, "agent_key": agent_key}
         self._sync_one(kind, row, refs)
         return refs
+
+    def _supersede_signals(self, kind: str, row: dict, older_ids: list) -> None:
+        if not older_ids:
+            return
+        try:
+            res = self._resonance()
+            if res is None:
+                return
+            import agent_pulse as AP
+            by = source_ref(kind, row["id"])
+            for oid in older_ids:
+                AP.supersede_signal(res, source_ref(kind, oid), by)
+        except Exception as ex:  # noqa: BLE001
+            log.warning("pulse supersede %s %s: %s", kind, row.get("id"), ex)
 
     def _drop_old(self, kind: str, row: dict, older_ids: list) -> list:
         """Gỡ nguồn của các lần đổi cũ hơn của cùng cặp khỏi lý do còn chờ (lớp 3) và lý do `feedback` còn chờ (A2)."""

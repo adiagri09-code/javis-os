@@ -464,9 +464,11 @@ with st._Tx(st) as c:
     c.execute("UPDATE agent_pulse SET tier=6, resumed_at=1 WHERE agent_key=?", (on_key,))
     c.execute("INSERT OR IGNORE INTO agent_pulse(agent_key, context_ref, state, updated_at) VALUES(?,?,?,?)",
               (off_key, "*", "off", 1))
+with st._Tx(st) as c:   # kho "của T2": chưa có mốc nâng cấp T3
+    c.execute("DELETE FROM pulse_meta WHERE name=?", (AP.UPGRADE_MARK,))
 import time as _time  # noqa: E402
 before = _time.time()
-AP.ensure(st)
+AP.ensure(st, force=True)
 r_on, r_off = AP.row(st, on_key, "*"), AP.row(st, off_key, "*")
 check("nâng cấp: agent bật về B3, resumed_at = lúc nâng cấp", r_on["tier"] == 3 and r_on["resumed_at"] >= before
       and r_on["state"] == "awake", r_on)
@@ -474,10 +476,9 @@ check("nâng cấp: agent tắt ở off", r_off["state"] == "off", r_off)
 with closing(st._conn()) as c:
     check("nâng cấp: không backfill tín hiệu từ reaction cũ", c.execute("SELECT COUNT(*) FROM pulse_signals")
           .fetchone()[0] == 0)
-AP._READY.discard(str(st.path))
 with st._Tx(st) as c:
     c.execute("UPDATE agent_pulse SET tier=5 WHERE agent_key=?", (on_key,))
-AP.ensure(st)
+RS.GoalStore(d / "resonance.sqlite3")
 check("nâng cấp chỉ một lần (mở lại không đặt lại bậc)", AP.row(st, on_key, "*")["tier"] == 5)
 
 print(f"\n{len(fails)} FAIL" if fails else "\nALL OK")

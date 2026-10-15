@@ -340,11 +340,11 @@ T3_TABLES = ("pulse_meta", "agent_pulse_events", "pulse_signals", "pulse_contrib
 _READY: set = set()
 
 
-def ensure(store) -> None:
+def ensure(store, force: bool = False) -> None:
     """Tạo bảng của nhịp (một lần mỗi kho mỗi tiến trình) và nâng cấp lần đầu (mục 12): mọi dòng `agent_pulse` về B3 với
     `resumed_at = lúc nâng cấp` (agent đang tắt Cộng hưởng: `off`); reaction cũ không được backfill thành tín hiệu."""
     key = str(getattr(store, "path", id(store)))
-    if key in _READY:
+    if key in _READY and not force:
         return
     with closing(store._conn()) as c:
         c.executescript(_SCHEMA)
@@ -532,6 +532,8 @@ def supersede_signal(store, source_ref: str, by_ref: str) -> int:
     """Thay reaction: dòng cũ `superseded_by` dòng mới (6.3), mọi agent của nguồn đó. Không cộng dồn."""
     ensure(store)
     with store._Tx(store) as c:
+        c.execute("UPDATE pulse_contrib SET status='superseded', superseded_at=? WHERE source_ref=? AND status='live'",
+                  (time.time(), str(source_ref)))
         return c.execute("UPDATE pulse_signals SET status='superseded', superseded_by=?, updated_at=? "
                          "WHERE source_ref=? AND status='live'", (str(by_ref or ""), time.time(),
                                                                   str(source_ref))).rowcount
