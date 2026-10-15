@@ -668,6 +668,7 @@ class ReviewHost:
     # ═════════════ tự rà soát (8.3) ═════════════
 
     def _state(self, store, key) -> dict:
+        ensure(store)
         with closing(store._conn()) as c:
             r = c.execute("SELECT * FROM agent_review_state WHERE agent_key=?", (key,)).fetchone()
         return dict(r) if r else {"agent_key": key, "last_review_at": None, "last_attempt_at": None}
