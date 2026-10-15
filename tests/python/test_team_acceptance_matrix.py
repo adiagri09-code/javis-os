@@ -195,8 +195,26 @@ MATRIX = [
                                "Thử lại: đúng một lượt mới, kết cục done"])], None, None),
 ]
 
-REVIEW = {"T1": "đã review (T1)", "T2": "đã review (T2 vòng 2)"}
-T3_REVIEW = "đã review (T3: ba vòng review và một vòng sửa; review xác minh đang chạy)"
+# Trạng thái review và smoke theo MỐC (dữ liệu, không suy ra từ code). Hàng của ma trận ghép từ các mốc trong cột Mốc.
+# Sửa ở đây khi một mốc có review hay smoke mới, rồi chạy --write để sinh lại bảng.
+REVIEWS = {
+    "T1": "T1 đã review (3 vòng, kết luận cuối PASS)",
+    "T2": "T2 đã review (vòng 2 PASS WITH CHANGES, các P3 đã sửa)",
+    "T3": "T3 đã review (ba review, một vòng sửa, xác minh vòng 2 và 3, kết luận cuối PASS)",
+    "T4": "T4 đã review (review độc lập PASS WITH CHANGES ở bd6de2fd, đã sửa ở vòng này)",
+}
+SMOKES = {
+    "T1": "T1: không có ghi nhận smoke trình duyệt trong gói T1-T4 này",
+    "T2": ("T2: smoke trình duyệt trên sandbox có chốt (reaction chat riêng và nhóm, F5, hai tab, màn 375px, khởi động "
+           "lại)"),
+    "T3": ("T3: smoke trình duyệt trên sandbox có chốt (khung nhịp, lịch sử phán xử với nút sửa và cập nhật ngưỡng, bài "
+           "học theo đúng hàng nhóm, chữ trạng thái trống, nền tối); chưa thử điện thoại thật"),
+    "T4": "T4: không có smoke trình duyệt (chỉ test host, engine giả, bench)",
+}
+
+
+def milestones(ms):
+    return [m for m in str(ms).split("/") if m in REVIEWS]
 
 
 def test_path(name):
@@ -315,15 +333,12 @@ def status_label(case, ms, ev):
         return f"đã code một phần, chờ phần {ev['pending_on']} của T3"
     if ev["status"] == "broken":
         return "thiếu test"
-    if "T3" in ms and "T4" in ms:
-        rev = "phần T3 đã review, phần T4 chưa review"
-    elif "T4" in ms:
-        rev = "chưa review"
-    elif "T3" in ms:
-        rev = T3_REVIEW
-    else:
-        rev = REVIEW.get(ms, "đã review (T1, T2)")
-    return f"đã code, đã test, {rev}, chưa pilot"
+    rev = "; ".join(REVIEWS[m] for m in milestones(ms)) or "chưa review"
+    return f"đã code, đã test, {rev}; chưa pilot"
+
+
+def smoke_label(ms):
+    return "; ".join(SMOKES[m] for m in milestones(ms)) or "không có"
 
 
 def render(ev, results, sha, when):
@@ -334,21 +349,23 @@ def render(ev, results, sha, when):
              f"Lần chạy cuối: {when}, head `{sha}`. Kết quả là của engine GIẢ qua host thật; chưa ca nào được pilot trên "
              "model thật, chưa đo VPS.", "",
              "Phần T3 đã ghép lúc sinh bảng: " + ", ".join(f"{k} {'có' if v else 'CHƯA'}" for k, v in PARTS.items()) + ".",
-             "", "| Ca | Mốc | Yêu cầu | Mã | Test | Kết quả lần cuối | Trạng thái |", "|---|---|---|---|---|---|---|"]
+             "", "| Ca | Mốc | Yêu cầu | Mã | Test | Kết quả lần cuối | Smoke | Trạng thái |",
+             "|---|---|---|---|---|---|---|---|"]
     for case, ms, req, code, tests, owner, scen in MATRIX:
         names = [n for n, _ in tests]
         if scen:
             names.append(f"kịch bản host `{scen}`")
         res = ", ".join(f"{n}: {results.get(n, 'thiếu file' if not test_path(n).is_file() else '?')}"
                         for n, _ in tests)
-        lines.append(f"| {case} | {ms} | {req} | {code} | {', '.join(names)} | {res} | {status_label(case, ms, ev[case])} |")
+        lines.append(f"| {case} | {ms} | {req} | {code} | {', '.join(names)} | {res} | {smoke_label(ms)} | "
+                     f"{status_label(case, ms, ev[case])} |")
     pend = [c for c, e in ev.items() if e["status"] == "pending"]
     lines += ["", "## Còn chờ", "",
               (f"- Ca {', '.join(pend)}: chờ phần L của T3 (bài học có phạm vi `agent_lessons`, góp ý đồng đội, tự rà "
                "soát `agent_review`, `agent_budget`)." if pend else "- Không ca nào chờ phần T3 (P, J, L đã ghép)."),
-              "- Review xác minh của T3 đang chạy; sửa nhỏ có thể còn vào nhánh T3.",
-              "- Ca 18: chưa có smoke trình duyệt thật (Playwright cho Python không có trong .venv); chi phí vẽ đo bằng "
-              "hàm vẽ thuần dưới node (tools/team_adaptive_ui_bench.js).",
+              "- Smoke trình duyệt: T2 và T3 đã làm trên sandbox có chốt (chưa thử điện thoại thật); T4 không có smoke "
+              "trình duyệt riêng, chi phí vẽ chỉ đo bằng hàm vẽ thuần dưới node (tools/team_adaptive_ui_bench.js, hai tab "
+              "là mô phỏng).",
               "- Mọi ca: chưa pilot trên model thật (gói pilot: docs/dev/team-chat-pilot-package.md, chưa chạy).", ""]
     return "\n".join(lines)
 
@@ -364,6 +381,8 @@ for part, has in PARTS.items():
         owned = [r[0] for r in MATRIX if r[5] == part]
         check(f"phần {part} đã ghép: không ca nào của nó còn pending", all(ev[c]["status"] != "pending" for c in owned))
 check("ma trận phủ đủ ca 1-28 và hàng thêm", {str(i) for i in range(1, 29)} | {"+"} <= {r[0] for r in MATRIX})
+check("mọi hàng có trạng thái review và smoke lấy từ dữ liệu theo mốc", all(milestones(r[1]) for r in MATRIX),
+      [r[0] for r in MATRIX if not milestones(r[1])])
 
 for name, ok in run_scenarios().items():
     check(name, ok)
