@@ -23336,9 +23336,18 @@ def _learn_legacy(key):
     return agent_lessons.legacy_lessons(_agent_memory(rows[0]["brain_id"], rows[0]["slug"]))
 
 
+def _learn_engine_for(key, ctx, purpose):
+    """Engine của lượt xem xét reaction và tự rà soát: cùng hợp đồng chỉ chữ với lượt quét. Chốt an toàn cho test: khi
+    JAVIS_NO_REAL_JUDGE_ENGINE=1 (tests/python/_paths.py đặt cho MỌI test) hay JAVIS_NO_REAL_REVIEW_ENGINE=1 thì ném lỗi
+    TRƯỚC khi dựng engine (lượt được hoàn, không lời gọi model nào). Test cần lượt học tự tiêm engine giả vào ReviewHost."""
+    if "1" in (os.environ.get("JAVIS_NO_REAL_JUDGE_ENGINE"), os.environ.get("JAVIS_NO_REAL_REVIEW_ENGINE")):
+        raise RuntimeError("engine thật của lượt học bị chặn (môi trường test)")
+    return _pulse_engine_for(key, ctx, purpose)
+
+
 agent_budget.wire(_pulse_store)
 agent_review.wire(agent_review.ReviewHost(agent_review.ReviewDeps(
-    store=_pulse_store, reactions=_feedback_projector(), engine_for=lambda k, c, p: _pulse_engine_for(k, c, p),
+    store=_pulse_store, reactions=_feedback_projector(), engine_for=lambda k, c, p: _learn_engine_for(k, c, p),
     persona=_pulse_persona, try_busy=_pulse_try_busy, release_busy=_pulse_release_busy, send=_learn_send,
     publish=lambda ev: _CHAT_RUNTIME.publish(ev), judge_payload=_learn_judge_payload, contexts=_pulse_contexts,
     legacy=_learn_legacy)))
