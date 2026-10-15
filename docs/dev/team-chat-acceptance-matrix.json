@@ -1,5 +1,5 @@
 {
- "sha": "4c7774a3",
+ "sha": "57ddec71",
  "results": {
   "test_agent_calls_ledger.py": "ok",
   "test_agent_judge_dm.py": "ok",
@@ -22,6 +22,7 @@
   "test_t3_fix_judge_main.py": "ok",
   "test_t3_fix_judge_p3.py": "ok",
   "test_t3_fix_judge_retry.py": "ok",
+  "test_t3_fix_judge_team_wait.py": "ok",
   "test_t3_fix_pulse_cancel.py": "ok",
   "test_t3_fix_pulse_judge.py": "ok",
   "test_t3_fix_pulse_main.py": "ok",

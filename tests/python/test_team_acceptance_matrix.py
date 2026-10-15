@@ -184,7 +184,7 @@ MATRIX = [
      [(f, []) for f in ("test_t3_fix_judge_guard.py", "test_t3_fix_judge_main.py", "test_t3_fix_judge_p3.py",
                         "test_t3_fix_judge_retry.py", "test_t3_fix_pulse_cancel.py", "test_t3_fix_pulse_judge.py",
                         "test_t3_fix_pulse_main.py", "test_t3_fix_pulse_p3.py", "test_t3_fix_pulse_scope.py",
-                        "test_t3_fix_review_learn.py")], None, None),
+                        "test_t3_fix_review_learn.py", "test_t3_fix_judge_team_wait.py")], None, None),
     ("T4.a", "T4", "Lịch sử dài: nhóm 5.000 tin giữ yêu cầu, quyết định, nguồn đóng góp, phản hồi; số đọc kho có trần",
      "team_long_memory, team_runner._older_summary",
      [("test_team_t4_long_history.py", ["số lần đọc kho mỗi lượt KHÔNG tăng theo độ dài lịch sử",
