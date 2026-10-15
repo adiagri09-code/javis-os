@@ -4133,6 +4133,7 @@
   "resonance.auto_label": "Auto",
   "resonance.auto_menu_on": "Auto: Bật",
   "resonance.auto_menu_off": "Auto: Tắt",
+  "teams.reply.why.lease_lost": "Mất quyền giữ trợ lý giữa chừng, lượt này không chạy",
   "teams.reply.why.leader_changed": "Người điều phối vừa đổi",
   "teams.reply.why.superseded": "Đã có câu trả lời mới hơn",
   "teams.reply.stuck": "chờ quá lâu mà chưa bắt đầu",

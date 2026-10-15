@@ -71,3 +71,9 @@ Không chế độ nào được mô tả là "bỏ mọi giới hạn": nhóm m
 - **Bật Auto mà đánh thức lỗi** (`main._TeamAdmin.set_resonance` trả `wake_error`): Auto giữ bật, nhật ký nhóm có `agent_set_resonance` và `agent_wake_failed`, ghi chú nói rõ Auto đã bật.
 - **`set_caps`** từ chối NaN, vô cực, kiểu sai trước khi ghi (cả `busy_wait_s` và trần trong hộp quyền), trả 4xx.
 - **Câu chữ:** docstring `effective_caps` và ghi chú trần của người điều phối nói đúng khi chủ đặt trần Không giới hạn.
+- **Vòng 2 của review bản sửa:** lần kiểm khoá cuối nằm trong `try/finally` nên huỷ lần hai vẫn nhả khoá (F6); việc mất người giữ ngay lúc chờ khoá thì không gọi engine, hoàn lượt (F7); mất việc thì vẫn giữ khoá agent tới hết lượt; `job_lost` thắng mọi nhãn đến muộn; mất khoá lặp lại tối đa `LEASE_REQUEUE_MAX = 2` lần chạy lại mỗi bước rồi chặn việc (F8), kể cả khi trần là Không giới hạn; lượt trả lời mất quyền trước engine có lý do `lease_lost`; nút Lưu giới hạn tách thành `saveCapsFlow` để test hành vi thật (không POST, focus đúng ô).
+
+## 6. Bằng chứng đo dao động (không phải hồi quy)
+
+- CI của `af85ad71` đỏ một kiểm độ trễ trong `test_resonance_perf.py` (0,102 s, ngưỡng 0,1 s). Commit đó chỉ đổi `teams.js` và i18n. Chạy lại cùng SHA trên CI: xanh (lần 2, run 38629547827). Cục bộ 5/5 đạt. Hồi quy thật (chặn event loop) cho khoảng 0,2 s, không phải 0,102 s. Ngưỡng giữ nguyên.
+- `test_team_t1_review.py` R5 (event loop với kho chậm 250 ms): trên bản sửa đỏ 1/5 lần (114,6 ms), trên mã gốc `3240168f` đỏ 1/6 lần (237,8 ms), cùng lúc máy đang chạy test của hai agent khác. Quét AST mọi hàm async của `team_runner.py`: không có lời gọi kho đồng bộ nào trên event loop. Kết luận: dao động do tải máy, có sẵn từ trước; ngưỡng giữ nguyên.

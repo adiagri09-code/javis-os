@@ -4133,6 +4133,7 @@
   "resonance.auto_label": "Auto",
   "resonance.auto_menu_on": "Auto: On",
   "resonance.auto_menu_off": "Auto: Off",
+  "teams.reply.why.lease_lost": "Lost its hold on the assistant midway, this turn did not run",
   "teams.reply.why.leader_changed": "The coordinator just changed",
   "teams.reply.why.superseded": "A newer answer replaced it",
   "teams.reply.stuck": "has waited too long without starting",

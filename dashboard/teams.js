@@ -310,6 +310,7 @@
     member_left: "teams.reply.why.member_left", restart: "teams.reply.why.restart",
     interrupted: "teams.reply.why.interrupted", internal: "teams.reply.why.internal",
     leader_changed: "teams.reply.why.leader_changed", superseded: "teams.reply.why.superseded",
+    lease_lost: "teams.reply.why.lease_lost",
     timeout: "teams.reply.why.timeout", auth: "teams.reply.why.auth", no_leader: "teams.reply.why.no_leader" };
   var STUCK_QUEUED_S = 600;   // khớp team_store.STUCK_QUEUED_S: chờ lâu hơn thì cho Thử lại
   var LEADER_SLOT = "__leader__";   // khớp team_runner.LEADER_SLOT: tin thường gửi lúc nhóm chưa có điều phối
@@ -2159,23 +2160,35 @@
     return missing ? { caps: {}, missing: missing } : { caps: caps, missing: null };
   }
 
+  // Luồng nút Lưu giới hạn, tách khỏi DOM để test được hành vi dưới node: `form.read(k)` đọc ô, `ui.note(text)`,
+  // `ui.focus(k)`, `ui.post(caps)` trả Promise. Thiếu số thì nhắc, đưa con trỏ vào ô đó và KHÔNG gửi (review T1 #1).
+  function saveCapsFlow(current, read, ui) {
+    var built = capsPayload(current, read);
+    if (built.missing) {
+      ui.note(tw("teams.cap_need_number", { name: tw(CAP_KEY[built.missing]) }));
+      ui.focus(built.missing);
+      return null;
+    }
+    if (!Object.keys(built.caps).length) { ui.note(tw("teams.saved")); return null; }
+    return ui.post(built.caps);
+  }
+
   function saveCaps() {
-    var built = capsPayload(S.team.caps, function (k) {
+    saveCapsFlow(S.team.caps, function (k) {
       var box = S.el.querySelector('[name="tm-cap-' + k + '-unl"]');
       return { checked: box ? !!box.checked : null, value: val("tm-cap-" + k) };
-    });
-    var caps = built.caps;
-    var missing = built.missing;
-    if (missing) {
-      setNote(tw("teams.cap_need_number", { name: tw(CAP_KEY[missing]) }));
-      var miss = S.el.querySelector('[name="tm-cap-' + missing + '"]');
-      if (miss && miss.focus) miss.focus();
-      return;
-    }
-    if (!Object.keys(caps).length) { setNote(tw("teams.saved")); return; }
-    call("POST", teamUrl("/caps"), { caps: caps }).then(function (r) {
-      if (r.code === 200) setNote(tw("teams.saved"));
-      act(r, drawSide);
+    }, {
+      note: setNote,
+      focus: function (k) {
+        var miss = S.el.querySelector('[name="tm-cap-' + k + '"]');
+        if (miss && miss.focus) miss.focus();
+      },
+      post: function (caps) {
+        return call("POST", teamUrl("/caps"), { caps: caps }).then(function (r) {
+          if (r.code === 200) setNote(tw("teams.saved"));
+          act(r, drawSide);
+        });
+      },
     });
   }
 
@@ -2386,7 +2399,7 @@
     jobStripHtml: jobStripHtml, blockedAction: blockedAction, jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
     mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, mentionScan: mentionScan, removeMention: removeMention,
     callsHtml: callsHtml, foldName: foldName, emailBefore: emailBefore, composerHint: composerHint, newClientId: newClientId,
-    membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, capsPayload: capsPayload, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
+    membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, capsPayload: capsPayload, saveCapsFlow: saveCapsFlow, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
     levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml,
     bannersHtml: bannersHtml, reactionPickerHtml: reactionPickerHtml, reactionChipHtml: reactionChipHtml,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
