@@ -93,8 +93,11 @@ class FeedbackProjector:
     def __init__(self, *, resonance: Callable[[], Any], sessions: Optional[Callable[[], Any]] = None,
                  teams: Optional[Callable[[], Any]] = None,
                  team_view: Optional[Callable[[str, str, int], Optional[dict]]] = None,
-                 clock: Callable[[], float] = time.time):
+                 clock: Callable[[], float] = time.time,
+                 judge_label: Optional[Callable[..., Any]] = None):
         self._resonance = resonance
+        # T3 phần J (0.156.0): `agent_judge.label` (trục nói/im của reaction dạy bộ phán xử). None: chỉ lưu như T2.
+        self._judge_label = judge_label
         self._sessions = sessions or (lambda: None)
         self._teams = teams or (lambda: None)
         self._team_view = team_view
@@ -211,6 +214,20 @@ class FeedbackProjector:
                 AP.void_signal(res, source_ref_)
         except Exception as ex:  # noqa: BLE001
             log.warning("pulse void %s: %s", source_ref_, ex)
+
+    def record_judge_label(self, kind: str, log_row: dict, agent_key: str, axis: str) -> Optional[dict]:
+        """T3 phần J: trục "Đáng lẽ nên nói" / "Nên im (chen ngang)" của reaction CỦA CHỦ trên tin của agent tới
+        `agent_judge.label` (nguồn `reaction`, thời điểm là lúc thả). Trục trống là bỏ nhãn do reaction đặt (nhãn chủ sửa
+        trong lịch sử quyết định giữ nguyên). Bộ phán xử tự quyết hiệu lực: chỉ dịch ngưỡng khi Cộng hưởng bật và nhãn sau
+        `resumed_at`; không có quyết định nào sinh ra tin này (lời trả lời trực tiếp ở chat riêng) thì không làm gì."""
+        if self._judge_label is None or not agent_key:
+            return None
+        try:
+            return self._judge_label(f"msg:{int(log_row['message_id'])}", axis or None, "owner",
+                                     at=float(log_row.get("created_at") or self.clock()), source="reaction")
+        except Exception as ex:  # noqa: BLE001 - nhãn phán xử hỏng không được làm hỏng việc chiếu reaction
+            log.warning("feedback projector judge label %s failed: %s: %s", kind, type(ex).__name__, ex)
+            return None
 
     # ───────────── kho ─────────────
 
@@ -330,6 +347,8 @@ class FeedbackProjector:
         goal_id = str(row.get("goal_id") or "") if kind == "dm" else ""
         res = self._resonance() if (agent_key or goal_id) else None
         nxt = self._next_state(kind, row)
+        if str(row.get("source_kind") or "owner") == "owner" and agent_key:
+            self.record_judge_label(kind, row, agent_key, str((nxt or {}).get("axis") or ""))
         if nxt is None:
             return {"route": "cleared", "source_ref": src, "removed": old_refs}
         source_kind = str(row.get("source_kind") or "owner")

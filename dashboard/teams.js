@@ -48,12 +48,16 @@
     agent_busy_long: "teams.block.agent_busy_long", waiting_user: "teams.block.waiting_user", cancelled: "teams.block.cancelled",
     server_ceiling: "teams.block.server_ceiling" };
   var CAP_KEY = { task_turns: "teams.cap.task_turns", task_steps: "teams.cap.task_steps", daily_turns: "teams.cap.daily_turns",
-    mentions: "teams.cap.mentions", help_depth: "teams.cap.help_depth", busy_wait_s: "teams.cap.busy_wait_s" };
+    mentions: "teams.cap.mentions", help_depth: "teams.cap.help_depth", busy_wait_s: "teams.cap.busy_wait_s",
+    judge_daily: "teams.cap.judge_daily", volunteer_k: "teams.cap.volunteer_k", judge_off_batch: "teams.cap.judge_off_batch" };
   var TAB_KEY = { jobs: "teams.tab_jobs", team: "teams.tab_team" };
   var LATE = ["late_cancelled", "late", "old_revision", "member_left", "leader_changed", "lease_lost"];
   // Trần chủ nhóm chỉnh được (team_store.OWNER_CAPS). Bốn trần đầu có "Không giới hạn" (lưu null, GOAL T1 mục 9).
-  var CAP_FIELDS = ["task_turns", "task_steps", "help_depth", "daily_turns", "mentions", "busy_wait_s"];
-  var OWNER_UNL = ["task_turns", "task_steps", "help_depth", "daily_turns"];
+  var CAP_FIELDS = ["task_turns", "task_steps", "help_depth", "daily_turns", "mentions", "busy_wait_s", "judge_daily",
+    "volunteer_k"];
+  var OWNER_UNL = ["task_turns", "task_steps", "help_depth", "daily_turns", "judge_daily"];
+  // Ô chọn chế độ (T3 phần J): phán xử khi Cộng hưởng của trợ lý tắt, 1 = lọc code + lô, 0 = chỉ lọc code. Chỉ chủ chỉnh.
+  var CAP_MODES = ["judge_off_batch"];
   // Bảng giới hạn (GOAL T1 mục 9): bốn nhóm theo ai đổi được, nhãn từng dòng. Khoá viết trọn cho bộ kiểm i18n.
   var LIMIT_CATS = [{ id: "owner", key: "teams.limits.owner" }, { id: "leader", key: "teams.limits.leader" },
     { id: "server", key: "teams.limits.server" }, { id: "provider", key: "teams.limits.provider" }];
@@ -67,7 +71,11 @@
   // Toàn quyền (T3, spec 13): trần trưởng nhóm đổi được trong trần trần của chủ.
   var AUTH_CAPS = ["task_turns", "task_steps", "help_depth", "daily_turns"];
   var AUTH_CAP_KEY = { task_turns: "teams.cap.task_turns", task_steps: "teams.cap.task_steps",
-    help_depth: "teams.cap.help_depth", daily_turns: "teams.cap.daily_turns" };
+    help_depth: "teams.cap.help_depth", daily_turns: "teams.cap.daily_turns", judge_daily: "teams.cap.judge_daily",
+    volunteer_k: "teams.cap.volunteer_k" };
+  // T3 phần J: trần phán xử trưởng nhóm Toàn quyền chỉnh được trong trần tối đa của chủ. Nằm ngoài AUTH_CAPS để ba mức tự
+  // quyết (levelOf, grantFor) giữ nguyên nghĩa; hộp cấp quyền chi tiết có thêm hai dòng này.
+  var AUTH_JUDGE_CAPS = ["judge_daily", "volunteer_k"];
   // Provider được "Không giới hạn" lượt (D6). Từ 0.142.0 lượt nhóm chạy model của trợ lý hay model chính, không còn model
   // việc nền, nên nhãn là provider thật của lượt (gói đăng ký). Quyền cũ ghi "aux" không còn khớp lượt nào: trần về mức
   // của nhóm, tức chặt hơn, không bao giờ rộng hơn.
@@ -357,6 +365,12 @@
     // "Xong" là bình thường nên không hiện; chỉ báo khi câu trả lời KHÔNG được áp dụng.
     var lateLine = late ? '<div class="tm-late">' + ic("triangle-alert") + esc(tw(STATUS_KEY[meta.status])) + "</div>" : "";
     var notes = (meta.notes || []).map(function (n) { return '<div class="tm-note-line">' + esc(n) + "</div>"; }).join("");
+    // "Sao em không trả lời?": máy chủ chỉ GỢI Ý quyết định im gần nhất (T3 phần J); bấm mở lịch sử quyết định để sửa.
+    if (mine && meta.judge_hint && meta.judge_hint.agent_key) {
+      var hm = memberOf(ctx.members, meta.judge_hint.agent_key);
+      notes += '<button type="button" class="tm-note-line tm-judge-hint" data-judge-hint="' + esc(meta.judge_hint.agent_key) +
+        '">' + esc(tw("judge.hint", { name: hm ? (hm.name || hm.slug) : meta.judge_hint.agent_key })) + "</button>";
+    }
     var prop = "";
     if (meta.proposal && meta.proposal.title) {
       prop = '<div class="tm-proposal"><div>' + esc(tw("teams.proposal", { name: who, title: meta.proposal.title })) + "</div>" +
@@ -682,7 +696,10 @@
         '<button type="button" class="ws-btn" data-remove="' + esc(m.agent_key) + '">' + esc(tw("teams.remove")) + "</button></span>" +
         // T3: nhịp chủ động của thành viên TRONG nhóm này (agent-pulse.js gắn vào sau khi vẽ).
         (open && m.slug ? '<div class="tm-pulse" data-pulse-slug="' + esc(m.slug) + '" data-pulse-ctx="team:' +
-          esc(team.team_id) + '"></div>' : "") + "</div></div>";
+          esc(team.team_id) + '"></div>' : "") +
+        // Quyết định nói / chờ / im của trợ lý trong ĐÚNG nhóm này, có nút sửa (agent-judge-ui.js vẽ khi hàng mở).
+        (open && m.slug ? '<div class="ajd-host" data-judge-slug="' + esc(m.slug) + '" data-judge-ctx="team:' +
+          esc(team.team_id || "") + '"></div>' : "") + "</div></div>";
     }).join("");
     // Thêm người: mở hộp chọn kiểu Zalo (tìm không dấu, lọc tag, chọn nhiều người một lần), 0.142.0.
     var add = '<div class="tm-add"><button type="button" class="ws-btn tm-add-open">' + ic("users") +
@@ -772,6 +789,13 @@
         (unl ? '<label class="tm-unl"><input type="checkbox" name="tm-cap-' + k + '-unl"' + (isUnl ? " checked" : "") + "> " +
           esc(tw("teams.auth.unlimited")) + "</label>" : "") + "</div>";
     }).join("");
+    capRows += CAP_MODES.map(function (k) {
+      var cur = caps[k] === 0 ? "0" : "1";
+      return '<label class="tm-field tm-cap"><span>' + esc(tw(CAP_KEY[k])) + '</span><select name="tm-cap-' + k + '">' +
+        '<option value="1"' + (cur === "1" ? " selected" : "") + ">" + esc(tw("teams.limits.mode_batch")) + "</option>" +
+        '<option value="0"' + (cur === "0" ? " selected" : "") + ">" + esc(tw("teams.limits.mode_code")) + "</option>" +
+        "</select></label>";
+    }).join("");
     return '<form class="tm-form tm-caps-form" onsubmit="return false"><div class="tm-qhead">' + esc(tw("teams.caps")) + "</div>" +
       // Trưởng nhóm đang được tự quyết: số trong hộp quyền đè số ở đây; nói rõ thay vì để "Đã lưu" mà không đổi gì.
       (team.authority && team.authority.authority ? '<div class="tm-note-line">' + esc(tw("teams.caps_full_note")) + "</div>" : "") +
@@ -784,6 +808,7 @@
 
   function limitValue(x) {
     if (x.unit === "rule") return "";
+    if (x.unit === "mode") return tw(x.value === 0 ? "teams.limits.mode_code" : "teams.limits.mode_batch");
     if (x.value === null || x.value === undefined) return tw("teams.auth.unlimited");
     if (x.unit === "seconds") {
       return x.value >= 60 && x.value % 60 === 0 ? tw("teams.limits.minutes", { n: x.value / 60 })
@@ -822,9 +847,10 @@
       "</section>";
   }
 
-  function capInputs(name, v) {
+  function capInputs(name, v, noUnl) {
     var unl = !!(v && typeof v === "object" && v.unlimited);
     var num = !unl && v !== null && v !== undefined && typeof v !== "object" ? String(v) : "";
+    if (noUnl) return '<input type="number" min="0" name="' + name + '" value="' + esc(num) + '">';
     return '<input type="number" min="0" name="' + name + '" value="' + esc(num) + '"' + (unl ? " disabled" : "") + ">" +
       '<label class="tm-unl"><input type="checkbox" name="' + name + '-unl"' + (unl ? " checked" : "") + "> " +
       esc(tw("teams.auth.unlimited")) + "</label>";
@@ -842,12 +868,12 @@
     var status = auth ? tw("teams.auth.on", { name: leader, when: new Date(auth.granted_at * 1000).toLocaleString() })
       : tw("teams.auth.off");
     var now = AUTH_CAPS.map(function (k) { return tw(AUTH_CAP_KEY[k]) + ": " + capText(eff[k]); }).join(" · ");
-    var rows = AUTH_CAPS.map(function (k) {
+    var rows = AUTH_CAPS.concat(AUTH_JUDGE_CAPS).map(function (k) {
       return '<div class="tm-field tm-auth-cap"><span>' + esc(tw(AUTH_CAP_KEY[k])) + "</span>" +
         '<span class="tm-auth-pair"><span class="tm-auth-lbl">' + esc(tw("teams.auth.cap_value")) + "</span>" +
-        capInputs("tm-auth-cap-" + k, (grant.caps || {})[k]) + "</span>" +
+        capInputs("tm-auth-cap-" + k, (grant.caps || {})[k], k === "volunteer_k") + "</span>" +
         '<span class="tm-auth-pair"><span class="tm-auth-lbl">' + esc(tw("teams.auth.cap_ceiling")) + "</span>" +
-        capInputs("tm-auth-ceil-" + k, (grant.ceilings || {})[k]) + "</span></div>";
+        capInputs("tm-auth-ceil-" + k, (grant.ceilings || {})[k], k === "volunteer_k") + "</span></div>";
     }).join("");
     var allowed = {};
     (grant.providers_unlimited || []).forEach(function (x) { allowed[x] = true; });
@@ -895,7 +921,7 @@
       return v === "" ? undefined : Number(v);
     }
     var caps = {}, ceilings = {};
-    AUTH_CAPS.forEach(function (k) {
+    AUTH_CAPS.concat(AUTH_JUDGE_CAPS).forEach(function (k) {
       var c = one("tm-auth-cap-" + k), l = one("tm-auth-ceil-" + k);
       if (c !== undefined) caps[k] = c;
       if (l !== undefined) ceilings[k] = l;
@@ -1364,6 +1390,7 @@
           only: el.getAttribute("data-pulse-ctx"), teamNames: names });
       });
     }
+    if (window.JavisAgentJudge && window.JavisAgentJudge.hydrate) window.JavisAgentJudge.hydrate(side);
   }
 
   function drawAll(stick) {
@@ -1937,6 +1964,7 @@
       return;
     }
     if (d.expand) { S.openMember = S.openMember === d.expand ? null : d.expand; drawSide(true); return; }
+    if (d.judgeHint) { S.openMember = d.judgeHint; return openSide("team", t); }
     if (t.classList.contains("tm-asjob")) {
       S.asJob = !S.asJob;
       // Đổi loại tin là một tin KHÁC: mã client cũ thuộc tin trước, gửi lại bằng nó sẽ được trả tin cũ khác loại.
@@ -2135,6 +2163,12 @@
       var v = f.value == null ? "" : String(f.value);
       if (v === "" && cur === null && f.checked === false && !missing) missing = k;
       if (v !== "" && (cur === null || Number(v) !== Number(cur))) caps[k] = Number(v);
+    });
+    CAP_MODES.forEach(function (k) {
+      var f = read(k) || {};
+      var v = f.value == null ? "" : String(f.value);
+      var cur = (current || {})[k];
+      if (v !== "" && Number(v) !== Number(cur === undefined ? 1 : cur)) caps[k] = Number(v);
     });
     return missing ? { caps: {}, missing: missing } : { caps: caps, missing: null };
   }

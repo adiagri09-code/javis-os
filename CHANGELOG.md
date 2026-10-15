@@ -8,7 +8,9 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.156.0] - 2026-10-15
 ### Thêm mới
-- **Trợ lý tự điều nhịp và tự biết lúc nên nói** (đang làm).
+- **Trợ lý tự biết lúc nên lên tiếng trong nhóm:** khi không ai gọi, mỗi trợ lý tự cân nhắc nói, chờ hay im; mỗi tin tối đa một người tự lên tiếng (chỉnh được). Lời gọi @ và việc giao vẫn luôn được trả lời; trợ lý nhờ được đồng đội xem tin mà không gọi nhau vòng tròn.
+- **Sửa quyết định nói hay im:** mở một thành viên trong ngăn Nhóm để xem các lần nói, chờ, im (cả lúc im lặng) và bấm "Đáng lẽ nên nói" hay "Nên im (chen ngang)". Bật Auto thì trợ lý học theo đúng nhóm đó.
+- **Giới hạn mới cho nhóm:** lượt phán xử mỗi ngày (mặc định 40, có Không giới hạn), số người tự lên tiếng mỗi tin, và cách phán xử khi Auto của trợ lý tắt.
 
 ## [0.157.0] - 2026-10-15
 ### Thêm mới
