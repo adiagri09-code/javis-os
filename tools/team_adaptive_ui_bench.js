@@ -73,7 +73,9 @@ for (let r = 0; r < RUNS; r++) pageT.push(time(() => { html = msgs.map((m) => TM
 out.message_page = stats(pageT);
 out.message_page_html_kb = Math.round(html.length / 1024);
 
-// Hai tab nhận cùng chuỗi gói reaction qua WS: mỗi gói thay tin rồi vẽ lại CẢ khung (teams.js onTeamEvent -> drawMsgs).
+// MÔ PHỎNG hai tab nhận cùng chuỗi gói reaction qua WS: vòng lặp này làm lại đúng việc teams.js onTeamEvent làm (thay tin
+// trong danh sách rồi drawMsgs vẽ lại cả khung) bằng hàm vẽ thật messageHtml; KHÔNG gọi onTeamEvent (cần DOM thật). Số lần vẽ
+// lại là của vòng mô phỏng, không phải đo từ dashboard.
 const tabs = [makeMsgs(N_MSGS), makeMsgs(N_MSGS)];
 const EVENTS = 20;
 const evT = [];
@@ -94,9 +96,9 @@ for (let r = 0; r < RUNS; r++) {
     }
   }));
 }
-out.two_tabs_ws_reactions = Object.assign(stats(evT), { events_per_run: EVENTS, tabs: 2,
-  full_list_redraws: redraws / RUNS,
-  note: "mỗi gói team_message vẽ lại cả khung tin của mỗi tab (O(số tin đang hiện)); cộng một lần đọc lại danh sách, hàng đợi, nhóm sau 300 ms (gộp)" });
+out.two_tabs_ws_reactions_simulated = Object.assign(stats(evT), { events_per_run: EVENTS, tabs: 2,
+  simulated_full_list_redraws: redraws / RUNS,
+  note: "mô phỏng, không gọi onTeamEvent: theo mã teams.js mỗi gói team_message vẽ lại cả khung tin của mỗi tab (O(số tin đang hiện)), cộng một lần đọc lại danh sách, hàng đợi, nhóm sau 300 ms (gộp)" });
 
 // Chip reaction và bộ chọn (reactions.js).
 const chipT = [];

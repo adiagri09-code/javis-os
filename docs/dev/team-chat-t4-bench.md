@@ -64,14 +64,14 @@ dựng chuỗi HTML bằng chính hàm vẽ của dashboard dưới node:
 |---|---|---|
 | Danh sách 12 nhóm | 0,4 ms | 7,7 ms |
 | Khung 200 tin (94 KB HTML) | 2,8 ms | 5,3 ms |
-| 20 gói reaction tới 2 tab, mỗi gói vẽ lại cả khung 200 tin | 92 ms | 101 ms |
+| MÔ PHỎNG 20 gói reaction tới 2 tab, mỗi gói vẽ lại cả khung 200 tin (vòng lặp của bench làm lại việc của `onTeamEvent`, không gọi nó) | 92 ms | 101 ms |
 | 500 chip + bộ chọn reaction | 25 ms | 36 ms |
 
 ## Trước và sau bản sửa hiệu năng của T3 (nhánh T3 `7e8b96f5`)
 
 Cùng máy, cùng lệnh mặc định, cùng dữ liệu. "Trước" là head T4 `89a0acd1` (T3 chỉ có P và J, chưa sửa hiệu năng); "sau" là
 head T4 sau khi ghép T3 `7e8b96f5` (P, J, L; lô phán xử và tick nhịp rời event loop qua `server/io_offload.py`, bộ chiếu theo
-lô; số đo của T3 ở docs/dev/team-chat-t3-pulse.md mục 9). Kết quả gốc của lần sau:
+lô; số đo của T3 ở docs/dev/team-chat-t3-pulse.md mục 9). (Các nhánh T3 sau `7e8b96f5` tới `054975b3` chỉ sửa hành vi và giao diện, không đổi đường nóng đã đo.) Kết quả gốc của lần sau:
 `exports/reviews/team-adaptive/t4-bench-2026-10-15-after-t3-fix.json`. Máy dùng chung với phiên khác nên lệch vài chục ms
 giữa hai lần là nhiễu; chỉ đọc các thay đổi lớn.
 

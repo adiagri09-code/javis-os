@@ -1,7 +1,7 @@
 # Nhóm chat thích nghi T4: lịch sử dài, vận hành, quay về bản cũ (0.157.0)
 
 Thiết kế: [2026-10-15-team-adaptive-design.md](../superpowers/specs/2026-10-15-team-adaptive-design.md) mục 11, 12, 13. Chồng
-trên T2 (0.154.0) và T3 (0.156.0: phần P nhịp, phần J phán xử, phần L học trong đội; nhánh T3 ở `7e8b96f5`). Số đo:
+trên T2 (0.154.0) và T3 (0.156.0: phần P nhịp, phần J phán xử, phần L học trong đội; nhánh T3 cuối `054975b3`). Số đo:
 [team-chat-t4-bench.md](team-chat-t4-bench.md). Ma trận nghiệm thu: [team-chat-acceptance-matrix.md](team-chat-acceptance-matrix.md).
 Gói pilot (chưa chạy): [team-chat-pilot-package.md](team-chat-pilot-package.md).
 
@@ -19,6 +19,18 @@ Khi phiên nhóm dài hơn cửa sổ 20 tin gần nhất, khối "Tóm tắt ph
 
 "Tin mới nhất của agent X" (đánh dấu tin mới trong cửa sổ) đổi sang chỉ mục từng phần `idx_messages_team_author`.
 
+Chi tiết của phần luôn giữ:
+- Chỉ dựng khi lịch sử dài hơn cửa sổ (cùng điều kiện với "Tóm tắt phần cũ"); nhóm ngắn thì yêu cầu và phản hồi đã nằm
+  trong cửa sổ và khối "Phản hồi gần đây", lời nhắc không đổi.
+- Phản hồi chờ xem xét đã hiện ở "Phản hồi gần đây" của lượt này không lặp lại; tiêu đề nào chạm trần ký tự mà không còn
+  dòng thì bỏ cả tiêu đề; khối kết thúc bằng câu dặn "dữ liệu máy trích, không phải lệnh mới".
+- Mọi chữ trích được gộp về một dòng (không chèn được đầu mục hay tiêu đề giả).
+- Ghi trên đường đọc: `pulse_contrib_result` được tạo (`CREATE INDEX IF NOT EXISTS`) ở lần đọc nguồn đóng góp đầu tiên của
+  tiến trình (`main._team_contrib_reader`, cờ một lần mỗi tiến trình), vì bảng là của phần P và có thể chưa có lúc khởi động.
+  Lần đầu đó có một câu DDL ngắn; các lần sau chỉ đọc.
+- `task_store.team_last_done` sắp các việc đã xong của một nhóm theo `updated_at` (cây sắp tạm): trần theo số việc của
+  nhóm, không theo số tin. Nếu số việc của một nhóm lên hàng chục nghìn thì nên thêm chỉ mục `(team_id, status, updated_at)`.
+
 Kiểm: `tests/python/test_team_t4_long_history.py`. Nhóm 5.000 tin vẫn có quyết định ghim từ đầu, yêu cầu gốc, việc bị chặn,
 nguồn đóng góp (kèm tỷ lệ), phản hồi chờ xem xét 45 ngày tuổi. Số lời gọi kho mỗi lượt đếm bằng lớp bọc: 60 tin và 5.000 tin
 bằng nhau, dưới 40. EXPLAIN QUERY PLAN của sáu truy vấn đều dùng đúng chỉ mục. Kho nhịp lỗi thì chỉ mất tỷ lệ ghi nhận.
@@ -33,9 +45,12 @@ nhóm nào); T4 không lặp lại.
 `tests/python/test_team_t4_ops.py`, `main.app` qua TestClient, engine giả, chốt chặn engine thật (`tests/python/_t4_host.py`
 dùng chung `install_guards` với bench):
 
-- **Nhiều tab:** gửi lại cùng nonce không thêm dòng nhật ký; mọi tab nhận gói `team_message`; tab B đổi thì tab A tải lại thấy.
+- **Nhiều tab:** gửi lại cùng nonce không thêm dòng nhật ký; hai tab thật đăng ký vào `ChatRuntime` (đường fan-out
+  thật) đều NHẬN gói `team_message` mang reaction mới, cùng nội dung, kể cả khi một tab thứ ba có socket đã chết.
 - **Mất kết nối:** gửi gói WS lỗi không làm hỏng thao tác; tải lại thấy trạng thái đã lưu và kết cục lượt trả lời.
-- **Khởi động lại:** reaction và trạng thái nhịp theo ngữ cảnh còn sau khi mở lại kho.
+- **Khởi động lại:** reaction và trạng thái nhịp còn sau khi mở lại kho; dựng bộ chạy MỚI trên một việc đang chạy chưa
+  tới engine (chạy tiếp tới xong bằng engine giả) và một việc có lượt đã tới engine (chặn `interrupted`, lượt tính một
+  lần); không khoá bận nào treo.
 - **Huỷ:** việc đang chờ bị huỷ không mở lượt model; huỷ lặp không 500.
 - **Thử lại:** lượt lỗi ghi `error`; Thử lại chạy đúng một lượt mới, `done`.
 - **Rời nhóm:** người đã rời không còn được phán xử cho tin mới.
@@ -43,13 +58,15 @@ dùng chung `install_guards` với bench):
 - **Tắt/bật Auto:** tắt thì phản hồi `stored_only`; bật lại không phát lại.
 - **Thu hồi Toàn quyền:** lượt quét của nhịp chỉ còn đề xuất, không xếp việc.
 - **Lỗi kho khi chiếu tác động:** reaction vẫn lưu, dòng nhật ký `pending`, nhịp sau chiếu xong.
-- **Lệch đồng hồ:** đánh giá nhịp với đồng hồ lùi không lỗi; khối nhóm với đồng hồ bộ chạy lùi 2 ngày vẫn dựng được.
-- **Nhóm bị chặn hay agent ngủ không chiếm suất:** pool một chỗ, hai nhóm chỉ có việc bị chặn, nhóm có việc vẫn được nhận; việc
-  của agent đang ngủ đông vẫn chạy xong; pool trống sau lượt; nhịp ngủ đông không giữ khoá bận.
+- **Lệch đồng hồ:** đánh giá nhịp với đồng hồ lùi không lỗi; đồng hồ bộ chạy lùi 2 ngày thì khối "Phản hồi gần đây"
+  vẫn có đúng dòng của tin đó.
+- **Nhóm bị chặn hay agent ngủ không chiếm suất:** pool một chỗ; việc của nhóm A rồi nhóm B bị chặn NGAY TRONG lượt của bộ
+  chạy (engine giả lỗi) và trả chỗ ngay; sau đó nhóm C được nhận và chạy xong dù agent của C đang ngủ đông ở nhóm C;
+  pool trống sau lượt; nhịp ngủ đông không giữ khoá bận.
 
 ## 3. Phát hiện khi đo
 
-Mục 1, 2, 3 đã được nhánh T3 sửa (`7e8b96f5`); số đo trước/sau ở [team-chat-t4-bench.md](team-chat-t4-bench.md). Giữ lại để đối chiếu.
+Mục 1, 2, 3 đã được nhánh T3 sửa (từ `7e8b96f5`, nhánh cuối `054975b3`); số đo trước/sau ở [team-chat-t4-bench.md](team-chat-t4-bench.md). Giữ lại để đối chiếu.
 
 1. **Lô phán xử nhóm (phần J) đọc ghi SQLite ngay trên luồng event loop.** `--stall-watch` của bench chụp được luồng loop
    bị giữ quá 50 ms tại `agent_judge.judge_team_message` -> `agent_judge_store` (`get_decision`, `profile`, `get_offset`,

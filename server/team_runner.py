@@ -1530,7 +1530,8 @@ class TeamRunner:
 
     # ───────────── lịch sử dài (T4, spec mục 19) ─────────────
 
-    def _older_summary(self, team: dict, shown: int, agent_key: str = "", current_task: str = "") -> list:
+    def _older_summary(self, team: dict, shown: int, agent_key: str = "", current_task: str = "",
+                       feedback_shown: Optional[set] = None) -> list:
         """Khối "Tóm tắt phần cũ" do CODE dựng (không gọi model): số tin cũ hơn cửa sổ lịch sử, các việc đã xong gần đây
         kèm trích kết quả, và (T4 0.157.0) phần luôn giữ: việc đang mở với yêu cầu gốc, nguồn đóng góp của kết quả gần
         nhất, phản hồi chưa xem xét (`team_long_memory`). Chỉ dữ liệu của chính nhóm này; mỗi mục một truy vấn có chỉ mục
@@ -1541,7 +1542,8 @@ class TeamRunner:
         import team_long_memory
         kept = team_long_memory.always_kept_lines(
             team=team, agent_key=agent_key, tasks=self.tasks, teams=self.teams, sessions=self.sessions,
-            name_of=lambda k: self._name(team, k), contrib_reader=self.contrib_reader, current_task=current_task)
+            name_of=lambda k: self._name(team, k), contrib_reader=self.contrib_reader, current_task=current_task,
+            skip_feedback=feedback_shown)
         lines = [f"\n## Tóm tắt phần cũ của nhóm (máy tự tóm, không phải model)",
                  (f"Có {older} tin cũ hơn phần lịch sử ở dưới." if shown else f"Có {older} tin cũ; tin gần nhất quá dài nên không hiện.")
                  + " Quyết định đã ghim vẫn ở Sổ quyết định."]
@@ -1743,9 +1745,10 @@ class TeamRunner:
             self._project("team", got["log_id"])
         return mid
 
-    def _feedback_lines(self, team: dict, agent_key: str) -> list:
+    def _feedback_lines(self, team: dict, agent_key: str, shown: Optional[set] = None) -> list:
         """Khối "Phản hồi gần đây của chủ nhóm" cho lượt kế của CHÍNH agent này trong CHÍNH nhóm này: tối đa 5 mục trong
-        30 ngày, emoji gốc kèm tên loại, lý do, góp ý, đoạn trích. Mục đã bỏ không còn trong kho nên tự rời khối."""
+        30 ngày, emoji gốc kèm tên loại, lý do, góp ý, đoạn trích. Mục đã bỏ không còn trong kho nên tự rời khối.
+        `shown` (T4): nhận mã tin đã hiện ở khối này, để phần luôn giữ của lịch sử dài không lặp lại."""
         rows = self.teams.recent_feedback(team["team_id"], agent_key, self.clock() - FEEDBACK_DAYS * 86400,
                                           FEEDBACK_LIMIT * 3)
         out = []
@@ -1755,6 +1758,8 @@ class TeamRunner:
             msg = self.sessions.team_message(team["session_id"], fb["message_id"])
             if msg is None:
                 continue   # tin không còn (phiên bị xoá bớt): phản hồi không còn ngữ cảnh, bỏ
+            if shown is not None:
+                shown.add(int(fb["message_id"]))
             excerpt = re.sub(r"\s+", " ", str(msg.get("content") or "")).strip()
             if len(excerpt) > FEEDBACK_EXCERPT:
                 excerpt = excerpt[:FEEDBACK_EXCERPT] + "..."
@@ -1900,7 +1905,10 @@ class TeamRunner:
             rendered.append(row)
             size += len(row)
         # Lịch sử dài (T4): phần cũ hơn cửa sổ được tóm bằng code, đặt trước phần lịch sử gần đây.
-        lines.extend(self._older_summary(team, len(rendered), agent_key, (task or {}).get("id") or ""))
+        # Khối phản hồi gần đây đọc TRƯỚC (vẫn đặt ở chỗ cũ trong lời nhắc) để phần luôn giữ không lặp lại mục đã có.
+        feedback_shown: set = set()
+        feedback = self._feedback_lines(team, agent_key, feedback_shown)
+        lines.extend(self._older_summary(team, len(rendered), agent_key, (task or {}).get("id") or "", feedback_shown))
         if rendered:
             lines.append(f"\n## Lịch sử gần đây của nhóm (tối đa {NEW_MSG_LIMIT} tin, cũ trước; "
                          "\"mới\" là tin sau lượt trước của bạn)")
@@ -1910,7 +1918,6 @@ class TeamRunner:
             auth = None
         if auth and role in LEADER_ROLES:
             lines.extend(self._authority_lines(team, auth, agent_key))
-        feedback = self._feedback_lines(team, agent_key)
         if feedback:
             lines.append("\n## Phản hồi gần đây của chủ nhóm (về tin của bạn trong nhóm này)")
             lines.extend(feedback)

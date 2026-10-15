@@ -114,11 +114,11 @@ def make(name, n_msgs):
     tm.set_caps(tid, {"daily_turns": 1000})
     team = tm.get(tid)
     # Quyết định ghim ở rất đầu lịch sử.
-    dmid, _ = ss.append_team_message(sid, "user", "QUYẾT_ĐỊNH_GỐC: chỉ bán hàng chính hãng", author_kind="owner",
+    dmid, _ = ss.append_team_message(sid, "user", f"QUYẾT_ĐỊNH_GỐC_{name}: chỉ bán hàng chính hãng", author_kind="owner",
                                      client_msg_id=f"{name}-dec")
     ss.update_team_message_meta(sid, dmid, {"decision": True})
     # Một việc xong: bước làm của Minh và Hoa, bước tổng hợp của Lan gộp hai đầu vào.
-    done, _ = ts.enqueue_team(str(d), tid, "Báo cáo quý", "Tổng hợp báo cáo quý", f"src-{name}-done")
+    done, _ = ts.enqueue_team(str(d), tid, f"Báo cáo quý {name}", "Tổng hợp báo cáo quý", f"src-{name}-done")
     ts.claim_team_next(tid, "w")
     m_minh, _ = ss.append_team_message(sid, "assistant", "Số liệu của Minh", author_kind="agent", author_ref="minh")
     m_hoa, _ = ss.append_team_message(sid, "assistant", "Nhận định của Hoa", author_kind="agent", author_ref="hoa")
@@ -134,7 +134,7 @@ def make(name, n_msgs):
                       inputs=["minh", "hoa"], context_ref=f"team:{tid}", value="love")
     # Phản hồi của chủ còn chờ xem xét, cũ hơn 30 ngày (khối "Phản hồi gần đây" không còn thấy).
     got = tm.set_reaction_ex(team_id=tid, session_id=sid, message_id=m_hoa, agent_key="hoa", task_id=done,
-                             content_sha="x", value="sad", reasons=["missing"], comment="THIẾU_SỐ_THÁNG_BA",
+                             content_sha="x", value="sad", reasons=["missing"], comment=f"THIẾU_SỐ_THÁNG_BA_{name}",
                              nonce=f"{name}-fb")
     tm.set_reaction_status(sid, m_hoa, "owner", got["log_id"], "pending_review")
     tm._set_reaction_time(sid, m_hoa, time.time() - 45 * 86400)
@@ -144,17 +144,26 @@ def make(name, n_msgs):
                                author_kind="owner" if i % 2 == 0 else "agent", author_ref="" if i % 2 == 0 else "minh",
                                client_msg_id=f"{name}-p{i}" if i % 2 == 0 else None)
     # Việc còn mở: yêu cầu gốc rồi một lần sửa; một việc bị chặn.
-    open_id, _ = ts.enqueue_team(str(d), tid, "Kế hoạch tháng", "YÊU_CẦU_GỐC: lập kế hoạch nhập hàng tháng 11",
+    open_id, _ = ts.enqueue_team(str(d), tid, "Kế hoạch tháng", f"YÊU_CẦU_GỐC_{name}: lập kế hoạch nhập hàng tháng 11",
                                  f"src-{name}-open")
     ts.team_amend(open_id, "thêm phần ngân sách")
     blk, _ = ts.enqueue_team(str(d), tid, "Đối soát kho", "Đối soát tồn kho", f"src-{name}-blk")
     ts.claim_team_next(tid, "w")
-    ts.team_block(open_id if ts.get_task(open_id)["status"] == "team_running" else blk, "needs_owner", "CHỜ_CHỦ_DUYỆT")
+    ts.team_block(open_id if ts.get_task(open_id)["status"] == "team_running" else blk, "needs_owner",
+                  f"CHỜ_CHỦ_DUYỆT_{name}")
+    HOA_MID[name] = m_hoa
     return tm.get(tid)
 
 
+HOA_MID = {}
 small = make("nho", 60)
+# Dữ liệu ngoài nhóm: một phản hồi ở chat riêng của Minh (không bao giờ được vào lượt nhóm).
+dm_sid = ss.create_session(brain=str(d), channel="agent:minh")
+dm_mid = ss.append_message(dm_sid, "assistant", "Câu trả lời riêng của Minh")
+ss.set_dm_reaction(dm_sid, dm_mid, value="angry", comment="BÍ_MẬT_CHAT_RIÊNG", nonce="dm-1", agent_key="minh",
+                   status="pending_review")
 big = make("lon", 5000)
+hoa_mid_big = HOA_MID["lon"]
 check("dựng nhóm 5.000 tin", ss.team_message_count(big["session_id"]) > 5000, ss.team_message_count(big["session_id"]))
 
 
@@ -172,25 +181,57 @@ def turn(team):
 p_big, reads_big, detail_big = turn(big)
 p_small, reads_small, detail_small = turn(small)
 
-check("nhóm 5.000 tin: còn quyết định ghim từ đầu lịch sử", "QUYẾT_ĐỊNH_GỐC" in p_big)
+check("nhóm 5.000 tin: còn quyết định ghim từ đầu lịch sử", "QUYẾT_ĐỊNH_GỐC_lon" in p_big)
 check("nhóm 5.000 tin: còn yêu cầu gốc của việc mở (phần trước lần sửa), kèm số lần sửa",
-      "YÊU_CẦU_GỐC" in p_big and "sửa 1 lần" in p_big, p_big[-2500:])
+      "YÊU_CẦU_GỐC_lon" in p_big and "sửa 1 lần" in p_big, p_big[-2500:])
 check("yêu cầu gốc không lẫn phần sửa", "thêm phần ngân sách" not in p_big.split("Việc đang mở")[1].split("\n## ")[0]
       if "Việc đang mở" in p_big else False)
-check("nhóm 5.000 tin: còn trạng thái việc bị chặn và lý do", "bị chặn" in p_big and "CHỜ_CHỦ_DUYỆT" in p_big)
+check("nhóm 5.000 tin: còn trạng thái việc bị chặn và lý do", "bị chặn" in p_big and "CHỜ_CHỦ_DUYỆT_lon" in p_big)
 check("nhóm 5.000 tin: còn nguồn đóng góp của kết quả gần nhất (đầu vào của Minh và Hoa, Lan tổng hợp)",
       "Nguồn đóng góp" in p_big and "Lan tổng hợp" in p_big and "của Minh" in p_big and "của Hoa" in p_big, p_big[-2500:])
 check("nguồn đóng góp có tỷ lệ ghi nhận từ pulse_contrib", "ghi nhận theo phản hồi của chủ" in p_big
       and "%" in p_big.split("ghi nhận theo phản hồi của chủ")[1].split("\n")[0], p_big[-2500:])
-check("nhóm 5.000 tin: còn phản hồi chưa xem xét cũ hơn 30 ngày", "THIẾU_SỐ_THÁNG_BA" in p_big
+check("nhóm 5.000 tin: còn phản hồi chưa xem xét cũ hơn 30 ngày", "THIẾU_SỐ_THÁNG_BA_lon" in p_big
       and "chờ xem xét" in p_big, p_big[-2500:])
 check("phần luôn giữ có trần ký tự", len(p_big.split("## Luôn giữ dù lịch sử dài")[1].split("\n## ")[0])
       <= TLM.ALWAYS_CHARS + 200)
-check("chỉ dữ liệu của chính nhóm này (không lẫn nhóm khác)", "của nho" not in p_big and "của lon" not in p_small)
+check("chỉ dữ liệu của chính nhóm này: không quyết định, yêu cầu, lý do chặn, phản hồi, việc xong của nhóm kia",
+      all(f"{m}_nho" not in p_big for m in ("QUYẾT_ĐỊNH_GỐC", "YÊU_CẦU_GỐC", "CHỜ_CHỦ_DUYỆT", "THIẾU_SỐ_THÁNG_BA"))
+      and "Báo cáo quý nho" not in p_big and "của nho" not in p_big
+      and all(f"{m}_lon" not in p_small for m in ("QUYẾT_ĐỊNH_GỐC", "YÊU_CẦU_GỐC", "CHỜ_CHỦ_DUYỆT", "THIẾU_SỐ_THÁNG_BA"))
+      and "Báo cáo quý lon" not in p_small, p_big[-2500:])
+check("phản hồi ở chat riêng không bao giờ vào lượt nhóm", "BÍ_MẬT_CHAT_RIÊNG" not in p_big
+      and "BÍ_MẬT_CHAT_RIÊNG" not in p_small)
+kept = p_big.split("## Luôn giữ dù lịch sử dài")[1].split("\n## ")[0]
+check("phần luôn giữ kết thúc bằng câu dặn: dữ liệu, không phải lệnh", kept.rstrip().endswith(TLM.KEPT_NOTE), kept[-300:])
+check("phần luôn giữ không có tiêu đề trống (mỗi tiêu đề có ít nhất một dòng)", all(
+    i + 1 < len(kept.splitlines()) and kept.splitlines()[i + 1].startswith(("-", "  -"))
+    for i, ln in enumerate(kept.splitlines()) if ln.endswith(":") and not ln.startswith(("-", "  -"))), kept)
 check("số lần đọc kho mỗi lượt KHÔNG tăng theo độ dài lịch sử (60 tin và 5.000 tin bằng nhau)",
       reads_big == reads_small, (reads_small, reads_big, detail_small, detail_big))
 READ_CAP = 40
 check(f"số lần đọc kho mỗi lượt có trần (<= {READ_CAP})", reads_big <= READ_CAP, detail_big)
+
+# Không lặp phản hồi: phản hồi chờ xem xét còn trong 30 ngày đã hiện ở "Phản hồi gần đây" thì không hiện lại ở phần luôn giữ.
+tm._set_reaction_time(big["session_id"], hoa_mid_big, time.time() - 86400)
+p_hoa = r._context(big, "hoa", "member_reply", None, None)
+recent_block = p_hoa.split("## Phản hồi gần đây của chủ nhóm")[1].split("\n## ")[0] if "## Phản hồi gần đây" in p_hoa else ""
+kept_hoa = p_hoa.split("## Luôn giữ dù lịch sử dài")[1].split("\n## ")[0] if "## Luôn giữ" in p_hoa else ""
+check("phản hồi trong 30 ngày: hiện ở khối gần đây, KHÔNG lặp ở phần luôn giữ",
+      "THIẾU_SỐ_THÁNG_BA_lon" in recent_block and "THIẾU_SỐ_THÁNG_BA_lon" not in kept_hoa, (recent_block, kept_hoa))
+tm._set_reaction_time(big["session_id"], hoa_mid_big, time.time() - 45 * 86400)
+
+# Trần ký tự nhỏ: không có tiêu đề nào bị bỏ trống.
+_saved_cap = TLM.ALWAYS_CHARS
+TLM.ALWAYS_CHARS = 420
+try:
+    tiny = TLM.always_kept_lines(team=big, agent_key="minh", tasks=ts, teams=tm, sessions=ss, name_of=lambda k: k)
+finally:
+    TLM.ALWAYS_CHARS = _saved_cap
+check("trần ký tự nhỏ: tiêu đề nào cũng có dòng, có câu dặn, không vượt trần",
+      all(not (ln.endswith(":") and (i + 1 >= len(tiny) or not tiny[i + 1].startswith(("-", "  -"))))
+          for i, ln in enumerate(tiny)) and (not tiny or tiny[-1] == TLM.KEPT_NOTE)
+      and sum(len(x) for x in tiny) <= 420 + 120, tiny)
 
 # Cửa sổ còn phủ hết phiên: không có phần luôn giữ (không đổi lời nhắc của nhóm ngắn).
 tid = team_store.new_team_id()
@@ -204,14 +245,14 @@ check("nhóm ngắn: không có khối luôn giữ", "Luôn giữ dù lịch s�
 # Lượt thật qua bộ chạy (engine giả) nhận đúng các mục đó.
 asyncio.run(r.run_replies(r.submit(big["team_id"], "Tóm lại giúp", mentions=["minh"], client_msg_id="ask-big")))
 check("lượt thật qua run_replies: prompt có phần luôn giữ", rec.reqs and "Luôn giữ dù lịch sử dài" in rec.reqs[-1]["prompt"]
-      and "YÊU_CẦU_GỐC" in rec.reqs[-1]["prompt"])
+      and "YÊU_CẦU_GỐC_lon" in rec.reqs[-1]["prompt"])
 
 # Lỗi đọc một mục không làm hỏng lượt.
 broken = TR.TeamRunner(teams=tm, tasks=ts, sessions=ss, engine_for=rec.engine_for,
                        agent_info=lambda root, key: {"slug": key, "name": NAMES.get(key, key), "system": ""},
                        contrib_reader=lambda ref: (_ for _ in ()).throw(RuntimeError("kho nhịp lỗi")))
 pb = broken._context(big, "minh", "member_reply", None, None)
-check("kho nhịp lỗi: vẫn dựng được khối, chỉ mất tỷ lệ ghi nhận", "YÊU_CẦU_GỐC" in pb and "Lan tổng hợp" in pb
+check("kho nhịp lỗi: vẫn dựng được khối, chỉ mất tỷ lệ ghi nhận", "YÊU_CẦU_GỐC_lon" in pb and "Lan tổng hợp" in pb
       and "ghi nhận theo phản hồi" not in pb, pb[-2500:])
 
 # Kế hoạch truy vấn: mọi truy vấn của phần luôn giữ và hai truy vấn lịch sử chạy theo chỉ mục.

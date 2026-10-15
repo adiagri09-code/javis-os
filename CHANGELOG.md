@@ -10,7 +10,6 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 ### Cải thiện
 - **Nhóm nhiều nghìn tin vẫn nhớ điều quan trọng:** mỗi lượt trả lời trợ lý vẫn thấy quyết định đã ghim, yêu cầu gốc và trạng thái các việc đang mở, ai đã góp vào kết quả gần nhất và phản hồi của bạn còn chờ xem xét, dù chúng nằm rất xa trong lịch sử.
 - **Nhóm dài không làm chậm từng lượt:** mỗi mục trên chỉ đọc một lần, có giới hạn, nên nhóm 5.000 tin tốn công đọc như nhóm vài chục tin.
-- **Ổn định hơn khi mở nhiều tab, mất mạng hay khởi động lại:** thả cảm xúc, thử lại, huỷ, đổi trưởng nhóm, thu hồi quyền đều giữ đúng trạng thái; nhóm đang bị chặn không giữ chỗ của nhóm có việc.
 
 ## [0.156.0] - 2026-10-15
 ### Thêm mới

@@ -121,11 +121,13 @@ def toggle_auto(slug, on):
 
 
 def guards_ok():
-    return not TAB.guards_hold(main)
+    """Chốt còn nguyên VÀ chưa có đường nào thử dựng engine thật (chốt đếm mỗi lần bị gọi)."""
+    return not TAB.guards_hold(main) and not TAB.REAL_ATTEMPTS
 
 
 def finish():
-    check("không engine thật nào được dựng hay gọi (chốt còn nguyên)", guards_ok(), TAB.guards_hold(main))
+    check("không engine thật nào được dựng hay gọi (chốt còn nguyên)", guards_ok(),
+          (TAB.guards_hold(main), len(TAB.REAL_ATTEMPTS)))
     if fails:
         print(f"\n{len(fails)} FAIL")
         raise SystemExit(1)

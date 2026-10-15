@@ -98,7 +98,11 @@ class RealEngineUsed(AssertionError):
     pass
 
 
+REAL_ATTEMPTS: list = []   # mỗi lần có đường nào thử dựng engine thật (đã bị chặn) ghi một dòng; báo cáo đếm thật
+
+
 def _no_real_engine(*a, **k):
+    REAL_ATTEMPTS.append(time.time())
     raise RealEngineUsed("a REAL engine was built or called; T4 harnesses only run fake engines")
 
 
@@ -635,7 +639,8 @@ def main_bench(argv=None) -> dict:
                        "pulse_tick_scheduler": "paused (bench gọi tick trực tiếp)",
                        "call_ceiling_env": "không đặt"},
         **report,
-        "real_engine_guard": {"unguarded": still, "real_calls": 0},
+        "real_engine_guard": {"unguarded": still, "real_engine_build_attempts": len(REAL_ATTEMPTS),
+                              "note": "đếm bằng chốt: mỗi lần một đường thử dựng engine thật thì chốt ghi lại rồi ném lỗi"},
     }
     if not a.no_ui:
         report["ui_render"] = run_ui_bench(a)

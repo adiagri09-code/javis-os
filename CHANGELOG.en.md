@@ -12,7 +12,6 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 ### Improved
 - **Teams with thousands of messages still remember what matters:** every assistant turn still sees pinned decisions, the original request and status of open jobs, who contributed to the latest result, and your feedback still waiting for review, however far back they are in the history.
 - **Long teams do not slow each turn:** each of those items is read once with a limit, so a 5,000 message team costs as much to read as a team with a few dozen.
-- **Steadier with many tabs, lost connections or restarts:** reactions, retry, cancel, leader changes and authority revoke all keep the right state; a blocked team never holds the slot of a team with work.
 
 ## [0.156.0] - 2026-10-15
 ### Added
