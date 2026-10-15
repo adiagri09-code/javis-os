@@ -8,6 +8,14 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.160.0] - 2026-10-15
+### Improved
+- **The Effort chip reads the real level of Antigravity models** that carry it in their name (e.g. `-high`), on the chip and in the slider popover.
+- **The slider popover stays on screen** on narrow phones, the orange particle effect is lighter (nothing is re-measured every frame), and an interrupted swipe no longer makes the slider jump.
+- **Ctrl+U opens the file picker only when a usable chat box is there**, not on other pages or while the chat box is locked.
+- **The connections-to-fix count in the + menu** is refreshed each time the menu opens.
+- **Leaving the Partners page mid-turn** no longer re-enables the Send button by mistake.
+
 ## [0.159.0] - 2026-10-15
 ### Improved
 - **Sturdier folder pinning:** switching brain no longer binds a pending pin in the new brain; a folder inside the brain picked with the browser is no longer labelled "outside the brain"; the folder search returns folders only, so files cannot crowd them out.

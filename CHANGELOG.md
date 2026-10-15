@@ -6,6 +6,14 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.160.0] - 2026-10-15
+### Cải thiện
+- **Chip Effort đọc đúng mức của model Antigravity** đã ghi sẵn mức trong tên (vd. `-high`), cả trên chip lẫn trong khung thanh trượt.
+- **Khung thanh trượt không còn tràn mép** màn hình hẹp, và hiệu ứng hạt cam nhẹ máy hơn (không đo lại mỗi khung hình); vuốt dở trên điện thoại không còn làm thanh trượt tự nhảy.
+- **Ctrl+U chỉ mở chọn file khi có khung gõ** đang dùng được, không mở ở trang khác hay lúc khung gõ đang khoá.
+- **Số kết nối cần làm lại ở menu +** được đếm lại mỗi lần mở menu.
+- **Rời trang Cộng sự giữa lượt chat** không còn làm nút Gửi bật lại nhầm.
+
 ## [0.159.0] - 2026-10-15
 ### Cải thiện
 - **Ghim thư mục chắc tay hơn:** đổi sang brain khác thì thư mục đang chờ ghim không bị gắn nhầm sang brain mới; thư mục trong brain chọn qua hộp duyệt không còn bị ghi nhầm là "ngoài brain"; ô tìm chỉ trả về thư mục nên không còn bị file chiếm chỗ.
