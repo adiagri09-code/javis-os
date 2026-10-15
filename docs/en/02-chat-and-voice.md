@@ -321,7 +321,18 @@ The row under the text box holds three controls side by side:
 
 - **Model chip**: shows the short name of the provider and model in use. Clicking it opens a picker with a **Find model...** box and a provider list, each expanding into its models. Providers that are not configured show a 🔒 with the line "+ Add an API key on the Models page to unlock".
 - **Effort chip** (thinking depth): separate from the model chip because you change it more often. Clicking it opens a six-stop slider **Off / Light / Medium / High / Extra / Ultra**, with "Faster" on the left, "Smarter" on the right and "Recommended" under Medium. Drag it or use the arrow keys, Home and End. Antigravity models that carry the level in their name (e.g. `-high`) lock the slider.
-- **Fast mode bolt**: click to turn it on and the bolt starts an orange wave; click again to turn it off. There is no on/off label; hover to see "Fast mode" and a cost note for the selected brain. Brains or models that do not support it show a dimmed bolt. This release only **stores the choice**; wiring Fast mode into each engine comes in the next release.
+- **Fast mode bolt**: click to turn it on and the bolt starts an orange wave; click again to turn it off. There is no on/off label; hover to see "Fast mode" and a cost note for the selected brain. Brains or models that do not support it show a dimmed bolt.
+
+  | Brain | What Fast mode does | Notes |
+  |---|---|---|
+  | Claude Code | Turns on Claude Code's fast mode | Opus 5.5, Opus 5, Opus 4.8 only; billed to usage credits at twice the price |
+  | Anthropic API | Sends `speed: "fast"` | Opus 5.5, Opus 5, Opus 4.8 only |
+  | ChatGPT (Codex) | Runs the Fast tier (`priority`) | With the bolt off Javis forces the normal tier, even when the model or the Codex config defaults to Fast |
+  | OpenAI API | `service_tier: "fast"` | |
+  | OpenRouter, Gemini | `service_tier: "priority"` | Gemini: Tier 2/3 accounts only |
+  | Grok, Antigravity, Groq, DeepSeek, Ollama | None | Dimmed bolt |
+
+  When a provider refuses Fast mode (account not eligible, limit reached), Javis resends at normal speed and the turn does not fail; hover the bolt to see why. Background runs (loops, reminders, Kanban, teams) always run at normal speed.
 
 The badge next to **CONVERSATION** (and in the top right of the Chat page) shows the **real** engine and model of the last turn, taken from the server rather than from what the model claims about itself. If the badge disagrees with what you expected, trust the badge.
 

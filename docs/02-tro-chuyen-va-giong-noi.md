@@ -337,7 +337,18 @@ Hàng nút dưới ô gõ có ba thứ đứng cạnh nhau:
 
 - **Chip model**: hiện tên rút gọn của nhà cung cấp và model đang dùng. Bấm chip mở bảng chọn: ô **Tìm model...**, danh sách nhà cung cấp, mỗi cái bung ra danh sách model. Nhà cung cấp chưa cấu hình hiện ổ khoá 🔒 kèm dòng "+ Thêm API key ở trang Models để mở khoá".
 - **Chip Effort** (độ sâu suy nghĩ): tách riêng khỏi chip model vì đổi thường xuyên hơn. Bấm mở một thanh trượt sáu nấc **Off / Light / Medium / High / Extra / Ultra** (để tiếng Anh cho gọn), đầu trái ghi "Faster", đầu phải "Smarter", "Recommended" nằm dưới Medium. Kéo chuột hoặc dùng phím mũi tên, Home, End. Model Antigravity đã ghi sẵn mức trong tên (vd. `-high`) thì thanh trượt bị khoá.
-- **Tia sét Fast mode**: bấm để bật, tia sét chuyển sóng cam; bấm lần nữa để tắt. Không có chữ bật/tắt, rê chuột vào sẽ thấy "Fast mode" kèm ghi chú chi phí của bộ não đang chọn. Bộ não hoặc model không hỗ trợ thì tia sét mờ đi. Bản này mới **lưu lựa chọn**; nối Fast mode vào từng engine làm ở bản sau.
+- **Tia sét Fast mode**: bấm để bật, tia sét chuyển sóng cam; bấm lần nữa để tắt. Không có chữ bật/tắt, rê chuột vào sẽ thấy "Fast mode" kèm ghi chú chi phí của bộ não đang chọn. Bộ não hoặc model không hỗ trợ thì tia sét mờ đi.
+
+  | Bộ não | Fast mode làm gì | Lưu ý |
+  |---|---|---|
+  | Claude Code | Bật chế độ nhanh của Claude Code | Chỉ Opus 5.5, Opus 5, Opus 4.8; tính vào usage credits, giá gấp đôi |
+  | Anthropic API | Gửi `speed: "fast"` | Chỉ Opus 5.5, Opus 5, Opus 4.8 |
+  | ChatGPT (Codex) | Chạy tier Fast (`priority`) | Tắt tia sét là ép về tốc độ thường, kể cả khi model hay cấu hình Codex mặc định đang để Fast |
+  | OpenAI API | `service_tier: "fast"` | |
+  | OpenRouter, Gemini | `service_tier: "priority"` | Gemini chỉ tài khoản Tier 2/3 |
+  | Grok, Antigravity, Groq, DeepSeek, Ollama | Không có | Tia sét mờ |
+
+  Nhà cung cấp từ chối Fast mode (tài khoản không đủ điều kiện, vượt giới hạn) thì Javis tự gửi lại ở tốc độ thường, lượt chat không hỏng; rê chuột vào tia sét sẽ thấy dòng báo lý do. Việc chạy nền (loop, nhắc hẹn, Kanban, nhóm) luôn chạy tốc độ thường.
 
 Badge cạnh chữ **HỘI THOẠI** (và ở góc phải trang Trò chuyện) hiện engine + model **thật** của lượt vừa chạy, lấy từ server chứ không phải model tự khai. Nếu badge khác cái bạn tưởng, tin badge.
 
