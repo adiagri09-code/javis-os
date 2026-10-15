@@ -4588,5 +4588,25 @@
    "POST"
   ],
   "trong": null
+ },
+ {
+  "order": 461,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/judge",
+  "name": "agent_judge_view",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 462,
+  "type": "APIRoute",
+  "path": "/agents/{slug}/judge/label",
+  "name": "agent_judge_label",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
  }
 ]

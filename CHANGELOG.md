@@ -13,6 +13,9 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - **Bảng Nhịp trên thẻ trợ lý và dòng thành viên nhóm:** trạng thái từng nơi, lần xem xét gần nhất và tiếp theo, vì sao đổi nhịp, phản hồi đã tính. Có nút Đánh thức, Tạm dừng, Đặt lại, Quay lại.
 - **Lần tự thức chỉ gọi AI khi có việc thật:** việc nhóm cũ, việc bị chặn có tin mới, mục tiêu chờ bạn. Không có quyền thì chỉ đề xuất; tin tự nhắn luôn qua bộ phán xử trước.
 - **Ghi công đúng người:** khen bản tổng hợp thì phần lớn về người làm các phần, không dồn hết cho trưởng nhóm.
+- **Trợ lý tự biết lúc nên lên tiếng trong nhóm:** khi không ai gọi, mỗi trợ lý tự cân nhắc nói, chờ hay im; mỗi tin tối đa một người tự lên tiếng (chỉnh được). Lời gọi @ và việc giao vẫn luôn được trả lời; trợ lý nhờ được đồng đội xem tin mà không gọi nhau vòng tròn.
+- **Sửa quyết định nói hay im:** mở một thành viên trong ngăn Nhóm để xem các lần nói, chờ, im (cả lúc im lặng) và bấm "Đáng lẽ nên nói" hay "Nên im (chen ngang)". Bật Auto thì trợ lý học theo đúng nhóm đó.
+- **Giới hạn mới cho nhóm:** lượt phán xử mỗi ngày (mặc định 40, có Không giới hạn), số người tự lên tiếng mỗi tin, và cách phán xử khi Auto của trợ lý tắt.
 
 ## [0.154.0] - 2026-10-15
 ### Thêm mới

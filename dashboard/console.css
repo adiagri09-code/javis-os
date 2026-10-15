@@ -3194,3 +3194,22 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 @media (max-width: 480px) {
   .pulse-acts .ws-btn { flex: 1 1 auto; }
 }
+
+/* Bộ phán xử nói / chờ / im (T3 phần J 0.156.0, agent-judge-ui.js): chữ tối thiểu 16px, vừa màn 375px, vùng chạm 44px. */
+.ajd { font-size: 16px; line-height: 1.45; min-width: 0; }
+.ajd-head, .ajd-ctx-head { font-weight: 600; margin: 10px 0 4px; }
+.ajd-sub, .ajd-why, .ajd-score, .ajd-excerpt, .ajd-labeled, .ajd-note { font-size: 16px; overflow-wrap: anywhere; }
+.ajd-sub, .ajd-score { color: var(--muted, inherit); }
+.ajd-host { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); min-width: 0; }
+.ajd-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.ajd-dec { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.ajd-dhead { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ajd-verdict, .ajd-kind { font-size: 16px; padding: 0 8px; border-radius: 10px; border: 1px solid var(--border); }
+.ajd-v-speak { font-weight: 600; }
+.ajd-when { font-size: 16px; color: var(--muted, inherit); margin-left: auto; }
+.ajd-excerpt { font-style: italic; }
+.ajd-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.ajd-btn { min-height: 44px; font-size: 16px; }
+.ajd-btn[aria-pressed="true"] { font-weight: 600; }
+.tm-judge-hint { display: block; min-height: 44px; font-size: 16px; text-align: left; background: none; border: 0;
+  padding: 4px 0; text-decoration: underline; cursor: pointer; color: inherit; }
