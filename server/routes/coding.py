@@ -21,6 +21,7 @@ là bỏ sót - main đã có sẵn bộ bí danh đó, chép lại ở đây l�
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Callable
 
@@ -37,6 +38,10 @@ router = APIRouter()
 @dataclass
 class CodingDeps:
     brain_keys: Callable[[str], list]
+    # 0.154.0, composer pinned folder: resolve a browse-relative path (raises ValueError when it
+    # leaves the ceiling) and give the brain root, both owned by main.
+    resolve_path: Callable[[str, str], str] = None
+    brain_root: Callable[[str], str] = None
 
 
 _DEPS: "CodingDeps" = None   # type: ignore
@@ -71,6 +76,28 @@ def _ve_thu_muc(r: dict) -> dict:
         "nhanh": coding_store.nhanh_hien_tai(p) if git else "",
         "nhanh_ds": coding_store.danh_sach_nhanh(p) if git else [],
     }
+
+
+def _folder_view(r):
+    """English view of a registered folder for the composer chip (0.154.0)."""
+    if not r:
+        return None
+    v = _ve_thu_muc(r)
+    return {"id": v["id"], "name": v["ten"], "path": v["duong_dan"], "exists": v["co_that"], "is_git": v["la_git"]}
+
+
+def _brain_fields(sid: str, brain: str) -> dict:
+    """`in_brain` / `brain_rel` of the session's main folder, relative to the brain root."""
+    out = {"in_brain": False, "brain_rel": ""}
+    tm = coding_store.thu_muc(coding_store.rang_buoc(sid).get("thu_muc") or "")
+    if not tm or not brain or not (_DEPS and _DEPS.brain_root):
+        return out
+    try:
+        rel = Path(tm["duong_dan"]).resolve().relative_to(Path(_DEPS.brain_root(brain)).resolve()).as_posix()
+        out = {"in_brain": True, "brain_rel": "" if rel == "." else rel}
+    except (ValueError, OSError):
+        pass
+    return out
 
 
 def _make_router() -> APIRouter:
@@ -135,7 +162,7 @@ def _make_router() -> APIRouter:
         return {"phien": ra, "kenh": coding_store.KENH}
 
     @r.get("/coding/session/{sid}")
-    async def coding_phien(sid: str):
+    async def coding_phien(sid: str, brain: str = Query("")):
         rb = coding_store.rang_buoc(sid)
         tm = coding_store.thu_muc(rb.get("thu_muc") or "")
         cwd = coding_store.cwd_cua_phien(sid)
@@ -150,7 +177,38 @@ def _make_router() -> APIRouter:
             # Chưa gắn thư mục thì KHÔNG chạy git ở đâu cả. Suy biến về "." là chạy `git status`
             # trong thư mục của tiến trình server - trả lời về một cây người dùng không hỏi.
             "cay_sach": coding_store.cay_sach(cwd) if cwd else None,
+            # 0.154.0: English fields for the composer chip (old fields above stay as they are).
+            "folder": _folder_view(tm),
+            **_brain_fields(sid, brain),
         }
+
+    @r.post("/coding/session/{sid}/pin")
+    async def coding_session_pin(sid: str, path: str = Form(""), brain: str = Form("")):
+        """Pin (or unpin with an empty path) the conversation's working folder in one call.
+
+        `path` is absolute (from the folder browser, same trust as POST /coding/folders) or
+        relative as /files/list and /files/search return it. Registering and binding in one
+        request means the UI can never leave a folder registered but not bound.
+        """
+        raw = str(path or "").strip()
+        try:
+            if not raw:
+                coding_store.dat_rang_buoc(sid, thu_muc_id="")
+                return {"ok": True, "folder": None, "in_brain": False, "brain_rel": ""}
+            if os.path.isabs(raw):
+                target = raw
+            else:
+                if not (_DEPS and _DEPS.resolve_path):
+                    return _400(localefmt.chu("Không đọc được đường dẫn.", "Cannot read path."))
+                try:
+                    target = _DEPS.resolve_path(brain, raw)
+                except ValueError as e:
+                    return _400(str(e))
+            rec = coding_store.them_thu_muc(target, brain=brain)
+            coding_store.dat_rang_buoc(sid, thu_muc_id=rec["id"])
+        except coding_store.LoiCoding as e:
+            return _400(str(e))
+        return {"ok": True, "folder": _folder_view(rec), **_brain_fields(sid, brain)}
 
     @r.post("/coding/session/{sid}")
     async def coding_phien_dat(sid: str, thu_muc: str = Form(None), nhanh: str = Form(None),

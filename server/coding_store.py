@@ -610,3 +610,37 @@ def khoi_prompt(sid: str) -> str:
     else:
         dong.append("Mức Toàn quyền: được commit, push và deploy khi việc yêu cầu.")
     return "\n".join(dong) + "\n"
+
+
+def pinned_folder_prompt(sid: str, brain_root: str) -> str:
+    """Prompt block for a NORMAL chat that has a pinned working folder (0.154.0).
+
+    Unlike `khoi_prompt` it never states a permission level: a normal chat keeps running at
+    `full`, and a line about Plan or Auto would contradict what the hub actually allows. The
+    brain-relative path matters for API brains, whose file tools are rooted at the brain.
+    Returns "" when the session has no folder or the folder no longer exists on disk.
+    The text stays Vietnamese like `khoi_prompt`: it is prompt content, not code.
+    """
+    cwd = cwd_cua_phien(sid)
+    if not cwd:
+        return ""
+    lines = ["", "# === THƯ MỤC LÀM VIỆC ===", f"Thư mục làm việc: {cwd}"]
+    rel = ""
+    if brain_root:
+        try:
+            rel = Path(cwd).resolve().relative_to(Path(brain_root).resolve()).as_posix()
+        except (ValueError, OSError):
+            rel = ""
+    if rel and rel != ".":
+        lines.append(f"Thư mục này nằm trong brain: {rel} (công cụ file của brain dùng đường dẫn này).")
+    extra = [r["duong_dan"] for r in thu_muc_cua_phien(sid)
+             if r["duong_dan"] != cwd and Path(r["duong_dan"]).is_dir()]
+    if extra:
+        lines.append("Thư mục khác cũng thuộc việc này, dùng ĐƯỜNG DẪN TUYỆT ĐỐI:")
+        lines += [f"  - {p}" for p in extra]
+    if la_git(cwd):
+        branch = nhanh_hien_tai(cwd)
+        if branch:
+            lines.append(f"Nhánh git: {branch}")
+    lines.append("Đọc, sửa và tạo file trong thư mục này trừ khi người dùng nói khác.")
+    return "\n".join(lines) + "\n"

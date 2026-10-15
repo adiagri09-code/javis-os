@@ -5883,20 +5883,25 @@ def _cwd_luot_chat(row, brain: str) -> str:
     return _brain_root(brain)
 
 
-def _khoi_coding(row) -> str:
+def _khoi_coding(row, brain: str = "") -> str:
     """Khối prompt của phiên Coding (thư mục làm việc, nhánh, và mức quyền nghĩa là gì).
 
     Trả "" cho mọi phiên khác, nên nối vào prompt là vô hại ở đường chat thường. Đặt `cwd`
     thôi chưa đủ: model vẫn đoán đường dẫn từ trí nhớ của nó, và ở chế độ Plan thì còn phải
     NÓI cho nó biết là hãy lập kế hoạch rồi dừng.
+
+    Since 0.154.0 any other session with a folder pinned from the composer gets the short
+    pinned-folder block (no permission line: a normal chat keeps running at `full`).
     """
     try:
         sid = (row or {}).get("id") or ""
-        if sid and str((row or {}).get("channel") or "").startswith("coding:"):
+        if not sid:
+            return ""
+        if str((row or {}).get("channel") or "").startswith("coding:"):
             return coding_store.khoi_prompt(sid)
+        return coding_store.pinned_folder_prompt(sid, _brain_root(brain) if brain else "")
     except Exception:
-        pass
-    return ""
+        return ""
 
 
 def _muc_quyen_luot_chat(row, user_message="") -> str:
@@ -14678,7 +14683,7 @@ async def websocket_endpoint(ws: WebSocket):
                         ) + channel_context.build_channel_block(
                             "dashboard", {"session_id": conv_sid}, telegram_running=bool(_TG_BOT),
                             port=_javis_port(), brain_root=_brain_root(brain),
-                        ) + _khoi_coding(_row0)
+                        ) + _khoi_coding(_row0, brain)
                 return sysprompt
 
             async def _subscription_system_prompt(route_provider, route_model, route_kind):
@@ -14707,7 +14712,7 @@ async def websocket_endpoint(ws: WebSocket):
                     ) + channel_context.build_channel_block(
                         "dashboard", {"session_id": conv_sid}, telegram_running=bool(_TG_BOT),
                         port=_javis_port(), brain_root=_brain_root(brain),
-                    ) + _khoi_coding(_row0)
+                    ) + _khoi_coding(_row0, brain)
 
                 try:
                     plan = await asyncio.to_thread(
@@ -21714,7 +21719,10 @@ conversations_routes.register(app, conversations_routes.ConversationsDeps(
 # `coding_store` đứng một mình, không cần gì từ main. Chiều phụ thuộc ngược lại thì có:
 # đường chat gọi `coding_store.cwd_cua_phien` để biết engine phải chạy ở thư mục nào.
 import routes.coding as coding_routes   # noqa: E402
-coding_routes.register(app, coding_routes.CodingDeps(brain_keys=_brain_keys))
+coding_routes.register(app, coding_routes.CodingDeps(
+    brain_keys=_brain_keys,
+    resolve_path=lambda b, rel: str(_safe_serve_path(b, rel)),
+    brain_root=lambda b: str(_brain_root(b))))
 
 
 @app.post("/telegram/test")
