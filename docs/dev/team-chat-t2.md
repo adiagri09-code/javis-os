@@ -144,8 +144,37 @@ do nhánh UI làm riêng; tài liệu này chỉ nói phần máy chủ.
 
 Bản 0.153.x bỏ qua bảng và cột mới, nên hạ phiên bản chạy được không cần khôi phục. Reaction của trưởng nhóm/thành viên
 (reactor `agent:...`) sẽ hiện như reaction thường ở bản cũ (ảnh hưởng đã biết, không mất dữ liệu). Muốn khôi phục hẳn:
-tắt Javis, chép ba file `.pre-0.154.0` đè lên kho tương ứng trong `JAVIS_STATE_DIR` (mất mọi thay đổi sau lúc nâng).
-`tools/team_chat_restore_pre.py` chưa biết hậu tố `.pre-0.154.0` (xem mục 6).
+dùng công cụ ở mục dưới, đừng chép tay (chép thô file `.sqlite3` bỏ sót phần còn trong WAL và không có đường lui).
+
+#### Khôi phục về trước 0.154.0
+
+Công cụ nội bộ `tools/team_adaptive_restore_pre.py` (không ghi CHANGELOG). Chạy khi Javis ĐÃ TẮT hẳn:
+
+```
+python tools/team_adaptive_restore_pre.py --to 0.154.0 --state-dir /duong/dan/state          # chỉ in kế hoạch
+python tools/team_adaptive_restore_pre.py --to 0.154.0 --state-dir /duong/dan/state --yes    # khôi phục thật
+```
+
+Không có `--state-dir` thì lấy `JAVIS_STATE_DIR`. Trên VPS thì dừng container trước, chạy công cụ trên thư mục state, rồi
+mới chạy bản cũ.
+
+- Về snapshot `.pre-0.154.0`: `team.sqlite3`, `conversations.db`, `resonance.sqlite3`. Đã lên 0.156.0 thì
+  `agent_judge.sqlite3` (T3, trước đó không có) bị cất bản sao rồi gỡ, và `resonance.sqlite3.pre-0.156.0` đổi tên thành
+  `.superseded-<thời điểm>` (giữ lại; lần nâng sau chụp bản mới đúng dòng thời gian).
+- Mất khỏi kho chạy: mọi thay đổi của ba kho sau lúc nâng: tin và phiên chat (chat riêng lẫn nhóm), reaction ở cả hai nơi
+  (gồm reaction của agent), nhóm và sổ lượt nhóm, mục tiêu Cộng hưởng, sổ lượt chung, lý do thức, nhịp agent.
+- Giữ: bản sao `<kho>.post-0.154.0-<thời điểm>` cạnh mỗi file kho bị đụng (đọc lại bằng sqlite3 khi cần đối chiếu), và
+  snapshot `.pre-0.154.0` (nâng lại dùng lại đúng bản này, không chụp đè).
+- `kanban.sqlite3` KHÔNG đổi (mốc này không chụp nó): việc nhóm tạo sau lúc nâng còn trong Kanban dù nhóm hay tin của nó
+  đã về bản trước.
+- An toàn: kiểm cả bộ trước khi ghi (thiếu snapshot của kho đã nâng, snapshot hỏng hay đã có dấu T2 thì dừng, chưa ghi
+  gì); ghi xong kiểm lại; một bước hỏng thì trả MỌI kho đã đụng về bản `.post-*` và báo lỗi, không bao giờ báo thành công
+  cho lần khôi phục dở. File bị giữ (Javis chưa tắt) thì báo rõ và gợi ý tắt hẳn.
+- Dấu "đã nâng" mà công cụ dùng: cột `team_reactions.source_kind`, bảng `dm_reactions`, bảng `agent_calls`
+  (`test_team_adaptive_restore.py` soi khớp với mã). Kho tạo mới từ 0.154.0 (không có snapshot) thì không có bản trước để
+  về: công cụ dừng và nói rõ.
+- `--to 0.156.0` (T3) đã có sẵn trong bảng `MILESTONES` của công cụ: gỡ `agent_judge.sqlite3`, về
+  `resonance.sqlite3.pre-0.156.0` nếu có. T3 điền bảng dấu của snapshot đó khi chốt.
 
 ### 5. Quyết định khi làm
 
@@ -174,7 +203,7 @@ tắt Javis, chép ba file `.pre-0.154.0` đè lên kho tương ứng trong `JAV
 
 ### 6. Còn mở
 
-- Mở rộng `tools/team_chat_restore_pre.py` cho hậu tố `.pre-0.154.0` (hiện khôi phục tay).
+- Đã có `tools/team_adaptive_restore_pre.py --to 0.154.0` (mục 4). `team_chat_restore_pre.py` vẫn chỉ cho `.pre-0.140.0`.
 - Khi gộp T1 `d408d89a`: `_REPLY_REASON` hai bên cùng thêm khoá (`lease_lost`, `server_ceiling`), gộp cả hai. Đường
   `lease_lost` trước engine của T1 gọi `_refund_if_unmarked`, nên dòng sổ tự hoàn (test của nhánh này kiểm đúng hàm đó).
 
