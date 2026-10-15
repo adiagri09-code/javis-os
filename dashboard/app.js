@@ -1322,6 +1322,8 @@ function handleMessage(data) {
 // Lượt Enter đang ĐỢI file tải lên xong. Chỉ giữ một lượt: bấm Enter hai lần trong lúc chờ
 // không được thành hai tin.
 let _choTaiLen = null;
+// A working-folder pin held on the empty chat: the first turn is sent once its /pin request settles.
+let _pinWait = null;
 let _sendEpoch = 0;   // callbacks queued in an old voice/chat context may not send in a new one
 
 // ---- Tin đang đợi lượt cũ dừng HẲN rồi mới gửi ----
@@ -1532,7 +1534,7 @@ function sendMessage(text, opts) {
     // Model đã chọn khi khung chat còn trống -> ghim luôn cho phiên vừa sinh (model-picker.js).
     try { if (window.JavisModelBar) window.JavisModelBar.claimPending(savedSessionId); } catch (e) {}
     // A working folder pinned on the empty chat follows the session that was just minted (0.158.0).
-    try { if (window.JavisPinnedFolder) window.JavisPinnedFolder.claimPending(savedSessionId); } catch (e) {}
+    try { if (window.JavisPinnedFolder) _pinWait = window.JavisPinnedFolder.claimPending(savedSessionId); } catch (e) {}
   }
   const sid = savedSessionId;
   // Phiên đang trả lời thì không gửi chồng lượt. NHƯNG tin từ MIC (hay gõ trong lúc rảnh tay)
@@ -1663,7 +1665,9 @@ function sendMessage(text, opts) {
                           voice_input: _tuGiong, voice_turn_id: String(turns[sid].id),
                           wf_run: !!(opts && opts.wfRun), ...(adaptiveMeta || {}) };
   if(adaptiveMeta) { adaptiveCurrent.set(sid,adaptiveMeta.utterance_id);adaptiveOutbox.set(adaptiveMeta.utterance_id,{payload,element:userElement,since:performance.now()}); }
-  ws.send(JSON.stringify(payload));
+  const _send = () => { try { ws.send(JSON.stringify(payload)); } catch (e) {} };
+  const _w = _pinWait; _pinWait = null;
+  if (_w) _w.then(_send, _send); else _send();
   _tuGiong = false;
 }
 // Trang đang mở và đoạn đang bôi đen, cho khối NGỮ CẢNH GIAO DIỆN. Chọn trong ô nhập chat thì

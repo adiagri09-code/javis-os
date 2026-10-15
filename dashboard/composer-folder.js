@@ -115,13 +115,17 @@
     });
   }
   function claimPending(newSid) {
-    if (!newSid) return Promise.resolve();         // keep the held pin until a real session id exists
+    if (!newSid) return null;                      // keep the held pin until a real session id exists
     var p = state.takePending();
     held = null;
-    if (!p) return Promise.resolve();
+    if (!p) return null;                           // nothing held: the caller sends right away
+    // app.js waits for this promise before sending the first turn, so the turn runs in the folder.
     var n = state.request(newSid);
     return getJson(pinUrl(newSid), { method: "POST", body: pinBody(p) }).then(function (d) {
-      if (d && d.ok !== false && state.accept(n, newSid)) apply(d);
+      if (d && d.ok !== false) { if (state.accept(n, newSid)) apply(d); return; }
+      // The pin failed (folder gone, path unreadable): drop the chip and say why, the turn runs in the brain.
+      apply(null);
+      if (window.JavisAttach) window.JavisAttach.note((d && d.error) || tw("cp.pin_failed"));
     });
   }
 

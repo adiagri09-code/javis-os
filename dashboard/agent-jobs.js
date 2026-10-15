@@ -172,11 +172,11 @@
       ? '<span class="aj-dot" title="' + esc(tw("ajobs.b.needs_you")) + '" aria-hidden="true"></span>' : "";
     return '<div class="aj-toolbar">' +
       '<label class="aj-tb-field"><span class="aj-tb-lbl">' + esc(tw("ajobs.tb_source")) + "</span>" +
-      '<select class="aj-sel aj-tb-sel aj-src-sel" aria-label="' + esc(tw("ajobs.srcf.label")) + '">' +
+      '<select class="aj-sel aj-tb-sel aj-src-sel" id="ajSrcSel" aria-label="' + esc(tw("ajobs.srcf.label")) + '">' +
       opt("", tw("ajobs.srcf.all"), srcTotal, src) +
       SOURCES.map(function (s) { return opt(s, tw(SOURCE_CHIP[s]), sc[s] || 0, src); }).join("") + "</select></label>" +
       '<label class="aj-tb-field"><span class="aj-tb-lbl">' + esc(tw("ajobs.tb_status")) + dot + "</span>" +
-      '<select class="aj-sel aj-tb-sel aj-status-sel" aria-label="' + esc(tw("ajobs.filter")) + '">' +
+      '<select class="aj-sel aj-tb-sel aj-status-sel" id="ajStatusSel" aria-label="' + esc(tw("ajobs.filter")) + '">' +
       opt("", tw("ajobs.all"), stTotal + (partial ? "+" : ""), st) +
       ["running", "waiting", "needs_you", "done"].map(function (b) {
         return opt(b, tw(BUCKET_KEY[b]), (counts[b] || 0) + (b === "done" && partial ? "+" : ""), st);

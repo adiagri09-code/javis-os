@@ -42,7 +42,14 @@ check("folder upload input is gone", html.indexOf('id="folderInput"') === -1 && 
 check("folder upload helpers are gone",
   ["handleFolder", "pickFolderFiles", "runQueue"].every(n => plus.indexOf(n) === -1) && app.indexOf("queue: (files") === -1 && app.indexOf("_hangDoi") === -1);
 check("claiming without a session id keeps the held pin (found in the sandbox check)",
-  /function claimPending\(newSid\) \{\s*if \(!newSid\) return Promise\.resolve\(\);[^\n]*\n\s*var p = state\.takePending\(\);/.test(src));
+  /function claimPending\(newSid\) \{\s*if \(!newSid\) return null;[^\n]*\n\s*var p = state\.takePending\(\);/.test(src));
+check("nothing held: claimPending returns null so the first message is not delayed", /if \(!p\) return null;/.test(src));
+// Review 0.158.0: the first turn could start before the /pin POST landed and run in the brain.
+check("app.js keeps the claim promise and sends the first turn only after it settles",
+  /_pinWait = window\.JavisPinnedFolder\.claimPending\(savedSessionId\)/.test(app)
+  && /const _w = _pinWait; _pinWait = null;\s*if \(_w\) _w\.then\(_send, _send\); else _send\(\);/.test(app));
+check("a failed claim clears the chip and says why in the composer",
+  /function claimPending[\s\S]{0,700}apply\(null\);[\s\S]{0,200}JavisAttach\.note\(/.test(src));
 check("pin uses the one-call endpoint", src.indexOf('"/pin"') !== -1);
 check("pin fires javis:pinned-folder-changed", src.indexOf('"javis:pinned-folder-changed"') !== -1);
 check("browse row opens the shared folder picker", src.indexOf("JavisFolderPicker.open(") !== -1);

@@ -79,6 +79,16 @@ try:
     rel = c.post("/coding/session/s-rel/pin", data={"path": "projects/shop-site", "brain": brain})
     check("pin by a brain-relative path works", rel.status_code == 200 and coding_store.cwd_cua_phien("s-rel") == real(proj), rel.text)
 
+    # Re-pinning the folder that is already pinned must not drop the worktree, branch or extra folders.
+    coding_store.dat_rang_buoc("s-api", worktree=outside, nhanh="feature-x",
+                               thu_muc_ids=[coding_store.rang_buoc("s-api")["thu_muc"], rec2["id"]])
+    again = c.post("/coding/session/s-api/pin", data={"path": proj, "brain": brain})
+    rb = coding_store.rang_buoc("s-api")
+    check("re-pinning the same folder keeps worktree, branch and extra folders",
+          again.status_code == 200 and rb.get("worktree") == outside and rb.get("nhanh") == "feature-x"
+          and len(rb.get("thu_mucs") or []) == 2, rb)
+    coding_store.dat_rang_buoc("s-api", worktree="", thu_muc_ids=[rb["thu_muc"]])
+
     off = c.post("/coding/session/s-api/pin", data={"path": "", "brain": brain}).json()
     check("empty path unpins", off.get("ok") and off.get("folder") is None and coding_store.cwd_cua_phien("s-api") == "", off)
 

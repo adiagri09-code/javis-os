@@ -150,6 +150,9 @@ function field(cls, value) { return { classList: { contains: (c) => c === cls },
   const tb = AJ.toolbarHtml(data, { source: "", filter: "" });
   check("toolbar has a source select and a status select",
     /<select class="aj-sel aj-tb-sel aj-src-sel"/.test(tb) && /<select class="aj-sel aj-tb-sel aj-status-sel"/.test(tb), tb);
+  // draw() restores focus by id only: without ids a keyboard user loses focus after each change.
+  check("both selects have stable ids so keyboard focus survives a redraw",
+    /<select [^>]*id="ajSrcSel"/.test(tb) && /<select [^>]*id="ajStatusSel"/.test(tb), tb);
   check("options carry their counts (sources 3, statuses 10)", tb.indexOf("(3)</option>") !== -1 && tb.indexOf("(10)</option>") !== -1, tb);
   check("the selected option follows the ui state",
     /value="needs_you" selected/.test(AJ.toolbarHtml(data, { source: "", filter: "needs_you" })));

@@ -205,7 +205,10 @@ def _make_router() -> APIRouter:
                 except ValueError as e:
                     return _400(str(e))
             rec = coding_store.them_thu_muc(target, brain=brain)
-            coding_store.dat_rang_buoc(sid, thu_muc_id=rec["id"])
+            # Re-pinning the folder that is already the main one changes nothing: rebinding would
+            # reset the worktree, the branch and the extra folders of that session.
+            if rec["id"] != (coding_store.rang_buoc(sid).get("thu_muc") or ""):
+                coding_store.dat_rang_buoc(sid, thu_muc_id=rec["id"])
         except coding_store.LoiCoding as e:
             return _400(str(e))
         return {"ok": True, "folder": _folder_view(rec), **_brain_fields(sid, brain)}
