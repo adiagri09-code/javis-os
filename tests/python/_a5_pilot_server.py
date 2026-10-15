@@ -38,6 +38,7 @@ if MODE == "dry":
     # đi qua bẫy của pilot. Đặt TRƯỚC khi nạp main.
     os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
     os.environ["JAVIS_NO_REAL_REVIEW_ENGINE"] = "1"
+    os.environ["JAVIS_NO_REAL_TEAM_ENGINE"] = "1"
 
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "server"))

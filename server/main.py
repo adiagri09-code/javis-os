@@ -2073,13 +2073,19 @@ def _resonance_engine(system_prompt: str, tag: str = "resonance"):
 
 
 _RESONANCE_STORE = None
+# Khoá cho các đối tượng dựng lười (kho resonance, kho và bộ phán xử): từ T3 luồng phụ (run_io, to_thread) có thể chạm chúng
+# trước event loop; không khoá thì khởi động nguội có thể dựng hai bộ phán xử (review T3 vòng 2 P3). Reentrant: dựng bộ phán
+# xử có thể đọc kho resonance.
+_LAZY_LOCK = __import__("threading").RLock()
 
 
 def _resonance_store():
     """Kho mục tiêu, mở lười: brain chưa bật Resonance thì không tạo file resonance.sqlite3 nào."""
     global _RESONANCE_STORE
     if _RESONANCE_STORE is None:
-        _RESONANCE_STORE = resonance_store.GoalStore()
+        with _LAZY_LOCK:
+            if _RESONANCE_STORE is None:
+                _RESONANCE_STORE = resonance_store.GoalStore()
     return _RESONANCE_STORE
 
 
@@ -22397,6 +22403,9 @@ def _team_agent_info(root, agent_key):
             "role": role}
 
 
+_TEAM_ENGINE_BUILD_REAL = team_engine.build
+
+
 def _team_engine_for(team, agent_key, role):
     """Engine CHỈ CHỮ cho một lượt nhóm (phán quyết R3 của kế hoạch T1): thư mục trống, không MCP, cổng từ chối mọi công
     cụ. Model theo hợp đồng chat tương tác và giao việc (`team_engine`, 0.142.0): model riêng của trợ lý, thiếu hay chưa
@@ -22418,6 +22427,10 @@ def _team_engine_for(team, agent_key, role):
         _agent_model_provider, lambda sp: aux_engine.availability(sp, settings))
 
     def _build(system, tag):
+        if os.environ.get("JAVIS_NO_REAL_TEAM_ENGINE") == "1" and team_engine.build is _TEAM_ENGINE_BUILD_REAL:
+            # Chốt của bộ test (review T3 vòng 2 P3): test quên thay engine thì lượt nhóm (và lượt quét, lượt học, cùng
+            # nhà máy này) dừng ở đây, không dựng CLI thật. Test thay `team_engine.build` bằng engine giả thì qua.
+            raise team_runner.EngineUnavailable("JAVIS_NO_REAL_TEAM_ENGINE: không dựng engine nhóm thật")
         base = _reply_policy_sandbox_engine(system, tag, cwd_name="team_cwd")
         try:
             eng = team_engine.build(spec, base, tag, settings)
@@ -22575,7 +22588,9 @@ def _agent_judge_store(create=True):
         path = Path(cfgmod.STATE_DIR) / agent_judge_store.STORE_NAME
         if not create and not path.is_file():
             return None
-        _AGENT_JUDGE_STORE[0] = agent_judge_store.JudgeStore(path)
+        with _LAZY_LOCK:
+            if _AGENT_JUDGE_STORE[0] is None:
+                _AGENT_JUDGE_STORE[0] = agent_judge_store.JudgeStore(path)
     return _AGENT_JUDGE_STORE[0]
 
 
@@ -22672,8 +22687,15 @@ def _judge_policy_change_noop(agent_key, context_ref, change):
 
 def _agent_judge():
     """Bộ phán xử dùng chung (một lần mỗi tiến trình), nối vào `agent_judge.default()` để phần P và L gọi được."""
+    if _AGENT_JUDGE[0] is not None:
+        return _AGENT_JUDGE[0]
+    with _LAZY_LOCK:
+        return _agent_judge_build()
+
+
+def _agent_judge_build():
     if _AGENT_JUDGE[0] is None:
-        _AGENT_JUDGE[0] = agent_judge.wire(agent_judge.Judge(
+        judge = agent_judge.wire(agent_judge.Judge(
             store=_agent_judge_store, ledger=lambda: agent_ledger.CallLedger(_resonance_store()),
             wake=lambda: agent_ledger.WakeReasons(_resonance_store()), ask=_agent_judge_ask,
             engine_label=_agent_judge_engine_label, resonance_on=_agent_judge_resonance_on,
@@ -22684,6 +22706,8 @@ def _agent_judge():
             policy_change=_judge_policy_change_noop))
         _register_judge_view_part()
         _wire_judge_with_pulse()
+        # Công bố SAU khi đã đăng ký người gửi và mục hiển thị: luồng khác thấy bộ phán xử thì nó đã nối đủ.
+        _AGENT_JUDGE[0] = judge
     return _AGENT_JUDGE[0]
 
 
