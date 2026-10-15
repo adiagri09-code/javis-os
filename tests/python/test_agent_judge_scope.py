@@ -13,6 +13,7 @@ import os
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
 from _judge_world import World, batch, check, finish, keys_in  # noqa: E402
+import agent_judge as AJ  # noqa: E402
 import team_store  # noqa: E402
 
 ROLES = {"lan": "Điều phối", "minh": "Quảng cáo", "hoa": "Kho hàng"}
@@ -63,7 +64,7 @@ async def ask(prompt, purpose, started):
 w.judge.history = lambda ctx: w.runner._judge_history(w.tm.get(ctx.split(":", 1)[1])) if ctx.startswith("team:") else \
     [{"who": "Chủ", "text": "chuyện riêng"}]
 asyncio.run(w.judge.judge_proactive(agent_key=w.k("minh"), context_ref=f"dm:{w.k('minh')}", draft="Nháp riêng",
-                                    source_event="scan:dm1", engine=ask))
+                                    source_event="scan:dm1", engine=AJ.mark_test_fake(ask)))
 check("prompt chat riêng không chứa ca/lịch sử của nhóm nào", "BIMATNHOMA" not in seen["p"]
       and "đơn hàng hôm nay" not in seen["p"] and "chuyện riêng" in seen["p"], seen["p"][:300])
 check("ngưỡng chat riêng không bị nhãn nhóm làm đổi",

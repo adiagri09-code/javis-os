@@ -74,6 +74,29 @@ class EngineUnavailable(RuntimeError):
     """Engine việc nền chưa dựng được: ném TRƯỚC khi gọi model, nên lượt được hoàn (không tính)."""
 
 
+# Chốt của bộ test (review T3 J P2-2): khi JAVIS_NO_REAL_JUDGE_ENGINE=1 (tests/run.py và tests/python/_paths.py đặt cho
+# MỌI test) thì `Judge` từ chối MỌI hàm hỏi model, kể cả hàm người gọi tiêm vào (`engine=`, `ctx["ask"]`), trừ hàm đã đánh
+# dấu rõ là engine giả của test (`mark_test_fake`). Chốt nằm ngay chỗ gọi model nên không có đường vòng nào qua được; biến
+# không đặt thì đường chạy y như cũ (chỉ thêm một phép so).
+NO_REAL_ENGINE_ENV = "JAVIS_NO_REAL_JUDGE_ENGINE"
+TEST_FAKE_ATTR = "javis_test_fake"
+
+
+def mark_test_fake(fn: Callable[..., Awaitable[str]]) -> Callable[..., Awaitable[str]]:
+    """Bọc một engine phán xử GIẢ của test `async (prompt, purpose, started) -> str` và đánh dấu nó được phép chạy dưới
+    chốt JAVIS_NO_REAL_JUDGE_ENGINE. Chỉ test dùng; mã máy chủ không bao giờ đánh dấu engine thật."""
+    async def fake(prompt: str, purpose: str, started: Callable[[], Any]) -> str:
+        return await fn(prompt, purpose, started)
+    setattr(fake, TEST_FAKE_ATTR, True)
+    return fake
+
+
+def real_engine_blocked(ask: Any) -> bool:
+    """True khi chốt test đang bật và `ask` không phải engine giả đã đánh dấu (fail closed)."""
+    import os
+    return os.environ.get(NO_REAL_ENGINE_ENV) == "1" and not getattr(ask, TEST_FAKE_ATTR, False)
+
+
 def _now(clock: Callable[[], float], now: Optional[float]) -> float:
     return clock() if now is None else float(now)
 
@@ -664,7 +687,7 @@ class Judge:
         if ledger is None and cid is not None:
             ledger = await run_io(self.ledger)
         has = ledger is not None and cid is not None
-        if ask is None:
+        if ask is None or real_engine_blocked(ask):
             if has:
                 await run_io(ledger.refund, cid)
             return None, "engine_unavailable"
@@ -1224,7 +1247,7 @@ class Judge:
                                   label: Optional[tuple] = None) -> tuple:
         """Như `_run_engine` nhưng không chốt dòng sổ (người nhận lý do chốt qua `WakeReasons.settle`); chỉ ghi mốc
         engine (ở luồng phụ)."""
-        if self.ask is None:
+        if self.ask is None or real_engine_blocked(self.ask):
             return None, "engine_unavailable"
         if ledger is None and cid is not None:
             ledger = await run_io(self.ledger)

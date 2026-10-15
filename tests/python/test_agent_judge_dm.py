@@ -66,7 +66,7 @@ def make(spend=None, enabled=True):
     js = AJS.JudgeStore(d / "agent_judge.sqlite3")
     led = AL.CallLedger(gs)
     wake = AL.WakeReasons(gs)
-    j = AJ.Judge(store=js, ledger=lambda: led, wake=lambda: wake, ask=eng.ask, clock=lambda: now[0],
+    j = AJ.Judge(store=js, ledger=lambda: led, wake=lambda: wake, ask=AJ.mark_test_fake(eng.ask), clock=lambda: now[0],
                  resonance_on=lambda k: True, try_spend=try_spend, timeout_s=1.0,
                  history=lambda ctx: [{"who": "Chủ", "text": f"tin của {ctx}"}],
                  agent_meta=lambda k: {"name": "Việt", "role_text": "Trợ lý bán hàng"})
