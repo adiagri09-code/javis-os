@@ -6,16 +6,72 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.152.0] - 2026-10-15
+## [0.167.0] - 2026-10-15
 ### Sửa lỗi
-- **Thu quyền là thu cả lượt đang chạy.** Người điều phối đang trả lời dở mà bạn thu lại rồi cho lại, hay mới cho quyền tự quyết, thì lệnh quản trị của lượt đó bị bỏ kèm ghi chú; lượt sau mới dùng quyền mới.
-- **Việc dài không bị chen ngang:** trợ lý đang làm một bước dài giữ chỗ tới khi xong, nhóm khác không giành được trợ lý đó giữa chừng.
-- Người điều phối bật lại Auto cho trợ lý do nhóm quản lý thì mục tiêu của trợ lý chạy tiếp ngay, không phải chờ tới 6 giờ.
-- **Trợ lý mất chỗ giữa chừng thì kết quả không được dùng:** nếu một lượt mất quyền giữ trợ lý hay việc (vd. máy chủ trục trặc lâu), tin vẫn hiện để bạn xem nhưng không đổi gì trong nhóm. Việc đang chờ trợ lý bận cũng không bị mất chỗ.
-- Người điều phối bật Auto mà bước đánh thức trục trặc thì nhóm ghi rõ "Auto đã bật, chưa đánh thức ngay" thay vì báo cả lệnh thất bại.
-- Ô giới hạn từ chối số không hợp lệ (vô cực, NaN) thay vì báo lỗi máy chủ.
+- **Thu quyền là thu cả lượt đang chạy:** bạn vừa thu, cấp lại hay mới cho quyền tự quyết thì lệnh quản trị của lượt người điều phối đang trả lời dở bị bỏ kèm ghi chú; lượt sau mới dùng quyền mới.
+- **Việc dài không bị chen ngang:** trợ lý đang làm một bước dài giữ chỗ tới khi xong. Lượt nào lỡ mất chỗ giữa chừng thì kết quả chỉ hiện để bạn xem, không đổi gì trong nhóm.
+- Người điều phối bật lại Auto cho trợ lý do nhóm quản lý thì mục tiêu chạy tiếp ngay; ô giới hạn từ chối số không hợp lệ thay vì báo lỗi máy chủ.
 ### Cải thiện
-- **Bảng giới hạn trong Nâng cao của nhóm:** mọi giới hạn chia theo bạn chỉnh được, người điều phối chỉnh được, máy chủ cố định và nhà cung cấp quyết. Số lần trả lời, số bước, số lần nhờ nhau có lựa chọn **Không giới hạn** ngay ở mục Giới hạn của nhóm.
+- **Bảng giới hạn trong Nâng cao của nhóm:** mọi giới hạn chia theo bạn chỉnh được, người điều phối chỉnh được, máy chủ cố định và nhà cung cấp quyết. Số lần trả lời, số bước, số lần nhờ nhau có lựa chọn **Không giới hạn**.
+
+## [0.166.3] - 2026-10-15
+### Sửa lỗi
+- **Bot không còn nhắn khách "Anh chị đợi em chút xíu để em kiểm tra lại ạ" khi gặp trục trặc kỹ thuật** (hết token, hết lượt gói, model lỗi). Khách không nhận tin nào cả, kể cả trên Zalo cá nhân, Zalo OA, Telegram và WhatsApp.
+- **Chủ được báo ở chuông thông báo của Javis:** bot nào lỗi, khách nào vừa nhắn mà chưa được trả lời, lỗi gì. Mỗi đợt lỗi chỉ báo một lần, bot chạy lại được thì lần lỗi sau mới báo tiếp. Người trực (nếu có cài) vẫn được báo như trước.
+
+## [0.166.2] - 2026-10-15
+### Sửa lỗi
+- **Tạo ảnh bằng gói ChatGPT không còn kẹt ở lỗi "The 'gpt-5.5' model is not supported".** Gói nào không có model đó, Javis tự chuyển sang model khác trong danh sách model ChatGPT của chính tài khoản bạn và tạo ảnh luôn, không phải chỉnh gì.
+- Lần sau Javis dùng ngay model vừa tạo ảnh được, nên không mất thêm một lượt lỗi. Tính năng nhờ ChatGPT xem ảnh hộ cũng được sửa cùng kiểu.
+
+## [0.165.1] - 2026-10-15
+### Sửa lỗi
+- **Danh sách tài liệu và link trong Project (và trong từng hội thoại) giữ đúng thứ tự mới nhất trước** kể cả khi hai mục được thêm cùng một tích tắc. Trước đây hai mục trùng giờ có thể đổi chỗ cho nhau ngẫu nhiên giữa các lần mở.
+
+## [0.164.1] - 2026-10-15
+### Sửa lỗi
+- **Hội thoại và Project tạo cùng một lúc luôn xếp đúng thứ tự**, cái mới nhất đứng trên. Trước đây trên máy nhanh, hai cuộc ghi cùng một tích tắc có thể bị đảo chỗ ngẫu nhiên trong danh sách bên trái.
+
+## [0.164.0] - 2026-10-15
+### Thêm mới
+- **Tia sét Fast mode chạy thật trên từng bộ não:** Claude Code và Anthropic API (Opus 5.5, Opus 5, Opus 4.8), ChatGPT qua Codex, OpenAI API, OpenRouter và Gemini. Bộ não không có Fast mode (Grok, Antigravity, Groq, DeepSeek, Ollama) vẫn để tia sét mờ.
+- **Tắt tia sét là tốc độ thường thật:** với Codex, Javis ép về tốc độ thường kể cả khi model hoặc cấu hình Codex đang để mặc định là Fast. Việc chạy nền (loop, nhắc hẹn, Kanban, quy trình, nhóm) và bot trả lời khách luôn chạy tốc độ thường, kể cả khi bạn từng bật `/fast` trong Claude Code.
+- **Nhà cung cấp từ chối Fast mode** (tài khoản không đủ điều kiện, vượt giới hạn) thì Javis tự gửi lại ở tốc độ thường, lượt chat không hỏng; rê chuột vào tia sét sẽ thấy lý do (vd. cần bật usage credits).
+
+## [0.162.0] - 2026-10-15
+### Bảo mật
+- **Plugin do bạn cài được tải mặc định**, không cần đặt biến môi trường nữa. Từng plugin vẫn chỉ chạy khi bạn bấm **Bật** trên thẻ của nó (plugin Javis tạo qua chat luôn bắt đầu ở trạng thái tắt), và mức quyền vẫn quyết định từng lần gọi tool.
+- Máy nào muốn chặn hẳn plugin người dùng (máy chủ dùng chung, bot cho người lạ) thì đặt `JAVIS_ENABLE_USER_PLUGINS=false` rồi khởi động lại.
+
+## [0.160.0] - 2026-10-15
+### Cải thiện
+- **Chip Effort đọc đúng mức của model Antigravity** đã ghi sẵn mức trong tên (vd. `-high`), cả trên chip lẫn trong khung thanh trượt.
+- **Khung thanh trượt không còn tràn mép** màn hình hẹp, và hiệu ứng hạt cam nhẹ máy hơn (không đo lại mỗi khung hình); vuốt dở trên điện thoại không còn làm thanh trượt tự nhảy.
+- **Ctrl+U chỉ mở chọn file khi có khung gõ** đang dùng được, không mở ở trang khác hay lúc khung gõ đang khoá.
+- **Số kết nối cần làm lại ở menu +** được đếm lại mỗi lần mở menu.
+- **Rời trang Cộng sự giữa lượt chat** không còn làm nút Gửi bật lại nhầm.
+
+## [0.159.0] - 2026-10-15
+### Cải thiện
+- **Ghim thư mục chắc tay hơn:** đổi sang brain khác thì thư mục đang chờ ghim không bị gắn nhầm sang brain mới; thư mục trong brain chọn qua hộp duyệt không còn bị ghi nhầm là "ngoài brain"; ô tìm chỉ trả về thư mục nên không còn bị file chiếm chỗ.
+- **Chip thư mục hiện "+N"** khi hội thoại còn gắn thư mục phụ từ trước, rê chuột thấy tên từng thư mục. Bỏ ghim thì thư mục không còn ai dùng tự rời khỏi danh sách đã đăng ký (không đụng gì trên đĩa).
+- **Bảng ghim tách dòng thư mục đang ghim và nút Bỏ ghim** cho dễ đọc.
+- **Trang Coding báo lỗi ở chỗ riêng** nên không còn bị mất khi hàng chip vẽ lại; dọn phần còn sót của nút chọn thư mục cũ.
+- **Mất mạng đúng lúc tin đầu đang chờ ghim thư mục** thì chữ trả về ô gõ kèm thông báo, không bị mất.
+
+## [0.158.0] - 2026-10-15
+### Cải thiện
+- **Ghim thư mục làm việc ngay từ khung chat.** Menu **+** có mục **Ghim thư mục làm việc**: chọn một thư mục trong brain (có ô tìm) hoặc duyệt thư mục khác. Ghim xong, cạnh tia sét hiện chip 📁 tên thư mục, và hội thoại đó làm việc ngay trong thư mục, hợp với dự án code. Ghim theo từng hội thoại.
+- **Thêm thư mục không còn tải từng file lên** như đính kèm nữa: thư mục là chỗ để làm việc.
+- **Trang Coding dùng chung chip thư mục đó**, bỏ nút chọn thư mục riêng; các chip nhánh, worktree, điểm hồi, mức quyền vẫn giữ.
+- **Tab Công việc của trợ lý gọn hơn:** hai hàng chip kéo ngang thành hai ô thả xuống **Nguồn** và **Trạng thái** (kèm số, có chấm vàng khi có việc cần bạn), chữ nhỏ lại cho vừa cột hẹp.
+
+## [0.153.0] - 2026-10-15
+### Cải thiện
+- **Khung gõ chat làm lại theo kiểu Claude:** một thẻ bo tròn chứa file đính kèm, ô gõ và một hàng nút duy nhất ở dưới (nút **+**, chip model, chip Effort, tia sét Fast mode, mic nhỏ và nút gửi tròn).
+- **Nút + mở menu:** đính kèm file hoặc ảnh (Ctrl+U), đính kèm cả thư mục (bỏ qua file ẩn, .git, node_modules, tối đa 50 file), chọn file có sẵn trong brain, lệnh và skill "/", **Kết nối** kèm tình trạng từng cái, và **Trợ lý và quy trình** để gọi nhanh.
+- **Effort tách thành chip riêng** cạnh chip model, bấm mở thanh trượt sáu nấc Off, Light, Medium, High, Extra, Ultra với hiệu ứng hạt cam.
+- **Tia sét Fast mode:** bấm để bật (sóng cam chuyển động), bấm lần nữa để tắt; rê chuột xem ghi chú chi phí theo bộ não. Bản này mới lưu lựa chọn, nối vào từng engine ở bản sau.
 
 ## [0.151.0] - 2026-10-15
 ### Cải thiện
