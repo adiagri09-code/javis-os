@@ -14,6 +14,7 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 - **Assigned work is never slowed:** the pace only covers self-started work. Team jobs, deadlines, goals and direct calls still run while an assistant sleeps or is paused.
 - **Pulse panel on the assistant card and team member rows:** state per place, last and next review, why the pace changed, feedback counted. Buttons to Wake, Pause, Reset and Revert.
 - **Self-wakes only call the AI when there is real work:** stale team jobs, blocked jobs with new messages, goals waiting for you. Without permission it only proposes; any message it wants to send passes the judge first.
+- **Assistant proposals have Accept and Reject:** accepting queues the job at once; after a rejection the assistant does not propose the same thing again until something new happens. Skip on a team proposal card now really rejects it and other tabs see it.
 - **Credit goes to the right people:** praise on a synthesis mostly goes to whoever did the parts, not all to the team leader.
 
 ## [0.154.0] - 2026-10-15
