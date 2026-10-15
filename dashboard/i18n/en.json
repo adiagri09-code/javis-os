@@ -4377,6 +4377,7 @@
   "lessons.status.kept": "kept",
   "lessons.status.reverted": "reverted",
   "lessons.status.rejected": "not applied",
+  "lessons.status.interrupted": "stopped while applying, please check",
   "lessons.revert.judge_error_up": "more judging mistakes",
   "lessons.revert.estimate_down": "usefulness dropped",
   "lessons.revert.owner": "reverted by you",

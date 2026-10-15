@@ -64,6 +64,7 @@ EVIDENCE_LIMIT = 40
 SOURCE_TAG = "self_review:"
 # Mã im của bộ phán xử nghĩa là "chưa phán xử vì hết hạn mức hay chạm trần", không phải "chọn im" (review T3 L P2-1).
 QUOTA_SILENCE = ("waiting_quota", "judge_cap", "server_ceiling")
+APPLYING_STALE_S = 600.0    # thay đổi kẹt ở `applying` quá 10 phút: tiến trình chết giữa lúc áp
 QUOTA_BACKOFF_S = 600.0     # hết hạn mức: phục vụ lại lý do sau 10 phút (không phải mỗi nhịp 30 giây)
 ENGINE_BACKOFF_S = 300.0    # engine chưa dựng được: sau 5 phút
 PROPOSAL_AREAS = ("permissions", "owner_rule", "code", "skill", "workflow", "structure", "other")
@@ -1172,6 +1173,11 @@ class ReviewHost:
         if store is None:
             return 0
         t = float(self.deps.clock()) if now is None else float(now)
+        with store._Tx(store) as c:
+            # Tiến trình chết giữa `applying` và `applied` (review T3 L P3): tác động có thể đã áp mà không có cửa sổ 6.4.
+            # Không để ẩn: đánh `interrupted` (hiện trong mục Bài học kèm trước/sau) để chủ kiểm và sửa tay nếu cần.
+            c.execute("UPDATE agent_review_changes SET status='interrupted', reject_reason='crash' WHERE status='applying' "
+                      "AND created_at<?", (t - APPLYING_STALE_S,))
         with closing(store._conn()) as c:
             rows = [dict(r) for r in c.execute("SELECT * FROM agent_review_changes WHERE status IN ('applied','kept') "
                                                "AND policy_change_id IS NOT NULL").fetchall()]

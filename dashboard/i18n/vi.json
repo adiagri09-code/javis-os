@@ -4377,6 +4377,7 @@
   "lessons.status.kept": "đã giữ",
   "lessons.status.reverted": "đã quay lại",
   "lessons.status.rejected": "không áp",
+  "lessons.status.interrupted": "dừng giữa lúc áp, cần bạn kiểm lại",
   "lessons.revert.judge_error_up": "phán xử sai nhiều hơn",
   "lessons.revert.estimate_down": "độ hữu ích giảm",
   "lessons.revert.owner": "bạn quay lại",

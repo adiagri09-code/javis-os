@@ -156,6 +156,24 @@ hạn), `tests/js/test_teams_ui.js` (hộp cấp quyền 6 dòng trần).
   dùng cùng `Judge.view`.
 - **Dọn quyết định**: mỗi giờ bỏ quyết định im cũ hơn 90 ngày không nhãn, không tin, không đang chờ.
 
+### 8.1 Sửa sau review T3 (nhánh `claude/team-adaptive-t3-fix`)
+
+- **Chốt test không có đường vòng (P2-2)**: `Judge._run_engine`/`_run_engine_claimed` từ chối mọi hàm hỏi khi
+  `JAVIS_NO_REAL_JUDGE_ENGINE == "1"`, trừ hàm `mark_test_fake`; biến đặt ở `tests/run.py`, `_paths.py`,
+  `test_adaptive_context_phase8.py` và pilot A5 dry.
+- **Lượt `say` của nhịp (P1)**: không truyền `engine`, có `payload` (`judge_daily` của nhóm). Lỗi ném trước `started()` hoàn dòng sổ
+  và ra `engine_unavailable` (không tính trần).
+- **Câu hỏi làm rõ ở chat riêng (P2-3)**: host gửi câu cố định; chữ `ask_clarify` của model chỉ nằm trong lịch sử quyết định. Ở
+  nhóm, gợi ý vào lượt `member_volunteer` của chính agent trong khối `<chat_data>`.
+- **Thử lại lượt tự lên tiếng (P2-4)**: `demote` giữ `features.volunteer_origin`; Thử lại chạy lại đúng quyết định (giữ `clarify`),
+  thành công thì `restore_volunteer` (về `speak`, gắn tin).
+- **P3**: nhãn lưu phần dịch đã áp sau kẹp; xét lại chat riêng nhận lý do trước rồi mới hỏi hạn mức (không đủ thì hoàn); lần chờ đã
+  gỡ mà quá 30 phút thì hết hạn ở `tick`; lý do được khép ở đường gọi trùng, nhóm tạm dừng, lần chờ bị huỷ; ca đã học nằm trong
+  `<chat_data>`, lượt tự lên tiếng không mang `reason` của bộ phán xử; "một lượt mỗi (agent, tin gốc)" giữ thêm bằng sổ trong tiến
+  trình có khoá.
+- **Lần chờ của tin chủ động trong NHÓM**: không có tin nhóm làm mốc nên khi gỡ chờ thì bị huỷ (lý do khép), không xét lại; chỉ chat
+  riêng có bước xét lại và gửi.
+
 ## 9. Bằng chứng (nhánh `claude/team-adaptive-t3-judge`, head kiểm `1049027e`)
 
 - `tests/run.py judge related team feedback agent_calls i18n icons route_table`: 43/43 xanh (439 giây).

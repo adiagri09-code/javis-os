@@ -45,8 +45,9 @@ Mỗi thay đổi tự rà soát đề xuất (áp hay không): `kind`, `signatu
 1. Bộ chiếu T2 gom reaction hợp lệ (Cộng hưởng bật, sau `resumed_at`, tin không gắn goal) thành MỘT lý do `reaction_review` mỗi (agent,
    ngữ cảnh). Host nhịp của P (`PulseHost.tick`) spawn bộ xử lý đã đăng ký cho lý do `pending` (bỏ qua agent đang bận, tạm dừng, tắt).
 2. `ReviewHost.serve_reaction_review(reason)`: thử khoá bận KHÔNG chờ (bận: `busy`, lý do giữ `pending`, attempt không đổi), hỏi
-   `agent_budget.try_spend(key, "reaction_review", reason_ref="wr:<id>")` (hết: mọi reaction của nguồn sang `waiting_quota` "Chờ hạn
-   mức", sự kiện `quota`, không sổ lượt), rồi `WakeReasons.claim` (CAS, chốt danh sách nguồn, giữ chỗ `agent_calls` purpose
+   `agent_budget.try_spend(key, "reaction_review", reason_ref="wr:<id>", units=2 ở chat riêng)` (chat riêng cần chỗ cho cả lượt
+   xem xét và lượt phán xử tin mới; hết: mọi reaction của nguồn sang `waiting_quota` "Chờ hạn mức", sự kiện `quota`, không sổ lượt;
+   ghi trạng thái, sự kiện, gói WS tối đa một lần mỗi 10 phút mỗi lý do), rồi `WakeReasons.claim` (CAS, chốt danh sách nguồn, giữ chỗ `agent_calls` purpose
    `reaction_review`, `obligation = 0`; trần chung đầy: "Chờ hạn mức" lý do `server_ceiling`).
 3. Reaction của nguồn sang `reviewing`. Lời nhắc: luật xem xét (`REVIEW_RULES`) nối sau persona; thân là từng nguồn `[rx:..]` với đoạn
    trích tin, emoji, lý do, trục nói/im, góp ý, cờ "chủ đã đổi phản hồi này sau đó"; cộng khối bài học đúng phạm vi ngữ cảnh.
@@ -61,10 +62,14 @@ Mỗi thay đổi tự rà soát đề xuất (áp hay không): `kind`, `signatu
    - `keep`: không gửi; "Không cần đổi" kèm lý do của model.
    - `lesson`: `agent_lessons.add(scope = ngữ cảnh, source = review, nguồn = consumed + wr:<id> + call:<id>)`; "Đã điều chỉnh".
    - `ask_back`/`revise`: `judge.proactive(agent_key, context_ref, draft, source_event = "wr:<id>", origin = "reaction_review",
-     payload = {judge_daily (nhóm), draft, review{...}})`. `speak`: `deps.send` gửi TIN MỚI trả lời tin bị phản hồi (không sửa đè);
-     gửi được thì "Đã điều chỉnh", không thì "Không cần đổi" ("Chưa gửi được tin mới"). `silent`: "Không cần đổi" ("Phán xử chọn
-     im"). `wait`: "Không cần đổi" ("Phán xử chọn chờ"); khi J gỡ chờ và xét lại thành `speak`, bộ gửi `on_judge_send` (chỉ nhận
-     `origin = reaction_review`) gửi tin và đổi trạng thái sang "Đã điều chỉnh".
+     payload = {judge_daily (nhóm), draft, review{..., session_id}})`. `speak`: `deps.send` gửi TIN MỚI trả lời tin bị phản hồi
+     (không sửa đè); ở chat riêng tin vào ĐÚNG phiên có tin bị phản hồi, kèm `reply_to` và dấu `review` (phiên đó không phải chat
+     riêng của trợ lý thì về phiên báo cáo). Gửi được thì "Đã điều chỉnh", không thì "Không cần đổi" ("Chưa gửi được tin mới").
+     Bộ phán xử dừng vì hết hạn mức hay chạm trần (`waiting_quota`, `judge_cap`, `server_ceiling`): "Chờ hạn mức", nguồn về lý do
+     chờ (`WakeReasons.requeue`), lùi 10 phút; không phải "phán xử chọn im". `silent`: "Không cần đổi" ("Phán xử chọn im"). `wait`:
+     "Không cần đổi" ("Phán xử chọn chờ"); ở CHAT RIÊNG, khi J gỡ chờ và xét lại thành `speak`, bộ gửi `on_judge_send` (chỉ nhận
+     `origin = reaction_review`) gửi tin và đổi trạng thái sang "Đã điều chỉnh". Trong NHÓM, lần chờ của tin chủ động không có tin
+     nhóm làm mốc nên bị huỷ khi gỡ chờ (lý do khép), tức là tin không được gửi.
 7. Trạng thái ghi lên MỌI reaction trong `consumed` (kho chat riêng và kho nhóm, chỉ khi reaction còn ở đúng lần đổi đó), gói WS
    `chat_reaction`/`team_message`. Quyết định ghi `agent_pulse_events` kind `reaction_review` (reason = outcome, payload: reason_id,
    call_id, consumed, moved_to, status, lesson_id/decision_id/message_id).
@@ -100,20 +105,25 @@ bằng chứng độc lập"; lượt được chấp nhận thì đánh dấu �
   phút và spawn `maybe_self_review` khi đến hạn.
 - Đến hạn (`due`): Cộng hưởng bật; ≥ 24 giờ từ lần rà soát thành công trước; ≥ 1 giờ từ lần thử lỗi; bằng chứng mới sau
   `max(resumed_at, lần trước)`: ≥ 6 nhãn nói/im (J, bỏ lời gọi trực tiếp) hay ≥ 5 tín hiệu hữu ích (P, bỏ `context_init`), trừ nguồn
-  đã được lượt xem xét reaction tiêu thụ và nguồn lần rà soát trước đã dùng.
+  đã được lượt xem xét reaction tiêu thụ, nguồn CÒN nằm trong lý do `reaction_review` chưa xong (chờ, đang chạy), nhãn sinh từ trục
+  nói/im của reaction (`label_source = reaction`), và nguồn lần rà soát trước đã dùng.
 - Lượt: khoá bận, `try_spend(key, "review")`, giữ chỗ `agent_calls` purpose `review` (`selfreview:<key>:<ms>`, obligation 0), lời nhắc
   `SELF_RULES` với mã bằng chứng `[decision:<id>]`, `[<source_ref>]` và bài học `[L<id>]`.
 - Mỗi thay đổi (tối đa 3, phần thừa `over_limit`): loại ngoài danh sách đóng thành đề xuất; bằng chứng phải là mã đã cho xem; `offset_set`
-  (ngữ cảnh của agent, kẹp ±0,25, không đổi thì bỏ), `eagerness_set` (low|medium|high), `lesson_add` (team/dm), `lesson_remove`
+  (ngữ cảnh của agent, kẹp ±0,25, không đổi thì bỏ), `eagerness_set` (low|medium|high), `lesson_add` (team/dm, cần ít nhất một
+  bằng chứng của CHÍNH ngữ cảnh đích, không thì `evidence_context`), `lesson_remove`
   (không phải bài học của chủ, không phải `*`), `lesson_promote` (bằng chứng ≥ 2 ngữ cảnh). Không đè thiết lập chủ đang giữ (`owner_held`).
   Không lặp chữ ký đã quay lại trong 14 ngày.
 - Áp ngay qua J (`set_offset`/`set_eagerness` với nguồn `self_review:<mã>`) hay kho bài học; ghi trước/sau; nối cửa sổ của P: dùng dòng
   `pulse_policy_changes` J đã ghi qua móc `policy_change` (nguồn trùng), không có thì tự ghi; đặt `base_error` (tỷ lệ nhãn ngược kết
   luận trong 30 ngày của ngữ cảnh) để luật "+0,15 khi ≥ 6 nhãn" có mốc.
 - Quay lại: P đóng cửa sổ (≥ 6 nhãn hay ≥ 5 tín hiệu mới hay 14 ngày) và gọi hàm quay lại đã đăng ký cho loại đó
-  (`agent_pulse.register_policy_reverter`). Hàm của L chỉ xử lý nguồn `self_review:*`: trả độ lệch/độ hăng hái về trước (nếu chủ đã
-  đặt lại thì giữ của chủ, ghi `owner_held`), thu hồi bài học đã thêm, khôi phục bài học đã bỏ, quay lại phép nâng. Chủ bấm Quay lại
-  trên thẻ dùng route của P `POST /agents/{slug}/pulse/revert {change_id}`.
+  (`agent_pulse.register_policy_reverter`). Hàm của L chỉ xử lý nguồn `self_review:*`: độ lệch bỏ ĐÚNG phần dịch của thay đổi (đã
+  nhạt dần như độ lệch), nên phần chủ dạy bằng nhãn trong cửa sổ được giữ; độ hăng hái về trước (chủ đã đặt lại thì giữ của chủ, ghi
+  `owner_held`); thu hồi bài học đã thêm, khôi phục bài học đã bỏ, quay lại phép nâng. Chủ bấm Quay lại trên thẻ dùng route của P
+  `POST /agents/{slug}/pulse/revert {change_id}`; lý do ghi `owner`.
+- Tiến trình chết giữa `applying` và `applied`: quá 10 phút thì thay đổi thành `interrupted` và hiện trong mục Bài học kèm trước/sau
+  (không có cửa sổ 6.4, chủ kiểm và sửa tay).
 - Đề xuất ngoài phạm vi (quyền, luật chủ, mã, skill, workflow, cấu trúc) vào `agent_review_proposals`, hiện ở mục "Đề xuất cần bạn quyết".
 
 ### 2.5 Hạn mức (mục 9)
@@ -123,7 +133,8 @@ sổ lượt ngay sau đó. Đếm: dòng `agent_calls` của agent từ 0 giờ
 cộng `judge_batch` ở ngữ cảnh `dm:` (phán xử tin chủ động ở chat riêng). Hai loại đầu (`reaction_review`, `related_review` nhận qua lý do
 `related_review`) dùng tới trần; loại khác chỉ dùng tới `trần - max(0, 2 - số lượt hai loại đầu hôm nay)`. Hết: lý do giữ `pending`,
 `agent_budget_waits` ghi lý do đã chờ; ngày sau mỗi lý do đó chỉ được một lượt (`backlog_once`). Trần đặt bằng `set_cap` (chỉ `by =
-"owner"`; số 0..200 hay "unlimited"). Dòng `agent_daily_calls` vào bảng giới hạn T1 (nhóm owner, mặc định 6, có Không giới hạn).
+"owner"`; số 0..200 hay "unlimited"/null; chuỗi rỗng là lỗi 400). `units` (mặc định 1) là số lượt cần còn trống. Host nhịp phục vụ lý do
+lớp 3 theo `sort_by_priority`. Dòng `agent_daily_calls` vào bảng giới hạn T1 (nhóm owner, mặc định 6, có Không giới hạn).
 
 ## 3. Route (chỉ của chủ, sau middleware auth + CSRF; thành công chỉ sau khi kho đã ghi)
 
@@ -138,6 +149,8 @@ cộng `judge_batch` ở ngữ cảnh `dm:` (phán xử tin chủ động ở ch
 | Tình huống | Kết quả |
 |---|---|
 | Agent bận (lượt nhóm, A2, quét) | lý do giữ `pending`, attempt không tăng; nhịp sau thử lại |
+| Phán xử tin mới dừng vì hết hạn mức | "Chờ hạn mức"; nguồn về lý do chờ (không tiêu thụ), lùi 10 phút |
+| Engine không dựng được nhiều lần | mỗi lần hoàn lượt; lý do lùi 5 phút trước lần thử kế |
 | Hết hạn mức ngày / trần chung | "Chờ hạn mức"; không sổ lượt, không engine; qua ngày một lượt mỗi lý do |
 | Engine không dựng được (trước mốc) | lượt `refunded`, lý do `pending` (không tính lần thử) |
 | Engine lỗi sau mốc, hết giờ | lượt `error`, lý do `pending` attempt + 1 (quá 3: `failed`, chủ bấm thử lại) |
@@ -167,11 +180,10 @@ cộng `judge_batch` ở ngữ cảnh `dm:` (phán xử tin chủ động ở ch
   1. `main._learn_register_sender()` đăng ký `ReviewHost.on_judge_send` với `agent_judge.register_sender` khi bộ phán xử đã nối (thử
      lại mỗi nhịp). Bộ gửi chung `main._judge_send` BỎ QUA payload `origin = "reaction_review"` (không gửi hai lần); test
      `test_t3_integration.py` kiểm cả hai.
-  2. Còn mở: `_agent_judge()` không truyền `policy_change`, nên móc mặc định của J gọi `agent_pulse.default_store()` (không có) và
-     nhãn dịch ngưỡng không mở cửa sổ 6.4 ở P. L vẫn đúng (tự ghi dòng cửa sổ cho thay đổi của mình).
-  3. Còn mở: nếu móc đó được nối, thay đổi của chủ cũng mở cửa sổ ở P và có thể bị P đánh `reverted` mà không đổi gì (hàm quay lại
-     của L chỉ xử lý nguồn `self_review:*`). Đề nghị chỉ mở cửa sổ cho nguồn tự áp (`self_review:*`, nhãn).
-  4. Còn mở: `agent-judge-ui.js` đăng ký `render(part, el, ctx)`; `agent-pulse.js` gọi `render(view)`. L theo chữ ký của P.
+  2. Đã khép (92202224): `_agent_judge()` truyền `policy_change=_judge_policy_change_noop`; nhãn của chủ không mở cửa sổ 6.4 ở P,
+     L tự ghi dòng cửa sổ cho thay đổi của mình.
+  3. Đã khép cùng mục 2: thay đổi của chủ không mở cửa sổ nên P không quay lại chúng.
+  4. Đã khép: `agent-pulse.js` gọi `render(view, null, {slug})`; mục "judge" và "lessons" theo cùng chữ ký.
 - **Bộ chạy nhóm:** `TeamRunner(learning=agent_lessons.TeamLearning(...))` qua `TeamApiDeps.learning`.
 
 ## 7. Quyết định khi làm
@@ -188,3 +200,6 @@ cộng `judge_batch` ở ngữ cảnh `dm:` (phán xử tin chủ động ở ch
 - Bước workflow (`_learn` của workflow) vẫn ghi MEMORY.md như trước: thiết kế chỉ đổi chat riêng và lượt nhóm.
 - Góp ý của đồng đội giao đúng một lần, cho lượt được CHẤP NHẬN đầu tiên của người nhận trong nhóm đó.
 - `learn.py` (rewire, curator) và `resonance_learning.py` (A3) không đọc bảng reaction, `pulse_signals` hay `agent_lessons` (test quét mã).
+- Sửa sau review T3 (nhánh `claude/team-adaptive-t3-fix`): lượt phán xử tin mới ở chat riêng tiêu hạn mức ở mức `reaction_review`
+  và cần 2 lượt trống trước khi nhận lý do; hết hạn mức ở bước phán xử không làm mất phản hồi (`requeue`); tự rà soát không học lại
+  phản hồi đang chờ lượt xem xét reaction; quay lại `offset_set` theo phần dịch; `lesson_add` cần bằng chứng của ngữ cảnh đích.

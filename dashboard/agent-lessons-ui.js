@@ -40,7 +40,7 @@
     lesson_add: "lessons.change.lesson_add", lesson_remove: "lessons.change.lesson_remove",
     lesson_promote: "lessons.change.lesson_promote" };
   var STATUS_KEY = { applied: "lessons.status.applied", kept: "lessons.status.kept", reverted: "lessons.status.reverted",
-    rejected: "lessons.status.rejected" };
+    rejected: "lessons.status.rejected", interrupted: "lessons.status.interrupted" };
   var REVERT_KEY = { judge_error_up: "lessons.revert.judge_error_up", estimate_down: "lessons.revert.estimate_down",
     owner: "lessons.revert.owner", owner_held: "lessons.revert.owner_held", policy_revert: "lessons.revert.policy_revert" };
   var AREA_KEY = { permissions: "lessons.area.permissions", owner_rule: "lessons.area.owner_rule", code: "lessons.area.code",
@@ -130,7 +130,7 @@
     if (b.cap != null && choices.indexOf(Number(b.cap)) < 0) choices.push(Number(b.cap));
     choices.sort(function (x, y) { return x - y; });
     html += '<div class="pulse-line">' + esc(budgetLine(b)) + "</div>" +
-      '<label class="lessons-budget"><span>' + esc(tw("lessons.budget_label")) + '</span><select class="lessons-budget-sel"' +
+      '<label class="lessons-budget"><span>' + esc(tw("lessons.budget_label")) + '</span><select class="lessons-budget-sel" data-prev="' + esc(cur) + '"' +
       dis + ">" + choices.map(function (n) {
         return '<option value="' + n + '"' + (String(n) === cur ? " selected" : "") + ">" + esc(String(n)) + "</option>";
       }).join("") + '<option value="unlimited"' + (cur === "unlimited" ? " selected" : "") + ">" +
@@ -214,6 +214,8 @@
       if (keep.parts.lessons) redraw(box, keep, { msg: tw("lessons.done") });
     }).catch(function (e) {
       Array.prototype.forEach.call(box.querySelectorAll("[data-lessons-act]"), function (x) { x.disabled = false; });
+      // Hạn mức bị từ chối: ô chọn về lại giá trị đang lưu (review T3 L P3), không giữ giá trị máy chủ chưa nhận.
+      if (el && el.sel && el.prev != null) el.sel.value = el.prev;
       var err = (e && e.error) || tw("lessons.error_generic");
       var note = box.querySelector(".lessons-note");
       if (!note) {
@@ -239,7 +241,7 @@
       var s = ev.target;
       if (!s || !s.classList || !s.classList.contains("lessons-budget-sel")) return;
       var box = s.closest(".lessons-part");
-      if (box) run(box, "budget", { value: s.value });
+      if (box) run(box, "budget", { value: s.value, prev: s.getAttribute("data-prev"), sel: s });
     });
   }
 

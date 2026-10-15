@@ -90,7 +90,8 @@ def set_cap(store, agent_key: str, value: Any, by: str = "owner", at: Optional[f
     (PermissionError): học, phản hồi, trưởng nhóm hay Toàn quyền không nâng được trần này."""
     if str(by) != "owner":
         raise PermissionError("chỉ chủ mới đổi được hạn mức lượt mỗi ngày của trợ lý")
-    unlimited = value is None or str(value).strip().lower() in ("unlimited", "none", "")
+    # Chuỗi rỗng KHÔNG phải "Không giới hạn" (review T3 L P3): ô trống gửi lên là lỗi nhập (400), không âm thầm bỏ trần.
+    unlimited = value is None or str(value).strip().lower() in ("unlimited", "none")
     n = None
     if not unlimited:
         try:

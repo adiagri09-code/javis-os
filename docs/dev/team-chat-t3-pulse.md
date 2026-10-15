@@ -132,6 +132,18 @@ khách quan ±0.5 w0.8 (mục 2a); tin chủ động đã xem, qua 24 giờ khô
 13. **Đặt lại nhịp ngữ cảnh** giữ lịch sử và ước lượng, chỉ đưa về B3 và coi bằng chứng trước mốc là cũ.
 14. **Khoá bận khi chưa có kho nhóm:** khoá trong tiến trình (chưa có lượt nhóm nào để tranh khoá).
 
+### 6.1 Sửa sau review T3 (nhánh `claude/team-adaptive-t3-fix`)
+
+15. **Phạm vi đã giao (P2-1):** `_code_pass` đọc `deps.contexts(key)` mỗi nhịp: dòng ngoài phạm vi bị gỡ lịch (sự kiện
+    `out_of_scope`), lý do lớp 3 của nó không được phục vụ; trở lại phạm vi thì có lịch lại. Đọc phạm vi lỗi thì bỏ qua lần đó, không
+    gỡ. `main._pulse_team_live` (nhóm hoạt động, thành viên đang tham gia) chặn mọi đường đăng/đề xuất/xếp việc tự phát.
+16. **Tín hiệu "huỷ" (P2-2):** chỉ route chủ huỷ việc (`owner_cancel=True`); trưởng nhóm ngắt, lưu trữ nhóm, huỷ việc treo không ghi.
+17. **Event loop (P2-3):** route reaction chat riêng, `_pulse_wake_dm` cuối lượt chat và `deps.store()` của route nhịp chạy ở luồng phụ.
+18. **P3:** thức lại, dòng mới, đặt lại, bật lại kẹp theo `max_tier`; lease 15 phút, lượt quét tối đa 9 phút; `ledger_busy` nhả
+    lịch; nhãn "Chờ hạn mức" gỡ khi hạn mức đủ; nguồn bịa ra `none` (`bad_source`); huỷ/sửa yêu cầu sau bản tổng hợp phân bổ theo
+    6.5; xếp việc của lượt quét ghi `team_events` và tin hệ thống; `record_contrib` không hồi sinh dòng `void`; route chỉ nhận nhóm
+    agent đang tham gia (hay đã có dòng); lý do lớp 3 theo `sort_by_priority`; bảng Nhịp có ô B0..B7 và nút quay lại đổi chính sách.
+
 ## 7. Chỗ phần J và L cắm vào
 
 - `agent_pulse_host.register_view_part(name, fn(store, agent_key) -> dict)`: mục trong `GET /agents/{slug}/pulse` (`parts`).

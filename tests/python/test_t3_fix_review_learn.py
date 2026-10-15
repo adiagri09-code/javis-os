@@ -268,6 +268,22 @@ with closing(w6["gs"]._conn()) as c:
 check("chủ quay lại qua route của P: lý do ghi 'owner' (L P3)", rr["status"] == "reverted"
       and rr["revert_reason"] == "owner", dict(rr))
 
+# ═════ L P3: chuỗi rỗng không phải "Không giới hạn"; thay đổi kẹt ở applying hiện ra ═════
+try:
+    AB.set_cap(w6["gs"], k6, "", by="owner")
+    empty_ok = False
+except ValueError:
+    empty_ok = True
+check("set_cap(''): lỗi nhập (route trả 400), không âm thầm bỏ trần", empty_ok and AB.get_cap(w6["gs"], k6) == 6,
+      AB.get_cap(w6["gs"], k6))
+stale = w6["host"]._record_change(w6["gs"], "selfreview:crash", k6, c6, "lesson_add", "lesson_add|x|y", ["decision:1"],
+                                  "x", "applying", now=now6 - 3600)
+w6["host"].refresh_policy_labels(now6)
+vp = w6["host"].view_part(w6["gs"], k6)
+row_c = next((c for c in vp["changes"] if c["id"] == stale), None)
+check("tiến trình chết giữa applying và applied: thay đổi hiện trong mục Bài học với trạng thái interrupted",
+      row_c is not None and row_c["status"] == "interrupted" and not row_c["can_revert"], row_c)
+
 if fails:
     print(f"\n{len(fails)} FAIL")
     raise SystemExit(1)

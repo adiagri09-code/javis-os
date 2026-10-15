@@ -71,6 +71,11 @@ check("Không giới hạn: dòng hạn mức và ô chọn", hu.includes(vi["le
   hu.includes('value="unlimited" selected'));
 const h7 = LUI.partHtml({ parts: { lessons: Object.assign({}, lessons, { budget: { cap: 7, used: 0 } }) } }, {});
 check("giá trị hạn mức lạ (7) vẫn có trong ô chọn", h7.includes('<option value="7" selected>'));
+// Review T3 L P3: ô chọn nhớ giá trị đang lưu để máy chủ từ chối thì về lại đúng giá trị đó.
+const lsrc = fs.readFileSync(path.join(ROOT, "dashboard", "agent-lessons-ui.js"), "utf8");
+check("ô chọn hạn mức mang giá trị đang lưu (data-prev) và đặt lại khi lưu lỗi",
+  h.includes('class="lessons-budget-sel" data-prev="6"') && hu.includes('data-prev="unlimited"')
+  && /el\.sel\.value = el\.prev/.test(lsrc));
 check("thông báo chỉ sau khi máy chủ xác nhận (msg/err do người gọi truyền)",
   LUI.partHtml(view, { msg: vi["lessons.done"] }).includes('role="status"') &&
   LUI.partHtml(view, { err: "x" }).includes('role="alert"') && !h.includes('role="status"'));
