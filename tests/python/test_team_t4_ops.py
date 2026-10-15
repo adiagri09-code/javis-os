@@ -46,8 +46,48 @@ check("mọi tab nhận gói team_message mang reaction mới (phát cho mọi t
 v1 = c.get(f"/teams/{TID}/messages{Q}").json()["messages"]
 v2 = c.get(f"/teams/{TID}/messages{Q}").json()["messages"]
 check("hai tab tải lại thấy cùng trạng thái", [m.get("reaction") for m in v1] == [m.get("reaction") for m in v2])
-r3 = c.post(f"/teams/{TID}/messages/{mid}/reaction{Q}", json={"value": "wow", "nonce": "tab-b-1"})
-check("tab B đổi sang wow: tab A tải lại thấy wow", r3.status_code == 200 and next(
+# Hai tab thật đăng ký vào ChatRuntime (đường fan-out thật, không phải gói bắt ở chỗ publish) và một tab có socket đã chết.
+fake_publish = main._CHAT_RUNTIME.publish
+del main._CHAT_RUNTIME.publish   # dùng lại phương thức thật của lớp
+tab_a, tab_b = [], []
+
+
+async def writer_a(ev):
+    tab_a.append(ev)
+
+
+async def writer_b(ev):
+    tab_b.append(ev)
+
+
+async def writer_dead(ev):
+    raise ConnectionResetError("tab đã đóng")
+
+
+main._CHAT_RUNTIME.add_client("tab-a", writer_a)
+main._CHAT_RUNTIME.add_client("tab-b", writer_b)
+main._CHAT_RUNTIME.add_client("tab-dead", writer_dead)
+try:
+    r3 = c.post(f"/teams/{TID}/messages/{mid}/reaction{Q}", json={"value": "wow", "nonce": "tab-b-1"})
+    drain()
+finally:
+    for cid in ("tab-a", "tab-b", "tab-dead"):
+        main._CHAT_RUNTIME.remove_client(cid)
+    main._CHAT_RUNTIME.publish = fake_publish
+
+
+def team_msg_for(tab):
+    return [e for e in tab if e.get("type") == "team_message" and (e.get("message") or {}).get("id") == mid]
+
+
+ga, gb = team_msg_for(tab_a), team_msg_for(tab_b)
+check("tab B đổi sang wow: tab A và tab B đều NHẬN gói team_message mang wow (dù một tab khác đã chết)",
+      r3.status_code == 200 and ga and gb and ga[-1]["message"]["reaction"]["value"] == "wow"
+      and gb[-1]["message"]["reaction"]["value"] == "wow", (len(tab_a), len(tab_b)))
+check("hai tab nhận cùng nội dung gói (cùng content_sha, cùng revision)",
+      ga and gb and ga[-1]["message"].get("content_sha") == gb[-1]["message"].get("content_sha")
+      and ga[-1]["message"]["reaction"]["revision"] == gb[-1]["message"]["reaction"]["revision"])
+check("tab A tải lại thấy wow", next(
     m for m in c.get(f"/teams/{TID}/messages{Q}").json()["messages"] if m["id"] == mid)["reaction"]["value"] == "wow")
 
 # ═════ mất kết nối rồi nối lại ═════
@@ -86,6 +126,47 @@ AP.ensure(gs2, force=True)
 v = AP.view(gs2, K["minh"])
 check("khởi động lại: trạng thái nhịp theo ngữ cảnh còn sau khi mở lại kho", any(
     x.get("context_ref") == f"team:{TID}" for x in (v.get("contexts") or [])), v)
+
+# Khởi động lại thật: bộ chạy MỚI (như tiến trình mới) trên một việc đang chạy chưa tới engine và một việc có lượt đã
+# tới mốc engine. Việc thứ nhất chạy tiếp tới xong; việc thứ hai bị chặn "interrupted", lượt tính một lần.
+import team_runner as TRM  # noqa: E402
+tsx = main.tasks_feature.store
+RT, RK = new_team("Khởi động lại", members=("lan", "minh"), leader="lan")
+j_resume = send(RT["team_id"], "Việc dở trước khi tắt", mentions=[RK["minh"]], as_job=True, cm="rs-1", run=False)
+tsx.claim_team_next(RT["team_id"], "tien-trinh-cu")
+# Tiến trình cũ đã nhận việc và tạo bước đầu (như _claim_batch) rồi chết trước khi lượt tới engine.
+api.teams().add_step(j_resume["task_id"], RT["team_id"], "work", RK["minh"], 1, "làm phần dở", [])
+R2, RK2 = new_team("Khởi động lại 2", members=("lan", "minh"), leader="lan")
+j_int = send(R2["team_id"], "Việc đang ở engine khi tắt", mentions=[RK2["minh"]], as_job=True, cm="rs-2", run=False)
+tsx.claim_team_next(R2["team_id"], "tien-trinh-cu")
+st_int = api.teams().add_step(j_int["task_id"], R2["team_id"], "work", RK2["minh"], 1, "làm", [])
+turn_int = api.teams().reserve_turn(R2["team_id"], j_int["task_id"], st_int["step_id"], RK2["minh"], "work")
+api.teams().mark_engine(turn_int, "fake", "fake-model")
+old_runner = api.runner()
+api._runner = None                       # tiến trình mới: bộ chạy dựng lại từ deps
+new_runner = api.runner()
+check("khởi động lại: bộ chạy mới là đối tượng khác, pool trống", new_runner is not old_runner and not new_runner._pool)
+rep = new_runner.recover()
+check("phục hồi: việc chưa tới engine được nhận lại để chạy tiếp", j_resume["task_id"] in rep["resumed"], rep)
+check("phục hồi: việc có lượt đã tới engine bị chặn interrupted (không tự chạy lại)", j_int["task_id"] in rep["blocked"]
+      and tsx.get_task(j_int["task_id"])["status"] == "team_blocked", (rep, tsx.get_task(j_int["task_id"])["status"]))
+check("phục hồi: lượt đã tới engine chốt interrupted (tính một lần, không hoàn)",
+      next(t for t in api.teams().turns(R2["team_id"]) if t["turn_id"] == turn_int)["status"] == "interrupted")
+calls_rs = fakes.team_calls
+
+
+async def _resume():
+    new_runner._bind_loop()
+    await new_runner.resume_jobs(rep["resumed"])
+    await new_runner.wait_jobs()
+
+asyncio.run(_resume())
+drain()
+check("bộ chạy mới chạy tiếp việc dở tới xong bằng engine giả", tsx.get_task(j_resume["task_id"])["status"] == "done"
+      and fakes.team_calls > calls_rs, ({k: tsx.get_task(j_resume["task_id"])[k] for k in
+                                         ("status", "block_kind", "block_reason")}, calls_rs, fakes.team_calls))
+check("khởi động lại không để khoá bận nào treo", api.teams().busy_of(RK2["minh"]) is None
+      and api.teams().busy_of(RK["minh"]) is None)
 
 # ═════ huỷ ═════
 job = send(TID, "Việc dài: lập báo cáo quý", mentions=[K["hoa"]], as_job=True, cm="job-cancel", run=False)
@@ -189,22 +270,32 @@ saved = runner.clock
 runner.clock = lambda: t0 - 2 * 86400
 try:
     ctx = runner._context(api.teams().get(TID), K["minh"], "member_reply", None, None)
-    ok = "NHÓM" in ctx
 finally:
     runner.clock = saved
-check("đồng hồ bộ chạy lùi 2 ngày: vẫn dựng được khối nhóm (phản hồi không biến mất, không lỗi)", ok)
+fb_block = ctx.split("## Phản hồi gần đây của chủ nhóm")[1].split("\n## ")[0] if "## Phản hồi gần đây của chủ nhóm" in ctx else ""
+check("đồng hồ bộ chạy lùi 2 ngày: khối phản hồi vẫn có đúng dòng của tin đó (phản hồi không biến mất)",
+      f"[#{mid}]" in fb_block and "cảm xúc:" in fb_block, ctx[-1500:])
 
 # ═════ nhóm bị chặn / agent ngủ không chiếm suất ═════
+runner = api.runner()
+runner.max_parallel_teams = 1
 A, KA = new_team("Bị chặn A", members=("tuan",), leader="tuan")
 B, KB = new_team("Bị chặn B", members=("tuan",), leader="tuan")
 C, KC = new_team("Có việc C", members=("lan",), leader="lan")
 ts = main.tasks_feature.store
+# A và B bị chặn NGAY TRONG lượt của bộ chạy (engine giả lỗi), mỗi lần pool chỉ một chỗ.
 for tm_, kk in ((A, KA), (B, KB)):
     j = send(tm_["team_id"], "Việc sẽ bị chặn", mentions=[kk["tuan"]], as_job=True, cm=f"blk-{tm_['team_id']}",
              run=False)
-    ts.claim_team_next(tm_["team_id"], "test")
-    check(f"việc của {tm_['name']} bị chặn", ts.team_block(j["task_id"], "needs_owner", "chờ chủ") is not None
-          and ts.get_task(j["task_id"])["status"] == "team_blocked")
+    fakes.team_error = RuntimeError("engine giả lỗi giữa lượt")
+    try:
+        got_claim = asyncio.run(runner.dispatch_once(wait=True))
+        drain()
+    finally:
+        fakes.team_error = None
+    check(f"{tm_['name']}: bộ chạy nhận việc, lượt lỗi giữa chừng thì việc bị chặn", j["task_id"] in got_claim
+          and ts.get_task(j["task_id"])["status"] == "team_blocked", (got_claim, ts.get_task(j["task_id"])["status"]))
+    check(f"{tm_['name']}: việc bị chặn trả chỗ pool ngay", not runner._pool, runner._pool)
 # Agent của nhóm C đang ngủ đông ở ngữ cảnh nhóm C: việc được giao vẫn chạy (nghĩa vụ không theo nhịp chủ động).
 toggle_auto("lan", True)
 AP.ensure_row(ps, KC["lan"], f"team:{C['team_id']}")
@@ -212,10 +303,10 @@ with ps._Tx(ps) as cx:
     cx.execute("UPDATE agent_pulse SET state='hibernating', tier=?, next_due_at=NULL WHERE agent_key=? AND context_ref=?",
                (AP.HIBERNATE, KC["lan"], f"team:{C['team_id']}"))
 jc = send(C["team_id"], "Việc thật của nhóm C", mentions=[KC["lan"]], as_job=True, cm="c-job", run=False)
-runner.max_parallel_teams = 1
 claimed = asyncio.run(runner.dispatch_once(wait=True))
 drain()
-check("pool một chỗ, hai nhóm chỉ có việc bị chặn: nhóm C có việc vẫn được nhận", jc["task_id"] in claimed, claimed)
+check("pool một chỗ, hai nhóm vừa bị chặn trong lượt: nhóm C có việc vẫn được nhận và chạy", jc["task_id"] in claimed,
+      claimed)
 check("việc của agent đang ngủ đông vẫn chạy xong (nghĩa vụ giữ)", ts.get_task(jc["task_id"])["status"] == "done",
       ts.get_task(jc["task_id"])["status"])
 check("không nhóm bị chặn nào giữ chỗ trong pool sau lượt", not runner._pool, runner._pool)

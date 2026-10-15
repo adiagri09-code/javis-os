@@ -62,7 +62,7 @@ MATRIX = [
                                 "giữ qua mở lại kho (restart)"]),
       ("test_team_reactions.py", ["đúng sáu giá trị, không gộp", "giữ qua mở lại kho (restart)"]),
       ("test_reactions_ui.js", ["đúng sáu giá trị theo hợp đồng"]),
-      ("test_team_t4_ops.py", ["tab B đổi sang wow: tab A tải lại thấy wow"])], None, "six_reactions"),
+      ("test_team_t4_ops.py", ["tab B đổi sang wow: tab A và tab B đều NHẬN gói team_message"])], None, "six_reactions"),
     ("5", "T2/T3", "Auto bật: phản hồi mở lần xem xét có tác động; tắt: chỉ lưu, không học nền",
      "feedback_projector, agent_ledger.WakeReasons",
      [("test_feedback_wake.py", ["Cộng hưởng tắt: KHÔNG lý do thức nào, không lượt model",
@@ -191,7 +191,7 @@ MATRIX = [
                                         "nhóm 5.000 tin: còn nguồn đóng góp của kết quả gần nhất"])], None, None),
     ("T4.b", "T4", "Vận hành: nhiều tab, mất kết nối, restart, huỷ, retry, rời nhóm, đổi trưởng nhóm, thu hồi; nhóm "
      "bị chặn hay ngủ không chiếm suất", "team_runner, team_api, feedback_projector",
-     [("test_team_t4_ops.py", ["pool một chỗ, hai nhóm chỉ có việc bị chặn: nhóm C có việc vẫn được nhận",
+     [("test_team_t4_ops.py", ["pool một chỗ, hai nhóm vừa bị chặn trong lượt: nhóm C có việc vẫn được nhận và chạy",
                                "Thử lại: đúng một lượt mới, kết cục done"])], None, None),
 ]
 
