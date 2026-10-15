@@ -306,7 +306,7 @@ class JudgeAdapter:
                 continue
             out.append({"id": int(d["id"]), "context_ref": d["context_ref"], "verdict": d["verdict"],
                         "label": d["label"], "label_at": float(at), "excerpt": str(d.get("excerpt") or "")[:300],
-                        "reason": str(d.get("reason") or "")[:200]})
+                        "reason": str(d.get("reason") or "")[:200], "label_source": str(d.get("label_source") or "")})
         return out
 
     def owner_held(self, agent_key: str, kind: str, context_ref: str) -> bool:
@@ -771,15 +771,26 @@ class ReviewHost:
                 "WHERE w.agent_key=? AND w.code='reaction_review' AND s.consumed_at IS NOT NULL", (key,))}
         return mine | rr
 
+    def _reviewing_refs(self, store, key) -> set:
+        """Nguồn còn thuộc một lý do `reaction_review` CHƯA xong (đang chờ, đang chạy, kể cả chờ hạn mức): lượt xem xét
+        reaction sẽ học từ chúng, nên tự rà soát không được đếm hay tiêu thụ (review T3 L P2-3: một phản hồi học hai lần)."""
+        with closing(store._conn()) as c:
+            return {r[0] for r in c.execute(
+                "SELECT s.source_ref FROM agent_wake_sources s JOIN agent_wake_reasons w ON w.id=s.reason_id "
+                "WHERE w.agent_key=? AND w.code='reaction_review' AND w.status IN ('pending','claimed') "
+                "AND s.removed_at IS NULL AND s.consumed_at IS NULL", (key,))}
+
     def evidence(self, store, key: str, now: float) -> dict:
         """Bằng chứng MỚI cho tự rà soát: nhãn nói/im và tín hiệu hữu ích sau `resumed_at` và sau lần rà soát trước, trừ
-        nguồn đã được lượt xem xét reaction hay lần rà soát trước tiêu thụ."""
+        nguồn đã được lượt xem xét reaction hay lần rà soát trước tiêu thụ, nguồn còn nằm trong lý do `reaction_review` chưa
+        xong, và nhãn sinh từ trục nói/im của reaction (thuộc về lượt xem xét reaction, không học hai lần)."""
         import agent_pulse as AP
         stt = self._state(store, key)
         resumed = store.resumed_at(key) or 0.0
         since = max(float(resumed), float(stt.get("last_review_at") or 0.0))
-        used = self._consumed_refs(store, key)
-        labels = [d for d in self.deps.judge.labeled(key, since) if f"decision:{d['id']}" not in used]
+        used = self._consumed_refs(store, key) | self._reviewing_refs(store, key)
+        labels = [d for d in self.deps.judge.labeled(key, since) if f"decision:{d['id']}" not in used
+                  and str(d.get("label_source") or "") != "reaction"]
         sigs = [s for s in AP.signals(store, key, status="live")
                 if s.get("kind") != "context_init" and float(s.get("at") or 0) > since and s["source_ref"] not in used]
         return {"since": since, "labels": labels[-EVIDENCE_LIMIT:], "signals": sigs[-EVIDENCE_LIMIT:], "state": stt,
@@ -921,6 +932,10 @@ class ReviewHost:
             elif kind == "lesson_add":
                 if not (ctx.startswith("team:") and ctx in contexts) and ctx != f"dm:{key}":
                     raise _Reject("context")
+                if not any(str(shown.get(x) or "") == ctx for x in ev):
+                    # Bài học của ngữ cảnh X phải có ít nhất một bằng chứng của CHÍNH X (review T3 L P2-5): không để chữ
+                    # model rút từ nhóm A hay chat riêng lọt vào prompt của nhóm B.
+                    raise _Reject("evidence_context")
                 text = AL.clean_text(ch.get("text"))
                 lk = str(ch.get("lesson_kind") or "method")
                 if not text or lk not in AL.KINDS:
@@ -1122,7 +1137,13 @@ class ReviewHost:
                 if self.deps.judge.owner_held(key, kind, ctx):
                     note = "owner_held"
                 else:
-                    self.deps.judge.set_offset(key, ctx, float(b.get("offset") or 0.0), f"revert:{src}")
+                    # Quay lại CHỈ phần dịch của chính thay đổi này (review T3 L P2-4): độ lệch hiện tại trừ (sau - trước),
+                    # đã nhạt dần như độ lệch. Phần chủ dạy bằng nhãn trong cửa sổ quan sát được giữ nguyên.
+                    import agent_judge_store as AJS
+                    delta = AJS.decay(float(a.get("offset") or 0.0) - float(b.get("offset") or 0.0),
+                                      float(r["created_at"]), now)
+                    cur = float((self.deps.judge.profile(key).get("offsets") or {}).get(ctx, 0.0))
+                    self.deps.judge.set_offset(key, ctx, AJS.clamp_offset(cur - delta), f"revert:{src}")
             elif kind == "eagerness_set":
                 if self.deps.judge.owner_held(key, kind, ctx):
                     note = "owner_held"
@@ -1139,7 +1160,9 @@ class ReviewHost:
                 AL.restore(store, int(b["lesson_id"]), by="auto", reason=f"revert:{src}", at=now)
         except Exception as ex:  # noqa: BLE001
             note = f"revert_error: {type(ex).__name__}"
-        self._update_change(store, cid, status="reverted", reverted_at=now, revert_reason=note or "policy_revert")
+        by_owner = str((ch or {}).get("revert_by") or "") == "owner"
+        self._update_change(store, cid, status="reverted", reverted_at=now,
+                            revert_reason=note or ("owner" if by_owner else "policy_revert"))
 
     def refresh_policy_labels(self, now: Optional[float] = None) -> int:
         """Trước khi P đóng cửa sổ quan sát: số nhãn và số lỗi phán xử từ sau mỗi thay đổi đang quan sát của tự rà soát

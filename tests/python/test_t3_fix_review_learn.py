@@ -6,6 +6,10 @@
   reaction_review; cần 2 lượt trống trước khi nhận lý do; phán xử dừng vì hết hạn mức thì trạng thái "Chờ hạn mức" và nguồn
   về lý do chờ (không tiêu thụ).
 - L P2-2: tin mới ở chat riêng mang mã phiên nguồn để vào ĐÚNG phiên có tin bị phản hồi (phần main ở test_t3_fix_pulse_main).
+- L P2-3: tự rà soát không đếm, không tiêu thụ nguồn còn nằm trong lý do reaction_review chưa xong, hay nhãn sinh từ reaction.
+- L P2-4: quay lại một offset_set chỉ bỏ phần dịch của chính nó; phần chủ dạy bằng nhãn trong cửa sổ được giữ.
+- L P2-5: lesson_add của tự rà soát cần ít nhất một bằng chứng của CHÍNH ngữ cảnh đích.
+- L P3: chủ quay lại thay đổi qua route của P thì ghi `owner`, không phải `policy_revert`.
 
 Kho thật, bộ chiếu T2 thật, hạn mức thật (`agent_budget`), lớp `agent_judge.Judge` THẬT với hàm hỏi model GIẢ (đánh dấu),
 engine lượt xem xét GIẢ. Không model thật nào.
@@ -68,7 +72,7 @@ class Engine:
 _n = [0]
 
 
-def world(judge=None, ask_reply='{"verdict":"speak","score":0.95,"reason":"đúng lúc"}'):
+def world(judge=None, ask_reply='{"verdict":"speak","score":0.95,"reason":"đúng lúc"}', resonance=False):
     """`judge=None`: lớp Judge THẬT (kho phán xử thật, hạn mức thật qua agent_budget.wire) với hàm hỏi GIẢ."""
     _n[0] += 1
     d = TEMP / f"{_n[0]:02d}"
@@ -86,8 +90,10 @@ def world(judge=None, ask_reply='{"verdict":"speak","score":0.95,"reason":"đún
         asks.append(purpose)
         return ask_reply
 
-    real = AJ.Judge(store=AJS.JudgeStore(d / "agent_judge.sqlite3"), ledger=lambda: ALG.CallLedger(gs),
-                    wake=lambda: ALG.WakeReasons(gs), ask=MARK(ask), engine_label=lambda: ("fake-aux", "j"))
+    js = AJS.JudgeStore(d / "agent_judge.sqlite3")
+    real = AJ.Judge(store=js, ledger=lambda: ALG.CallLedger(gs), wake=lambda: ALG.WakeReasons(gs), ask=MARK(ask),
+                    engine_label=lambda: ("fake-aux", "j"), resonance_on=lambda k: resonance,
+                    policy_change=lambda *a: None)
     AJ.wire(real)
     box = {"sent": [], "events": []}
     pj = FP.FeedbackProjector(resonance=lambda: gs, sessions=lambda: ss, teams=lambda: tm, team_view=lambda t, s, m: None)
@@ -106,7 +112,7 @@ def world(judge=None, ask_reply='{"verdict":"speak","score":0.95,"reason":"đún
         deps.judge = judge
     host = AR.ReviewHost(deps)
     return {"gs": gs, "ss": ss, "pj": pj, "key": key, "dsid": dsid, "other": other, "eng": eng, "host": host,
-            "W": ALG.WakeReasons(gs), "box": box, "asks": asks}
+            "W": ALG.WakeReasons(gs), "box": box, "asks": asks, "js": js, "judge": real}
 
 
 def dm_react(w, text, value="sad", reasons=("too_long",)):
@@ -197,6 +203,70 @@ check("phán xử báo waiting_quota: nguồn về một lý do chờ mới, ch�
 check("không gửi tin nào", w3["box"]["sent"] == [])
 res3b = run(w3["host"].serve_reaction_review(again[0]))
 check("lùi lại: lý do vừa trả về không bị phục vụ lại ngay ở nhịp kế (backoff)", res3b.get("outcome") == "backoff", res3b)
+
+import time  # noqa: E402
+
+# ═════ L P2-3: tự rà soát không học lại phản hồi của lượt xem xét reaction chưa xong ═════
+w4 = world()
+k4 = w4["key"]
+mA, srcA = dm_react(w4, "Tin A", value="love", reasons=())
+mB, srcB = dm_react(w4, "Tin B", value="sad", reasons=("too_long",))
+check("chuẩn bị: hai reaction nằm trong một lý do reaction_review đang chờ",
+      len(pending(w4)) == 1 and {s["source_ref"] for s in w4["W"].sources(pending(w4)[0]["id"], True)} == {srcA, srcB})
+dctx = f"dm:{k4}"
+d_hist = w4["js"].add_decision({"agent_key": k4, "context_ref": dctx, "source_event": "pulse:1", "kind": "proactive",
+                                "verdict": "silent", "excerpt": "nháp 1"})
+d_rx = w4["js"].add_decision({"agent_key": k4, "context_ref": dctx, "source_event": "pulse:2", "kind": "proactive",
+                              "verdict": "silent", "excerpt": "nháp 2"})
+w4["judge"].label(d_hist, "should_speak", "owner", source="history")
+w4["judge"].label(d_rx, "should_speak", "owner", source="reaction")
+ev = w4["host"].evidence(w4["gs"], k4, time.time() + 1)
+sig_refs = {s["source_ref"] for s in ev["signals"]}
+lab_ids = {d["id"] for d in ev["labels"]}
+check("tự rà soát: không đếm tín hiệu của reaction còn trong lý do reaction_review chưa xong",
+      srcA not in sig_refs and srcB not in sig_refs, sig_refs)
+check("tự rà soát: không đếm nhãn sinh từ trục nói/im của reaction; nhãn chủ sửa trong lịch sử vẫn đếm",
+      d_rx not in lab_ids and d_hist in lab_ids, lab_ids)
+
+# ═════ L P2-5: lesson_add cần bằng chứng của chính ngữ cảnh đích ═════
+now5 = time.time()
+r5 = w4["host"].apply_change(w4["gs"], k4, {"kind": "lesson_add", "context_ref": "team:B", "text": "Luôn báo số liệu",
+                                             "lesson_kind": "method", "evidence": ["decision:1"], "why": "x"},
+                             {"decision:1": "team:A"}, {}, ["team:A", "team:B", dctx], "selfreview:t5", now5)
+check("lesson_add cho team:B chỉ có bằng chứng của team:A: bị từ chối (evidence_context)",
+      r5["status"] == "rejected" and r5["reason"] == "evidence_context", r5)
+r5b = w4["host"].apply_change(w4["gs"], k4, {"kind": "lesson_add", "context_ref": "team:B", "text": "Luôn báo số liệu",
+                                              "lesson_kind": "method", "evidence": ["decision:1", "decision:2"],
+                                              "why": "x"},
+                              {"decision:1": "team:A", "decision:2": "team:B"}, {}, ["team:A", "team:B", dctx],
+                              "selfreview:t5b", now5)
+check("lesson_add có ít nhất một bằng chứng của team:B: được áp", r5b["status"] == "applied", r5b)
+
+# ═════ L P2-4: quay lại offset_set giữ phần chủ dạy bằng nhãn ═════
+w6 = world(resonance=True)
+AR.ensure(w6["gs"])
+k6 = w6["key"]
+c6 = f"dm:{k6}"
+now6 = time.time()
+r6 = w6["host"].apply_change(w6["gs"], k6, {"kind": "offset_set", "context_ref": c6, "value": 0.2,
+                                             "evidence": ["decision:1"], "why": "kín tiếng hơn"},
+                             {"decision:1": c6}, {}, [c6], "selfreview:t6", now6)
+check("chuẩn bị: tự rà soát đặt độ lệch 0.2", r6["status"] == "applied"
+      and abs(w6["js"].get_offset(k6, c6) - 0.2) < 1e-3, (r6, w6["js"].get_offset(k6, c6)))
+d6 = w6["js"].add_decision({"agent_key": k6, "context_ref": c6, "source_event": "pulse:6", "kind": "proactive",
+                            "verdict": "silent", "excerpt": "nháp 6"})
+lab6 = w6["judge"].label(d6, "should_speak", "owner", source="history")
+mid6 = w6["js"].get_offset(k6, c6)
+check("chuẩn bị: chủ dạy 'Đáng lẽ nên nói' trong cửa sổ quan sát dịch độ lệch xuống", lab6["effect"] == "applied"
+      and mid6 < 0.2 - 0.05, (lab6, mid6))
+w6["host"].revert_policy({"source": f"self_review:{r6['change_id']}", "revert_by": "owner", "revert_reason": "owner"})
+after6 = w6["js"].get_offset(k6, c6)
+check("quay lại offset_set: chỉ bỏ phần +0.2 của chính nó, phần chủ dạy được giữ (không về 0.0)",
+      abs(after6 - (mid6 - 0.2)) < 2e-3, (mid6, after6))
+with closing(w6["gs"]._conn()) as c:
+    rr = c.execute("SELECT status, revert_reason FROM agent_review_changes WHERE id=?", (r6["change_id"],)).fetchone()
+check("chủ quay lại qua route của P: lý do ghi 'owner' (L P3)", rr["status"] == "reverted"
+      and rr["revert_reason"] == "owner", dict(rr))
 
 if fails:
     print(f"\n{len(fails)} FAIL")

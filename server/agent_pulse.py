@@ -1167,6 +1167,8 @@ def revert_policy_change(store, change_id: int, reason: str = "owner", by: str =
     ch = dict(r)
     ch["before"], ch["after"] = _jl(ch.pop("before_json"), {}), _jl(ch.pop("after_json"), {})
     fn = _POLICY_REVERTERS.get(ch["kind"])
+    # Hàm quay lại của J/L biết ai quay lại và vì sao (chủ bấm nút thì ghi `owner`, không phải `policy_revert`).
+    ch["revert_reason"], ch["revert_by"] = str(reason), str(by)
     if fn is not None:
         fn(ch)
     with store._Tx(store) as c:

@@ -239,9 +239,11 @@ check("học không nâng trần, không cấp quyền: max_tier và hạn mức
 clock.t += D + 1
 evA2 = [judge.label("team:A", "speak", "should_speak", clock.t - 30 + i) for i in range(3)]   # nhãn đúng: lỗi nền thấp
 evB2 = [judge.label("team:B", "speak", "should_silent", clock.t - 20 + i) for i in range(3)]
+# Bài học của chat riêng phải có bằng chứng của CHÍNH chat riêng (review T3 L P2-5).
+evD2 = [judge.label(f"dm:{key}", "speak", "should_silent", clock.t - 5)]
 eng.text = changes_json(
     {"kind": "offset_set", "context_ref": "team:A", "value": 0.12, "evidence": evA2, "why": "chen ngang ở A"},
-    {"kind": "lesson_add", "context_ref": f"dm:{key}", "text": "Hỏi lại khi yêu cầu mơ hồ.", "evidence": evB2[:1],
+    {"kind": "lesson_add", "context_ref": f"dm:{key}", "text": "Hỏi lại khi yêu cầu mơ hồ.", "evidence": evD2,
      "lesson_kind": "speak"},
     {"kind": "lesson_promote", "lesson_id": lid, "evidence": evA2[:1], "why": "chỉ một nhóm"})
 res = run(host.maybe_self_review(key))
@@ -256,7 +258,7 @@ check("cửa sổ quan sát ở P dùng đúng dòng J đã ghi (nguồn self_re
       and sum(1 for p in pcs.values() if p["source"] == pc["source"]) == 1, pc)
 check("lesson_add áp: bài học phạm vi dm, nguồn review, dẫn bằng chứng",
       r_add["status"] == "applied" and ALS.get(gs, r_add["after"]["lesson_id"])["scope"] == f"dm:{key}"
-      and evB2[0] in ALS.get(gs, r_add["after"]["lesson_id"])["source_refs"], r_add)
+      and evD2[0] in ALS.get(gs, r_add["after"]["lesson_id"])["source_refs"], r_add)
 check("lesson_promote với bằng chứng 1 ngữ cảnh: từ chối", r_pro == {"status": "rejected", "reason": "contexts",
                                                                      "change_id": r_pro["change_id"]}, r_pro)
 clock.t += D + 1
@@ -284,7 +286,9 @@ dec = {g["change_id"]: g for g in got}
 check("lỗi phán xử tăng quá 0,15 (≥ 6 nhãn): P tự quay lại, lý do judge_error_up",
       dec.get(off_change["policy_change_id"], {}).get("reason") == "judge_error_up", got)
 row = [r for r in review_rows(gs, key) if r["id"] == off_change["change_id"]][0]
-check("quay lại: độ lệch về trước thay đổi, thay đổi ghi 'reverted'", judge.offsets["team:A"] == 0.0
+# Quay lại bỏ ĐÚNG phần dịch của thay đổi, đã nhạt dần như kho thật (review T3 L P2-4); bộ phán xử giả không nhạt dần
+# nên sau một ngày còn dư rất nhỏ.
+check("quay lại: độ lệch về trước thay đổi, thay đổi ghi 'reverted'", abs(judge.offsets["team:A"]) < 0.01
       and row["status"] == "reverted" and row["reverted_at"] is not None, [judge.offsets, row])
 host.refresh_policy_labels(clock.t)
 check("lý do quay lại lấy từ P", [r for r in review_rows(gs, key) if r["id"] == off_change["change_id"]][0]
@@ -296,7 +300,7 @@ ev4 = [judge.label("team:A", "speak", "should_silent", clock.t - 30 + i * 0.1) f
 eng.text = changes_json({"kind": "offset_set", "context_ref": "team:A", "value": 0.2, "evidence": ev4[:2]})
 res = run(host.maybe_self_review(key))
 check("cùng hướng, cùng ngữ cảnh trong 14 ngày: từ chối reverted_recently",
-      res["results"][0]["reason"] == "reverted_recently" and judge.offsets["team:A"] == 0.0, res["results"])
+      res["results"][0]["reason"] == "reverted_recently" and abs(judge.offsets["team:A"]) < 0.01, res["results"])
 clock.t += 15 * D
 ev5 = [judge.label("team:A", "speak", "should_speak", clock.t - 30 + i * 0.1) for i in range(6)]
 eng.text = changes_json({"kind": "offset_set", "context_ref": "team:A", "value": 0.2, "evidence": ev5[:2]})
