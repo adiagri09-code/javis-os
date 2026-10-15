@@ -591,7 +591,7 @@ class TeamRunner:
             msg = await self._io(self._team_msg, team_id, mid)
             via = (msg or {}).get("author_ref") or "" if (msg or {}).get("author_kind") == "agent" else ""
             return await self._volunteer_turn(team_id, key, mid, attempt, {"reason": ""}, kind="message", via_key=via)
-        team = self._team(team_id)
+        team = await self._io(self._team, team_id)
         role = "leader_reply" if key == team["leader_key"] else "member_reply"
         body = (f"Chủ nhóm vừa nhắn (tin #{mid}):\n{text}\n\n"
                 "Trả lời ngắn gọn, đúng vai của bạn trong nhóm.")
