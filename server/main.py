@@ -22543,28 +22543,46 @@ async def sessions_message_reaction(session_id: str, message_id: int, request: R
                             status_code=404)
 
     def _do():
+        # Thứ tự (review T2 P3): kiểm thân, tin và nonce gửi lại TRƯỚC khi tra tác giả, nên request bị từ chối hay gửi
+        # lại không cấp mã trợ lý, không ghim phiên, không tạo kho resonance.
+        try:
+            n = reaction_values.normalize(body.get("value"), body.get("reasons"), body.get("axis"), body.get("comment"),
+                                          body.get("nonce"))
+        except reaction_values.ReactionInputError as ex:
+            raise sessions.DmReactionError(400, ex.vi, ex.en)
         msg = store.message_row(session_id, int(message_id))
         if msg is None:
-            raise sessions.DmReactionError(404, "không có tin này trong phiên")
+            raise sessions.DmReactionError(404, "không có tin này trong phiên", "no such message in this session")
         if msg.get("role") != "assistant":
-            raise sessions.DmReactionError(409, "chỉ câu trả lời mới nhận reaction")
-        agent_key, ver = _dm_reaction_author(sess)
+            raise sessions.DmReactionError(409, "chỉ câu trả lời mới nhận reaction", "only replies take reactions")
+        used = store.dm_nonce_owner(n["nonce"])
+        if used is not None:
+            if used != (session_id, int(message_id), "owner"):
+                raise sessions.DmReactionError(409, "nonce đã dùng cho một tin khác",
+                                               "this nonce was used for another message")
+            return {"replayed": True}, store.dm_reaction_of(session_id, int(message_id))
+        extra = {}
+        try:
+            agent_key, ver = _dm_reaction_author(sess)
+        except Exception as _e:   # noqa: BLE001 - lỗi kho resonance không được làm mất reaction
+            print(f"[dm reaction author] {type(_e).__name__}: {_e}", file=sys.stderr)
+            agent_key, ver = "", 0
+            extra = {"effect_state": "pending_author", "status": "received",
+                     "status_reason": localefmt.chu("Đã lưu, sẽ chuyển cho trợ lý sau", "Saved; it reaches the "
+                                                    "assistant shortly")}
         receipt = store.report_receipt_by_message(session_id, int(message_id)) or {}
-        got = store.set_dm_reaction(session_id, int(message_id), value=body.get("value"), reasons=body.get("reasons"),
-                                    axis=body.get("axis"), comment=body.get("comment"), nonce=body.get("nonce"),
+        got = store.set_dm_reaction(session_id, int(message_id), value=n["value"], reasons=n["reasons"],
+                                    axis=n["axis"], comment=n["comment"], nonce=n["nonce"],
                                     seen_sha=body.get("seen_sha") or None, agent_key=agent_key,
-                                    agent_config_version=ver, goal_id=str(receipt.get("goal_id") or ""))
-        if not got["replayed"]:
+                                    agent_config_version=ver, goal_id=str(receipt.get("goal_id") or ""), **extra)
+        if not got["replayed"] and not extra:
             _feedback_projector().project("dm", got["log_id"])
         return got, store.dm_reaction_of(session_id, int(message_id))
 
     try:
         got, state = await asyncio.to_thread(_do)
     except sessions.DmReactionError as ex:
-        en = {400: "Invalid reaction request", 404: "No such message in this session",
-              409: "This message cannot take this reaction"}.get(ex.code, "Reaction failed")
-        return JSONResponse({"ok": False, "error": localefmt.chu(str(ex), f"{en}: {ex}" if ex.code == 400 else en)},
-                            status_code=ex.code)
+        return JSONResponse({"ok": False, "error": localefmt.chu(ex.vi, ex.en)}, status_code=ex.code)
     r = reaction_values.public(state)
     if not got["replayed"]:
         try:
@@ -22578,6 +22596,25 @@ async def sessions_message_reaction(session_id: str, message_id: int, request: R
 _FEEDBACK_PULSE_BUSY = [False]
 
 
+def _dm_resolve_pending_authors(limit: int = 200) -> int:
+    """Reaction chat riêng lưu lúc kho resonance lỗi (`pending_author`): tra lại tác giả rồi trả dòng về hàng chờ chiếu.
+    Kho vẫn lỗi thì để nguyên, nhịp sau thử lại. Trả số dòng đã gắn tác giả."""
+    store = get_store()
+    n = 0
+    for row in store.pending_author_dm_logs(limit):
+        sess = store.get_session(row["session_id"])
+        if not sess:
+            continue
+        try:
+            key, ver = _dm_reaction_author(sess)
+        except Exception as _e:   # noqa: BLE001
+            print(f"[dm reaction author retry] {type(_e).__name__}: {_e}", file=sys.stderr)
+            return n
+        store.set_dm_reaction_author(row["id"], key, ver)
+        n += 1
+    return n
+
+
 async def _feedback_pulse_tick():
     """Nhịp của bộ chiếu phản hồi (T2, thiết kế 3.5): chiếu mọi dòng nhật ký reaction còn `pending` (lỗi lúc ghi, tiến
     trình chết giữa hai kho) và ghi ngược trạng thái hiển thị; đẩy gói WS cho mọi thay đổi. Chạy lúc khởi động và mỗi
@@ -22586,6 +22623,7 @@ async def _feedback_pulse_tick():
         return
     _FEEDBACK_PULSE_BUSY[0] = True
     try:
+        await asyncio.to_thread(_dm_resolve_pending_authors)
         events = await asyncio.to_thread(_feedback_projector().project_pending)
         for ev in events or []:
             try:

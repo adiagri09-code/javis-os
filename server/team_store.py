@@ -692,6 +692,13 @@ class TeamStore:
             return [dict(r) for r in c.execute("SELECT * FROM team_turns WHERE created_at >= ? ORDER BY created_at",
                                                (float(since),)).fetchall()]
 
+    def turns_for_reconcile(self, since: float, limit: int = 2000) -> list:
+        """Lượt cho đối soát sổ chung (T2): tạo từ mốc `since`, chốt từ mốc đó, hay còn mở; cũ trước, có trần số dòng."""
+        with closing(self._conn()) as c:
+            return [dict(r) for r in c.execute(
+                "SELECT * FROM team_turns WHERE created_at >= ? OR settled_at >= ? OR status IN ('reserved','running') "
+                "ORDER BY created_at LIMIT ?", (float(since), float(since), int(limit))).fetchall()]
+
     def open_turns(self) -> list:
         """Lượt còn `reserved` hay `running` (dùng khi khởi động lại để chốt `interrupted` hay hoàn)."""
         with closing(self._conn()) as c:
