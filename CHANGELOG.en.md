@@ -13,7 +13,7 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 - **The create-team picker no longer breaks when you pick several members:** picking a third one used to push the whole box up, hiding the title, leaving the Create button floating mid-screen and a blank area below. The box now stays put however many people you pick.
 
 ### Improved
-- **The Vietnamese interface now uses the word "Team"** for teams, in the sidebar and across this feature.
+- **The Vietnamese interface now uses the word "Team"** for teams, in the sidebar and across this feature, and calls team members colleagues rather than assistants.
 - **The colleagues page uses one name throughout** in Vietnamese: its tab, create button and filters now match the page title instead of saying "assistant" or "agent".
 
 ## [0.188.0] - 2026-10-16

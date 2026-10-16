@@ -98,7 +98,7 @@ check("dòng chỗ trống đã giao cho điều phối: ẩn", h === "");
 const team = { team_id: "tm1", leader_key: "ag_lan", creator: { kind: "owner", you: true, name: "minhquy" },
   members: [{ agent_key: "ag_lan", slug: "lan", name: "Lan", status: "active", role: "leader" },
     { agent_key: "ag_m", slug: "m", name: "Minh", status: "active", role: "member" }] };
-check("đầu nhóm: 'Bạn + 2 trợ lý · Lan điều phối'", TM.headLine(team) === "Bạn + 2 trợ lý · Lan điều phối", TM.headLine(team));
+check("đầu nhóm: 'Bạn + 2 cộng sự · Lan điều phối'", TM.headLine(team) === "Bạn + 2 trợ lý · Lan điều phối", TM.headLine(team));
 check("chưa có điều phối: nói rõ", TM.headLine(Object.assign({}, team, { leader_key: null })).includes(vi["teams.no_leader_short"]));
 const mh = TM.membersHtml(team, [], null);
 check("ngăn Nhóm: dòng Bạn (tên đăng nhập do server cấp) · Người tạo nhóm/quản lý, đứng đầu", mh.indexOf("Bạn (minhquy)") >= 0 &&
