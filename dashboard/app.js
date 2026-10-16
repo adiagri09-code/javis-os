@@ -1610,7 +1610,10 @@ function sendMessage(text, opts) {
     return;
   }
   window.JavisAsk.freezeAll();   // trả lời rồi thì chip của lượt trước hết bấm được
-  const userElement = appendUserMessage(msg, atts);
+  // 0.173.1: an automatic /goal round (block carries JAVIS_GOAL_ROUND) is drawn as the collapsible round line.
+  const _goalRound = (_slash.type === "prefix" && window.JavisLenh && window.JavisLenh.docVong)
+    ? window.JavisLenh.docVong(_slash.prefix) : null;
+  const userElement = _goalRound ? appendGoalRound(_goalRound, true) : appendUserMessage(msg, atts);
   // /goal đang chạy: tin do vòng tự động gửi thì gắn nó vào phiên này; tin người dùng tự gõ thì
   // dừng mục tiêu (lời của họ lên trước, không chạy tiếp vòng tự động dưới một câu họ vừa nói).
   try {
@@ -1622,6 +1625,7 @@ function sendMessage(text, opts) {
   // Lưu cả `url` (đường /upload/raw của file stage): thiếu nó thì F5 xong ảnh trong tin cũ
   // không còn gì để trỏ tới, và bong bóng chỉ còn trơ cái tên file.
   recordTurn("user", msg, atts.map(a => ({ name: a.name, kind: a.kind, url: a.url || "" })));
+  if (_goalRound) { convo[convo.length - 1].goalRound = _goalRound; persistSession(); }
 
   // Soạn message gửi Javis (kèm đường dẫn file trong Sources)
   const _isSkill = _slash.type === "skill";
@@ -1834,7 +1838,10 @@ function restoreSession() {
   const _traLoi = [];   // T2: các câu trả lời vừa dựng lại, để refresh() sửa reaction và gắn mã còn thiếu
   convo.forEach((t, i) => {
     // t.ts vắng mặt ở tin lưu từ trước bản này -> truyền 0 để ẩn giờ thay vì hiện giờ F5.
-    if (t.role === "user") { appendUserMessage(t.text, t.atts || [], t.ts || 0); return; }
+    if (t.role === "user") {
+      if (t.goalRound && window.JavisLenh && window.JavisLenh.vongHtml) { appendGoalRound(t.goalRound, false); return; }
+      appendUserMessage(t.text, t.atts || [], t.ts || 0); return;
+    }
     // t.brain vắng ở tin lưu từ trước bản này -> rơi về brain của cả phiên, rồi mới tới
     // brain đang chọn. Không có thì hành vi y như cũ, không hỏng thêm gì.
     if (t.buoc && window.JavisSteps && window.JavisSteps.tomTat(t.buoc).hien)
@@ -1883,6 +1890,8 @@ function veTinDaLuu(m, brainCua, sidCua) {
     // Đọc lại từ chính khối đó, không thì mở lại hội thoại là ảnh và file biến mất khỏi
     // bong bóng, người dùng không xem lại được mình đã gửi gì (chủ repo báo 2026-09-10).
     const _sach = chuNguoiGo(m.content || "");
+    const _vongCu = window.JavisLenh && window.JavisLenh.docVong ? window.JavisLenh.docVong(m.content || "") : null;
+    if (_vongCu) { appendGoalRound(_vongCu, false); return { role: "user", text: _sach, atts: [], ts, goalRound: _vongCu }; }
     const _atts = docDinhKem(m.content || "");
     const el = appendUserMessage(_sach, _atts, ts);
     if(m.voice_metadata && m.voice_metadata.response_policy==='ack_only' && !m.voice_metadata.answer_requested) renderVoiceReceipt(el,{...m.voice_metadata,session_id:savedSessionId});
@@ -2217,6 +2226,18 @@ function appendUserMessage(text, attachments, ts) {
     actsHtml("user", ts === undefined ? Date.now() : ts, !!(text || "").trim());
   vaAnhHong(div);
   chatAppend(div); scrollBottom(true);
+}
+// 0.173.1: one automatic /goal round as a collapsible line with a Stop goal button (chat-lenh.js draws the
+// HTML). `live`: drawn while the goal runs, so the button works; restored rounds show it disabled.
+function appendGoalRound(round, live) {
+  const div = document.createElement("div");
+  div.className = "msg msg-goal-round";
+  const active = !!(live && window.JavisLenh && window.JavisLenh.dangCoMucTieu());
+  div.innerHTML = window.JavisLenh.vongHtml(round, active);
+  const btn = div.querySelector(".goal-round-stop");
+  if (btn) btn.addEventListener("click", () => { if (window.JavisLenh) window.JavisLenh.dungMucTieu(); });
+  chatAppend(div); scrollBottom(true);
+  return div;
 }
 // brain (tuỳ chọn): brain của HỘI THOẠI chứa tin này. Bỏ trống = brain đang chọn (tin mới).
 // Truyền vào khi dựng lại tin CŨ, để ảnh trong tin phân giải theo đúng brain của nó thay vì

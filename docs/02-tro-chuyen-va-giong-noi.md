@@ -184,18 +184,19 @@ Mức chặn khác nhau theo bộ não, nên nói cho rõ: với **Claude Code, 
 
 #### `/goal` - làm tới khi đạt
 
-Gõ `/goal mọi đơn hôm nay đã được đối soát xong`. Javis làm một vòng, tự kiểm tra bằng dữ liệu thật xem mục tiêu đã đúng chưa, và nếu chưa thì **tự gửi vòng kế tiếp** mà bạn không phải nhắc. Mỗi vòng có một dòng ghi chú ngắn nói còn thiếu gì.
+Gõ `/goal mọi đơn hôm nay đã được đối soát xong`. Javis làm một vòng, tự kiểm tra bằng dữ liệu thật xem mục tiêu đã đúng chưa, và nếu chưa thì **tự gửi vòng kế tiếp** mà bạn không phải nhắc. Mỗi vòng tự nhắc hiện thành một dòng "Javis tự nhắc làm tiếp (vòng n/5)": bấm vào để xem vòng trước còn thiếu gì, và nút **Tắt mục tiêu** ngay cạnh để dừng bất cứ lúc nào (dừng rồi thì nút mờ đi). Các dòng này còn nguyên sau khi tải lại trang.
 
 Javis đề xuất "xong hay chưa", còn **việc có chạy tiếp hay không do mã quyết định**, để một mục tiêu không bao giờ đạt được không thành vòng lặp đốt token vô hạn. Vòng tự động dừng khi:
 
 - mục tiêu đã đạt;
-- đã chạy **8 vòng** mà chưa đạt;
+- Javis báo **không làm tiếp được** vì thiếu quyền, thiếu công cụ, thiếu kết nối hay thiếu dữ liệu: dừng ngay ở vòng đó, nói rõ lý do và gợi ý cách gỡ, thay vì nhắc đi nhắc lại;
+- đã chạy **5 vòng** mà chưa đạt;
 - hai vòng liền báo còn thiếu y hệt nhau (không có tiến triển);
 - Javis hỏi ngược bạn một câu cần bạn quyết;
 - một vòng bị lỗi, hoặc Javis không báo được mục tiêu đã đạt hay chưa;
 - **bạn gõ một tin mới, bấm Dừng, mở hội thoại khác hoặc gõ `/goal clear`** - lời của bạn luôn lên trước.
 
-Chế độ này chạy trong **tab chat đang mở**: đóng tab hay tải lại trang thì dừng. Khác với `/plan`, `/goal` làm việc thật (đúng quyền hạn bạn đã cấp cho Javis), nên hãy viết mục tiêu cụ thể, kiểm chứng được.
+Khi dừng, mục tiêu tự tắt và câu báo luôn kèm việc bạn có thể làm tiếp (gỡ chỗ thiếu rồi gõ `/goal` lại). Chế độ này chạy trong **tab chat đang mở**: đóng tab hay tải lại trang thì dừng (các dòng vòng đã chạy vẫn còn để xem lại). Khác với `/plan`, `/goal` làm việc thật (đúng quyền hạn bạn đã cấp cho Javis), nên hãy viết mục tiêu cụ thể, kiểm chứng được.
 
 #### Trên Telegram
 

@@ -22244,7 +22244,7 @@ async def slash_memory(brain: str = Query("brain")):
 
 @app.post("/slash/block")
 async def slash_block(kind: str = Form(...), dk: str = Form(""), vong: int = Form(1),
-                      toi_da: int = Form(8)):
+                      toi_da: int = Form(lenh_he_thong.GOAL_MAX_ROUNDS), left: str = Form("")):
     """Khối chỉ dẫn của `/plan` và `/goal` cho khung chat web.
 
     Máy chủ là nguồn DUY NHẤT của chữ trong khối (Telegram dùng chung `lenh_he_thong`): trình
@@ -22258,7 +22258,7 @@ async def slash_block(kind: str = Form(...), dk: str = Form(""), vong: int = For
                                 status_code=400)
         toi_da = max(1, min(int(toi_da), 20))
         vong = max(1, min(int(vong), toi_da))
-        return {"block": lenh_he_thong.khoi_muc_tieu(dk, vong, toi_da)}
+        return {"block": lenh_he_thong.khoi_muc_tieu(dk, vong, toi_da, left)}
     return JSONResponse({"error": localefmt.chu("kind phải là plan hoặc goal", "kind must be plan or goal")},
                         status_code=400)
 
