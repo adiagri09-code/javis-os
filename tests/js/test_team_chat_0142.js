@@ -144,7 +144,7 @@ check("bốn trạng thái có chip đếm: Đang làm, Đang chờ, Cần bạn
 check("có nút Giao việc", jh.includes("aj-assign-open") && jh.includes(vi["ajobs.assign"]));
 check("Cần bạn đứng đầu, lý do hiện và đã escape", jh.indexOf('aj-sec-h">' + vi["ajobs.b.needs_you"]) < jh.indexOf('aj-sec-h">' + vi["ajobs.b.running"])
   && jh.includes("Trợ lý gặp lỗi &lt;b&gt;"), jh);
-check("nguồn nhóm có tên nhóm, vai trợ lý trong việc", jh.includes("Nhóm Ra mắt &lt;x&gt;") && jh.includes(vi["ajobs.role.helper"])
+check("nguồn nhóm có tên nhóm, vai trợ lý trong việc", jh.includes("Team Ra mắt &lt;x&gt;") && jh.includes(vi["ajobs.role.helper"])
   && jh.includes(vi["ajobs.role.coordinator"]));
 check("tiến độ là số bước thật, vị trí trong hàng nhóm, hàng chờ trung thực khi AI tự vận hành tắt",
   jh.includes("1/3") && jh.includes(vi["ajobs.queue_pos"].replace("{n}", "2")) && jh.includes(vi["ajobs.board_off"]));

@@ -23171,7 +23171,7 @@ class _TeamAdmin:
 
 async def _team_notify(session_id, text):
     await _bo_vao_hom_thu(f"{WEB_CHAT_PREFIX}{session_id}", text, kind="report",
-                          label=localefmt.chu("Nhóm", "Team"), source="team")
+                          label=localefmt.chu("Team", "Team"), source="team")
 
 
 _FEEDBACK_PROJECTOR = [None]

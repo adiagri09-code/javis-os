@@ -8,7 +8,11 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.189.1] - 2026-10-16
 ### Sửa lỗi
-- Đang sửa khung chọn cộng sự khi tạo nhóm.
+- **Khung tạo team không còn vỡ khi chọn nhiều cộng sự:** trước đây chọn tới người thứ ba là khung bị đẩy lên, mất tiêu đề, nút Tạo nằm lơ lửng giữa màn hình và phía dưới trống trơn. Giờ khung đứng yên dù chọn bao nhiêu người.
+
+### Cải thiện
+- **"Nhóm" đổi thành "Team"** ở thanh bên và mọi chỗ của tính năng này: Tạo team, Tên team, Danh sách team.
+- **Trang Cộng sự gọi thống nhất là "Cộng sự":** tab, nút tạo, bộ lọc bên trong không còn ghi "Trợ lý" hay "agent".
 
 ## [0.188.0] - 2026-10-16
 ### Sửa lỗi
