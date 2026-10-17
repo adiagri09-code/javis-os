@@ -6,6 +6,11 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.197.1] - 2026-10-17
+### Sửa lỗi
+- **Safari không còn mất kết nối hàng phút.** Safari có lỗi riêng với kiểu nén dữ liệu trên đường kết nối trực tiếp: gặp tin lớn là tự cắt, rồi nối lại cũng cắt tiếp, trong khi Chrome vẫn chạy bình thường. Javis giờ tắt kiểu nén đó, mọi trình duyệt đều ổn định như Chrome.
+- **Lần sau còn rớt là có dấu vết:** mỗi lần đứt kết nối, trang ghi lại trình duyệt, mã đóng và thời gian đứt rồi gửi về máy chủ khi nối lại, xem ở `/health/loop`.
+
 ## [0.197.0] - 2026-10-17
 ### Thêm mới
 - **Số tin chưa đọc trên từng nhóm:** danh sách Team hiện số đỏ như Zalo, tên nhóm in đậm khi còn tin chưa đọc. Mở nhóm là đọc xong, máy nào cũng tắt số theo.
