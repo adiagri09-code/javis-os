@@ -4928,5 +4928,15 @@
    "GET"
   ],
   "trong": null
+ },
+ {
+  "order": 495,
+  "type": "APIRoute",
+  "path": "/diag/ws-drops",
+  "name": "diag_ws_drops",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
  }
 ]

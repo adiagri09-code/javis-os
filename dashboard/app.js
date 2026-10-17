@@ -936,11 +936,14 @@ function connect() {
   // for minutes, since nothing retried a socket stuck in CONNECTING. Give it WS_MO_MS, then close it: onclose retries.
   const dangMo = ws;
   setTimeout(() => {
-    if (dangMo === ws && dangMo.readyState === WebSocket.CONNECTING) { try { dangMo.close(); } catch (e) {} }
+    if (dangMo === ws && dangMo.readyState === WebSocket.CONNECTING) { _ghiDut("connect_timeout", false, 0); try { dangMo.close(); } catch (e) {} }
   }, WS_MO_MS);
+  ws.onopen = () => { _wsMoLuc = Date.now(); };
   // Mất socket là trạng thái THẬT người dùng cần thấy ("ĐANG KẾT NỐI LẠI"), không phải đoán.
-  ws.onclose = () => {
-    try { runActions(turn.wsDown()); } catch (e) {}
+  ws.onclose = (e) => {
+    _ghiDut(e && e.code, !!(e && e.wasClean), _wsMoLuc);
+    _wsMoLuc = 0;
+    try { runActions(turn.wsDown()); } catch (e2) {}
     baoDutMang(true);
     setTimeout(connect, 3000);
   };
@@ -962,7 +965,32 @@ function connect() {
 // adds a reconnect on top of the wait.
 const WS_IM_MS = 30000, WS_PONG_MS = 20000, WS_MO_MS = 10000;
 let _wsLastFrameAt = 0, _wsPingAt = 0;
+
+// ---- Dấu vết đứt kết nối (0.197.1) ----
+// Khách báo 17/10: Safari mất kết nối tới 10 phút trong khi Chrome mở cùng lúc vẫn chạy. Không có số liệu thì mỗi lần
+// chỉ đoán được. Mỗi lần đứt ghi mã đóng (1006 = đứt không lời chào, "ping" = socket im không đáp, "connect_timeout"
+// = bắt tay treo), socket đã sống bao lâu, mốc bắt đầu đứt; nối lại được thì gửi một lần về máy chủ (POST
+// /diag/ws-drops, xem ở /health/loop). Chỉ giữ 10 lần gần nhất, gửi hỏng thì bỏ.
+let _wsMoLuc = 0, _wsDut = [], _wsDutTu = 0;
+function _ghiDut(code, clean, moLuc) {
+  const now = Date.now();
+  if (!_wsDutTu) _wsDutTu = now;
+  _wsDut.push({ code: String(code == null ? "" : code), clean: !!clean, open_s: moLuc ? (now - moLuc) / 1000 : 0,
+    at: now / 1000 });
+  if (_wsDut.length > 10) _wsDut.shift();
+}
+function _baoDutVeMayChu() {
+  if (!_wsDut.length) return;
+  const body = { ua: navigator.userAgent, down_s: _wsDutTu ? (Date.now() - _wsDutTu) / 1000 : 0, drops: _wsDut };
+  _wsDut = []; _wsDutTu = 0;
+  try {
+    fetch("/diag/ws-drops", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .catch(() => {});
+  } catch (e) {}
+}
 function _dropDeadSocket() {
+  _ghiDut("ping", false, _wsMoLuc);
+  _wsMoLuc = 0;
   const cu = ws;
   ws = null;
   if (cu) {
@@ -1047,6 +1075,7 @@ function handleMessage(data) {
     // Socket NỐI LẠI (không phải lần chào đầu): tin tới trong lúc đứt có thể đã rơi mất, ví dụ
     // câu trả lời của một lượt chạy xong khi điện thoại đang tắt màn hình. Đồng bộ nhẹ.
     if (_daChao) setTimeout(_dongBoNeuLech, 300);
+    _baoDutVeMayChu();
     // Nhóm chat (0.142.0): gói team_message/team_replies lỡ trong lúc mất kết nối không được gửi lại, nên trang Nhóm
     // tự tải lại tin và kết cục lượt trả lời của nhóm đang mở khi socket nối lại.
     if (_daChao) { try { window.dispatchEvent(new CustomEvent("javis:team-event", { detail: { type: "team_resync" } })); } catch (e) {} }

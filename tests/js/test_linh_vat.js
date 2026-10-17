@@ -219,7 +219,7 @@ check("hàng đợi có trần, không phình vô hạn", /if \(_tinDutMang\.len
 check("mất mạng được báo NGAY TRONG khung chat (orb bị ẩn ở trang Trò chuyện)",
   /function baoDutMang\(dut\)/.test(app) && /showActivity\(Icons\.warn\(window\.t\("app\.ws_mat_ket_noi"\)\)\)/.test(app));
 check("chờ một nhịp mới báo, khỏi nhấp nháy khi iOS ẩn trang", /\}, 2500\);/.test(app));
-check("ws.onclose gọi baoDutMang", /ws\.onclose = \(\) => \{[\s\S]{0,200}baoDutMang\(true\);/.test(app));
+check("ws.onclose gọi baoDutMang", /ws\.onclose = \(e?\) => \{[\s\S]{0,320}baoDutMang\(true\);/.test(app));
 ["app.ws_mat_ket_noi", "app.ws_giu_tin", "app.ws_tra_tin"].forEach(k => {
   check("i18n vi+en có " + k, typeof vi[k] === "string" && typeof en[k] === "string");
 });

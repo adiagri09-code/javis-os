@@ -40,6 +40,9 @@ RESTARTS = 10
 
 _files = {"beat": None, "restarts": None}
 
+CLIENT_DROPS = 30
+_client_drops: deque = deque(maxlen=CLIENT_DROPS)
+
 _state = {"tick": 0.0, "loop_thread": None, "started": False, "current": None}
 _incidents: deque = deque(maxlen=INCIDENTS)
 _lock = threading.Lock()
@@ -155,12 +158,40 @@ def start(loop: Optional[asyncio.AbstractEventLoop] = None, state_dir: Optional[
     return True
 
 
+def _clean_drop(d) -> dict:
+    d = d if isinstance(d, dict) else {}
+
+    def num(v):
+        try:
+            return round(float(v), 1)
+        except (TypeError, ValueError):
+            return None
+    return {"code": str(d.get("code", ""))[:20], "clean": bool(d.get("clean")), "open_s": num(d.get("open_s")),
+            "at": num(d.get("at"))}
+
+
+def note_client_drops(body) -> None:
+    """Keep one page's report of how it lost its socket (0.197.1). Bounded: the last CLIENT_DROPS reports, each with
+    at most 10 drops and short strings, so a page cannot grow the server's memory."""
+    body = body if isinstance(body, dict) else {}
+    drops = body.get("drops") if isinstance(body.get("drops"), list) else []
+    try:
+        down = round(float(body.get("down_s") or 0), 1)
+    except (TypeError, ValueError):
+        down = 0.0
+    with _lock:
+        _client_drops.append({"received": time.time(), "ua": str(body.get("ua") or "")[:200], "down_s": down,
+                              "drops": [_clean_drop(d) for d in drops[-10:]]})
+
+
 def report() -> dict:
     """The recent incidents, newest first, for GET /health/loop."""
     with _lock:
         items = [dict(i) for i in reversed(_incidents)]
+        clients = [dict(c) for c in reversed(_client_drops)]
         lag = (time.monotonic() - _state["tick"]) if _state["tick"] else None
     restarts = _read_json(_files["restarts"], [])
     return {"running": bool(_state["started"]), "block_s": BLOCK_S,
             "lag_s": round(lag, 3) if lag is not None else None, "incidents": items,
-            "unclean_restarts": list(reversed(restarts if isinstance(restarts, list) else []))}
+            "unclean_restarts": list(reversed(restarts if isinstance(restarts, list) else [])),
+            "client_drops": clients}

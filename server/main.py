@@ -44,6 +44,10 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+# 0.197.1: no WebSocket compression, whatever started uvicorn (ws_compat explains the Safari drops it prevents).
+import ws_compat  # noqa: E402
+ws_compat.disable_deflate()
+
 from claude_cli import CodexCLI, claude_engine, find_claude_cli, find_codex_cli, cancel_all, _empty_mcp_file, auth_status as claude_auth_status, auth_login as claude_auth_login, auth_logout as claude_auth_logout, auth_login_ui_start, auth_login_ui_code, mcp_native_add, mcp_native_remove, mcp_native_status, mcp_open_auth_terminal, mcp_native_list, codex_mcp_native_list, codex_mcp_native_add, codex_mcp_native_remove, codex_mcp_native_status, codex_mcp_open_login_terminal
 import claude_cli   # binary `claude`: tìm đường, auth, và danh mục model nhúng sẵn trong CLI
 import codex_models   # thang effort mà CHÍNH Codex khai cho từng model (model/list)
@@ -24823,7 +24827,7 @@ if __name__ == "__main__":
     # chạy Claude full quyền trên máy + vault của bạn). Đổi qua JAVIS_HOST nếu cần.
     host = os.getenv("JAVIS_HOST", "127.0.0.1")
     port = int(os.getenv("JAVIS_PORT", "7777"))
-    uvicorn.run("main:app", host=host, port=port, reload=False)
+    uvicorn.run("main:app", host=host, port=port, reload=False, ws_per_message_deflate=ws_compat.wanted())
 
 
 @app.post("/share/chat")
@@ -24877,3 +24881,12 @@ async def _stop_loop_watch():
 async def health_loop():
     """Recent event-loop freezes with the stack where the loop was stuck (loop_watch). Read only."""
     return loop_watch.report()
+
+
+@app.post("/diag/ws-drops")
+async def diag_ws_drops(body: dict = Body(...)):
+    """A page that just got its live socket back reports how it lost it (0.197.1): browser, close codes, seconds
+    down. Kept in memory (loop_watch, last few only) and shown in GET /health/loop, so a "Mất kết nối" report from one
+    browser can be traced to its cause instead of guessed."""
+    loop_watch.note_client_drops(body)
+    return {"ok": True}
