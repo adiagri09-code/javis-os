@@ -1561,6 +1561,13 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .hud-voice.dictating .dict-bar { display: flex; }
 .hud-voice.dictating .cp-plus, .hud-voice.dictating .cp-chips, .hud-voice.dictating .cp-gap,
 .hud-voice.dictating .dict-btn, .hud-voice.dictating #voiceBtn { display: none; }
+/* 0.231.0: send is hidden while the box is empty (voice chat takes its place), but while dictating it is the
+   "stop and send" button, so it stays even before the first word lands. */
+.hud-voice.dictating #sendBtn { display: flex !important; }
+/* The voice chat button sits where send appears, so it wears the same filled circle: one spot, two jobs. In a call
+   it turns red (.in-call) as before. */
+#voiceBtn:not(.in-call):not(.handsfree) { background: var(--accent-solid); color: var(--on-accent); border-color: transparent; }
+#voiceBtn:not(.in-call):not(.handsfree):hover { opacity: .85; color: var(--on-accent); border-color: transparent; }
 .dict-cancel, .dict-stop {
   flex: none; width: 34px; height: 34px; border-radius: 50%; padding: 0; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;

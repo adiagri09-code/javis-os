@@ -32,7 +32,7 @@
   <!-- Biến --ic-* cho icon dùng trong content: của CSS. Phải đứng TRƯỚC style.css
        vì style.css tham chiếu các biến này. -->
   <link rel="stylesheet" href="/static/vendor/lucide-icons.css?v=1">
-  <link rel="stylesheet" href="/static/style.css?v=130">
+  <link rel="stylesheet" href="/static/style.css?v=131">
   <link rel="stylesheet" href="/static/console.css?v=110">
   <!-- Áp tông đã lưu TRƯỚC khi vẽ để không nháy tối rồi mới đổi sang sáng.
        Giá trị cũ "dim" (tông tối-nhạt, gỡ ở 0.9.250) quy về tối; theme.js sẽ ghi đè lại.
@@ -908,7 +908,7 @@
   <script src="/static/voice-lang.js?v=1"></script>
   <script src="/static/voice.js?v=29"></script>
   <script src="/static/graph.js?v=17"></script>
-  <script src="/static/chat-render.js?v=20"></script>
+  <script src="/static/chat-render.js?v=21"></script>
   <script src="/static/code-hl.js?v=1"></script>
   <script src="/static/dataview.js?v=2"></script>
   <!-- window.JavisCopy: chép một chuỗi vào bảng nhớ tạm, có đường lui cho http trần. Đứng
@@ -956,7 +956,7 @@
   <script src="/static/screen-awake.js?v=1"></script>
   <script src="/static/incoming-call.js?v=1"></script>
   <script src="/static/call-bar.js?v=1"></script>
-  <script src="/static/app.js?v=146"></script>
+  <script src="/static/app.js?v=147"></script>
   <!-- Sau app.js: dải việc nền đọc window.JavisSessions (app.js dựng) để biết phiên + brain. -->
   <script src="/static/background-strip.js?v=3"></script>
   <!-- Thân bảng chọn model dùng chung: phải đứng TRƯỚC model-picker.js (thanh chat) và
@@ -989,15 +989,15 @@
        (ngăn Nhóm gọi window.JavisAgentJudge.hydrate); góp phần "judge" vào khung nhịp qua window.JavisPulseParts. -->
   <script src="/static/agent-judge-ui.js?v=2"></script>
   <!-- Nút mic nhập chữ của khung soạn Nhóm (0.176.0): nạp TRƯỚC teams.js. -->
-  <script src="/static/dictate.js?v=2"></script>
-  <script src="/static/composer-dictate.js?v=1"></script>
+  <script src="/static/dictate.js?v=3"></script>
+  <script src="/static/composer-dictate.js?v=2"></script>
   <script src="/static/teams.js?v=18"></script>
   <script src="/static/chatbots-reply-policy.js?v=1"></script>
   <script src="/static/chatbots-try.js?v=1"></script>
   <script src="/static/chatbots.js?v=18"></script>
   <!-- Trang Hội thoại (hộp thư khách): nạp TRƯỚC console.js để renderConversations uỷ quyền được. -->
   <script src="/static/conversations-filters.js?v=1"></script>
-  <script src="/static/ht-media.js?v=2"></script>
+  <script src="/static/ht-media.js?v=3"></script>
   <script src="/static/conversations.js?v=10"></script>
   <!-- Dashboard Token (trang Mức dùng nâng cấp): nạp TRƯỚC console.js để renderUsage ủy quyền được. -->
   <script src="/static/usage.js?v=2"></script>
