@@ -8,7 +8,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.231.0] - 2026-10-19
 ### Cải thiện
-- **Khung chat gọn còn hai nút.** (đang viết)
+- **Khung chat gọn còn hai nút: micro và một nút đa năng.** Ô nhập trống thì nút đó là đàm thoại (biểu tượng sóng âm), gõ chữ hoặc đính kèm file là nó tự đổi thành nút gửi, xoá hết chữ thì đổi lại.
+- **Đang gọi thì micro tạm ẩn**, chỉ còn nút cúp máy màu đỏ, đỡ bấm nhầm.
 
 ## [0.230.0] - 2026-10-19
 ### Thêm mới

@@ -10,7 +10,8 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.231.0] - 2026-10-19
 ### Improved
-- **The chat box is down to two buttons.** (in progress)
+- **The chat box is down to two buttons: the mic and one all-purpose button.** With an empty box it is voice chat (the sound wave); type or attach a file and it turns into send, clear the text and it turns back.
+- **During a call the mic steps aside**, leaving only the red hang-up button, so nothing gets pressed by mistake.
 
 ## [0.230.0] - 2026-10-19
 ### Added
