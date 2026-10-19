@@ -1,4 +1,4 @@
-"""A file pasted in the chat during a Live call gets ONE brain turn and ONE voice (0.232.0). No network.
+"""A file pasted in the chat during a Live call gets ONE brain turn and ONE voice (0.236.0). No network.
 
     python tests/run.py voice_live_paste
 

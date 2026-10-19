@@ -1717,7 +1717,7 @@ function sendMessage(text, opts) {
     window.JavisVoiceLive.sendText(msg);
     return;
   }
-  // 0.232.0: có file thì cũng KHÔNG mở lượt chat thường. Trước đây lượt chat đọc ảnh và đọc ra
+  // 0.236.0: có file thì cũng KHÔNG mở lượt chat thường. Trước đây lượt chat đọc ảnh và đọc ra
   // loa bằng giọng Edge, trong khi model Live nghe "xem ảnh này" lại giao chính ảnh đó cho
   // ask_javis: hai lượt bộ não, hai giọng chồng nhau. Nay gửi khung "ask" để server chạy MỘT lượt
   // và model Live đọc kết quả; socket chưa mở thì mới rơi về đường thường.
@@ -1817,7 +1817,7 @@ function sendMessage(text, opts) {
   _tuGiong = false;
 }
 // Khối "[File đính kèm để ĐỌC ...]" đứng trước câu người dùng gõ. Dùng chung cho lượt chat thường
-// và tin có file gửi lúc đang gọi Live (0.232.0), để F5 dựng lại bong bóng ảnh y như nhau.
+// và tin có file gửi lúc đang gọi Live (0.236.0), để F5 dựng lại bong bóng ảnh y như nhau.
 function tinDocFile(atts, than) {
   const lines = atts.map(a => `- ${a.path}`).join("\n");
   const src = (atts.find(a => a.sources) || {}).sources || "", attDir = (atts.find(a => a.attachments) || {}).attachments || "";

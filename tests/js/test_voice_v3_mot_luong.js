@@ -50,7 +50,7 @@ check("i18n: câu tiến độ không có em dash", !/—/.test(vi["app.voice_fi
 
 // 3
 check("khung WS: voice: _tuGiong || handsFree", /const payload = \{ message: outMsg[\s\S]{0,300}voice: _tuGiong \|\| handsFree/.test(app));
-// 0.232.0: the context block is built by boiNguCanh (shared with a file pasted during Live); the chat turn
+// 0.236.0: the context block is built by boiNguCanh (shared with a file pasted during Live); the chat turn
 // passes it the same voice flag.
 check("khối ngữ cảnh mang voice: _tuGiong || handsFree",
       /outMsg = boiNguCanh\(outMsg, _tuGiong \|\| handsFree\);/.test(app) && /interruptedAt: _ngatLoiTai, voice: voice,/.test(app));

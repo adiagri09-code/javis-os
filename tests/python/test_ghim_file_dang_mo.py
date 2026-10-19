@@ -82,7 +82,7 @@ check("clearAttachments() KHÔNG đụng tới ghim", "pinnedNote" not in _clear
 
 # Khối ngữ cảnh phải nằm TRƯỚC câu của user và mang đường dẫn thật.
 _send = APP.split("function sendMessage(", 1)[1].split("\nfunction ", 1)[0]
-# 0.232.0: the wrap lives in boiNguCanh, shared with a file pasted during a Live call.
+# 0.236.0: the wrap lives in boiNguCanh, shared with a file pasted during a Live call.
 _wrap = APP.split("function boiNguCanh(", 1)[1].split("\nfunction ", 1)[0]
 check("sendMessage wraps the message with boiNguCanh", "outMsg = boiNguCanh(outMsg," in _send)
 check("gửi kèm khối FILE ĐANG MỞ", "[FILE ĐANG MỞ trong trình sửa của Javis: ${pinnedNote.abs}" in _wrap)

@@ -393,7 +393,7 @@
     if (text) sendJson({ type: "text", text: String(text) });
   }
 
-  // A message with files typed during the call (0.232.0): the route runs ONE brain turn on it and the Live model
+  // A message with files typed during the call (0.236.0): the route runs ONE brain turn on it and the Live model
   // only reads the answer out, so the dashboard opens no chat turn of its own (two voices otherwise). False when
   // the socket is not open: the caller then sends it the ordinary way.
   function ask(text, display, files) {

@@ -14991,7 +14991,7 @@ async def voice_live_ws(ws: WebSocket, session_id: str = Query(""), brain: str =
 
     Khung JSON về trình duyệt: ready | interrupted | transcript | tool | turn_done | error.
     Khung JSON từ trình duyệt: {"type":"text","text":...} | {"type":"ask","text":...,"display":...,"files":[...]}
-    | {"type":"stop"}. Byte = audio. "ask" (0.232.0) là tin có file đính kèm gõ trong lúc gọi: chạy MỘT lượt bộ não
+    | {"type":"stop"}. Byte = audio. "ask" (0.236.0) là tin có file đính kèm gõ trong lúc gọi: chạy MỘT lượt bộ não
     chính ngay tại đây rồi model chỉ đọc lại, không mở lượt chat thường song song.
     """
     if cfgmod.gate_active() and not cfgmod.valid_session(ws.cookies.get("javis_session", "")):
@@ -15068,7 +15068,7 @@ async def voice_live_ws(ws: WebSocket, session_id: str = Query(""), brain: str =
     spoke = {"t": 0.0}               # lần gần nhất Javis nói về việc nền (kết quả hay tiến độ)
     heartbeat = {"task": None}
     readback = {"pending": 0, "active": False}
-    # File pasted during the call (0.232.0): while its brain turn runs, and ATTACHMENT_GUARD_S after its answer is
+    # File pasted during the call (0.236.0): while its brain turn runs, and ATTACHMENT_GUARD_S after its answer is
     # read, an ask_javis from the model about an image or file is that same file, not a second turn.
     attach_guard = {"busy": 0, "until": 0.0, "names": []}
 

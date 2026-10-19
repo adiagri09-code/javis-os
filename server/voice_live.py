@@ -270,7 +270,7 @@ class LiveProvider:
         await self._send_all(self.late_result_messages(text))
 
     async def read_result(self, text: str):
-        """Have the model read out a brain answer it did not ask for (a file pasted in the chat, 0.232.0).
+        """Have the model read out a brain answer it did not ask for (a file pasted in the chat, 0.236.0).
         A tagged text turn works on Gemini and OpenAI Realtime; GPT-Live and ChatGPT Live override it."""
         await self.send_text(readback_text(text))
 
@@ -910,7 +910,7 @@ STATUS_FIRST_S = 60.0    # việc chạy quá chừng này thì bắt đầu nó
 STATUS_EVERY_S = 90.0    # rồi cách chừng này mới nói lại
 STATUS_TICK_S = 5.0      # nhịp kiểm tra của vòng nền
 FOLLOWUP_ACK = "Đã ghi nhận. Việc đang làm sẽ báo kết quả ngay khi xong, không có việc mới."
-# A file pasted into the chat during a call (0.232.0). The dashboard sends it to the route as an "ask" frame and the
+# A file pasted into the chat during a call (0.236.0). The dashboard sends it to the route as an "ask" frame and the
 # route runs ONE brain turn on it. Before this, the paste opened an ordinary chat turn AND the Live model, hearing
 # "look at this picture", handed the same picture to ask_javis: two brain turns on one image, two voices over each
 # other, one of them in English (owner report 2026-10-19). While that turn runs, and a short while after its answer
