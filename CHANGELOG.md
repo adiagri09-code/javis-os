@@ -6,6 +6,14 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.222.0] - 2026-10-19
+### Thêm mới
+- **Nút Thử mic và Thử loa** trong Cài đặt → Giọng nói: nói thử 5 giây là thấy vạch nhảy và biết mic nghe rõ không, kèm gợi ý khi mic bị tắt hay chọn nhầm. Thử loa phát hai tiếng chuông.
+- **Mẫu Bản tin buổi sáng** ở trang Việc định kỳ: bấm là điền sẵn một nhắc hẹn 7 giờ sáng (chào, lịch hôm nay, chuyện hôm qua, tin đáng chú ý). Bấm Lưu mới tạo.
+### Cải thiện
+- **Việc nền không mất thời gian thử lại model đang hỏng.** Model vừa lỗi được cho nghỉ một lúc (hết hạn mức 5 phút, không phản hồi 30 phút, không có quyền 6 tiếng), các việc sau đi thẳng model còn chạy được.
+- **Javis vẫn nhớ ra ký ức cũ khi danh sách quá dài:** những ký ức không vừa chỗ vẫn được nêu tên để Javis biết mà mở đọc.
+
 ## [0.221.0] - 2026-10-19
 ### Cải thiện
 - **Javis chỉ nói "đã mở" khi app thật sự lên.** Mở app xong, Javis kiểm tra app đã chạy chưa. Không thấy thì nói thẳng là chưa chắc mở được, không báo xong cho có.

@@ -8,6 +8,14 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.222.0] - 2026-10-19
+### Added
+- **Test mic and Test speaker buttons** in Settings → Voice: speak for 5 seconds and the meter shows whether the mic hears you, with a hint when it is muted or the wrong one. The speaker test plays two chimes.
+- **A Morning brief template** on the recurring-work page: one click fills in a 7 a.m. reminder (greeting, today's calendar, yesterday's talk, notable news). It is only created when you press Save.
+### Improved
+- **Background jobs stop wasting time on a broken model.** A model that just failed rests for a while (5 minutes after a quota error, 30 after an outage, 6 hours after an access error) and the next jobs go straight to one that works.
+- **Javis still finds old memories when the list is too long:** memories that no longer fit are named so Javis knows to open them.
+
 ## [0.221.0] - 2026-10-19
 ### Improved
 - **Javis only says "opened" when the app really came up.** After opening an app it checks the app is running; if not, it says plainly that it is not sure, instead of reporting success.
