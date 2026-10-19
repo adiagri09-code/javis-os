@@ -8,7 +8,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.232.0] - 2026-10-19
 ### Sửa lỗi
-- **Dán ảnh lúc đang gọi Live không còn hai giọng trả lời chồng nhau.** (đang viết)
+- **Dán ảnh lúc đang gọi Live không còn hai giọng trả lời chồng nhau.** Trước đây ảnh được đọc hai lần: một lần ở khung chat (giọng tiếng Việt), một lần do giọng Live tự giao lại (thường bằng tiếng Anh). Giờ ảnh chỉ được đọc một lần và chỉ giọng Live nói kết quả. Ảnh vẫn hiện trong khung chat, tải lại trang vẫn còn.
+- **Giọng Live trả lời đúng ngôn ngữ đã chọn.** Khi mic để tự nhận ngôn ngữ mà chưa nghe được câu nào, Javis dùng ngôn ngữ trả lời trong Cài đặt thay vì đoán theo model.
 
 ## [0.230.0] - 2026-10-19
 ### Thêm mới
