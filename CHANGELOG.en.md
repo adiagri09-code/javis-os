@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.234.0] - 2026-10-19
+### Fixed
+- **A bot tagging someone in a Zalo group no longer shows raw code.** Now and then a group reply showed a `<a_mention href="zm://Profile/...">` snippet instead of a clean tag. That snippet is now removed before sending, and the person being answered still gets a real tag.
+- **The bot no longer copies Zalo's tag code.** Messages whose tags arrive from Zalo as code are cleaned to "@Name" before the bot reads them, so it does not imitate that code.
 ## [0.231.0] - 2026-10-19
 ### Improved
 - **The chat box is down to two buttons: the mic and one all-purpose button.** With an empty box it is voice chat (the sound wave); type or attach a file and it turns into send, clear the text and it turns back.

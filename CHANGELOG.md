@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.234.0] - 2026-10-19
+### Sửa lỗi
+- **Bot tag người trong nhóm Zalo không còn lộ mã.** Thỉnh thoảng bot trả lời trong nhóm hiện cả đoạn `<a_mention href="zm://Profile/...">` thay vì một cái tag gọn. Giờ đoạn mã đó được gỡ trước khi gửi, người được trả lời vẫn được tag thật.
+- **Bot không còn học theo mã tag của Zalo.** Tin có tag mà Zalo gửi về dưới dạng mã được làm sạch thành "@Tên" trước khi bot đọc, nên bot không bắt chước viết lại mã đó.
 ## [0.231.0] - 2026-10-19
 ### Cải thiện
 - **Khung chat gọn còn hai nút: micro và một nút đa năng.** Ô nhập trống thì nút đó là đàm thoại (biểu tượng sóng âm), gõ chữ hoặc đính kèm file là nó tự đổi thành nút gửi, xoá hết chữ thì đổi lại.
