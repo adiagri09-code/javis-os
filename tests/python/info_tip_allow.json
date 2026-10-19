@@ -1,4 +1,5 @@
 {
+ "settings.vc_mic_silent": "status: the mic test verdict, shown only after the person pressed Test mic",
  "app.login_cookie_lost": "error: login failure reason",
  "auth.reset_server": "content: reset steps shown after clicking Forgot password",
  "bgs.warn_xep_hang": "status: stall warning inside the popover the user opened",
