@@ -701,18 +701,40 @@ def _fit_memory_index(mem: str, cap: int = None) -> str:
 
     # Bậc cuối: buộc phải bỏ bớt dòng. Giữ các dòng ĐẦU (ký ức nền tảng ghi sớm nhất) và nói rõ
     # còn bao nhiêu, kèm đường đọc tiếp - đừng để mất im lặng.
+    # 0.220.0: also NAME the hidden memories (file names only, within a small budget). A model
+    # cannot look up a memory it does not know exists: with only a count, "who is Lan?" got "I do
+    # not know" while facts/lan-em-gai.md sat on disk unread.
+    hidden_budget = min(1200, cap // 5)
     kept, total = [], 0
     items = 0
-    for l in rebuild(None).split("\n"):
-        if total + len(l) + 1 > cap - 300:
+    rebuilt = rebuild(None).split("\n")
+    for l in rebuilt:
+        if total + len(l) + 1 > cap - 300 - hidden_budget:
             break
         kept.append(l)
         total += len(l) + 1
         if _MEM_ITEM_RE.match(l):
             items += 1
     con_lai = sum(1 for l in lines if _MEM_ITEM_RE.match(l)) - items
+    names = []
+    used = 0
+    for l in rebuilt[len(kept):]:
+        m = _MEM_ITEM_RE.match(l)
+        link = re.search(r"\]\(([^)]*)\)", m.group(1)) if m else None
+        if not link:
+            continue
+        slug = Path(link.group(1).strip()).stem
+        if not slug:
+            continue
+        if used + len(slug) + 2 > hidden_budget:
+            names.append("…")
+            break
+        names.append(slug)
+        used += len(slug) + 2
+    ten = (f" Tên file của chúng: {', '.join(names)}. Cần ký ức nào thì đọc memory/facts/<tên>.md."
+           if names else "")
     return "\n".join(kept) + (
-        f"\n\n> (Chỉ mục quá dài nên còn {con_lai} ký ức chưa liệt kê ở đây. "
+        f"\n\n> (Chỉ mục quá dài nên còn {con_lai} ký ức chưa liệt kê ở đây.{ten} "
         "Đọc memory/MEMORY.md để xem đủ danh sách, và memory/facts/ để xem chi tiết.)")
 
 
