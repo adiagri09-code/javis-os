@@ -2194,7 +2194,7 @@
     // openForm(loop) = tạo/sửa việc lặp · openForm(null, rem) = SỬA một nhắc hẹn/lịch cron.
     // Trước đây nhắc hẹn tạo xong là bất động (chỉ huỷ/chuyển brain) - muốn đổi giờ cron phải
     // xoá rồi tạo lại, đúng chỗ khách báo "không sửa được lịch cron".
-    // `tpl` (0.220.0): a ready-made reminder from /reminders/templates pre-fills a NEW reminder.
+    // `tpl` (0.222.0): a ready-made reminder from /reminders/templates pre-fills a NEW reminder.
     // Nothing is created until Save, so the usual checks (report channel, can_force) still apply.
     async function openForm(lp, rem, tpl) {
       await ensureBrains();   // đảm bảo ô brain luôn có lựa chọn dù /viec/all chưa tải xong

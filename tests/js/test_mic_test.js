@@ -1,4 +1,4 @@
-/* Mic and speaker test in Settings > Voice (dashboard/mic-test.js, 0.220.0). Pure part, under node.
+/* Mic and speaker test in Settings > Voice (dashboard/mic-test.js, 0.222.0). Pure part, under node.
 
        node tests/js/test_mic_test.js */
 const M = require("../../dashboard/mic-test.js");

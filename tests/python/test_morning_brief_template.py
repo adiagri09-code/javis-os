@@ -1,4 +1,4 @@
-"""Ready-made "Morning brief" on the recurring-work page (0.220.0).
+"""Ready-made "Morning brief" on the recurring-work page (0.222.0).
 
     python tests/run.py morning_brief_template
 

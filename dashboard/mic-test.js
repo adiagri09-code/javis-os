@@ -1,4 +1,4 @@
-/* mic-test.js - "Test mic" and "Test speaker" in Settings > Voice (0.220.0).
+/* mic-test.js - "Test mic" and "Test speaker" in Settings > Voice (0.222.0).
 
    Every automatic check runs on silence, so a muted mic, a level slider at zero or a privacy
    shutter all pass and the call simply hears nothing. Only a person speaking can settle that: the

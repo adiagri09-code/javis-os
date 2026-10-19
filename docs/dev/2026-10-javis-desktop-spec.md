@@ -75,7 +75,7 @@ Việc nền (loop, nhắc hẹn) ở mức `suggest` hay `auto` vẫn thấy đ
 
 ## 6. Báo kết quả trung thực
 
-Dùng chung bộ chữ kết quả đã có ở `desktop-apps` từ 0.219.0:
+Dùng chung bộ chữ kết quả đã có ở `desktop-apps` từ 0.221.0:
 
 - `[done]` (đã đọc lại thật),
 - `[unverified]` (đã gửi lệnh, không kiểm được),

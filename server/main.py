@@ -701,7 +701,7 @@ def _fit_memory_index(mem: str, cap: int = None) -> str:
 
     # Bậc cuối: buộc phải bỏ bớt dòng. Giữ các dòng ĐẦU (ký ức nền tảng ghi sớm nhất) và nói rõ
     # còn bao nhiêu, kèm đường đọc tiếp - đừng để mất im lặng.
-    # 0.220.0: also NAME the hidden memories (file names only, within a small budget). A model
+    # 0.222.0: also NAME the hidden memories (file names only, within a small budget). A model
     # cannot look up a memory it does not know exists: with only a count, "who is Lan?" got "I do
     # not know" while facts/lan-em-gai.md sat on disk unread.
     hidden_budget = min(1200, cap // 5)

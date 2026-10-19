@@ -1,4 +1,4 @@
-"""A background-job link that just failed rests before it is tried first again (0.220.0).
+"""A background-job link that just failed rests before it is tried first again (0.222.0).
 
     python tests/run.py aux_cooldown
 

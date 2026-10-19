@@ -136,7 +136,7 @@ _SCRIPT_RUNNERS = {
 
 
 def morning_brief_template() -> dict:
-    """Ready-made "Morning brief" for the recurring-work page (0.220.0). Never created on its own:
+    """Ready-made "Morning brief" for the recurring-work page (0.222.0). Never created on its own:
     the page pre-fills the form with it and the person presses Save, so the usual checks still run
     (no report channel -> can_force). Read-and-report level: a brief only reads and summarises."""
     return {

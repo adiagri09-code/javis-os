@@ -451,7 +451,7 @@ class _ApiAuxEngine:
             print(f"[aux usage] {type(e).__name__}: {e}", file=sys.stderr)
 
 
-# ---- Cooldown of broken links (0.220.0) ----
+# ---- Cooldown of broken links (0.222.0) ----
 # A link that just failed is put to rest for a while, so the next background job does not pay for
 # the same dead model again (a 504 can take 15 seconds to arrive). Process memory only: a restart
 # forgets, which is the right default after an update or a new key. Resting links are not skipped,
