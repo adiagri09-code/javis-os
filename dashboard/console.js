@@ -2013,6 +2013,7 @@
     el.innerHTML = `<div class="cview-section">
       <div class="si-actions" style="margin-bottom:14px;align-items:center">
         <button class="s-btn" id="lpNew">+ ${esc(window.t("cs.si_add"))}</button>
+        <button class="s-btn-ghost" id="lpMorning">${ic("sun")} ${esc(window.t("cs.si_morning"))}</button>
         <button class="s-btn-ghost" id="lpStop">■ ${esc(window.t("cs.si_stop"))}</button>${infoBtn()}
       </div>
       ${infoBody(`${esc(window.t("cs.si_intro_a"))} <b>loop</b> ${esc(window.t("cs.si_intro_b"))} <b>${esc(window.t("cs.si_intro_c"))}</b> ${esc(window.t("cs.si_intro_d"))} <b>${esc(window.t("cs.si_intro_e"))}</b> ${esc(window.t("cs.si_intro_f"))} <b>${esc(window.t("cs.si_intro_g"))}</b> ${esc(window.t("cs.si_intro_h"))}`)}
@@ -2193,27 +2194,29 @@
     // openForm(loop) = tạo/sửa việc lặp · openForm(null, rem) = SỬA một nhắc hẹn/lịch cron.
     // Trước đây nhắc hẹn tạo xong là bất động (chỉ huỷ/chuyển brain) - muốn đổi giờ cron phải
     // xoá rồi tạo lại, đúng chỗ khách báo "không sửa được lịch cron".
-    async function openForm(lp, rem) {
+    // `tpl` (0.220.0): a ready-made reminder from /reminders/templates pre-fills a NEW reminder.
+    // Nothing is created until Save, so the usual checks (report channel, can_force) still apply.
+    async function openForm(lp, rem, tpl) {
       await ensureBrains();   // đảm bảo ô brain luôn có lựa chọn dù /viec/all chưa tải xong
       fcur = { mode: lp ? lp.mode : "full" };
-      fkind = rem ? "reminder" : "loop";
-      frmode = rem && rem.mode === "task" ? "task" : "notify";
+      fkind = (rem || tpl) ? "reminder" : "loop";
+      frmode = (rem && rem.mode === "task") || (tpl && tpl.mode === "task") ? "task" : "notify";
       // Mở form một nhắc hẹn cũ thì hiện ĐÚNG mức nó đang chạy (bản ghi cũ chưa có trường này
       // thì server đã quy về mặc định trong _view, nên chỗ này không phải đoán lại).
-      frmq = (rem && rem.muc_quyen) || "full";
+      frmq = (rem && rem.muc_quyen) || (tpl && tpl.muc_quyen) || "full";
       el.querySelector("#lpRemLast").checked = !!(rem && rem.remember_last);
       el.querySelector("#lpRemSpeak").checked = !!(rem && rem.speak);
       el.querySelector("#lpRemCall").checked = !!(rem && rem.call);
       const locked = !!(lp || rem);   // đang SỬA (loop hay nhắc) → khoá loại việc + brain
       el.querySelector("#lpSlug").value = lp ? lp.slug : "";
       el.querySelector("#lpRemId").value = rem ? rem.id : "";
-      el.querySelector("#lpName").value = rem ? (rem.label || "") : (lp ? lp.name : "");
-      el.querySelector("#lpBody").value = rem ? (rem.text || "") : (lp ? (lp.body || "") : "");
+      el.querySelector("#lpName").value = rem ? (rem.label || "") : tpl ? (tpl.label || "") : (lp ? lp.name : "");
+      el.querySelector("#lpBody").value = rem ? (rem.text || "") : tpl ? (tpl.text || "") : (lp ? (lp.body || "") : "");
       el.querySelector("#lpInterval").value = lp ? lp.interval_min : 120;
       // Cron sửa được nguyên văn (không phụ thuộc múi giờ). Hẹn MỘT LẦN thì để trống + nói rõ
       // "trống = giữ nguyên", vì viết lại mốc giờ tuyệt đối dễ lệch múi giờ máy người dùng.
       const when = el.querySelector("#lpRemWhen");
-      when.value = rem && rem.cron ? rem.cron : "";
+      when.value = rem && rem.cron ? rem.cron : (tpl && tpl.cron) || "";
       when.placeholder = (rem && !rem.cron)
         ? window.t("cs.si_when_keep", { luc: fmtWhen(rem.due_at) })
         : window.t("cs.si_when_ph2");
@@ -2244,6 +2247,12 @@
       el.querySelector("#lpName").focus();
     }
     el.querySelector("#lpNew").onclick = () => openForm(null);
+    el.querySelector("#lpMorning").onclick = async () => {
+      let d = null;
+      try { d = await (await fetch("/reminders/templates", { cache: "no-store" })).json(); } catch (e) {}
+      const tpl = ((d && d.templates) || []).find(x => x.id === "morning_brief");
+      if (tpl) openForm(null, null, tpl);
+    };
     el.querySelector("#lpCancel").onclick = () => { el.querySelector("#lpForm").style.display = "none"; };
 
     el.querySelector("#lpSave").onclick = async () => {

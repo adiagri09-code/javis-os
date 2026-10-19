@@ -134,6 +134,32 @@ _SCRIPT_RUNNERS = {
 }
 
 
+
+def morning_brief_template() -> dict:
+    """Ready-made "Morning brief" for the recurring-work page (0.220.0). Never created on its own:
+    the page pre-fills the form with it and the person presses Save, so the usual checks still run
+    (no report channel -> can_force). Read-and-report level: a brief only reads and summarises."""
+    return {
+        "id": "morning_brief",
+        "label": localefmt.chu("Bản tin buổi sáng", "Morning brief"),
+        "cron": "0 7 * * *",
+        "mode": "task",
+        "muc_quyen": "suggest",
+        "text": localefmt.chu(
+            "Soạn bản tin buổi sáng ngắn cho tôi, tối đa 10 dòng: "
+            "1) chào và nói giờ hiện tại; "
+            "2) lịch hôm nay nếu đã kết nối lịch (Google Calendar hay tương tự), chưa kết nối thì bỏ mục này; "
+            "3) nhắc ngắn chuyện hôm qua đã bàn, đọc từ memory/conversations/ của ngày hôm qua nếu có; "
+            "4) vài tin đáng chú ý trong lĩnh vực của tôi nếu có công cụ tìm kiếm web, không có thì bỏ. "
+            "Không bịa số liệu: mục nào không có nguồn thì bỏ qua.",
+            "Write me a short morning brief, 10 lines at most: "
+            "1) greet me and say the current time; "
+            "2) today's calendar if a calendar is connected (Google Calendar or similar), otherwise skip it; "
+            "3) a short recap of what we discussed yesterday, from yesterday's file in memory/conversations/ if there is one; "
+            "4) a few notable news items in my field if a web search tool is available, otherwise skip it. "
+            "Do not invent numbers: skip any part that has no source."),
+    }
+
 class NotifyNotReady(ValueError):
     """Chưa có đường gửi kết quả (bot Telegram chưa bật / chưa có Chat ID).
 
@@ -948,6 +974,11 @@ class RemindersFeature:
                     # Kèm lời đọc để chỗ gọi (chat) nhắc lại lịch bằng tiếng Việt, khỏi bắt user
                     # tự dịch "0 7 * * *".
                     "cron_human": cron_util.describe_cron(rem["cron"]) if rem["cron"] else ""}
+
+        @router.get("/reminders/templates")
+        async def reminders_templates():
+            """Ready-made reminders the recurring-work page can pre-fill (never created here)."""
+            return {"templates": [morning_brief_template()]}
 
         @router.get("/reminders/scripts")
         async def reminders_scripts(brain: str = Query("brain")):

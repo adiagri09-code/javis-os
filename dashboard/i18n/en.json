@@ -1856,6 +1856,7 @@
   "cs.si_intro_g": "can read real data through MCP",
   "cs.si_intro_h": "(POS, ads, calendar...) and at Full access (the default) acts for real: creates orders, runs ads, publishes posts, sends messages. Pick Auto or Suggest for a lighter loop.",
   "cs.si_add": "Add job",
+  "cs.si_morning": "Morning brief",
   "cs.si_stop": "Stop the running round",
   "cs.si_kind": "Job type",
   "cs.si_kind_loop": "Repeating job",

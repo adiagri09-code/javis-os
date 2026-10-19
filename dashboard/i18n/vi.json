@@ -1856,6 +1856,7 @@
   "cs.si_intro_g": "đọc được dữ liệu thật qua MCP",
   "cs.si_intro_h": "(POS, quảng cáo, lịch...) và ở mức Toàn quyền (mặc định) tự thao tác thật: tạo đơn, chạy quảng cáo, đăng bài, gửi tin. Muốn nhẹ hơn thì chọn Tự làm hoặc Đề xuất.",
   "cs.si_add": "Thêm việc",
+  "cs.si_morning": "Bản tin buổi sáng",
   "cs.si_stop": "Dừng vòng đang chạy",
   "cs.si_kind": "Loại việc",
   "cs.si_kind_loop": "Việc lặp",
