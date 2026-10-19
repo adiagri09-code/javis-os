@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.232.0] - 2026-10-19
+### Sửa lỗi
+- **Dán ảnh lúc đang gọi Live không còn hai giọng trả lời chồng nhau.** (đang viết)
+
 ## [0.230.0] - 2026-10-19
 ### Thêm mới
 - **Nút ghi âm thành chữ trong khung chat.** Bấm micro, nói, chữ hiện dần trong ô nhập. Bấm ô vuông để dừng và sửa lại trước khi gửi, bấm mũi tên để gửi luôn, bấm X để huỷ. Javis không tự gửi gì cả.
