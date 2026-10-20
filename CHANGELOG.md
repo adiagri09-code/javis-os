@@ -8,7 +8,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.248.0] - 2026-10-20
 ### Sửa lỗi
-- **Tên miền trên Hostinger: Javis nói rõ bước nào đang hỏng.** (đang viết)
+- **Tên miền trên Hostinger: Javis nói rõ bước nào đang hỏng.** Trước đây đã trỏ DNS đúng mà tên miền chưa mở được thì Cài đặt chỉ ghi "SSL: qua Hostinger", kèm câu gợi ý DNS có thể sai. Giờ Javis tự mở tên miền từ máy chủ và ghi đúng nguyên nhân: Hostinger chưa nhận tên miền (cần đặt DOMAIN_NAME rồi Redeploy), đang chờ cấp chứng chỉ, proxy không gọi được Javis, tên miền mở nhầm trang khác, hay cổng 443 không trả lời.
+- Ai sửa thẳng dòng `Host(...)` trong file YAML thay vì đặt DOMAIN_NAME thì Javis không còn báo mãi "còn bước Redeploy" khi tên miền đã chạy.
 
 ## [0.246.0] - 2026-10-20
 ### Cải thiện
