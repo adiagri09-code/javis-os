@@ -42,6 +42,9 @@ DEFAULT_CAPS = {
     "judge_daily": 40,
     "volunteer_k": 1,
     "judge_off_batch": 1,
+    # 0.260.0 (chủ 20/10/2026): các người được @ trong một tin trả lời CÙNG LÚC (1) hay lần lượt theo thứ tự @ (0, người sau
+    # đọc được câu của người trước, như trước 0.260.0).
+    "reply_parallel": 1,
 }
 # Trần chủ nhóm đổi được (POST /teams/{id}/caps). GOAL T1 mục 9 (bảng giới hạn): `running_jobs` và `no_progress` vẫn nằm
 # trong DEFAULT_CAPS để hiện và để đọc dòng cũ, nhưng do MÁY CHỦ cố định:
@@ -50,11 +53,11 @@ DEFAULT_CAPS = {
 #   giới hạn kỹ thuật, thay vì mở song song trong một nhóm (đụng khoá bận theo agent, thứ tự hàng đợi, ngữ cảnh chung).
 # - no_progress: bộ chạy dừng ở hai kết quả GIỐNG HỆT liên tiếp (so sha), con số không được đọc ở đâu.
 OWNER_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns", "mentions", "busy_wait_s", "judge_daily",
-              "volunteer_k", "judge_off_batch")
+              "volunteer_k", "judge_off_batch", "reply_parallel")
 # Trần có lựa chọn "Không giới hạn" (lưu `None`, không thay bằng số lớn). Bộ chạy đọc `None` là không chặn.
 UNLIMITED_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns", "judge_daily")
 # Giá trị lớn nhất của các ô không phải trần lượt (T3 J): K tối đa 5 người, chế độ phán xử là 0 hay 1.
-CAP_MAX = {"volunteer_k": 5, "judge_off_batch": 1}
+CAP_MAX = {"volunteer_k": 5, "judge_off_batch": 1, "reply_parallel": 1}
 FIXED_CAPS = {"running_jobs": 1, "no_progress": 2}
 TEAM_STATUS = ("active", "paused", "archived")
 STEP_KINDS = ("plan", "work", "help", "synthesize", "reply")
@@ -712,6 +715,12 @@ class TeamStore:
             r = c.execute("SELECT * FROM team_steps WHERE task_id=? AND status='queued' ORDER BY seq LIMIT 1",
                           (task_id,)).fetchone()
             return self._step(r) if r else None
+
+    def queued_steps(self, task_id: str) -> list:
+        """Mọi bước đang chờ của việc theo thứ tự (0.260.0: bộ chạy gom bước Làm/Hỗ trợ thành một đợt chạy song song)."""
+        with closing(self._conn()) as c:
+            return [self._step(r) for r in c.execute(
+                "SELECT * FROM team_steps WHERE task_id=? AND status='queued' ORDER BY seq", (task_id,)).fetchall()]
 
     def claim_step(self, step_id: str) -> bool:
         with self._Tx(self) as c:

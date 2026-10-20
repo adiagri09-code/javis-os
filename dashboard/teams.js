@@ -58,7 +58,8 @@
     server_ceiling: "teams.block.server_ceiling" };
   var CAP_KEY = { task_turns: "teams.cap.task_turns", task_steps: "teams.cap.task_steps", daily_turns: "teams.cap.daily_turns",
     mentions: "teams.cap.mentions", help_depth: "teams.cap.help_depth", busy_wait_s: "teams.cap.busy_wait_s",
-    judge_daily: "teams.cap.judge_daily", volunteer_k: "teams.cap.volunteer_k", judge_off_batch: "teams.cap.judge_off_batch" };
+    judge_daily: "teams.cap.judge_daily", volunteer_k: "teams.cap.volunteer_k", judge_off_batch: "teams.cap.judge_off_batch",
+    reply_parallel: "teams.cap.reply_parallel" };
   var TAB_KEY = { info: "teams.tab_info", jobs: "teams.tab_jobs", team: "teams.tab_team" };
   var LATE = ["late_cancelled", "late", "old_revision", "member_left", "leader_changed", "lease_lost"];
   // Trần chủ nhóm chỉnh được (team_store.OWNER_CAPS). Bốn trần đầu có "Không giới hạn" (lưu null, GOAL T1 mục 9).
@@ -66,7 +67,11 @@
     "volunteer_k"];
   var OWNER_UNL = ["task_turns", "task_steps", "help_depth", "daily_turns", "judge_daily"];
   // Ô chọn chế độ (T3 phần J): phán xử khi Cộng hưởng của trợ lý tắt, 1 = lọc code + lô, 0 = chỉ lọc code. Chỉ chủ chỉnh.
-  var CAP_MODES = ["judge_off_batch"];
+  // 0.260.0: reply_parallel, 1 = mọi người được @ trả lời cùng lúc, 0 = lần lượt theo thứ tự @.
+  var CAP_MODES = ["judge_off_batch", "reply_parallel"];
+  // Nhãn hai lựa chọn của từng ô chế độ: [nhãn của 1, nhãn của 0]. Khoá viết trọn cho bộ kiểm i18n.
+  var MODE_LABELS = { judge_off_batch: ["teams.limits.mode_batch", "teams.limits.mode_code"],
+    reply_parallel: ["teams.limits.mode_parallel", "teams.limits.mode_sequential"] };
   // Bảng giới hạn (GOAL T1 mục 9): bốn nhóm theo ai đổi được, nhãn từng dòng. Khoá viết trọn cho bộ kiểm i18n.
   var LIMIT_CATS = [{ id: "owner", key: "teams.limits.owner" }, { id: "leader", key: "teams.limits.leader" },
     { id: "server", key: "teams.limits.server" }, { id: "provider", key: "teams.limits.provider" }];
@@ -75,7 +80,8 @@
     "pulse.tier_6", "pulse.tier_7", "pulse.tier_8"];
   var LIMIT_KEY = { running_jobs: "teams.limits.running_jobs", max_parallel_teams: "teams.limits.max_parallel_teams",
     agent_one_turn: "teams.limits.agent_one_turn",
-    engine_slots_cli: "teams.limits.engine_slots_cli", engine_slots_api: "teams.limits.engine_slots_api", busy_lease: "teams.limits.busy_lease", no_progress: "teams.limits.no_progress",
+    engine_slots_cli: "teams.limits.engine_slots_cli", engine_slots_api: "teams.limits.engine_slots_api",
+    job_parallel: "teams.limits.job_parallel", tool_slots: "teams.limits.tool_slots", busy_lease: "teams.limits.busy_lease", no_progress: "teams.limits.no_progress",
     turn_timeout: "teams.limits.turn_timeout", step_timeout: "teams.limits.step_timeout",
     admin_ops_per_turn: "teams.limits.admin_ops_per_turn", history_window: "teams.limits.history_window",
     text_only: "teams.limits.text_only", server_call_ceiling: "teams.limits.server_call_ceiling",
@@ -1266,8 +1272,8 @@
     capRows += CAP_MODES.map(function (k) {
       var cur = caps[k] === 0 ? "0" : "1";
       return '<label class="tm-field tm-cap"><span>' + esc(tw(CAP_KEY[k])) + '</span><select name="tm-cap-' + k + '">' +
-        '<option value="1"' + (cur === "1" ? " selected" : "") + ">" + esc(tw("teams.limits.mode_batch")) + "</option>" +
-        '<option value="0"' + (cur === "0" ? " selected" : "") + ">" + esc(tw("teams.limits.mode_code")) + "</option>" +
+        '<option value="1"' + (cur === "1" ? " selected" : "") + ">" + esc(tw(MODE_LABELS[k][0])) + "</option>" +
+        '<option value="0"' + (cur === "0" ? " selected" : "") + ">" + esc(tw(MODE_LABELS[k][1])) + "</option>" +
         "</select></label>";
     }).join("");
     return '<form class="tm-form tm-caps-form" onsubmit="return false"><div class="tm-qhead">' + esc(tw("teams.caps")) + "</div>" +
@@ -1282,7 +1288,10 @@
 
   function limitValue(x) {
     if (x.unit === "rule") return "";
-    if (x.unit === "mode") return tw(x.value === 0 ? "teams.limits.mode_code" : "teams.limits.mode_batch");
+    if (x.unit === "mode") {
+      var ml = MODE_LABELS[x.key] || MODE_LABELS.judge_off_batch;
+      return tw(x.value === 0 ? ml[1] : ml[0]);
+    }
     if (x.value === null || x.value === undefined) return tw("teams.auth.unlimited");
     if (x.unit === "seconds") {
       return x.value >= 60 && x.value % 60 === 0 ? tw("teams.limits.minutes", { n: x.value / 60 })

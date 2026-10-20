@@ -133,10 +133,13 @@ check("TC7 một @: chỉ người được @ trả lời", [c["agent_key"] for 
       and fake.calls[0]["role"] == "member_reply")
 fake.calls.clear()
 fake.say("ag_minh", "member_reply", "Minh nói: số liệu tuần là 42")
+# 0.260.0: several @ answer at the same time by default; the team's `reply_parallel` 0 keeps the old order.
+tm.set_caps(T["team_id"], {"reply_parallel": 0})
 s4 = r.submit(T["team_id"], "Hai bạn xem", mentions=["ag_minh", "ag_hoa"], client_msg_id="c3")
 run(r.run_replies(s4))
-check("TC7 nhiều @: đúng thứ tự @", [c["agent_key"] for c in fake.calls] == ["ag_minh", "ag_hoa"])
-check("TC7 người sau thấy câu trả lời của người trước", "số liệu tuần là 42" in fake.calls[1]["prompt"])
+check("TC7 lần lượt: đúng thứ tự @", [c["agent_key"] for c in fake.calls] == ["ag_minh", "ag_hoa"])
+check("TC7 lần lượt: người sau thấy câu trả lời của người trước", "số liệu tuần là 42" in fake.calls[1]["prompt"])
+tm.set_caps(T["team_id"], {"reply_parallel": 1})
 before = len(msgs(ss, T))
 try:
     r.submit(T["team_id"], "Đông quá", mentions=["ag_minh", "ag_hoa", "ag_lan", "ag_tu"], client_msg_id="c4")
@@ -195,19 +198,24 @@ fake.say("ag_lan", "synthesize", "Tổng hợp: nội dung và ảnh đã xong")
 job = r.submit(T["team_id"], "Soạn kế hoạch ra mắt", as_job=True, client_msg_id="j1")
 started = run(r.dispatch_once(wait=True))
 check("TC10 điều phối nhận đúng việc", started == [job["task_id"]])
-check("TC10 thứ tự lượt: plan, work Minh, work Hoa, synthesize", [(c["agent_key"], c["role"]) for c in fake.calls] == [
-    ("ag_lan", "plan"), ("ag_minh", "work"), ("ag_hoa", "work"), ("ag_lan", "synthesize")])
+# 0.260.0: the two Work steps run side by side in one wave, so their order is free; plan first, synthesis last.
+calls = [(c["agent_key"], c["role"]) for c in fake.calls]
+check("TC10 thứ tự lượt: plan, hai bước Làm (cùng đợt), synthesize", len(calls) == 4 and calls[0] == ("ag_lan", "plan")
+      and sorted(calls[1:3]) == [("ag_hoa", "work"), ("ag_minh", "work")] and calls[3] == ("ag_lan", "synthesize"), calls)
 task = ts.get_task(job["task_id"])
 check("TC10 việc xong, kết quả là bản tổng hợp", task["status"] == "done" and "Tổng hợp" in task["result"])
 agent_msgs = [m for m in msgs(ss, T) if m["author_kind"] == "agent"]
 check("TC10 mỗi tin có tác giả, nhãn việc, bước, vai", all(m["task_id"] == job["task_id"] and m["step_id"]
                                                           and m["meta"].get("role") for m in agent_msgs)
-      and [m["author_ref"] for m in agent_msgs] == ["ag_lan", "ag_minh", "ag_hoa", "ag_lan"])
+      and [m["author_ref"] for m in agent_msgs][0] == "ag_lan" and [m["author_ref"] for m in agent_msgs][-1] == "ag_lan"
+      and sorted(m["author_ref"] for m in agent_msgs[1:3]) == ["ag_hoa", "ag_minh"])
 check("TC10 bản tổng hợp gắn nhãn Kết quả việc", agent_msgs[-1]["meta"].get("job_result") is True
       and agent_msgs[-1]["meta"].get("applied") is True)
 check("TC10 khối chỉ dẫn không lọt vào tin", all("JAVIS_TEAM" not in m["content"] for m in agent_msgs))
-check("TC10 brief của bước đến đúng người làm", "Viết nội dung" in fake.calls[1]["prompt"]
-      and "Làm ảnh" in fake.calls[2]["prompt"])
+check("TC10 brief của bước đến đúng người làm", "Viết nội dung" in fake.by("ag_minh", "work")[0]["prompt"]
+      and "Làm ảnh" in fake.by("ag_hoa", "work")[0]["prompt"])
+check("TC10 bước cùng đợt được báo đồng đội đang làm song song", "Hoa" in fake.by("ag_minh", "work")[0]["prompt"]
+      and "CÙNG LÚC" in fake.by("ag_hoa", "work")[0]["prompt"])
 check("TC10 tổng hợp thấy kết quả các bước", "Nội dung xong" in fake.calls[3]["prompt"] and "Ảnh xong" in fake.calls[3]["prompt"])
 check("TC10 lượt không cầm khoá bận sau khi xong", all(tm.busy_of(k) is None for k in AGENTS))
 
@@ -229,8 +237,9 @@ check("TC11 bắt đầu bằng work của người được @, trưởng nhóm 
 fake.calls.clear()
 j4 = r.submit(T["team_id"], "Hai bạn làm", mentions=["ag_minh", "ag_hoa"], as_job=True, client_msg_id="j4")
 run(r.dispatch_once(wait=True))
-check("TC11 nhiều @: mỗi người một work rồi trưởng nhóm tổng hợp",
-      [(c["agent_key"], c["role"]) for c in fake.calls] == [("ag_minh", "work"), ("ag_hoa", "work"), ("ag_lan", "synthesize")])
+calls = [(c["agent_key"], c["role"]) for c in fake.calls]
+check("TC11 nhiều @: mỗi người một work (cùng đợt, thứ tự tự do) rồi trưởng nhóm tổng hợp", len(calls) == 3
+      and sorted(calls[:2]) == [("ag_hoa", "work"), ("ag_minh", "work")] and calls[2] == ("ag_lan", "synthesize"), calls)
 
 # ---------- TC12: nhờ hỗ trợ, nhờ ngược, độ sâu, không tiến triển ----------
 ss, ts, tm, fake, r, pub, inbox, gone = world("help")
@@ -325,6 +334,7 @@ check("gỡ chặn chạy lại bước: việc xong", ts.get_task(ja["task_id"]
 
 # ---------- TC19, TC20: bỏ thành viên, đổi trưởng nhóm, sửa, huỷ giữa chừng ----------
 ss, ts, tm, fake, r, pub, inbox, gone = world("late")
+r.job_parallel = 1   # these cases time an event between two steps, so the steps run one by one (as before 0.260.0)
 T = make_team(tm, ss, "Muộn")
 TID = T["team_id"]
 
@@ -454,7 +464,11 @@ async def both():
     await asyncio.sleep(0.05)
     r.submit(Y["team_id"], "Việc Y", mentions=["ag_minh"], as_job=True, client_msg_id="y1")
     await r.dispatch_once(wait=False)
-    await asyncio.sleep(0.05)
+    # Wait for the condition, not a fixed time: on a loaded machine Y's turn needs several thread hops to start.
+    for _ in range(300):
+        if ("start", Y["team_id"]) in order:
+            break
+        await asyncio.sleep(0.01)
     waiting = r.busy_view(Y["team_id"])
     gate.set()
     await r.wait_jobs()
@@ -462,10 +476,10 @@ async def both():
 
 
 waiting = run(both())
-# 0.257.0: the busy lock is per thread (agent + team), so the agent lock no longer makes Y wait. These two are Work steps
-# of the same brain, and those still take turns behind the brain's tool lock (0.194.0).
-check("TC21 bước Làm cùng brain vẫn lần lượt (khoá công cụ theo brain)", order == [
-    ("start", X["team_id"]), ("end", X["team_id"]), ("start", Y["team_id"])], str(order))
+# 0.257.0: the busy lock is per thread (agent + team); 0.260.0: tool turns share a slot of the folder, TOOL_SLOTS wide.
+# So Minh's Work step in Y starts while the one in X is still running.
+check("TC21 cùng agent làm việc ở hai nhóm cùng lúc", order[:2] == [("start", X["team_id"]), ("start", Y["team_id"])]
+      and ("end", X["team_id"]) in order, str(order))
 check("TC21 khoá bận theo mạch: nhóm Y không thấy agent bị nhóm X giữ", waiting == {}, str(waiting))
 rx = [m for m in msgs(ss, X) if m["author_kind"] == "agent"]
 ry = [m for m in msgs(ss, Y) if m["author_kind"] == "agent"]
@@ -550,6 +564,10 @@ async def same_team():
     s1 = r.submit(X["team_id"], "Câu một", mentions=["ag_minh"], client_msg_id="px2")
     s2 = r.submit(X["team_id"], "Câu hai", mentions=["ag_minh"], client_msg_id="px3")
     tasks = [asyncio.ensure_future(r.run_replies(s1)), asyncio.ensure_future(r.run_replies(s2))]
+    for _ in range(300):   # first turn started (condition, not a fixed time), then give a second turn room to start
+        if live["now"] >= 1:
+            break
+        await asyncio.sleep(0.01)
     await asyncio.sleep(0.2)
     first = live["now"]
     gate.set()
@@ -570,6 +588,10 @@ async def one_slot():
     sx = r.submit(X["team_id"], "Lan ơi", client_msg_id="px4")
     sy = r.submit(Y["team_id"], "Hoa ơi", client_msg_id="py4")
     tasks = [asyncio.ensure_future(r.run_replies(sx)), asyncio.ensure_future(r.run_replies(sy))]
+    for _ in range(300):   # first turn started (condition, not a fixed time), then give a second turn room to start
+        if live["now"] >= 1:
+            break
+        await asyncio.sleep(0.01)
     await asyncio.sleep(0.2)
     first = live["now"]
     gate.set()
@@ -680,7 +702,8 @@ fake.say("ag_lan", "plan", "Chia." + directive(op="assign", agent="minh", brief=
 j = r.submit(TID, "Việc tên hiển thị", as_job=True, client_msg_id="v1")
 run(r.dispatch_once(wait=True))
 check("review I1: giao theo tên hiển thị (khác hoa thường) vẫn tới đúng người",
-      [(c["agent_key"], c["role"]) for c in fake.calls][:3] == [("ag_lan", "plan"), ("ag_minh", "work"), ("ag_hoa", "work")],
+      [(c["agent_key"], c["role"]) for c in fake.calls][0] == ("ag_lan", "plan")
+      and sorted((c["agent_key"], c["role"]) for c in fake.calls[1:3]) == [("ag_hoa", "work"), ("ag_minh", "work")],
       str([(c["agent_key"], c["role"]) for c in fake.calls]))
 fake.calls.clear()
 fake.say("ag_lan", "plan", "Chia." + directive(op="assign", agent="Người lạ", brief="a"))
@@ -778,9 +801,151 @@ async def lock_leak():
         await t
     except asyncio.CancelledError:
         pass
-    return r._lock_for("ag_tu").locked()
+    return r._lock_for(tm.busy_slot("ag_tu", T["team_id"])).locked()
 
 
 check("review: huỷ lúc đang chờ khoá bận trong kho không giữ khoá trong tiến trình", run(lock_leak()) is False)
 tm.release_busy("ag_tu", "tu_khac")
+
+# ---------- 0.260.0: trả lời song song trong một nhóm, bước Làm chạy theo đợt ----------
+ss, ts, tm, fake, r, pub, inbox, gone = world("wave")
+T = make_team(tm, ss, "Đợt")
+TID = T["team_id"]
+live = {"now": 0, "peak": 0}
+
+
+def slow(text, gate=None):
+    async def answer(req):
+        live["now"] += 1
+        live["peak"] = max(live["peak"], live["now"])
+        try:
+            if gate is not None:
+                await asyncio.wait_for(gate.wait(), 2)
+            else:
+                await asyncio.sleep(0.1)
+        finally:
+            live["now"] -= 1
+        return text
+    return answer
+
+
+fake.say("ag_minh", "member_reply", slow("Minh trả lời"))
+fake.say("ag_hoa", "member_reply", slow("Hoa trả lời"))
+s1 = r.submit(TID, "Hai bạn xem giúp", mentions=["ag_minh", "ag_hoa"], client_msg_id="w1")
+outs = run(r.run_replies(s1))
+check("0.260.0 nhiều @ trong một tin: trả lời CÙNG LÚC", live["peak"] == 2 and len(outs) == 2, (live, outs))
+check("0.260.0 cả hai lượt có kết cục done", [x["status"] for x in tm.replies_of(TID, s1["message_id"])] == ["done", "done"],
+      tm.replies_of(TID, s1["message_id"]))
+
+live.update(now=0, peak=0)
+
+
+async def cancel_replies():
+    gate = asyncio.Event()
+    fake.say("ag_minh", "member_reply", slow("không tới", gate))
+    fake.say("ag_hoa", "member_reply", slow("không tới", gate))
+    sub = r.submit(TID, "Rồi huỷ", mentions=["ag_minh", "ag_hoa"], client_msg_id="w2")
+    t = asyncio.ensure_future(r.run_replies(sub))
+    for _ in range(100):
+        if live["now"] == 2:
+            break
+        await asyncio.sleep(0.01)
+    t.cancel()
+    try:
+        await t
+    except asyncio.CancelledError:
+        pass
+    return sub
+
+sub = run(cancel_replies())
+rows = tm.replies_of(TID, sub["message_id"])
+check("0.260.0 huỷ giữa lúc trả lời song song: mọi lượt thành lỗi có Thử lại, không treo",
+      [x["status"] for x in rows] == ["error", "error"] and all(x["reason"] == "interrupted" for x in rows), rows)
+check("0.260.0 huỷ xong không còn dòng khoá bận", tm.busy_of("ag_minh") is None and tm.busy_of("ag_hoa") is None)
+
+# Một bước của đợt lỗi: bước kia vẫn được áp dụng; Chạy lại chỉ chạy lại bước lỗi, rồi tổng hợp đủ hai kết quả.
+fake.calls.clear()
+live.update(now=0, peak=0)
+# The failing step comes FIRST in the wave, so this also checks that clean results are applied before the failure.
+fake.say("ag_lan", "plan", "Chia." + directive(op="assign", agent="ag_hoa", brief="phần B")
+         + directive(op="assign", agent="ag_minh", brief="phần A"))
+fake.say("ag_minh", "work", slow("Phần A xong"))
+fake.say("ag_hoa", "work", RuntimeError("engine hỏng"))
+fake.say("ag_hoa", "work", "Phần B xong")
+fake.say("ag_lan", "synthesize", "Tổng hợp A và B")
+j = r.submit(TID, "Việc chia đôi", as_job=True, client_msg_id="w3")
+run(r.dispatch_once(wait=True))
+steps = {(st["agent_key"], st["kind"]): st for st in tm.steps(j["task_id"])}
+check("0.260.0 đợt có một bước lỗi: việc dừng failed", ts.get_task(j["task_id"])["block_kind"] == "failed")
+check("0.260.0 bước tốt cùng đợt vẫn được áp dụng, không thành đến muộn",
+      steps[("ag_minh", "work")]["status"] == "done" and steps[("ag_minh", "work")]["applied"] is True, steps)
+r.unblock(j["task_id"], "retry")
+run(r.dispatch_once(wait=True))
+check("0.260.0 Chạy lại: chỉ bước lỗi chạy lại, việc xong bằng bản tổng hợp hai kết quả",
+      ts.get_task(j["task_id"])["status"] == "done" and len(fake.by("ag_minh", "work")) == 1
+      and len(fake.by("ag_hoa", "work")) == 2 and "Phần A xong" in fake.by("ag_lan", "synthesize")[0]["prompt"]
+      and "Phần B xong" in fake.by("ag_lan", "synthesize")[0]["prompt"], ts.get_task(j["task_id"]))
+
+# Hai bước cùng đợt đều lỗi: bước dừng việc chờ Chạy lại, bước kia về hàng chờ (không mất), Chạy lại thì cả hai làm lại.
+fake.calls.clear()
+fake.say("ag_lan", "plan", "Chia." + directive(op="assign", agent="ag_minh", brief="phần C")
+         + directive(op="assign", agent="ag_hoa", brief="phần D"))
+fake.say("ag_minh", "work", RuntimeError("hỏng 1"), "Phần C xong")
+fake.say("ag_hoa", "work", RuntimeError("hỏng 2"), "Phần D xong")
+fake.say("ag_lan", "synthesize", "Tổng hợp C và D")
+j = r.submit(TID, "Việc hai lỗi", as_job=True, client_msg_id="w4")
+run(r.dispatch_once(wait=True))
+st = [x for x in tm.steps(j["task_id"]) if x["kind"] == "work"]
+check("0.260.0 hai bước lỗi: một bước failed, bước kia về hàng chờ",
+      sorted(x["status"] for x in st) == ["failed", "queued"] and ts.get_task(j["task_id"])["status"] == "team_blocked",
+      [(x["agent_key"], x["status"]) for x in st])
+r.unblock(j["task_id"], "retry")
+run(r.dispatch_once(wait=True))
+synth = fake.by("ag_lan", "synthesize")
+check("0.260.0 Chạy lại sau hai lỗi: cả hai phần làm lại, tổng hợp đủ", ts.get_task(j["task_id"])["status"] == "done"
+      and synth and "Phần C xong" in synth[0]["prompt"] and "Phần D xong" in synth[0]["prompt"],
+      (ts.get_task(j["task_id"]), [(c["agent_key"], c["role"]) for c in fake.calls]))
+
+# Huỷ việc giữa đợt: mọi lượt đang chạy bị ngắt, việc huỷ.
+fake.calls.clear()
+live.update(now=0, peak=0)
+
+
+async def cancel_wave():
+    gate = asyncio.Event()
+    fake.say("ag_lan", "plan", "Chia." + directive(op="assign", agent="ag_minh", brief="E")
+             + directive(op="assign", agent="ag_hoa", brief="F"))
+    fake.say("ag_minh", "work", slow("không tới", gate))
+    fake.say("ag_hoa", "work", slow("không tới", gate))
+    jj = r.submit(TID, "Việc bị huỷ giữa đợt", as_job=True, client_msg_id="w5")
+    await r.dispatch_once(wait=False)
+    for _ in range(200):
+        if live["now"] == 2:
+            break
+        await asyncio.sleep(0.01)
+    peak = live["peak"]
+    r.cancel_job(jj["task_id"], "chủ huỷ")
+    await r.wait_jobs()
+    return jj, peak
+
+jj, peak = run(cancel_wave())
+check("0.260.0 hai bước Làm của một việc chạy cùng lúc", peak == 2, peak)
+check("0.260.0 huỷ giữa đợt: việc huỷ, hai lượt đang chạy đều bị ngắt và tính một lần",
+      ts.get_task(jj["task_id"])["status"] == "cancelled"
+      and sorted(t["status"] for t in tm.turns(TID) if t["task_id"] == jj["task_id"] and t["role"] == "work")
+      == ["interrupted", "interrupted"], [t["status"] for t in tm.turns(TID) if t["task_id"] == jj["task_id"]])
+check("0.260.0 huỷ xong không còn dòng khoá bận", all(tm.busy_of(k) is None for k in AGENTS))
+
+# JAVIS_TEAM_JOB_PARALLEL=1: lần lượt như trước.
+fake.calls.clear()
+live.update(now=0, peak=0)
+r.job_parallel = 1
+fake.say("ag_lan", "plan", "Chia." + directive(op="assign", agent="ag_minh", brief="G")
+         + directive(op="assign", agent="ag_hoa", brief="H"))
+fake.say("ag_minh", "work", slow("G xong"))
+fake.say("ag_hoa", "work", slow("H xong"))
+j = r.submit(TID, "Việc lần lượt", as_job=True, client_msg_id="w6")
+run(r.dispatch_once(wait=True))
+check("0.260.0 một chỗ mỗi việc: bước Làm chạy lần lượt", live["peak"] == 1
+      and ts.get_task(j["task_id"])["status"] == "done", live)
 raise SystemExit(1 if fails else 0)
