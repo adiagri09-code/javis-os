@@ -2,7 +2,7 @@
 
 ***Tiếng Việt** · [English](en/33-login-vault.md)*
 
-Từ 0.251.0 Javis có trang **Cookies** (trước 0.258.0 tên là Kho đăng nhập): chỗ cất phiên đăng nhập riêng của bạn (cookie) để Javis dùng lại. Bạn đăng nhập một lần trên trình duyệt của mình, đưa cookie cho Javis, rồi Javis đọc được những trang chỉ hiện khi đã đăng nhập: kênh người bán Shopee, trang affiliate, trang quản trị web.
+Từ 0.251.0 Javis có trang **Cookies** (trước 0.261.0 tên là Kho đăng nhập): chỗ cất phiên đăng nhập riêng của bạn (cookie) để Javis dùng lại. Bạn đăng nhập một lần trên trình duyệt của mình, đưa cookie cho Javis, rồi Javis đọc được những trang chỉ hiện khi đã đăng nhập: kênh người bán Shopee, trang affiliate, trang quản trị web.
 
 Kho này là tuỳ chọn. Không thêm đăng nhập nào thì Javis chạy y như cũ.
 

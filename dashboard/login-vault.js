@@ -1,4 +1,4 @@
-/* Cookies page, once "Kho đăng nhập" / Login vault (0.251.0; renamed and given a file upload in 0.258.0).
+/* Cookies page, once "Kho đăng nhập" / Login vault (0.251.0; renamed and given a file upload in 0.261.0).
  *
  * The owner signs in on their own browser, exports that site's cookies and pastes them here. The server
  * (server/login_vault.py) encrypts them; Javis then opens pages behind that sign-in (tool javis_login) and

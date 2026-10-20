@@ -2,7 +2,7 @@
 
 *[Tiếng Việt](../33-kho-dang-nhap.md) · **English***
 
-From 0.251.0 Javis has a **Cookies** page (called Login vault before 0.258.0): a place to keep your own sign-ins (cookies) so Javis can reuse them. You sign in once in your own browser, hand the cookies to Javis, and Javis can then read pages that only show when you are signed in: your Shopee seller center, affiliate dashboards, your website's admin pages.
+From 0.251.0 Javis has a **Cookies** page (called Login vault before 0.261.0): a place to keep your own sign-ins (cookies) so Javis can reuse them. You sign in once in your own browser, hand the cookies to Javis, and Javis can then read pages that only show when you are signed in: your Shopee seller center, affiliate dashboards, your website's admin pages.
 
 The vault is optional. With no sign-ins in it, Javis works exactly as before.
 
