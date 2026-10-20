@@ -19,9 +19,9 @@ import asyncio
 import os
 import tempfile
 
-os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-homthu-"))
-
 from _paths import ROOT, SERVER  # noqa: E402,F401
+
+os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-homthu-"))
 
 import inbox  # noqa: E402
 import main   # noqa: E402

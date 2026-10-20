@@ -4,9 +4,10 @@ import json
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: E402,F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-zalo-mcp-"))
 
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import mcp_catalog  # noqa: E402
 import zalo_cli  # noqa: E402
 import zalo_login  # noqa: E402
