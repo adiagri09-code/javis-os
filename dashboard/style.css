@@ -3530,12 +3530,18 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
 .ww-card .ww-err { font-size: 13px; color: var(--warn-ink); margin-top: 4px; }
 .ww-card .ww-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
 .ww-card .ww-del { color: var(--red); }
-/* Kho dang nhap / Login vault (0.252.0, login-vault.js). Text is 16px or larger: the owner reads it on a phone. */
+/* Cookies page, once Kho dang nhap / Login vault (0.252.0, login-vault.js). Text is 16px or larger: the owner reads it on a phone. */
 .lv-page { max-width: 760px; }
 .lv-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
   margin: 6px 0 10px; }
 .lv-title { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; color: var(--text); }
 .lv-add { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; }
+.lv-head-act { display: flex; flex-wrap: wrap; gap: 8px; }
+.lv-head-act [hidden] { display: none; }
+.lv-upload { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; min-height: 38px; }
+.lv-paste-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.lv-file { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; min-height: 36px; }
+.lv-form textarea.drop { border-color: var(--accent2); border-style: dashed; background: var(--surface-2, var(--surface-1)); }
 .lv-warn { margin: 6px 0 12px; padding: 10px 12px; border: 1px solid rgba(224,102,74,.5); border-radius: 10px;
   background: rgba(224,102,74,.08); font-size: 16px; line-height: 1.5; }
 .lv-list { display: flex; flex-direction: column; gap: 12px; }
@@ -3589,6 +3595,7 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
 .lv-form-act { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .lv-form-act .s-btn, .lv-form-act .s-btn-ghost { font-size: 16px; min-height: 40px; }
 .lv-msg { font-size: 16px; color: var(--warn-ink); }
+.lv-msg.ok { color: var(--text2); }
 .lv-empty { text-align: center; padding: 36px 16px; color: var(--text3); font-size: 16px; border: 1px dashed var(--border);
   border-radius: 14px; }
 .lv-empty .ic { width: 28px; height: 28px; opacity: .6; }

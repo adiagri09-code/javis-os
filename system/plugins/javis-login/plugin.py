@@ -16,7 +16,7 @@ _STATUS = {"ok": "còn đăng nhập (lần kiểm gần nhất)", "signed_out":
 def _vault():
     v = login_vault.current()
     if v is None:
-        return None, "ERROR: Kho đăng nhập chưa sẵn sàng (máy chủ đang khởi động?). Thử lại sau vài giây."
+        return None, "ERROR: Trang Cookies chưa sẵn sàng (máy chủ đang khởi động?). Thử lại sau vài giây."
     return v, ""
 
 
@@ -32,8 +32,8 @@ def _list() -> str:
         return err
     rows = [v.view(r) for r in v.store.list()]
     if not rows:
-        return ("Kho đăng nhập đang trống. Người dùng thêm ở trang Kho đăng nhập (thanh bên, nhóm Kết nối): đăng "
-                "nhập trên trình duyệt của họ, xuất cookie bằng Cookie-Editor rồi dán vào.")
+        return ("Trang Cookies đang trống. Người dùng thêm ở trang Cookies (thanh bên, nhóm Kết nối): đăng nhập trên "
+                "trình duyệt của họ, xuất cookie bằng Cookie-Editor rồi dán vào hoặc tải file lên.")
     return "\n".join(_line(x) for x in rows)
 
 
@@ -48,7 +48,7 @@ async def _fetch(args) -> str:
     r = await v.open(url, str(a.get("login") or "").strip())
     if r.get("signed_out"):
         return (f"ĐĂNG NHẬP HẾT HẠN: '{r.get('login')}' không còn vào được ({r.get('error')}). Báo người dùng đăng nhập "
-                "lại trên trình duyệt của họ, xuất cookie rồi bấm Cập nhật ở thẻ đó trong trang Kho đăng nhập. "
+                "lại trên trình duyệt của họ, xuất cookie rồi bấm Cập nhật ở thẻ đó trong trang Cookies. "
                 "Đừng thử lại cho tới khi họ cập nhật.")
     if not r.get("ok"):
         return f"ERROR: {r.get('error')}"
@@ -62,7 +62,7 @@ async def _fetch(args) -> str:
 def register(ctx):
     ctx.register_tool(
         "javis_login",
-        "Mở một trang web CẦN ĐĂNG NHẬP bằng phiên đăng nhập người dùng đã cất trong Kho đăng nhập (Shopee seller, "
+        "Mở một trang web CẦN ĐĂNG NHẬP bằng phiên đăng nhập người dùng đã cất trong trang Cookies (Shopee seller, "
         "trang affiliate, trang quản trị web...). Trả về chữ trên trang, KHÔNG bao giờ trả cookie. Chỉ đọc (GET), "
         "không bấm nút hay gửi form. Trang nặng JavaScript có thể ra ít chữ. op=list: xem các đăng nhập đang có (tên, "
         "tên miền, còn sống không). op=fetch: url (bắt buộc), login = tên đăng nhập (bỏ trống thì tự chọn theo tên "

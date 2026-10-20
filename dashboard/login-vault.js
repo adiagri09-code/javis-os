@@ -1,9 +1,10 @@
-/* Kho đăng nhập / Login vault page (0.251.0).
+/* Cookies page, once "Kho đăng nhập" / Login vault (0.251.0; renamed and given a file upload in 0.258.0).
  *
  * The owner signs in on their own browser, exports that site's cookies and pastes them here. The server
  * (server/login_vault.py) encrypts them; Javis then opens pages behind that sign-in (tool javis_login) and
  * page watches can use it. This page adds, checks, updates, switches off and deletes sign-ins. It never
- * receives a cookie back from the server: the list carries names, domains and status only.
+ * receives a cookie back from the server: the list carries names, domains and status only. A cookie file
+ * (Cookie-Editor JSON, cookies.txt) is read in the browser and goes in as the same text a paste would.
  *
  * Render helpers are pure (tested with node); `mount` wires the API. No long dashes anywhere. */
 (function () {
@@ -72,7 +73,7 @@
     if (lg.uses) meta.push(esc(tw("lv.used", { n: lg.uses, t: fmtTime(lg.used_at) })));
     return '<div class="lv-card' + (lg.allow_ai ? "" : " off") + '" data-id="' + esc(lg.id) + '">'
       + '<div class="lv-top">'
-      + '<div class="lv-name"><span class="lv-ic">' + ic("key") + "</span><b>" + esc(lg.name) + "</b></div>"
+      + '<div class="lv-name"><span class="lv-ic">' + ic("cookie") + "</span><b>" + esc(lg.name) + "</b></div>"
       + '<span class="lv-st ' + st.cls + '" title="' + esc(lg.status_note || stTxt) + '"><i></i>' + esc(stTxt) + "</span>"
       + "</div>"
       + '<div class="lv-dom">' + (lg.domains || []).slice(0, 6).map(function (d) { return "<span>" + esc(d) + "</span>"; }).join("")
@@ -94,7 +95,9 @@
     return '<div class="lv-form">'
       + (withName ? '<div class="si-field"><label>' + esc(tw("lv.name")) + '</label><input data-f="name" maxlength="80" placeholder="'
         + esc(tw("lv.name_ph")) + '"></div>' : "")
-      + '<div class="si-field"><label>' + esc(tw("lv.paste")) + '</label><textarea data-f="text" rows="5" spellcheck="false" placeholder="'
+      + '<div class="si-field"><div class="lv-paste-row"><label>' + esc(tw("lv.paste")) + "</label>"
+      + '<button type="button" class="s-btn-ghost lv-file" data-f="file">' + ic("file-up") + " " + esc(tw("lv.file_pick"))
+      + '</button><input type="file" data-f="filein" accept="' + FILE_ACCEPT + '" hidden></div><textarea data-f="text" rows="5" spellcheck="false" placeholder="'
       + esc(tw("lv.paste_ph")) + '"></textarea></div>'
       + '<div class="si-field lv-site" hidden><label>' + esc(tw("lv.site")) + '</label><input data-f="site" placeholder="'
       + esc(tw("lv.site_ph")) + '"></div>'
@@ -130,6 +133,32 @@
     return !!s && s[0] !== "[" && s[0] !== "{" && s.indexOf("\t") < 0;
   }
 
+  /* Cookie files are small (one site is a few KB); anything near the server's 400k-character cap is the
+     whole browser's cookie jar, which the owner should not hand over anyway. */
+  var MAX_FILE = 1024 * 1024;
+  var FILE_ACCEPT = ".json,.txt,.cookies,text/plain,application/json";
+
+  /* A name suggested by the file name: "shopee.vn.json" -> "shopee.vn". Generic export names give ""
+     so the server names the entry after the cookies' domain instead. */
+  function nameFromFile(fname) {
+    var base = String(fname || "").replace(/^.*[\\/]/, "").replace(/\.(json|txt|cookies)$/i, "")
+      .replace(/\s*\(\d+\)$/, "").trim();
+    if (/^(cookies?|export|cookie[-_ ]?editor|storage[-_ ]?state)([-_ ]?\d+)?$/i.test(base)) return "";
+    base = base.replace(/[-_ ]cookies?$/i, "");
+    return base.slice(0, 80);
+  }
+
+  function readFile(file) {
+    return new Promise(function (resolve) {
+      if (!file) return resolve({ ok: false, error: tw("lv.file_err") });
+      if (file.size > MAX_FILE) return resolve({ ok: false, error: tw("lv.file_big") });
+      var fr = new FileReader();
+      fr.onload = function () { resolve({ ok: true, text: String(fr.result || ""), name: file.name || "" }); };
+      fr.onerror = function () { resolve({ ok: false, error: tw("lv.file_err") }); };
+      fr.readAsText(file);
+    });
+  }
+
   async function api(url, body) {
     try {
       var r = await fetch(url, body === undefined ? undefined : {
@@ -142,11 +171,34 @@
     var ta = form.querySelector('[data-f="text"]');
     var site = form.querySelector(".lv-site");
     ta.addEventListener("input", function () { site.hidden = !needsSite(ta.value); });
+    var fin = form.querySelector('[data-f="filein"]');
+    async function useFile(file) {
+      var msg = form.querySelector(".lv-msg");
+      var r = await readFile(file);
+      msg.classList.toggle("ok", !!r.ok);
+      if (!r.ok) { msg.textContent = r.error; return; }
+      ta.value = r.text;
+      ta.dispatchEvent(new Event("input"));
+      var nm = form.querySelector('[data-f="name"]');
+      if (nm && !nm.value.trim()) nm.value = nameFromFile(r.name);
+      msg.textContent = tw("lv.file_ok", { f: r.name });
+    }
+    form.querySelector('[data-f="file"]').onclick = function () { fin.click(); };
+    fin.onchange = function () { if (fin.files && fin.files[0]) useFile(fin.files[0]); fin.value = ""; };
+    ta.addEventListener("dragover", function (e) { e.preventDefault(); ta.classList.add("drop"); });
+    ta.addEventListener("dragleave", function () { ta.classList.remove("drop"); });
+    ta.addEventListener("drop", function (e) {
+      ta.classList.remove("drop");
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      e.preventDefault();
+      useFile(f);
+    });
     form.querySelector('[data-f="cancel"]').onclick = onCancel;
     form.querySelector('[data-f="save"]').onclick = async function () {
       var btn = this, msg = form.querySelector(".lv-msg");
       var val = function (k) { var el = form.querySelector('[data-f="' + k + '"]'); return el ? el.value.trim() : ""; };
-      btn.disabled = true; msg.textContent = "";
+      btn.disabled = true; msg.textContent = ""; msg.classList.remove("ok");
       var r = await onSave({ name: val("name"), text: ta.value, site: val("site"), test_url: val("test_url") });
       btn.disabled = false;
       if (!r.ok) { msg.textContent = r.error || tw("lv.err_net"); return; }
@@ -158,8 +210,9 @@
   function mount(el) {
     if (!el) return;
     el.innerHTML = '<div class="cview-section lv-page">'
-      + '<div class="lv-head"><span class="lv-title">' + ic("key") + " " + esc(tw("lv.head")) + infoBtn() + "</span>"
-      + '<button class="s-btn lv-add" type="button">' + ic("plus") + " " + esc(tw("lv.add")) + "</button></div>"
+      + '<div class="lv-head"><span class="lv-title">' + ic("cookie") + " " + esc(tw("lv.head")) + infoBtn() + "</span>"
+      + '<div class="lv-head-act"><button class="s-btn-ghost lv-upload" type="button">' + ic("file-up") + " " + esc(tw("lv.upload")) + "</button>"
+      + '<button class="s-btn lv-add" type="button">' + ic("plus") + " " + esc(tw("lv.add")) + "</button></div></div>"
       + infoBody(introHtml())
       + '<div class="lv-warn" hidden></div>'
       + '<div class="lv-new"></div>'
@@ -168,6 +221,11 @@
     var items = [];
 
     function closeNew() { q(".lv-new").innerHTML = ""; q(".lv-add").hidden = false; }
+    // Upload = open the add form (if not open yet) and its file picker, in the same click so the browser allows it.
+    q(".lv-upload").onclick = function () {
+      if (!q(".lv-new .lv-form")) q(".lv-add").onclick();
+      q('.lv-new [data-f="filein"]').click();
+    };
     q(".lv-add").onclick = function () {
       q(".lv-add").hidden = true;
       q(".lv-new").innerHTML = '<div class="lv-card lv-card-new">' + pasteFormHtml(true) + "</div>";
@@ -219,7 +277,7 @@
     function render() {
       var host = q(".lv-list");
       if (!items.length) {
-        host.innerHTML = '<div class="lv-empty">' + ic("key") + "<p>" + esc(tw("lv.empty")) + "</p></div>";
+        host.innerHTML = '<div class="lv-empty">' + ic("cookie") + "<p>" + esc(tw("lv.empty")) + "</p></div>";
         return;
       }
       host.innerHTML = items.map(function (lg) { return cardHtml(lg); }).join("");
@@ -261,7 +319,8 @@
     load();
   }
 
-  var api_ = { mount: mount, introHtml: introHtml, cardHtml: cardHtml, expiryText: expiryText, needsSite: needsSite, pasteFormHtml: pasteFormHtml };
+  var api_ = { mount: mount, introHtml: introHtml, cardHtml: cardHtml, expiryText: expiryText, needsSite: needsSite, pasteFormHtml: pasteFormHtml,
+    nameFromFile: nameFromFile };
   if (typeof window !== "undefined") window.JavisLoginVault = api_;
   if (typeof module !== "undefined" && module.exports) module.exports = api_;
 })();

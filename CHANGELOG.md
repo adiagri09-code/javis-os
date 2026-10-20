@@ -8,7 +8,8 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.261.0] - 2026-10-20
 ### Cải thiện
-- Trang Kho đăng nhập đổi tên thành **Cookies** (đang viết).
+- **Kho đăng nhập giờ tên là Cookies**, biểu tượng hình bánh quy, gọn hơn trên thanh bên. Nút và câu trên trang cũng nói "cookie" cho thống nhất.
+- **Tải file cookie lên được.** Bấm **Tải file lên** ở đầu trang (hoặc **Chọn file** trong form, hoặc kéo file thả vào ô): Javis nhận file JSON của Cookie-Editor và file `cookies.txt`, tự điền tên theo tên file. Không phải mở file ra chép dán nữa.
 
 ## [0.260.0] - 2026-10-20
 ### Cải thiện

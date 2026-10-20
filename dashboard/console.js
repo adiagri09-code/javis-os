@@ -57,8 +57,8 @@
     // "share-2" chu khong phai "link": nhan nhom "Ket noi" ngay trong cung mot rail da dung
     // ic("link"), nen de "link" o day la hai muc canh nhau deo y het nhau.
     share: "share-2",
-    // 0.251.0: login vault, the owner's stored sign-ins (login-vault.js).
-    logins: "key",
+    // 0.251.0: login vault, the owner's stored sign-ins (login-vault.js). 0.258.0: renamed Cookies, cookie icon.
+    logins: "cookie",
   };
   // Cỡ icon rail do CSS lo (.rail-ico svg { width: 19px }), độ ưu tiên chọn tử
   // cao hơn .ic nên không cần truyền cỡ ở đây.

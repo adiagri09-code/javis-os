@@ -295,7 +295,7 @@ def test_watch_uses_the_sign_in_and_pauses_once_when_it_expires(tmp_path, monkey
     asyncio.run(f.check(w["id"]))
     after = f.store.get(w["id"])
     assert after["status"] == "paused"
-    assert "Kho đăng nhập" in sent[-1] or "Login vault" in sent[-1]
+    assert "Cookies" in sent[-1]
     assert len(sent) == 2
     f.store.close()
     v.store.close()

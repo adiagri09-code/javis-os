@@ -117,7 +117,7 @@ def register(ctx):
         "sách, hàng về). op=create: url, condition = change (trang đổi) | contains (xuất hiện cụm chữ, cần value) | "
         "price_below (có giá dưới ngưỡng, value như 1.500.000đ, 1,5 triệu, 250k, $20); interval_minutes (5 tới 10080, "
         "mặc định 60); title; chat_id lấy từ khối KÊNH HỘI THOẠI HIỆN TẠI; summarize=true để AI tóm tắt mỗi lần có "
-        "thay đổi (tốn token, mặc định tắt); login = tên một đăng nhập trong Kho đăng nhập khi trang cần đăng nhập. "
+        "thay đổi (tốn token, mặc định tắt); login = tên một đăng nhập trong trang Cookies khi trang cần đăng nhập. "
         "op=list: liệt kê. op=pause | resume | check_now | delete: cần id.",
         _chay,
         schema={
@@ -131,7 +131,7 @@ def register(ctx):
                 "title": {"type": "string"},
                 "chat_id": {"type": "string", "description": "Người nhận báo, vd web:<mã phiên>"},
                 "summarize": {"type": "boolean"},
-                "login": {"type": "string", "description": "Tên đăng nhập trong Kho đăng nhập, khi trang cần đăng nhập"},
+                "login": {"type": "string", "description": "Tên đăng nhập trong trang Cookies, khi trang cần đăng nhập"},
                 "id": {"type": "string", "description": "Mã mục theo dõi (op pause/resume/check_now/delete)"},
             },
             "required": ["op"],

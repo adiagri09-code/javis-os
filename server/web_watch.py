@@ -535,10 +535,10 @@ def after_signed_out(w: dict, login_name: str, error: str) -> tuple[dict, Option
             "last_at": now, "status": "paused"}
     alert = {"title": localefmt.chu(f"⚠ {w['title']}: đăng nhập '{login_name}' đã hết hạn, tạm dừng theo dõi",
                                     f"⚠ {w['title']}: the sign-in '{login_name}' expired, watch paused"),
-             "body": localefmt.chu("Đăng nhập lại trên trình duyệt của bạn, xuất cookie rồi bấm Cập nhật ở trang Kho "
-                                   "đăng nhập. Sau đó mở lại mục theo dõi ở trang Việc định kỳ.",
-                                   "Sign in again in your browser, export the cookies and press Update on the Login "
-                                   "vault page. Then resume the watch on the Recurring work page."),
+             "body": localefmt.chu("Đăng nhập lại trên trình duyệt của bạn, xuất cookie rồi bấm Cập nhật ở trang "
+                                   "Cookies. Sau đó mở lại mục theo dõi ở trang Việc định kỳ.",
+                                   "Sign in again in your browser, export the cookies and press Update on the "
+                                   "Cookies page. Then resume the watch on the Recurring work page."),
              "url": w["url"], "page_title": "", "key": f"watch-signed-out:{w['id']}:{streak}", "failed": True}
     return cols, alert
 
@@ -593,7 +593,7 @@ class WebWatchFeature:
             import login_vault
             vault = login_vault.current()
             if vault is None:
-                return None, localefmt.chu("Kho đăng nhập chưa sẵn sàng", "The Login vault is not ready")
+                return None, localefmt.chu("Trang Cookies chưa sẵn sàng", "The Cookies store is not ready")
             row, _ck, err = vault.pick(url, login_id, only_allowed=True)
             if err:
                 return None, err
@@ -695,7 +695,7 @@ class WebWatchFeature:
         import login_vault
         vault = login_vault.current()
         if vault is None:
-            return after_failure(w, localefmt.chu("Kho đăng nhập chưa sẵn sàng", "The Login vault is not ready"))
+            return after_failure(w, localefmt.chu("Trang Cookies chưa sẵn sàng", "The Cookies store is not ready"))
         try:
             r = await vault.open(w["url"], w["login_id"])
         except Exception as e:  # noqa: BLE001

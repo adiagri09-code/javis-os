@@ -1,8 +1,8 @@
-# 33 - Kho đăng nhập
+# 33 - Cookies (Kho đăng nhập)
 
 ***Tiếng Việt** · [English](en/33-login-vault.md)*
 
-Từ 0.251.0 Javis có **Kho đăng nhập**: chỗ cất phiên đăng nhập riêng của bạn (cookie) để Javis dùng lại. Bạn đăng nhập một lần trên trình duyệt của mình, đưa cookie cho Javis, rồi Javis đọc được những trang chỉ hiện khi đã đăng nhập: kênh người bán Shopee, trang affiliate, trang quản trị web.
+Từ 0.251.0 Javis có trang **Cookies** (trước 0.258.0 tên là Kho đăng nhập): chỗ cất phiên đăng nhập riêng của bạn (cookie) để Javis dùng lại. Bạn đăng nhập một lần trên trình duyệt của mình, đưa cookie cho Javis, rồi Javis đọc được những trang chỉ hiện khi đã đăng nhập: kênh người bán Shopee, trang affiliate, trang quản trị web.
 
 Kho này là tuỳ chọn. Không thêm đăng nhập nào thì Javis chạy y như cũ.
 
@@ -10,8 +10,10 @@ Kho này là tuỳ chọn. Không thêm đăng nhập nào thì Javis chạy y n
 
 1. Cài tiện ích **Cookie-Editor** cho Chrome hoặc Edge.
 2. Mở trang đã đăng nhập, bấm biểu tượng Cookie-Editor, chọn **Export** rồi **JSON**. Cookie được chép vào bộ nhớ tạm.
-3. Trong Javis vào thanh bên, nhóm **Kết nối**, mục **Kho đăng nhập**. Bấm **Thêm đăng nhập**.
+3. Trong Javis vào thanh bên, nhóm **Kết nối**, mục **Cookies** (biểu tượng bánh quy). Bấm **Thêm cookie**.
 4. Đặt tên dễ nhớ (ví dụ "Shopee bán hàng"), dán cookie vào ô, bấm **Lưu và kiểm tra**.
+
+Đã có file cookie (Cookie-Editor xuất ra file JSON, hoặc `cookies.txt` từ tiện ích Get cookies.txt LOCALLY) thì bấm **Tải file lên** ở đầu trang, hoặc nút **Chọn file** trong form, hoặc kéo file thả vào ô. Javis đọc file ngay trên trình duyệt, tự điền tên theo tên file nếu ô Tên còn trống. File tối đa 1 MB.
 
 Javis cũng nhận nội dung file `cookies.txt` và chuỗi `tên=giá trị; ...` (lúc đó điền thêm ô Trang web, ví dụ `shopee.vn`).
 
@@ -39,7 +41,7 @@ Javis chỉ **đọc** trang (tải trang về và lấy chữ). Nó không bấ
 - Cookie được **mã hoá** trên máy chủ. Máy chưa mã hoá được (thiếu thư viện `cryptography`) thì Javis từ chối lưu chứ không ghi trần ra đĩa.
 - **AI không bao giờ thấy giá trị cookie.** Tool chỉ trả nội dung trang và tên đăng nhập.
 - Cookie chỉ được gửi tới đúng tên miền nó thuộc về, kiểm lại ở **mọi bước chuyển hướng**: trang chuyển sang site khác thì cookie không đi theo.
-- Trang Kho đăng nhập đòi **đăng nhập dashboard thật**: API token không đọc hay thêm được đăng nhập.
+- Trang Cookies đòi **đăng nhập dashboard thật**: API token không đọc hay thêm được đăng nhập.
 - **Chatbot trả lời khách không thấy tool này.**
 
 ## Lưu ý thật

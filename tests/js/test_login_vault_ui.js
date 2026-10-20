@@ -50,10 +50,21 @@ check("add form asks name, cookies, site and test page", ["name", "text", "site"
 const intro = LV.introHtml();
 check("(i) text explains export, safety and the IP caveat", intro.includes("Cookie-Editor") && intro.includes("mã hoá") && intro.includes("VPS"));
 check("update form has no name field", !LV.pasteFormHtml(false).includes('data-f="name"'));
+check("both forms can take a cookie file", [true, false].every((w) => { const f = LV.pasteFormHtml(w);
+  return f.includes('data-f="file"') && /type="file" data-f="filein" accept="[^"]*\.json[^"]*\.txt/.test(f); }));
+check("file name suggests the entry name", LV.nameFromFile("shopee.vn.json") === "shopee.vn"
+  && LV.nameFromFile("C:\\dl\\banhang.shopee.vn_cookies.txt") === "banhang.shopee.vn" && LV.nameFromFile("Shopee (2).txt") === "Shopee");
+check("generic export names leave the name to the server", ["cookies.txt", "cookies (1).txt", "export.json", "cookie-editor.json"]
+  .every((n) => LV.nameFromFile(n) === ""));
+const lvSrc = D("login-vault.js");
+check("page has an Upload file button wired to the picker", lvSrc.includes('class="s-btn-ghost lv-upload"') && /q\("\.lv-upload"\)\.onclick/.test(lvSrc));
+check("upload refuses files over 1 MB", /MAX_FILE = 1024 \* 1024/.test(lvSrc) && /file\.size > MAX_FILE/.test(lvSrc));
 
 const cons = D("console.js");
 check("sidebar: Connections group has logins", /ids: \["mcp", "packs", "channels", "logins", "models"\]/.test(cons));
-check("sidebar: logins has the key icon", /logins: "key"/.test(cons));
+check("sidebar: logins has the cookie icon", /logins: "cookie"/.test(cons));
+check("page is called Cookies in both languages", VI["page.logins.label"] === "Cookies" && EN["page.logins.label"] === "Cookies");
+check("cookie and file-up icons are vendored", /"cookie":/.test(D("vendor/lucide-icons.js")) && /"file-up":/.test(D("vendor/lucide-icons.js")));
 check("page delegates to login-vault.js", /id === "logins"[\s\S]{0,200}JavisLoginVault\.mount\(el\)/.test(cons));
 check("voice commands know the page", /"logins", "pet", "share"\]/.test(D("ui-actions.js")) && /"logins", "pet", "share",/.test(R("server/ui_targets.py")));
 check("index.html loads the module", /login-vault\.js\?v=\d+/.test(D("index.html")));
