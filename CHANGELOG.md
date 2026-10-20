@@ -6,6 +6,13 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.260.0] - 2026-10-20
+### Cải thiện
+- **Gọi nhiều người trong một tin thì họ trả lời cùng lúc.** Trước đây @ ba người là chờ từng người xong mới tới người sau. Muốn kiểu cũ (người sau đọc câu người trước rồi mới nói) thì vào Nâng cao của team, ô "Khi gọi nhiều người trong một tin", chọn Lần lượt.
+- **Trưởng nhóm chia việc cho nhiều người thì họ làm cùng lúc**, tối đa 3 người một đợt, xong hết mới tổng hợp. Một người gặp lỗi thì phần của người khác vẫn được giữ, bấm Chạy lại chỉ làm lại phần lỗi.
+- **Các team cùng một brain làm việc có công cụ song song được.** Trước đây mọi bước có đọc ghi file trong một brain phải xếp hàng. Giờ mỗi thư mục làm việc cho tối đa 3 lượt cùng lúc, team đã ghim thư mục riêng thì không chờ team khác. Khi chạy cùng lúc, mỗi cộng sự được dặn chỉ sửa file của phần mình.
+- Muốn chặt như trước: đặt `JAVIS_TEAM_TOOL_SLOTS=1` (một người ghi file một lúc) hoặc `JAVIS_TEAM_JOB_PARALLEL=1` (làm lần lượt).
+
 ## [0.257.0] - 2026-10-20
 ### Cải thiện
 - **Một cộng sự làm được ở nhiều team cùng lúc.** Trước đây cộng sự đang trả lời ở team này thì team khác phải đứng chờ, có khi tới 30 phút. Giờ mỗi team có mạch riêng nên chạy song song. Trong cùng một team, mỗi cộng sự vẫn trả lời từng câu một.

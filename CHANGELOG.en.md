@@ -8,6 +8,13 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.260.0] - 2026-10-20
+### Improved
+- **Calling several members in one message makes them answer at the same time.** Before, @ three members meant waiting for each one in turn. For the old way (each reads the previous answer first), open the team's Advanced section and set "When one message calls several members" to One by one.
+- **When the leader splits a job, the members work at the same time**, up to 3 per round, and the summary comes once all are done. If one member hits an error, the others' parts are kept and Retry only redoes the failed part.
+- **Teams of the same brain can run tool work side by side.** Before, every step that read or wrote files in one brain waited in line. Now each working folder allows up to 3 turns at once, and a team with its own pinned folder never waits for another team. When they run together, each member is told to edit only the files of its own part.
+- For the stricter old behavior set `JAVIS_TEAM_TOOL_SLOTS=1` (one writer at a time) or `JAVIS_TEAM_JOB_PARALLEL=1` (one step at a time).
+
 ## [0.257.0] - 2026-10-20
 ### Improved
 - **One assistant can work in several teams at once.** Before, an assistant answering in one team made every other team wait, sometimes up to 30 minutes. Each team now has its own thread, so they run in parallel. Within one team an assistant still answers one message at a time.
