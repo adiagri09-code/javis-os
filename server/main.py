@@ -11806,6 +11806,16 @@ watch_feature = web_watch.register(app, web_watch.WebWatchDeps(
     channels=_kenh_con_thieu,
 ))
 
+# 0.251.0: login vault (login_vault.py). The owner's sign-in cookies, encrypted, reused by javis_login and by
+# page watches. Its routes need a real dashboard session: an API token can neither read nor add a sign-in.
+import login_vault  # noqa: E402
+
+login_vault.register(app, login_vault.LoginVaultDeps(
+    state_dir=lambda: cfgmod.STATE_DIR,
+    has_session=lambda r: cfgmod.valid_session(r.cookies.get("javis_session", "")),
+    fetch=web_watch.fetch,
+))
+
 
 # ============================================================
 # 0.199.0: a broken background run reaches Javis Core (incident_desk.py), plus the read-only health scan

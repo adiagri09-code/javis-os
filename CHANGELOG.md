@@ -7,10 +7,12 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
 ## [0.251.0] - 2026-10-20
+### Thêm mới
+- **Kho đăng nhập** (thanh bên, nhóm Kết nối): đăng nhập trên trình duyệt của bạn, xuất cookie bằng Cookie-Editor rồi dán vào. Javis dùng lại phiên đó để đọc trang cần đăng nhập (kênh người bán, trang affiliate, trang quản trị) và để **Theo dõi trang** canh được trang cần đăng nhập. Mỗi thẻ ghi còn đăng nhập hay đã hết hạn, hạn tới ngày nào, có công tắc cho Javis dùng.
+- Cookie được mã hoá trên máy chủ, AI không bao giờ thấy giá trị cookie, chatbot của khách không dùng được. Javis chỉ đọc trang, không bấm nút hay gửi form. Hướng dẫn ở `docs/33-kho-dang-nhap.md`.
 ### Cải thiện
 - **Tên hội thoại hiện ngay cạnh nút Thu nhỏ** ở đầu trang Trò chuyện và trang Code, nên luôn biết mình đang ở cuộc nào. Tên dài tự cắt bằng dấu ba chấm, trên điện thoại tên co lại trước để các nút bên phải không bị đẩy ra ngoài.
-- **Bấm vào tên là đổi tên được ngay**, không phải mở cột Hội thoại. Rê chuột vào tên sẽ hiện cây bút để biết chỗ này bấm được.
-- Cuộc chưa có tin nhắn nào thì hiện mờ chữ "Hội thoại mới".
+- **Bấm vào tên là đổi tên được ngay**, không phải mở cột Hội thoại. Cuộc chưa có tin nhắn nào thì hiện mờ chữ "Hội thoại mới".
 
 ## [0.249.0] - 2026-10-20
 ### Cải thiện

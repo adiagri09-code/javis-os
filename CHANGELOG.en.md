@@ -9,10 +9,12 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
 ## [0.251.0] - 2026-10-20
+### Added
+- **Login vault** (sidebar, Connections group): sign in in your own browser, export the cookies with Cookie-Editor and paste them. Javis reuses that session to read pages behind the sign-in (seller centers, affiliate dashboards, admin pages) and **Page watch** can watch them. Each card says whether it is still signed in and until when, with a switch to let Javis use it.
+- Cookies are encrypted on the server, the AI never sees a cookie value, and customer chatbots cannot use it. Javis only reads pages; it does not click buttons or send forms. Guide in `docs/en/33-login-vault.md`.
 ### Improved
 - **The conversation's name now sits next to the Shrink button** at the top of the Chat and Code pages, so you always know which chat you are in. Long names end in an ellipsis, and on a phone the name shrinks first so the buttons on the right stay on screen.
-- **Click the name to rename it** without opening the Conversations column. Hovering shows a pencil so you know it is clickable.
-- A chat with no messages yet shows a dimmed "New conversation".
+- **Click the name to rename it** without opening the Conversations column. A chat with no messages yet shows a dimmed "New conversation".
 
 ## [0.249.0] - 2026-10-20
 ### Improved

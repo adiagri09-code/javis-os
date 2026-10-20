@@ -103,8 +103,9 @@ def allow_patterns():
 # engines directly, Claude Code through the X-Javis-Bot header written by `claude_config_path(bot=True)`).
 # `javis_team` (0.173.0) creates, edits and deletes team chats and writes assistant files: owner-only for the same reason.
 # `javis_watch` (0.239.0) makes the server fetch an address on a schedule and message the owner: not a customer's call.
+# `javis_login` (0.251.0) opens pages signed in as the owner (login vault): a customer must never browse as them.
 OWNER_ONLY_TOOLS = frozenset({"javis_reply_policy", "javis_reply_policy_tune", "javis_team", "javis_memory",
-                              "javis_watch"})
+                              "javis_watch", "javis_login"})
 
 
 # ============================================================
