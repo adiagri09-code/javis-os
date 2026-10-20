@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.261.0] - 2026-10-20
+### Cải thiện
+- Trang Kho đăng nhập đổi tên thành **Cookies** (đang viết).
+
 ## [0.260.0] - 2026-10-20
 ### Cải thiện
 - **Gọi nhiều người trong một tin thì họ trả lời cùng lúc.** Trước đây @ ba người là chờ từng người xong mới tới người sau. Muốn kiểu cũ (người sau đọc câu người trước rồi mới nói) thì vào Nâng cao của team, ô "Khi gọi nhiều người trong một tin", chọn Lần lượt.
