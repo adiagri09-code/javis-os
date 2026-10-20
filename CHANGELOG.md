@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.248.0] - 2026-10-20
+### Sửa lỗi
+- **Tên miền trên Hostinger: Javis nói rõ bước nào đang hỏng.** (đang viết)
+
 ## [0.246.0] - 2026-10-20
 ### Cải thiện
 - **Bỏ nút Lịch sử (hình đồng hồ) trên khung chat.** Nút này làm đúng việc của nút thu gọn ở góc cột Hội thoại, nên trên máy tính giờ chỉ còn nút thu gọn đó. Áp dụng cho trang Trò chuyện và trang Code.
