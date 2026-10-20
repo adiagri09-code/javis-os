@@ -7968,6 +7968,25 @@
       .chatpage.side-thu .chatpage-side > .cside-expand:hover{ color:var(--accent); border-color:var(--accent); }
     }
     .cp-min{ display:inline-flex; align-items:center; gap:5px; font-family:var(--font); }
+    /* 0.251.0: conversation name beside the collapse button. Quiet by default (no border, a hairline
+       divider in front) so it reads as the page's heading rather than a third button. It shrinks
+       before the chips on the right do. Hover shows a soft background and the pencil that says a
+       click renames it. Long names end in an ellipsis. */
+    .cp-conv-host{ flex:0 100 auto; min-width:0; display:flex; align-items:center; gap:8px; }
+    .cp-conv-host:empty{ display:none; }
+    .cp-conv-host::before{ content:""; flex:none; width:1px; height:18px; background:var(--border); }
+    .cp-conv{ display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:100%;
+      background:none; border:0; border-radius:8px; padding:4px 8px; margin-left:-4px; cursor:pointer;
+      color:var(--text); font:500 16px/1.3 var(--font); transition:background .15s ease;
+      animation:cpConvIn .22s ease; }
+    .cp-conv-t{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cp-conv .ic{ flex:none; color:var(--text3); opacity:0; transition:opacity .15s ease; }
+    .cp-conv:hover{ background:var(--surface-1); }
+    .cp-conv:hover .ic, .cp-conv:focus-visible .ic{ opacity:1; }
+    .cp-conv.is-new{ color:var(--text3); font-weight:400; cursor:default; }
+    .cp-conv.is-new:hover{ background:none; }
+    @keyframes cpConvIn{ from{ opacity:0; transform:translateY(2px); } to{ opacity:1; transform:none; } }
+    @media (prefers-reduced-motion:reduce){ .cp-conv{ animation:none; } }
     .chatpage-slot{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:10px; }
     /* Mở file từ tab Thư mục (desktop): trình sửa bên TRÁI, khung chat co thành CỘT PHẢI
        y như màn Javis - hội thoại ở trên, ô nhập dưới đáy cột (chủ chỉnh 27/08: bản xếp
@@ -8343,6 +8362,8 @@
             '<button class="cp-ico-btn cp-min" type="button" id="cpMinBtn" data-i18n-title="cs.cp_min_title" data-i18n-aria="cs.cp_min_title" ' +
               'title="' + esc(window.t("cs.cp_min_title")) + '" aria-label="' + esc(window.t("cs.cp_min_title")) + '">' +
               ic("chevron-left") + '<span data-i18n="cs.cp_min">' + esc(window.t("cs.cp_min")) + '</span></button>' +
+            // 0.251.0: the open conversation's name (sessions-ui.js renderTitle draws it).
+            '<span class="cp-conv-host"></span>' +
             // Tiêu đề tĩnh "Trò chuyện với Javis" ĐÃ BỎ (chủ repo yêu cầu 01/09). Nó nói
             // đúng một điều mà rail đang tô sáng và khung trống đã ghi bằng chữ in nghiêng
             // ngay bên dưới, nên nó chỉ ăn chỗ. Chip project lùi về mép phải, chiếm chỗ đó.

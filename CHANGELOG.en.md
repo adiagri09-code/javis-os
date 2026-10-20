@@ -10,7 +10,9 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.251.0] - 2026-10-20
 ### Improved
-- In progress.
+- **The conversation's name now sits next to the Shrink button** at the top of the Chat and Code pages, so you always know which chat you are in. Long names end in an ellipsis, and on a phone the name shrinks first so the buttons on the right stay on screen.
+- **Click the name to rename it** without opening the Conversations column. Hovering shows a pencil so you know it is clickable.
+- A chat with no messages yet shows a dimmed "New conversation".
 
 ## [0.249.0] - 2026-10-20
 ### Improved

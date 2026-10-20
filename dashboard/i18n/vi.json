@@ -2881,6 +2881,7 @@
   "cs.cp_side_open": "Mở cột Hội thoại / Thư mục",
   "cs.cp_min_title": "Thu nhỏ về màn Javis",
   "cs.cp_min": "Thu nhỏ",
+  "cs.cp_title_rename": "Bấm để đổi tên: {ten}",
   "cs.cp_side_collapse": "Thu gọn cột này (như sidebar)",
   "cs.cp_side_expand": "Mở lại cột Hội thoại / Thư mục",
   "cs.cp_chat_collapse": "Thu khung hội thoại sang phải",

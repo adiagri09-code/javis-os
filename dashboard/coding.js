@@ -138,6 +138,8 @@
             // computer the column folds with the button in its own corner instead.
             '<button class="cp-ico-btn cp-side-toggle" type="button" id="cdLeftBtn" title="' +
               esc(t("coding.toggle_list")) + '" aria-label="' + esc(t("coding.toggle_list")) + '">' + ic("panel-left") + "</button>" +
+            // 0.251.0: the open conversation's name, as on the Chat page (sessions-ui.js renderTitle).
+            '<span class="cp-conv-host"></span>' +
             // Chip gom nhóm hội thoại của trang Trò chuyện đậu vào đây, y như thanh tiêu đề
             // của trang đó. Thiếu ô này thì JavisChatSide.chip() không có chỗ để vẽ.
             '<span class="proj-chip-host"></span>' +

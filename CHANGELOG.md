@@ -8,7 +8,9 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.251.0] - 2026-10-20
 ### Cải thiện
-- Đang làm.
+- **Tên hội thoại hiện ngay cạnh nút Thu nhỏ** ở đầu trang Trò chuyện và trang Code, nên luôn biết mình đang ở cuộc nào. Tên dài tự cắt bằng dấu ba chấm, trên điện thoại tên co lại trước để các nút bên phải không bị đẩy ra ngoài.
+- **Bấm vào tên là đổi tên được ngay**, không phải mở cột Hội thoại. Rê chuột vào tên sẽ hiện cây bút để biết chỗ này bấm được.
+- Cuộc chưa có tin nhắn nào thì hiện mờ chữ "Hội thoại mới".
 
 ## [0.249.0] - 2026-10-20
 ### Cải thiện
