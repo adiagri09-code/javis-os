@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.251.0] - 2026-10-20
+### Cải thiện
+- Đang làm.
+
 ## [0.249.0] - 2026-10-20
 ### Cải thiện
 - **Trang Công cụ (Plugins) có ô tìm kiếm.** Gõ tên plugin, tên công cụ bên trong hay một chữ trong mô tả là lọc ngay, không cần gõ dấu ("lich dang" vẫn ra "Lịch đăng bài"). Bấm Esc hoặc dấu X để xoá.

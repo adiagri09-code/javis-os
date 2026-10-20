@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.251.0] - 2026-10-20
+### Improved
+- In progress.
+
 ## [0.249.0] - 2026-10-20
 ### Improved
 - **The Plugins page has a search box.** Type a plugin name, a tool inside it or a word from its description and the list filters at once, and Vietnamese accent marks are optional. Press Esc or the X to clear it.
