@@ -397,8 +397,8 @@ class LoginVault:
         if login:
             row = self.store.get(login) or self.store.find_name(login)
             if not row:
-                return None, [], localefmt.chu(f"Không có đăng nhập nào tên '{login}' trong Kho đăng nhập.",
-                                               f"No sign-in named '{login}' in the Login vault.")
+                return None, [], localefmt.chu(f"Không có đăng nhập nào tên '{login}' trong trang Cookies.",
+                                               f"No sign-in named '{login}' on the Cookies page.")
             if only_allowed and not row.get("allow_ai"):
                 return None, [], localefmt.chu(f"Đăng nhập '{row['name']}' đang tắt quyền cho Javis dùng.",
                                                f"The sign-in '{row['name']}' is not allowed for Javis.")
@@ -419,8 +419,8 @@ class LoginVault:
                 if best is None or score > best[0]:
                     best = (score, row, ck)
         if not best:
-            return None, [], localefmt.chu(f"Kho đăng nhập chưa có đăng nhập nào cho {host or 'địa chỉ này'}.",
-                                           f"The Login vault has no sign-in for {host or 'this address'}.")
+            return None, [], localefmt.chu(f"Trang Cookies chưa có đăng nhập nào cho {host or 'địa chỉ này'}.",
+                                           f"The Cookies page has no sign-in for {host or 'this address'}.")
         return best[1], best[2], ""
 
     # ---------- writing ----------

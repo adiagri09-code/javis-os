@@ -1,8 +1,8 @@
-# 33 - Login vault
+# 33 - Cookies (Login vault)
 
 *[Tiếng Việt](../33-kho-dang-nhap.md) · **English***
 
-From 0.251.0 Javis has a **Login vault**: a place to keep your own sign-ins (cookies) so Javis can reuse them. You sign in once in your own browser, hand the cookies to Javis, and Javis can then read pages that only show when you are signed in: your Shopee seller center, affiliate dashboards, your website's admin pages.
+From 0.251.0 Javis has a **Cookies** page (called Login vault before 0.261.0): a place to keep your own sign-ins (cookies) so Javis can reuse them. You sign in once in your own browser, hand the cookies to Javis, and Javis can then read pages that only show when you are signed in: your Shopee seller center, affiliate dashboards, your website's admin pages.
 
 The vault is optional. With no sign-ins in it, Javis works exactly as before.
 
@@ -10,8 +10,10 @@ The vault is optional. With no sign-ins in it, Javis works exactly as before.
 
 1. Install the **Cookie-Editor** extension for Chrome or Edge.
 2. Open the site while signed in, click the Cookie-Editor icon, choose **Export** then **JSON**. The cookies are copied to the clipboard.
-3. In Javis open the sidebar, group **Connections**, item **Login vault**. Press **Add sign-in**.
+3. In Javis open the sidebar, group **Connections**, item **Cookies** (the cookie icon). Press **Add cookies**.
 4. Give it a name you will recognise (for example "Shopee seller"), paste the cookies and press **Save and check**.
+
+If you already have a cookie file (a JSON file exported by Cookie-Editor, or a `cookies.txt` from the Get cookies.txt LOCALLY extension), press **Upload file** at the top of the page, the **Choose file** button in the form, or drop the file on the box. Javis reads the file in your browser and names the entry after the file when the Name box is empty. Files are limited to 1 MB.
 
 Javis also reads a `cookies.txt` file and a `name=value; ...` string (then also fill in the Website field, for example `shopee.com`).
 
@@ -39,7 +41,7 @@ Javis only **reads** pages (it downloads the page and takes the text). It does n
 - Cookies are **encrypted** on the server. When the machine cannot encrypt (the `cryptography` library is missing) Javis refuses to save instead of writing them in the clear.
 - **The AI never sees a cookie value.** The tool returns the page text and the sign-in's name only.
 - A cookie only goes to the domain it belongs to, checked again on **every redirect hop**: a page that redirects to another site does not carry the cookies along.
-- The Login vault page needs a **real dashboard sign-in**: an API token can neither read nor add sign-ins.
+- The Cookies page needs a **real dashboard sign-in**: an API token can neither read nor add sign-ins.
 - **Customer chatbots never see this tool.**
 
 ## Honest caveats

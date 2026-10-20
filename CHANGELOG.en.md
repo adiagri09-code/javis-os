@@ -18,6 +18,12 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 ### Security
 - Web reads never touch the internal network (localhost, the LAN, a cloud server's metadata address), checked again on every redirect. Page content is marked as data, not instructions, so a page that plants commands cannot steer Javis.
 - Chatbots talking to customers get neither the terminal nor the web tools, even at Full access.
+
+## [0.261.0] - 2026-10-20
+### Improved
+- **The Login vault is now called Cookies**, with a cookie icon, so it fits the sidebar. Buttons and text on the page say "cookies" too.
+- **Upload a cookie file.** Press **Upload file** at the top of the page (or **Choose file** in the form, or drop the file on the box): Javis takes a Cookie-Editor JSON file or a `cookies.txt`, and names the entry after the file. No more opening the file to copy and paste.
+
 ## [0.260.0] - 2026-10-20
 ### Improved
 - **Calling several members in one message makes them answer at the same time.** Before, @ three members meant waiting for each one in turn. For the old way (each reads the previous answer first), open the team's Advanced section and set "When one message calls several members" to One by one.
