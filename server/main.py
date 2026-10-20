@@ -14,6 +14,7 @@ import os
 import json
 import math
 import asyncio
+import dataclasses
 import glob
 import hashlib
 # `sys` phải nằm ở ĐẦU file: rải rác trong file có chỗ `import sys` cục bộ, nhưng cũng có chỗ
@@ -3014,35 +3015,69 @@ _API_TOOL_PROVIDERS = ("openrouter", "openai", "anthropic-api", "gemini", "groq"
                        "ollama-local", "openai-compat", "anthropic-compat")
 
 
-def _coding_ctx_luot(row):
-    """Ngữ cảnh Coding của lượt (thư mục làm việc, mức quyền), hoặc None ở mọi phiên khác.
+def _coding_ctx_luot(row, brain=None, sid="", chat_id=""):
+    """Ngữ cảnh làm việc của một lượt chat CỦA CHỦ: thư mục làm việc, mức quyền, kênh báo về.
 
-    Chỉ phiên của trang Coding. Phiên chat thường có ghim thư mục (0.158.0) vẫn để tool file của
-    engine API gốc ở brain như cũ, đúng như `coding_store.pinned_folder_prompt` đã hứa."""
+    0.256.0 chỉ có ở trang Coding. Từ 0.259.0 MỌI khung chat của chủ đều có, theo yêu cầu của chủ
+    repo ("mọi chỗ đều phải có các chức năng như nhau ở mọi khung chat"):
+
+      - Phiên trang Coding: thư mục của phiên, mức quyền theo chip (như 0.256.0).
+      - Mọi phiên khác (khung chat thường, trang trợ lý, Telegram của chủ): thư mục đã ghim của
+        phiên (0.158.0) nếu có, rồi tới gốc brain; mức quyền `full` như khung chat thường xưa
+        nay (lượt /plan vẫn bị hạ xuống suggest ở trần của hub).
+
+    Trả None khi không biết phiên nào (không có chỗ giữ trạng thái terminal). Chỗ gọi KHÔNG được
+    truyền vào đây lượt của bot nói chuyện với khách: terminal không bao giờ thuộc về người lạ.
+    """
     try:
+        import coding_ctx
         if row and str(row.get("channel") or "").startswith("coding:"):
-            import coding_ctx
             ctx = coding_ctx.for_session(row.get("id") or "")
-            return ctx if ctx.active else None
+            if ctx.active:
+                return dataclasses.replace(ctx, chat_id=chat_id or f"{WEB_CHAT_PREFIX}{ctx.session_id}")
+            # Phiên Coding chưa gắn thư mục: làm việc ở gốc brain như khung chat thường.
+        sid = str(sid or (row or {}).get("id") or "").strip()
+        if not sid:
+            return None
+        goc = []
+        try:
+            cwd = coding_store.cwd_cua_phien(sid)
+            if cwd:
+                goc.append(str(Path(cwd).resolve()))
+            for r in (coding_store.thu_muc_cua_phien(sid) or []):
+                d = str((r or {}).get("duong_dan") or "")
+                if d and Path(d).is_dir() and str(Path(d).resolve()) not in goc:
+                    goc.append(str(Path(d).resolve()))
+        except Exception:
+            pass
+        br = str(Path(_brain_root(brain)).resolve())
+        if br not in goc:
+            goc.append(br)
+        quyen = "full"
+        if row and str(row.get("channel") or "").startswith("coding:"):
+            quyen = coding_store.muc_quyen_cua_phien(sid) or coding_store.MUC_QUYEN_MAC_DINH
+        return coding_ctx.CodingToolContext(
+            session_id=sid, workspace_root=goc[0], workspace_roots=tuple(goc), permission_mode=quyen,
+            chat_id=chat_id or f"{WEB_CHAT_PREFIX}{sid}")
     except Exception as e:
         print(f"[coding ctx] {type(e).__name__}: {e}", file=sys.stderr)
     return None
 
 
 async def _api_stream_mcp(prov, key, model, messages, reasoning="off", brain=None,
-                          force_lazy=False, mode="full", coding_row=None):
+                          force_lazy=False, mode="full", coding_row=None, owner_sid="", owner_chat=""):
     """Model API/OAuth dùng MCP của Javis qua HUB: đa tài khoản + quyền + audit + builtin tools
     (file vault, use_skill) → engine API cũng là agent thực thụ. anthropic-api giờ CÓ tool loop.
     ChatGPT OAuth ở các kênh tương tác đi qua Codex CLI native MCP, không dùng fallback này.
 
-    `coding_row` (0.256.0): dòng phiên của lượt. Phiên trang Coding thì hub nhận thư mục làm
-    việc và mức quyền của phiên: tool file chạm được vào repo, mức Tự động có javis_run_command,
-    mức Toàn quyền có terminal thật, có mốc khôi phục, và vòng tool có trần riêng. Trước bản này
-    không chỗ nào truyền thư mục làm việc vào hub, nên engine API trong phiên Coding thực ra
-    không đọc nổi một file nào của repo."""
+    `coding_row` (0.256.0), `owner_sid` / `owner_chat` (0.259.0): lượt chat CỦA CHỦ. Hub nhận thư
+    mục làm việc và mức quyền (xem `_coding_ctx_luot`): tool file chạm được vào thư mục đó, mức
+    Toàn quyền có terminal thật, có mốc khôi phục, và vòng tool có trần riêng. Lượt không truyền
+    gì (bot của khách, việc nền) giữ nguyên hộp công cụ cũ."""
     tools, route = [], {}
     inventory_tools, inventory_route = [], {}
-    _cctx = _coding_ctx_luot(coding_row) if prov in _API_TOOL_PROVIDERS else None
+    _cctx = (_coding_ctx_luot(coding_row, brain, owner_sid, owner_chat)
+             if prov in _API_TOOL_PROVIDERS and (coding_row or owner_sid) else None)
     if _cctx is not None:
         try:
             import coding_checkpoint
@@ -16647,10 +16682,10 @@ async def websocket_endpoint(ws: WebSocket):
                                 force_lazy=(_phase8_plan.action == "use" or _attempt > 1),
                                 # 0.256.0: phiên trang Coding chạy theo chip quyền của phiên (và
                                 # /plan hạ lượt xuống suggest), như engine CLI ở cùng trang.
-                                mode=(_muc_quyen_luot_chat(_row0, user_message)
-                                      if str((_row0 or {}).get("channel") or "").startswith("coding:")
-                                      else "full"),
-                                coding_row=_row0,
+                                # 0.259.0: mọi khung chat của chủ (không riêng Coding) nhận
+                                # thư mục làm việc và terminal; /plan hạ lượt xuống suggest.
+                                mode=_muc_quyen_luot_chat(_row0, user_message),
+                                coding_row=_row0, owner_sid=conv_sid,
                             )
                             async for ev in gen:
                                 if ev["type"] == "meta":
@@ -21864,8 +21899,15 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
         actual_model = api_model or "?"
         loi = []
         _pinged = False
-        async for ev in (await _api_stream_mcp(prov, api_key, api_model, sess["or"], reasoning,
-                                               brain=brain)):
+        # 0.259.0: Telegram của CHỦ có cùng hộp công cụ như dashboard (thư mục làm việc, terminal,
+        # mốc khôi phục). Bot mức Toàn quyền cũng đi đường này nhưng KHÔNG nhận: terminal không
+        # bao giờ thuộc về người lạ nhắn tới bot.
+        _chu_tg = not bot
+        async for ev in (await _api_stream_mcp(
+                prov, api_key, api_model, sess["or"], reasoning, brain=brain,
+                mode=_muc_quyen_luot_chat(None, text) if _chu_tg else "full",
+                owner_sid=(str(conv_sid or f"{channel}-{chat_id}") if _chu_tg else ""),
+                owner_chat=(str(chat_id) if _chu_tg and channel == "telegram" else ""))):
             if ev["type"] == "text":
                 if not _pinged:
                     _pinged = True; await _p("✍ Đang soạn câu trả lời…")

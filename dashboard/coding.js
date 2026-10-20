@@ -589,6 +589,33 @@
     if (m && m.parentNode) m.parentNode.removeChild(m);
   }
 
+  // ============================================================
+  // Hoàn tác ở MỌI khung chat (0.259.0)
+  // ============================================================
+  /** Từ 0.259.0 mọi khung chat của chủ đều có terminal và mốc khôi phục, không riêng trang Code.
+   *  Trang Code có chip Hoàn tác; các khung chat còn lại nhận một mục trong menu "+" của ô soạn
+   *  tin, mở đúng bảng Hoàn tác ở trên cho phiên đang mở. */
+  function dangKyMenuHoanTac() {
+    if (!W.JavisComposerMenu || !W.JavisComposerMenu.register) return;
+    W.JavisComposerMenu.register({
+      id: "undo", order: 25, icon: ic("undo-2"), label: "cp.undo", emptyKey: "coding.undo_empty",
+      submenu: function () {
+        var id = sid();
+        if (!id) return Promise.resolve([]);
+        return api("/coding/session/" + encodeURIComponent(id) + "/undo").then(function (r) {
+          return ((r && r.moc) || []).map(function (m) {
+            return { label: t("coding.undo_item", { gio: gioMoc(m.luc) }), hint: m.ly_do || "",
+                     run: function () { moBangHoanTac(m); } };
+          });
+        }, function () { return []; });
+      },
+    });
+  }
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", dangKyMenuHoanTac);
+    else dangKyMenuHoanTac();
+  }
+
   W.JavisCoding = {
     render: render, roi: roi,
     // Exposed for node tests

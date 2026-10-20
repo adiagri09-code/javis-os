@@ -109,7 +109,7 @@ import engine  # noqa: E402
 async def _thu():
     async def _gen():
         yield engine._max_tool_rounds()
-        yield engine._clip_tool_result("x" * 20_000)
+        yield engine._clip_tool_result("x" * 20_000, ten="javis_terminal")
     ra = []
     async for v in engine.chay_trong_phien_coding(_gen):
         ra.append(v)
@@ -118,7 +118,9 @@ async def _thu():
 
 vong, cat = asyncio.run(_thu())
 check("trong phiên Coding: trần mặc định 150 vòng", vong == 150)
-check("trong phiên Coding: kết quả tool 20.000 ký tự không bị cắt", len(cat) == 20_000)
+check("tool tự phân trang (terminal, đọc file, web): 20.000 ký tự không bị cắt", len(cat) == 20_000)
+check("kết quả MCP vẫn cắt ở 8.000 kể cả trong phiên Coding (0.259.0)",
+      len(engine._clip_tool_result("x" * 20_000, ten="pos_list_orders")) < 9_000)
 check("ngoài phiên Coding: vẫn 30 vòng", engine._max_tool_rounds() == 30)
 check("ngoài phiên Coding: vẫn cắt ở 8.000", len(engine._clip_tool_result("x" * 20_000)) < 9_000)
 check("nhắc chốt việc khi còn 10 vòng", engine._nhac_sap_het(139, 150) != "" and engine._nhac_sap_het(10, 150) == "")

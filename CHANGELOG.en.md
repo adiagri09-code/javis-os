@@ -10,7 +10,14 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.259.0] - 2026-10-20
 ### Added
-- **Web search and reading for every brain, coding tools in every chat** (in progress).
+- **Every brain can search and read the web.** OpenRouter, OpenAI, Anthropic API, Gemini, Groq, DeepSeek and Ollama now search the internet and read web pages and PDFs to answer about news, prices and documentation instead of guessing from memory. No key needed: DuckDuckGo by default. With a Tavily or Brave key (`TAVILY_API_KEY`, `BRAVE_API_KEY`) or your own SearXNG (`SEARXNG_URL`) Javis uses that first. Long pages are read in parts, nothing is cut off.
+- **Every chat gets the full Code page toolkit.** The normal chat, assistant chats and your Telegram now also have the terminal, section edits, file search, restore points and 150 tool rounds per turn. With no pinned folder Javis works right in the brain; with one, it works in that folder.
+- **Undo in every chat**: the composer's "+" menu has "Undo Javis's changes", which opens the same Undo panel as the Code page.
+### Improved
+- File reads, the terminal and web reads can return up to 60,000 characters at a time (normal chat used to cut at 8,000), so nothing is lost mid-way. Results from outside connections (POS, ads...) keep the old cap so chat turns do not grow heavier.
+### Security
+- Web reads never touch the internal network (localhost, the LAN, a cloud server's metadata address), checked again on every redirect. Page content is marked as data, not instructions, so a page that plants commands cannot steer Javis.
+- Chatbots talking to customers get neither the terminal nor the web tools, even at Full access.
 
 ## [0.256.0] - 2026-10-20
 ### Added

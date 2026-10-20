@@ -277,6 +277,7 @@
   "cp.plus": "Add files, commands, connections",
   "cp.attach": "Add files or photos",
   "cp.pin_folder": "Pin working folder",
+  "cp.undo": "Undo Javis's changes",
   "cp.pin_search_ph": "Find a folder in the brain...",
   "cp.pin_browse": "Browse another folder...",
   "cp.pin_unpin": "Unpin",

@@ -1451,18 +1451,19 @@ async def _openai_responses_stream_once(access_token, account_id, model, message
 # ============================================================
 # MCP đa-model - vòng tool-calling để model API/OAuth dùng MCP của Javis (qua mcp_client)
 # ============================================================
-def _clip_tool_result(result, max_chars: int = 0, head_ratio: float = 0.6) -> str:
+def _clip_tool_result(result, max_chars: int = 0, head_ratio: float = 0.6, ten: str = "") -> str:
     """Cắt kết quả tool quá dài kiểu head+tail KÈM marker, thay cho hard-cut `[:max]`.
     Tail của kết quả MCP (POS/Ads) hay chứa total/summary/pagination → cắt cụt đầu là
     mất phần đó âm thầm. Giữ đầu + cuối + dòng báo bỏ bao nhiêu → model thấy cả hai mép
     và BIẾT data bị thiếu (không tưởng đủ rồi báo sai). Port head+tail của Hermes
     code_execution_tool.
 
-    Trần mặc định 8.000 ký tự cho lượt chat thường; phiên Coding (0.256.0) nâng lên 60.000 vì ở
-    đó một trang đọc file hay output test 8.000 ký tự là cắt mất đúng chỗ cần sửa, còn các tool
-    lập trình đã tự phân trang và tự cắt output của chúng."""
+    Trần mặc định 8.000 ký tự. Các tool tự phân trang và tự cắt output của chúng (đọc file, terminal,
+    tìm file, đọc web: `CAT_RONG`) được tới 60.000 (0.259.0, trước đó chỉ trong phiên Coding): cắt
+    chúng ở 8.000 là cắt mất đúng chỗ cần sửa hay đúng đoạn bài cần đọc, trong khi kết quả MCP
+    (báo cáo POS, danh sách đơn) vẫn giữ trần cũ để lượt chat thường không phình theo."""
     if not max_chars:
-        max_chars = CAT_KET_QUA_CODING if _PHIEN_CODING.get() else 8000
+        max_chars = CAT_KET_QUA_CODING if ten in CAT_RONG else 8000
     text = str(result)
     if len(text) <= max_chars:
         return text
@@ -2021,7 +2022,7 @@ async def _cc_tool_loop(url, headers, model, messages, mcp_tools, mcp_route, rea
                     result = await mcp_client.call_route(mcp_route, fn, args)
                 else:
                     result = _schedule_tool_blocked_result()
-                msgs.append({"role": "tool", "tool_call_id": tc.get("id"), "content": _clip_tool_result(result)})
+                msgs.append({"role": "tool", "tool_call_id": tc.get("id"), "content": _clip_tool_result(result, ten=fn)})
             guard.ghi([((tc.get("function") or {}).get("name"),
                         (tc.get("function") or {}).get("arguments") or "") for tc in tcs])
             nhac = guard.loi_nhac() + _nhac_sap_het(_vong, _n_vong)
@@ -2084,6 +2085,8 @@ async def _cc_tool_loop(url, headers, model, messages, mcp_tools, mcp_route, rea
 # không hề kẹt. main bật cờ `_PHIEN_CODING` cho đúng lượt của phiên Coding (`chay_trong_phien_coding`).
 _PHIEN_CODING: contextvars.ContextVar = contextvars.ContextVar("javis_phien_coding", default=False)
 CAT_KET_QUA_CODING = 60_000
+CAT_RONG = frozenset({"javis_read_file", "javis_terminal", "javis_process", "javis_search_files",
+                      "javis_edit_file", "javis_web_fetch", "javis_web_search", "javis_run_command"})
 # Còn ngần này vòng thì nhắc model chốt việc, để lượt kết thúc bằng một bản tóm tắt chứ không bị
 # cắt ngang giữa chừng.
 NHAC_KHI_CON = 10
@@ -2411,7 +2414,7 @@ async def responses_with_mcp(access_token, account_id, model, messages, reasonin
                         result = await mcp_client.call_route(mcp_route, fc.get("name"), args)
                     else:
                         result = _schedule_tool_blocked_result()
-                    items.append({"type": "function_call_output", "call_id": fc.get("call_id"), "output": _clip_tool_result(result)})
+                    items.append({"type": "function_call_output", "call_id": fc.get("call_id"), "output": _clip_tool_result(result, ten=fc.get("name") or "")})
                 guard.ghi([(fc.get("name"), fc.get("arguments") or "") for fc in fcalls])
                 nhac = guard.loi_nhac() + _nhac_sap_het(_vong, _n_vong)
                 if nhac:
@@ -2540,7 +2543,7 @@ async def anthropic_chat_with_mcp(api_key, model, messages, reasoning, mcp_tools
                     else:
                         res = _schedule_tool_blocked_result()
                     results.append({"type": "tool_result", "tool_use_id": tu.get("id"),
-                                    "content": _clip_tool_result(res)})
+                                    "content": _clip_tool_result(res, ten=tu.get("name") or "")})
                 guard.ghi([(tu.get("name"), json.dumps(tu.get("input") or {}, sort_keys=True,
                                                        ensure_ascii=False)) for tu in tool_uses])
                 nhac = guard.loi_nhac() + _nhac_sap_het(_vong, _n_vong)

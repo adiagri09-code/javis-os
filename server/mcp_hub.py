@@ -106,7 +106,10 @@ def allow_patterns():
 # `javis_watch` (0.239.0) makes the server fetch an address on a schedule and message the owner: not a customer's call.
 # `javis_login` (0.251.0) opens pages signed in as the owner (login vault): a customer must never browse as them.
 OWNER_ONLY_TOOLS = frozenset({"javis_reply_policy", "javis_reply_policy_tune", "javis_team", "javis_memory",
-                              "javis_watch", "javis_login"})
+                              "javis_watch", "javis_login",
+                              # 0.259.0: tìm và đọc web. Bot nói chuyện với khách lạ không được biến
+                              # máy chủ của chủ thành máy đi đọc web hộ bất kỳ ai nhắn tới.
+                              "javis_web_search", "javis_web_fetch"})
 
 
 # ============================================================
@@ -590,13 +593,22 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
     # đọc" (chặn ghi đè file chưa đọc) và mốc khôi phục trước thao tác thay đổi.
     _sid_coding = str(getattr(coding_ctx_cua_phien, "session_id", "") or "") if workspace_root else ""
     _goc_lv = [str(Path(g).resolve()) for g in _goc_lam_viec(workspace_root)]
+    # 0.259.0: mọi khung chat của chủ đều có thư mục làm việc, và khi không ghim thư mục nào thì đó
+    # chính là gốc brain. Số dòng khi đọc và rào ghi đè file chưa đọc chỉ áp cho thư mục làm việc
+    # NGOÀI brain (repo, thư mục đã ghim): ghi chú, ghi nhớ, báo cáo trong brain vẫn ghi như xưa
+    # nay, không bắt đọc trước và không bị chèn số dòng.
+    try:
+        _vault_rs = str(Path(vault_root).resolve()) if vault_root else ""
+    except (OSError, ValueError):
+        _vault_rs = ""
+    _goc_rieng = [g for g in _goc_lv if g != _vault_rs]
 
     def _trong_lam_viec(p):
         try:
             rp = Path(p).resolve()
         except (OSError, ValueError):
             return False
-        return any(rp == Path(g) or Path(g) in rp.parents for g in _goc_lv)
+        return any(rp == Path(g) or Path(g) in rp.parents for g in _goc_rieng)
 
     def _goc_cua(p):
         try:
@@ -862,6 +874,30 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
     if _sid_coding:
         for _fn in CORE_CODING_FNS:
             route[_fn]["hat_nhan"] = True
+
+    # 0.259.0: tìm và đọc web cho engine API (Claude Code, Codex, Grok có WebSearch/WebFetch riêng).
+    # Không vào nhóm hạt nhân: lượt nào cần web thì model tìm thấy qua javis_search_tools khi tầng
+    # lazy đang bật, còn lại chúng hiện thẳng như mọi tool khác. Xem web_tools.
+    async def _web_search(args):
+        import web_tools
+        args = args or {}
+        return await web_tools.tim(str(args.get("query") or ""), args.get("limit") or web_tools.TIM_MAC_DINH)
+
+    async def _web_fetch(args):
+        import web_tools
+        args = args or {}
+        return await web_tools.doc(str(args.get("url") or ""), args.get("offset") or 0,
+                                   args.get("limit") or web_tools.DOC_MAC_DINH)
+
+    add("javis_web_search", "Tìm trên web (tin mới, giá cả, tài liệu, bất cứ thứ gì cần thông tin hiện tại). "
+        "Trả danh sách tiêu đề, địa chỉ, đoạn trích; đọc kỹ trang nào thì gọi javis_web_fetch.",
+        {"query": {"type": "string"}, "limit": {"type": "integer", "description": "số kết quả, mặc định 5"}},
+        ["query"], _web_search)
+    add("javis_web_fetch", "Đọc một trang web hoặc file PDF theo url, trả nội dung dạng chữ (markdown). Trang "
+        "dài thì gọi lại với offset để đọc tiếp. Trang cần đăng nhập thì dùng javis_login.",
+        {"url": {"type": "string"}, "offset": {"type": "integer"},
+         "limit": {"type": "integer", "description": "số ký tự, mặc định 15000, tối đa 50000"}},
+        ["url"], _web_fetch)
     # Mô tả tool = router thu nhỏ: liệt kê slug + mô tả ngắn để engine biết KHI NÀO gọi skill nào.
     # Trần lấy từ skill_router (CHUNG với system prompt) - trước đây hub tự cắt 60, system prompt
     # cắt 100 - người viết skill không biết mình bị chấm theo thước nào.
@@ -920,7 +956,7 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
         import coding_terminal
 
         def _chat_id():
-            return f"web:{_sid_coding}"
+            return str(getattr(coding_ctx_cua_phien, "chat_id", "") or f"web:{_sid_coding}")
 
         def _nhat_ky(lenh, ket, nguy):
             try:

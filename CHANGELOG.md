@@ -8,7 +8,14 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.259.0] - 2026-10-20
 ### Thêm mới
-- **Tìm và đọc web cho mọi bộ não, công cụ lập trình ở mọi khung chat** (đang làm).
+- **Mọi bộ não đều tìm và đọc được web.** OpenRouter, OpenAI, Anthropic API, Gemini, Groq, DeepSeek, Ollama giờ tự tìm trên mạng và đọc trang web, file PDF để trả lời tin mới, giá cả, tài liệu, thay vì đoán từ trí nhớ. Không cần key: mặc định tìm qua DuckDuckGo. Có key Tavily hoặc Brave (biến `TAVILY_API_KEY`, `BRAVE_API_KEY`) hay máy SearXNG riêng (`SEARXNG_URL`) thì Javis dùng nguồn đó trước. Trang dài thì đọc tiếp từng đoạn, không bị cắt mất.
+- **Mọi khung chat đều có đủ đồ nghề như trang Code.** Khung chat thường, trang trợ lý và Telegram của bạn giờ cũng có terminal, sửa file từng đoạn, tìm trong file, mốc khôi phục và 150 vòng công cụ mỗi lượt. Chưa ghim thư mục thì Javis làm việc ngay trong brain; đã ghim thì làm trong thư mục đó.
+- **Hoàn tác ở mọi khung chat**: menu dấu "+" của ô soạn tin có thêm mục "Hoàn tác thay đổi của Javis", mở đúng bảng Hoàn tác như trang Code.
+### Cải thiện
+- Đọc file, terminal và đọc web được trả về tới 60.000 ký tự mỗi lần (trước là 8.000 ở khung chat thường), nên không còn bị cắt mất giữa chừng. Kết quả từ kết nối ngoài (POS, quảng cáo...) vẫn giữ trần cũ để lượt chat không nặng thêm.
+### Bảo mật
+- Đọc web không bao giờ chạm vào mạng nội bộ (localhost, mạng LAN, địa chỉ quản trị của máy chủ đám mây), kiểm lại ở mọi lần trang chuyển hướng. Nội dung trang được đánh dấu là dữ liệu, không phải lệnh, để một trang cố tình cài câu lệnh không điều khiển được Javis.
+- Chatbot nói chuyện với khách không có terminal và không có công cụ web, kể cả bot mức Toàn quyền.
 
 ## [0.256.0] - 2026-10-20
 ### Thêm mới
