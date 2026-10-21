@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.270.0] - 2026-10-21
+### Sửa lỗi
+- Đang soạn.
+
 ## [0.269.0] - 2026-10-21
 ### Sửa lỗi
 - **Nút Cập nhật chạy lại được trên máy cài Javis dưới user thường.** Từ 0.267.0, máy chạy service Javis bằng user không phải root bấm cập nhật là báo "Interactive authentication required" và đứng nguyên bản cũ. Giờ Javis tự chuyển sang cách không cần quyền quản trị: tải bản mới trong lúc Javis cũ vẫn chạy, rồi khởi động lại một lần. Máy chạy bằng root không đổi gì.
