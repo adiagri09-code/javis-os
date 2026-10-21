@@ -56,10 +56,10 @@ _EN = {
     "bấm Kiểm tra.":
         "Still starting (a first run may be downloading its package) - not an error yet. Wait a "
         "moment, then click Check.",
-    "Gói cài đặt của trình kết nối bị thiếu file (cài dở). Bấm Kiểm tra để Javis dọn bản hỏng "
-    "và cài lại.":
-        "The connector's installed package is missing files (an interrupted install). Click "
-        "Check and Javis removes the broken copy and installs it again.",
+    "Gói cài đặt của trình kết nối bị thiếu file (cài dở). Chờ khoảng hai phút rồi bấm Kiểm tra "
+    "để Javis dọn bản hỏng và cài lại.":
+        "The connector's installed package is missing files (an interrupted install). Wait about "
+        "two minutes, then click Check and Javis removes the broken copy and installs it again.",
     "Composio từ chối consumer key mà Javis đang dùng. Vào Composio "
     "For You → Connect my agent, lấy key ck_*, nhập vào thẻ Composio "
     "trong Javis rồi bấm Kết nối hoặc Kết nối lại. Kết nối lại riêng "
@@ -122,8 +122,10 @@ def classify_error(err: str, conn=None) -> tuple[str, str]:
     # (see npx_cache). Checked before the generic spawn hints, which would only say "could not
     # start" and send people looking at the wrong thing.
     if any(s in low for s in _BROKEN_INSTALL_HINTS) and _is_npx(conn):
-        return "install", ("Gói cài đặt của trình kết nối bị thiếu file (cài dở). Bấm Kiểm tra "
-                           "để Javis dọn bản hỏng và cài lại.")
+        # "Wait about two minutes": npx_cache leaves a folder touched in the last QUIET_SECONDS
+        # alone (it may still be mid-install), so a Check right away would repair nothing.
+        return "install", ("Gói cài đặt của trình kết nối bị thiếu file (cài dở). Chờ khoảng hai "
+                           "phút rồi bấm Kiểm tra để Javis dọn bản hỏng và cài lại.")
     if any(s in low for s in _SPAWN_HINTS):
         return "spawn", "Không khởi động được trình kết nối trên máy chạy Javis."
     if any(s in low for s in _NET_HINTS):

@@ -126,6 +126,10 @@ async def main():
     check("MODULE_NOT_FOUND on an npx connector reads as a broken install that Check repairs",
           kind == "install" and "Kiểm tra" in msg, (kind, msg))
     check("and it has an English text for English screens", msg in connect_health._EN)
+    # npx_cache leaves a folder touched in the last QUIET_SECONDS alone, so a Check right away
+    # would repair nothing: the text says to wait first.
+    check("it tells the user to wait about two minutes before Check (the npx quiet window)",
+          "hai phút" in msg and "two minutes" in connect_health._EN.get(msg, ""), msg)
     kind2, _ = connect_health.classify_error(err, {"command": "node", "args": ["/srv/x.js"]})
     check("not an npx connector: Check cannot repair it, so no such promise", kind2 != "install", kind2)
 
