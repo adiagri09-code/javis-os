@@ -5163,6 +5163,10 @@
       if (rec.ok) {
         dot.classList.add("hok");
         chip.title = window.t("cs.cn_h_ok", { so: rec.tools || 0 }) + when;
+      } else if (rec.kind === "starting") {
+        // Still in its first start (often an npx download): not an error yet, so amber, not red.
+        dot.classList.add("hunk");
+        chip.title = (rec.message || window.t("cs.cn_h_unchecked")) + when;
       } else {
         dot.classList.add("herr");
         chip.title = (rec.message || window.t("app.err_cap")) + when;
