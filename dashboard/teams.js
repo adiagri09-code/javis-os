@@ -1713,16 +1713,24 @@
 
   function q(s) { return encodeURIComponent(s); }
 
+  // 0.267.0 (a user's iPhone, 21/10/2026: "hay bị treo khung chat, thoát hẳn xong vào lại mới được"): a request sent
+  // while the phone changes network, or right before the app goes to the background, can hang forever. Send kept its
+  // button disabled waiting for it and nothing redrew, so only reopening the app helped. Every request now gives up after
+  // CALL_MS and fails like a network error (a send that gave up is sent again with the same client id, never twice).
+  var CALL_MS = 30000;
   function call(method, url, body) {
     var opt = { method: method, credentials: "same-origin" };
     if (body !== undefined) {
       opt.headers = { "Content-Type": "application/json" };
       opt.body = JSON.stringify(body);
     }
+    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = null;
+    if (ctl) { opt.signal = ctl.signal; timer = setTimeout(function () { ctl.abort(); }, CALL_MS); }
     var sep = url.indexOf("?") >= 0 ? "&" : "?";
     return fetch(url + sep + "brain=" + q(brain()), opt).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) { return { code: r.status, j: j || {} }; });
-    });
+    }).then(function (x) { clearTimeout(timer); return x; }, function (e) { clearTimeout(timer); throw e; });
   }
 
   var S = null;
@@ -2651,10 +2659,21 @@
       if (S && S.activeId && S.el && S.el.isConnected && document.visibilityState !== "hidden") markOpened(S.activeId);
     }, 800);
   }
+  // 0.267.0: back after AWAY_MS or more, the open team is read again from the server. On an iPhone the socket can come
+  // back "open" but dead, so messages and answers that landed meanwhile never arrived and the chat looked frozen until
+  // the app was closed (the main chat has done the same since 0.85.11). A short switch to another app reloads nothing.
+  var AWAY_MS = 20000, hiddenAt = 0;
   function onVisible() {
+    if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+    var away = hiddenAt && Date.now() - hiddenAt >= AWAY_MS;
+    hiddenAt = 0;
     if (document.visibilityState === "visible" && S && S.activeId && S.el && S.el.isConnected) {
       markOpened(S.activeId);
       drawList();
+      if (away) {
+        if (S.jumped === null || S.jumped === undefined) loadMsgs(false);
+        loadQueue(); loadTeam();
+      }
     }
   }
 

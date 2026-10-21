@@ -74,12 +74,28 @@ def venv_python():
 
 
 def has_systemd():
+    unit = f"{systemd_service_name()}.service"
     try:
         r = subprocess.run(["systemctl", "list-unit-files"], capture_output=True, text=True,
                            creationflags=_CAM)
-        return r.returncode == 0 and "javis.service" in (r.stdout or "")
+        return r.returncode == 0 and re.search(
+            rf"^{re.escape(unit)}\s", r.stdout or "", re.MULTILINE) is not None
     except Exception:
         return False
+
+
+def systemd_service_name(env_name=None, cgroup=None):
+    """Resolve this installation's unit, including instances installed under a custom name."""
+    name = os.getenv("JAVIS_NAME", "") if env_name is None else env_name
+    if name and re.fullmatch(r"[A-Za-z0-9._-]+", name):
+        return name
+    if cgroup is None:
+        try:
+            cgroup = Path("/proc/self/cgroup").read_text(encoding="utf-8")
+        except OSError:
+            cgroup = ""
+    match = re.search(r"(?:^|/)([A-Za-z0-9._-]+)\.service(?:/|$)", cgroup or "", re.MULTILINE)
+    return match.group(1) if match else "javis"
 
 
 LAUNCHD_LABEL = os.getenv("JAVIS_LAUNCHD_LABEL", "com.javis.os")
@@ -160,7 +176,7 @@ def stop_server(mode, server_pid=0, port=""):
     if mode == "windows":
         run(["cmd", "/c", str(ROOT / "stop-javis.bat")])
     elif mode == "systemd":
-        subprocess.run(["systemctl", "stop", "javis"], capture_output=True, text=True,
+        subprocess.run(["systemctl", "stop", systemd_service_name()], capture_output=True, text=True,
                        creationflags=_CAM)
     elif mode == "launchd":
         # CỐ Ý không dừng gì: kill lúc này thì KeepAlive respawn ngay và bản respawn đó sẽ
@@ -183,7 +199,7 @@ def start_server(mode, port=""):
         subprocess.Popen(["wscript.exe", "//nologo", str(ROOT / "start-javis.vbs")],
                          cwd=str(ROOT), creationflags=0x00000008)  # DETACHED_PROCESS
     elif mode == "systemd":
-        subprocess.run(["systemctl", "start", "javis"], capture_output=True, text=True,
+        subprocess.run(["systemctl", "start", systemd_service_name()], capture_output=True, text=True,
                        creationflags=_CAM)
     elif mode == "launchd":
         # kickstart -k: launchd tự hạ bản đang chạy rồi bật bản mới - MỘT người điều phối,
@@ -399,6 +415,51 @@ def poll_health(port, timeout_s=90):
     return False
 
 
+def _systemd_worker_command(a, service_name):
+    unit = f"javis-update-{os.getpid()}"
+    command = [
+        "systemd-run", "--quiet", "--collect", f"--unit={unit}",
+        "--property=Type=exec", f"--property=User={os.getuid()}",
+        f"--property=Group={os.getgid()}", f"--working-directory={ROOT}",
+        f"--setenv=JAVIS_NAME={service_name}",
+        f"--setenv=JAVIS_PORT={a.port}",
+        f"--setenv=JAVIS_STATE_DIR={us.STATE_DIR}",
+        f"--setenv=JAVIS_HOST={os.getenv('JAVIS_HOST', '127.0.0.1')}",
+        f"--setenv=HOME={os.getenv('HOME', str(Path.home()))}",
+        f"--setenv=PATH={os.getenv('PATH', '')}",
+        sys.executable, str(Path(__file__).resolve()),
+        "--old-sha", a.old_sha, "--old-version", a.old_version,
+        "--target", a.target, "--port", str(a.port),
+        "--server-pid", str(a.server_pid), "--systemd-worker",
+    ]
+    return command
+
+
+def _launch_systemd_worker(a):
+    """Move the updater out of Javis's cgroup before stopping the systemd service."""
+    service_name = systemd_service_name()
+    command = _systemd_worker_command(a, service_name)
+    log(f"Tách updater khỏi {service_name}.service bằng systemd-run…")
+    try:
+        result = subprocess.run(command, cwd=str(ROOT), capture_output=True, text=True,
+                                creationflags=_CAM, timeout=30)
+    except Exception as e:
+        result = None
+        error = f"{type(e).__name__}: {e}"
+    else:
+        error = (result.stderr or result.stdout or "").strip()
+    if result is not None and result.returncode == 0:
+        return True
+    reason = _chu("Không chạy được updater độc lập; Javis vẫn được giữ nguyên. ",
+                  "Could not start an independent updater; Javis has been left running. ")
+    if error:
+        reason += error[:400]
+    log(reason)
+    us.write_state({"phase": "error", "result": "error", "error": reason,
+                    "finished_at": _now()})
+    return False
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--old-sha", default="")
@@ -407,6 +468,8 @@ def main():
     ap.add_argument("--port", default=os.getenv("JAVIS_PORT", "7777"))
     ap.add_argument("--server-pid", type=int, default=0,
                     help="PID server đang chạy (để chế độ nohup kill đúng tiến trình)")
+    ap.add_argument("--systemd-worker", action="store_true",
+                    help="Updater đã được tách khỏi cgroup của Javis")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -417,12 +480,15 @@ def main():
               f"-> rollback(reset {a.old_sha or '?'}) nếu không lên")
         return 0
 
+    mode = service_mode()
+    if mode == "systemd" and not a.systemd_worker:
+        return 0 if _launch_systemd_worker(a) else 1
+
     target = a.target or None
     us.write_state({"phase": "preparing", "started_at": _now(), "finished_at": None,
                     "result": None, "error": None, "old_sha": a.old_sha,
                     "old_version": a.old_version, "target_version": target, "stashed": False})
 
-    mode = service_mode()
     log(f"Chế độ restart: {mode}")
 
     log("Dừng server cũ…")
