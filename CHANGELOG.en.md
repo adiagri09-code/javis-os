@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.269.0] - 2026-10-21
+### Fixed
+- In progress.
+
 ## [0.268.0] - 2026-10-21
 ### Fixed
 - **SharePoint files read through Composio at Read-only.** Every SharePoint command, even listing a folder or downloading a file to read, was blocked as dangerous because the app name starts with the word SHARE. Javis now ignores the app name when it judges a command: reads run at Read-only, while upload, share and delete still need Full access.
