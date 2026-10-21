@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.268.0] - 2026-10-21
+### Sửa lỗi
+- **Đọc được file SharePoint qua Composio ở mức Chỉ đọc.** Trước đây mọi lệnh SharePoint, kể cả liệt kê thư mục hay tải file về đọc, đều bị chặn như thao tác nguy hiểm vì tên ứng dụng bắt đầu bằng chữ SHARE (chia sẻ). Giờ Javis bỏ qua tên ứng dụng khi xét lệnh: đọc chạy ở mức Chỉ đọc, còn tải lên, chia sẻ, xoá vẫn cần Toàn quyền như cũ.
+
 ## [0.267.0] - 2026-10-21
 ### Sửa lỗi
 - **Team không còn bắt duyệt khi trợ lý chỉ đọc file.** Ở nhóm "cần duyệt", lệnh đọc nối nhiều bước (`cd ...; cat ...; sed -n ...; grep "a\|b" ...`) từng bị coi là hành động ra ngoài và dừng việc chờ chủ nhóm. Giờ Javis tách từng lệnh ra xét riêng: đọc, tìm, in ra thì chạy luôn. Ghi file, xoá, chạy mã, gửi đi vẫn phải chờ duyệt như cũ.
