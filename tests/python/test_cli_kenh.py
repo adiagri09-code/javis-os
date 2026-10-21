@@ -229,6 +229,57 @@ try:
 finally:
     cli_main.cmd.hoi = _goc_hoi
 
+# --agent <slug>: the turn runs as that agent of the brain. The option takes a value, so the slug
+# must never leak into the question (the quick path used to keep only the words without "-").
+_seen = {}
+_goc_hoi, _goc_chat = cli_main.cmd.hoi, cli_main.cmd.chat
+cli_main.cmd.hoi = lambda args, cau, session="": _seen.update(cau=cau, agent=getattr(args, "agent", None)) or 0
+cli_main.cmd.chat = lambda args: _seen.update(chat_agent=getattr(args, "agent", None)) or 0
+try:
+    cli_main.main(["--agent", "quick-check", "kiểm tra merchant.example"])
+    check("--agent before the question: slug goes to the option, not into the question",
+          _seen.get("agent") == "quick-check" and _seen.get("cau") == "kiểm tra merchant.example")
+    _seen.clear()
+    cli_main.main(["--brain", "brain", "hôm nay thế nào"])
+    check("--brain with a value that is also a command name still asks the question",
+          _seen.get("cau") == "hôm nay thế nào")
+    _seen.clear()
+    cli_main.main(["chat", "--agent", "quick-check"])
+    check("javis chat --agent <slug> keeps the agent", _seen.get("chat_agent") == "quick-check")
+    _seen.clear()
+    cli_main.main(["--agent", "quick-check", "chat"])
+    check("javis --agent <slug> chat keeps the agent", _seen.get("chat_agent") == "quick-check")
+    _seen.clear()
+    cli_main.main(["hôm nay thế nào"])
+    check("no --agent: the agent stays empty", not _seen.get("agent"))
+finally:
+    cli_main.cmd.hoi, cli_main.cmd.chat = _goc_hoi, _goc_chat
+
+
+class _FakeClient:
+    def __init__(self):
+        self.sent = []
+
+    def post(self, path, data):
+        self.sent.append((path, dict(data)))
+        return {"ok": True, "text": "(fake answer)", "files": []}
+
+
+_fake = _FakeClient()
+_goc_client = cli_main.cmd._client
+cli_main.cmd._client = lambda args: _fake
+try:
+    _args = cli_main._parser().parse_args(["-q", "--agent", "quick-check"])
+    cli_main.cmd.hoi(_args, "câu hỏi")
+    _args = cli_main._parser().parse_args(["-q"])
+    cli_main.cmd.hoi(_args, "câu hỏi")
+finally:
+    cli_main.cmd._client = _goc_client
+check("--agent is sent as the `agent` form field of /chat",
+      _fake.sent and _fake.sent[0][0] == "/chat" and _fake.sent[0][1].get("agent") == "quick-check")
+check("without --agent no `agent` field is sent (a plain question is unchanged)",
+      len(_fake.sent) == 2 and "agent" not in _fake.sent[1][1])
+
 print()
 if _fails:
     print(f"THẤT BẠI {len(_fails)}: {_fails}")
