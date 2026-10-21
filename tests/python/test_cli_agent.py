@@ -163,7 +163,7 @@ check("agent: runs on the agent's model, not the main model", run.get("model") =
 check("agent: system prompt carries the agent's role body", "QUICK CHECK ROLE BODY" in sp, sp[:200])
 check("agent: system prompt lists the agent's skills", "check-merchant" in sp and "cpc-estimate" in sp)
 check("agent: Javis's own prompt is not used", "JAVIS MAIN PROMPT" not in sp)
-check("agent: the CLI channel block is still there", "Javis CLI" in sp)
+check("agent: the CLI channel block is still there", "Terminal KHÔNG render markdown" in sp, sp[-300:])
 check("agent: runs inside the chosen brain", same_dir(run.get("cwd"), BRAIN), run.get("cwd"))
 check("agent: fast path and adaptive context are skipped (both answer in Javis's voice)",
       FAST.calls == 0 and ADAPTIVE.calls == 0, (FAST.calls, ADAPTIVE.calls))
@@ -304,12 +304,20 @@ async def fake_api_stream(prov, api_key, api_model, msgs, reasoning, **kw):
     return _gen()
 
 
-_saved_provider, _saved_stream = main._chat_provider, main._api_stream_mcp
-_saved_compact = main._tg_compact_bg
-main._chat_provider = lambda mcfg: ("openrouter", "api", "sk-test", "test/model")
-main._api_stream_mcp = fake_api_stream
-main._tg_compact_bg = lambda *a, **k: None
-try:
+class api_engine:
+    """Runs the turns inside on a fake API engine (OpenRouter shape) as the main model."""
+
+    def __enter__(self):
+        self.saved = (main._chat_provider, main._api_stream_mcp, main._tg_compact_bg)
+        main._chat_provider = lambda mcfg: ("openrouter", "api", "sk-test", "test/model")
+        main._api_stream_mcp = fake_api_stream
+        main._tg_compact_bg = lambda *a, **k: None
+
+    def __exit__(self, *exc):
+        main._chat_provider, main._api_stream_mcp, main._tg_compact_bg = self.saved
+
+
+with api_engine():
     chat(brain=BRAIN, session="apiiso", message="api plain 1")
     api_plain = API_RUNS[-1]
     chat(brain=BRAIN, session="apiiso", agent="api-one", message="api agent one")
@@ -318,9 +326,6 @@ try:
     api_two = API_RUNS[-1]
     chat(brain=BRAIN, session="apiiso", message="api plain 2")
     api_plain2 = API_RUNS[-1]
-finally:
-    main._chat_provider, main._api_stream_mcp = _saved_provider, _saved_stream
-    main._tg_compact_bg = _saved_compact
 check("isolation (API): plain turn first, then agent: the agent turn runs with the agent's prompt",
       "API ONE ROLE BODY" in api_one["system"] and "JAVIS MAIN PROMPT" not in api_one["system"],
       api_one["system"][:200])
@@ -336,7 +341,30 @@ check("isolation (API): each agent's history holds only its own turn",
 
 
 # ================================================================
-# 5. A stale Codex model on an agent never rewrites the owner's MAIN model
+# 5. Prompt parity with the dashboard agent chat
+# ================================================================
+# The CLI agent turn must get what an agent chat on the Partners page gets: the builder block
+# (where to write agents/workflows/skills), the lesson rule and the agent's learned lessons.
+main._ket_luot_agent(BRAIN, "api-one", "earlier dashboard question",
+                     "ok\nJAVIS_LESSON: PARITY LESSON MARKER", conv_sid="")
+_dash = main._agent_turn_system_prompt(BRAIN, "api-one", "")
+with api_engine():
+    chat(brain=BRAIN, session="parity", agent="api-one", message="parity question")
+_cli_sp = API_RUNS[-1]["system"]
+check("parity: the dashboard agent prompt has the builder block and the learned lesson (precondition)",
+      main._agent_builder_block(BRAIN) in _dash and "PARITY LESSON MARKER" in _dash)
+check("parity: the CLI agent prompt has the builder block", main._agent_builder_block(BRAIN) in _cli_sp)
+check("parity: the CLI agent prompt has the lesson rule", main.agent_lessons.DM_LESSON_RULE in _cli_sp)
+check("parity: the CLI agent prompt has the agent's learned lessons", "PARITY LESSON MARKER" in _cli_sp,
+      _cli_sp[-600:])
+check("parity: the CLI agent prompt names the CLI, not the Partners page",
+      "trang Cộng sự). Trả lời" not in _cli_sp and "qua Javis CLI" in _cli_sp)
+check("parity: the dashboard agent prompt still names the Partners page",
+      "trên dashboard Javis (trang Cộng sự). Trả lời" in _dash)
+
+
+# ================================================================
+# 6. A stale Codex model on an agent never rewrites the owner's MAIN model
 # ================================================================
 # The Codex branch self-heals a stale model by writing the corrected one as the main model. Right
 # for the owner's own turn, wrong for an agent turn: the stale model is the agent's (same bug as

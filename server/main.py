@@ -10327,13 +10327,17 @@ _AGENT_BA_LOI = ("Ba lối đúng: làm xong ngay trong lượt và trả kết 
                  "làm được lối nào thì nói thẳng là chưa làm.")
 
 
-def _agent_chat_prompt(brain, slug) -> str:
+def _agent_chat_prompt(brain, slug, channel="dashboard") -> str:
     """System prompt khi CHỦ chat trực tiếp với một trợ lý ở trang Cộng sự.
 
     Là ĐÚNG prompt mà workflow dùng cho trợ lý đó (vai, thân file, kỹ năng, bộ nhớ riêng, luật
     JAVIS_LESSON), cộng một câu nói rõ đây là trò chuyện chứ không phải một bước quy trình.
     Cố ý KHÔNG nối CLAUDE.md, bộ nhớ của chủ hay khối kênh: người dùng đang muốn nói chuyện với
     "Người viết", không phải với Javis đội mũ Người viết.
+
+    `channel`: "dashboard" (the Partners page) or "cli" (POST /chat with `agent`). Only the closing
+    line that tells the agent where the owner is talking from changes; the CLI engine appends its
+    own channel block after this prompt.
     """
     if not (_agents_dir(brain) / f"{slug}.md").exists():
         raise FileNotFoundError(slug)
@@ -10344,9 +10348,11 @@ def _agent_chat_prompt(brain, slug) -> str:
     if _resonance_turn_enabled(brain):
         sysprompt = (sysprompt.replace(_AGENT_HAI_LOI, _AGENT_BA_LOI)
                      + "\n# Cộng hưởng (đang bật cho bạn)\n- " + _RESONANCE_GOAL_HINT + "\n")
+    where = ("qua Javis CLI (terminal hoặc HTTP /chat)" if channel == "cli"
+             else "trên dashboard Javis (trang Cộng sự)")
     return (sysprompt + _agent_builder_block(brain)
-            + "\n\n# Kênh: bạn đang trò chuyện trực tiếp với chủ trên dashboard Javis "
-            "(trang Cộng sự). Trả lời như đang nói chuyện, theo ngôn ngữ chủ đang dùng; "
+            + f"\n\n# Kênh: bạn đang trò chuyện trực tiếp với chủ {where}. "
+            "Trả lời như đang nói chuyện, theo ngôn ngữ chủ đang dùng; "
             "không cần báo cáo dạng nhiệm vụ trừ khi được giao việc cụ thể.")
 
 
@@ -10389,10 +10395,12 @@ def _dm_feedback_prompt(brain, slug, conv_sid) -> str:
         return ""
 
 
-def _agent_turn_system_prompt(brain, slug, conv_sid) -> str:
+def _agent_turn_system_prompt(brain, slug, conv_sid, channel="dashboard") -> str:
     """System prompt của một lượt chat riêng với trợ lý (`agent:<slug>`): prompt trợ lý, khối phiên, và khối phản hồi
-    reaction gần đây của chủ cho ĐÚNG trợ lý này (T2), và bài học phạm vi chat riêng + chung (T3 phần L)."""
-    return (_agent_chat_prompt(brain, slug) + _session_block(conv_sid) + _dm_feedback_prompt(brain, slug, conv_sid)
+    reaction gần đây của chủ cho ĐÚNG trợ lý này (T2), và bài học phạm vi chat riêng + chung (T3 phần L).
+
+    `channel` as in `_agent_chat_prompt`: the CLI agent turn (`_cli_agent_prompt`) uses this same composition."""
+    return (_agent_chat_prompt(brain, slug, channel) + _session_block(conv_sid) + _dm_feedback_prompt(brain, slug, conv_sid)
             + _dm_lessons_prompt(brain, slug, conv_sid))
 
 
@@ -21628,7 +21636,7 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
     if _bot_full:
         sysprompt = _bot_full_prompt(brain, _sys_bot_full, _lang_qd, conv_sid)
     elif agent:
-        sysprompt = _cli_agent_prompt(brain, agent["slug"])
+        sysprompt = _cli_agent_prompt(brain, agent["slug"], conv_sid)
     try:
         if _bot_full or agent:
             raise _BoQua()   # nguồn chọn lọc thay prompt bằng giọng Javis: không dùng cho bot hay agent
@@ -23475,13 +23483,13 @@ def _cli_agent(brain: str, session: str, agent: str):
     return {"brain": root, "slug": f.stem}, ""
 
 
-def _cli_agent_prompt(brain, slug) -> str:
-    """Prompt của agent cho lượt CLI: đúng lõi prompt mà trang Cộng sự và workflow dùng (vai, thân
-    file, kỹ năng, bộ nhớ riêng, luật JAVIS_LESSON). Không ghép CLAUDE.md hay bộ nhớ của chủ, y như
-    chat với trợ lý trên dashboard. Bỏ câu "đang ở trang Cộng sự" của bản dashboard: khối kênh CLI
-    do lõi engine nối sau mới là kênh thật."""
-    _mk, _agent_sysprompt, _log, _learn = _workflow_agent_helpers(brain, None)
-    return _agent_sysprompt(slug)[1]
+def _cli_agent_prompt(brain, slug, conv_sid="") -> str:
+    """The agent's system prompt for a CLI turn: the very prompt of an agent chat on the dashboard
+    (`_agent_turn_system_prompt`: role, file body, skills, own memory, the Resonance swap, the
+    builder block, the session block, recent feedback and the agent's learned lessons), with the
+    closing channel line naming the CLI instead of the Partners page. Like the dashboard, no
+    CLAUDE.md and no owner memory; the CLI channel block is appended by the engine."""
+    return _agent_turn_system_prompt(brain, slug, conv_sid, channel="cli")
 
 
 async def _cli_turn(message: str, brain: str, session: str, host: str, progress=None, agent=None):
