@@ -13745,6 +13745,22 @@ async def do_update():
     latest, _err = await _latest_remote_version(cur)
 
     if mode == "docker":
+        # 0.267.0 (a user's VPS stuck on 0.206.0): an image built on a PC and loaded onto the VPS is in no registry, so
+        # Redeploy, `--pull always` and Watchtower all bring back the same old version. Say what actually updates it.
+        if not deploy_info.image_source():
+            _write_update_state({"phase": "idle"})   # nhả claim
+            return JSONResponse({"ok": False, "self_built": True, "current": cur, "latest": latest,
+                "error": localefmt.chu(
+                    f"Javis này chạy bằng image tự đóng gói, không phải image chính thức, nên kéo lại hay Redeploy "
+                    f"vẫn ra đúng bản cũ. Đổi sang image chính thức một lần (dữ liệu, brain và đăng nhập giữ nguyên): "
+                    f"trong file compose, sửa dòng image: thành {deploy_info.OFFICIAL_IMAGE}:latest rồi chạy lệnh dưới. "
+                    f"Từ đó nút cập nhật dùng được. Tự build từ mã nguồn thì cập nhật bằng ./update.sh. Hướng dẫn đầy đủ: DEPLOY.md, mục Cập nhật.",
+                    f"This Javis runs a self-built image, not the official one, so pulling or Redeploying brings back "
+                    f"the same old version. Switch to the official image once (data, brains and logins are kept): in "
+                    f"the compose file, change the image: line to {deploy_info.OFFICIAL_IMAGE}:latest, then run the "
+                    f"command below. After that the Update button works. Building from source? Update with ./update.sh. "
+                    f"Full steps: DEPLOY.md, Updating section."),
+                "manual": "docker compose up -d --pull always"}, status_code=400)
         if not await _watchtower_reachable():
             _write_update_state({"phase": "idle"})   # nhả claim, không kẹt "preparing"
             return JSONResponse({"ok": False,
