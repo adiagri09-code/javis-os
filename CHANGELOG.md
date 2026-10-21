@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.266.0] - 2026-10-21
+### Cải thiện
+- **Ấn giữ tin nhắn trên điện thoại lại bôi chữ và sao chép như bình thường.** Khung chat chính bỏ lớp làm tối, hàng emoji và thẻ Trả lời / Sao chép khi ấn giữ: giữ ngón tay là điện thoại tự hiện tay kéo chọn chữ và nút Sao chép của máy, chọn được đúng đoạn cần copy. Các nút Trả lời, Sao chép, Sửa, Gửi lại vẫn ở hàng nhỏ hiện ra khi chạm vào tin, kéo tin sang trái vẫn là trích dẫn. Muốn thả emoji khác thì ấn giữ nút like ở góc bong bóng.
+
 ## [0.265.0] - 2026-10-21
 ### Cải thiện
 - **Tài liệu có hướng dẫn kết nối Anthropic Compatible.** Trang hướng dẫn Models thêm mục C1: chuẩn bị gì từ bên bán, điền 3 ô ở đâu, cách đặt làm model chính, và bảng xử lý từng câu báo lỗi. Gửi link mục này cho khách là họ tự làm được.
