@@ -608,8 +608,8 @@ async def startup_smoke(version: str = "", pool=None, retry_after: float | None 
     fingerprint = sorted(f"{f['id']}:{f['kind']}" for f in failed)
     already = fingerprint == _last_notified()
     _smoke = {"version": version, "at": time.time(), "checked": len(conns),
-              "ok": len(conns) - len(failed), "failed": failed, "notified": bool(failed) and not already}
-    _save_notified(fingerprint)
+              "ok": len(conns) - len(failed), "failed": failed, "notified": False}
+    sent = False
     if failed:
         print(f"[connect smoke] {len(failed)}/{len(conns)} connections fail after start: "
               + ", ".join(f"{f['label']} ({f['kind']})" for f in failed)
@@ -630,6 +630,13 @@ async def startup_smoke(version: str = "", pool=None, retry_after: float | None 
                     f"{en}. Open the Connections page and click Check."))
                 if asyncio.iscoroutine(coro):
                     await coro
+                sent = True
             except Exception as e:  # noqa: BLE001 - a failed notice must not break the boot
                 print(f"[connect smoke] notify failed: {type(e).__name__}: {e}", file=sys.stderr)
+    # Remember a failure set only once the owner was actually told (or there is nothing to
+    # report): saved while no notifier is wired yet, or after a notice that failed, that set
+    # would never be reported on a later restart.
+    if sent or not failed:
+        _save_notified(fingerprint)
+    _smoke["notified"] = sent
     return last_smoke()

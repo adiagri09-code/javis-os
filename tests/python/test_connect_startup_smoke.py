@@ -119,6 +119,44 @@ async def main():
     connect_health.on_connections_down = notify
     await mcp_client.pool.close_all()
 
+    # --- no notifier wired yet: the failure set is not remembered as told, so a later restart
+    #     with a notifier still reports it ---
+    notices.clear()
+    mcp_store.resolved = lambda enabled_only=True, *a, **k: [dict(good)]
+    await connect_health.startup_smoke("9.9.9", retry_after=0.1)       # clean start resets the state
+    saved_hook, saved_engine = connect_health.on_connections_down, connect_health.on_engine_down
+    connect_health.on_connections_down = None
+    connect_health.on_engine_down = None
+    mcp_store.resolved = lambda enabled_only=True, *a, **k: [dict(good), dict(broken)]
+    report = await connect_health.startup_smoke("9.9.9", retry_after=0.1)
+    check("no notifier wired: the report says nothing was sent", report.get("notified") is False, report)
+    check("and the failure set is not saved as already reported",
+          connect_health._last_notified() == [], connect_health._last_notified())
+    connect_health.on_connections_down, connect_health.on_engine_down = saved_hook, saved_engine
+    report = await connect_health.startup_smoke("9.9.9", retry_after=0.1)
+    check("next restart with a notifier: the same failure set is reported after all",
+          len(notices) == 1 and "Broken source" in notices[0] and report.get("notified") is True,
+          (notices, report.get("notified")))
+    check("and only then is it saved as reported", connect_health._last_notified() == ["broken:spawn"],
+          connect_health._last_notified())
+
+    # --- a notice that fails to send is not saved as reported either ---
+    notices.clear()
+    mcp_store.resolved = lambda enabled_only=True, *a, **k: [dict(good)]
+    await connect_health.startup_smoke("9.9.9", retry_after=0.1)
+
+    async def failing_notify(text):
+        raise RuntimeError("channel down")
+
+    connect_health.on_connections_down = failing_notify
+    mcp_store.resolved = lambda enabled_only=True, *a, **k: [dict(good), dict(broken)]
+    report = await connect_health.startup_smoke("9.9.9", retry_after=0.1)
+    check("a notice that failed is not saved as reported",
+          report.get("notified") is False and connect_health._last_notified() == [],
+          (report.get("notified"), connect_health._last_notified()))
+    connect_health.on_connections_down = notify
+    await mcp_client.pool.close_all()
+
     # --- the 2026-10-13 error text ---
     err = "RuntimeError: process đóng stdout (Error: Cannot find module 'ajv' | code: 'MODULE_NOT_FOUND')"
     npx_conn = {"command": "npx", "args": ["-y", "mcp-server-gsc@latest"]}
