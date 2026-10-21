@@ -621,8 +621,13 @@ class SessionPool:
         h = _spec_hash(spec)
         ent = self._sessions.get(key)
         # đổi key/URL/env → session cũ vô hiệu; same for a session marked stale while starting,
-        # once its handshake is over (`invalidate(defer_if_starting=True)`).
-        if ent and (ent["hash"] != h or (ent.get("stale") and not self.is_starting_key(key))):
+        # once its handshake is over (`invalidate(defer_if_starting=True)`) and no tool call is
+        # running on it (`ban`, as in `_sweep`): closing it would kill that call mid-flight.
+        # Changing env/token during a first install still closes the starting process here; the
+        # npx repair (`npx_cache`) catches the half-installed folder on a later start.
+        if ent and (ent["hash"] != h
+                    or (ent.get("stale") and not ent.get("ban")
+                        and not self.is_starting_key(key))):
             self._close_later(ent["obj"])
             ent = None
             self._sessions.pop(key, None)

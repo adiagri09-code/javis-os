@@ -254,6 +254,63 @@ async def scenario_deferred_invalidation():
     await mcp_client.pool.close_all()
 
 
+class _FakeSession:
+    """Stands in for a pooled session: `is_starting` is set by the test, `close` is recorded."""
+
+    def __init__(self, name):
+        self.name = name
+        self.starting = False
+        self.closed = False
+
+    def is_starting(self):
+        return self.starting
+
+    async def close(self):
+        self.closed = True
+
+
+async def scenario_stale_session_waits_for_running_tool_call():
+    """A session marked stale (`invalidate(defer_if_starting=True)`) whose handshake is over must
+    not be closed by `_get` while a tool call is still running on it (`ban`): closing a stdio
+    session kills its process tree and the call with it. Once the call ends, the next `_get`
+    closes it and hands out a fresh session."""
+    pool = mcp_client.SessionPool()
+    made = []
+
+    def fake_make(spec):
+        made.append(_FakeSession(f"s{len(made) + 1}"))
+        return made[-1]
+
+    pool._make = fake_make
+    spec = {"key": "fakeban", "transport": "http", "url": "http://127.0.0.1:9/mcp", "headers": {}}
+    key, first = pool._get(spec)
+    first.starting = True
+    release = asyncio.Event()
+
+    async def tool_call(sess):
+        await release.wait()
+        return "done"
+
+    call = asyncio.create_task(pool._chay(key, first, tool_call, True))
+    await asyncio.sleep(0)
+    pool.invalidate(key, defer_if_starting=True)
+    check("a starting session is only marked stale", pool._sessions[key].get("stale") is True)
+    first.starting = False              # handshake over, the tool call still holds `ban`
+    _, again = pool._get(spec)
+    await asyncio.sleep(0)
+    check("stale but a tool call is running: _get keeps the same session",
+          again is first and not first.closed, (getattr(again, "name", again), first.closed))
+    check("and the tool call is not cut", not call.done())
+    release.set()
+    check("the tool call finishes on that session", await call == "done")
+    _, fresh = pool._get(spec)
+    await asyncio.sleep(0)
+    check("once the call is over, the next _get closes the stale session",
+          first.closed, first.closed)
+    check("and hands out a fresh one", fresh is not first and len(made) == 2,
+          (getattr(fresh, "name", fresh), len(made)))
+
+
 async def scenario_cancelled_waiter_keeps_handshake():
     """The mechanism itself: cancelling a waiter does not cancel the handshake task."""
     marker = _TMP / "m5"
@@ -284,6 +341,7 @@ async def main():
     await scenario_handshake_still_bounded()
     await scenario_hung_at_startup_not_kept_forever()
     await scenario_deferred_invalidation()
+    await scenario_stale_session_waits_for_running_tool_call()
     await scenario_cancelled_waiter_keeps_handshake()
 
 
