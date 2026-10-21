@@ -68,6 +68,8 @@ write_agent(OTHER, "other-only", "OTHER BRAIN AGENT BODY", model="haiku")
 # Two agents on "Default" (the main model), for the session isolation checks on an API engine.
 write_agent(BRAIN, "api-one", "API ONE ROLE BODY")
 write_agent(BRAIN, "api-two", "API TWO ROLE BODY")
+# An agent that still names an API model Codex cannot run: the Codex branch coerces it.
+write_agent(BRAIN, "codex-stale", "CODEX STALE ROLE BODY", model="gpt-4o")
 # Same slug as BRAIN's agent, in the default brain: a mistyped brain must never reach this one.
 write_agent(DEFAULT, "quick-check", "DEFAULT BRAIN IMPOSTOR BODY", model="haiku")
 
@@ -331,6 +333,54 @@ check("isolation (API): the plain session keeps Javis's prompt and none of the a
 check("isolation (API): each agent's history holds only its own turn",
       api_one["user"] == ["api agent one"] and api_two["user"] == ["api agent two"],
       (api_one["user"], api_two["user"]))
+
+
+# ================================================================
+# 5. A stale Codex model on an agent never rewrites the owner's MAIN model
+# ================================================================
+# The Codex branch self-heals a stale model by writing the corrected one as the main model. Right
+# for the owner's own turn, wrong for an agent turn: the stale model is the agent's (same bug as
+# the dedicated bots fixed in 0.102.1).
+class FakeCodex:
+    runs = []
+
+    def __init__(self, **kw):
+        self.cwd = kw.get("cwd")
+        self.model = kw.get("model")
+        self.instructions = kw.get("instructions") or ""
+        self.session_id = None
+        self.extra_config = []
+        self.steer = False
+
+    def is_available(self):
+        return True
+
+    async def query(self, prompt):
+        FakeCodex.runs.append({"instructions": self.instructions, "model": self.model})
+        yield {"type": "final", "content": "codex answer", "tokens_in": 1, "tokens_out": 1}
+
+
+_cfg = main.cfgmod.read_settings()
+main._set_main_model(_cfg, "anthropic-cli", "opus")
+main.cfgmod.write_settings(_cfg)
+_main_before = dict(main.cfgmod.read_settings()["model"].get("main") or {})
+_saved_codex = (main.CodexCLI, main._apply_codex_hub, main.openai_oauth.write_codex_auth)
+main.CodexCLI = lambda **kw: FakeCodex(**kw)
+main._apply_codex_hub = lambda cli, vault_root=None: cli
+main.openai_oauth.write_codex_auth = lambda *a, **k: None
+try:
+    r = chat(brain=BRAIN, session="codex", agent="codex-stale")
+finally:
+    main.CodexCLI, main._apply_codex_hub, main.openai_oauth.write_codex_auth = _saved_codex
+_main_after = dict(main.cfgmod.read_settings()["model"].get("main") or {})
+check("stale Codex model: the agent turn ran on Codex with the agent's prompt",
+      r.status_code == 200 and bool(FakeCodex.runs)
+      and "CODEX STALE ROLE BODY" in FakeCodex.runs[-1]["instructions"], r.text[:200])
+check("stale Codex model: the owner's main model is unchanged after the agent turn",
+      _main_before == _main_after == {"provider": "anthropic-cli", "model": "opus"}, (_main_before, _main_after))
+_txt = r.json().get("text") or ""
+check("stale Codex model: the notice names the agent and its settings, not the Models page",
+      "codex-stale" in _txt and "gpt-4o" in _txt and "Models" not in _txt, _txt[:300])
 
 print()
 if _fails:

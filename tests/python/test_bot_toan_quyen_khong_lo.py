@@ -46,8 +46,8 @@ core = src[src.index("async def _tg_answer_engine("):src.index("async def _tg_he
 check("every reply of the engine core marks a full-access bot as a customer turn",
       core.count("_tg_ket(") == 3 and core.count("khach=_bot_full)") == 3, core.count("khach=_bot_full)"))
 i = core.index('_set_main_model(_fix, "openai-oauth", actual_model)')
-check("the Codex model self-heal never writes the owner's main model for a bot",
-      "if not _bot_full:" in core[i - 400:i], core[i - 400:i])
+check("the Codex model self-heal never writes the owner's main model for a bot (nor an agent turn)",
+      "if not _bot_full and not agent:" in core[i - 400:i], core[i - 400:i])
 check("chatbot_runtime puts canh_bao in the bot log",
       '(out or {}).get("canh_bao")' in (SERVER / "chatbot_runtime.py").read_text(encoding="utf-8"))
 

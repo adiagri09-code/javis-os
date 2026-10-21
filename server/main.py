@@ -21801,15 +21801,27 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
             # user biết. Trước đây Telegram lặng lẽ đổi, user cứ tưởng đang chạy model mình chọn.
             # NOT for a dedicated bot (0.102.1): its model is the Agent's, and writing the owner's MAIN
             # model because a customer bot's Agent named a stale model changed the owner's own brain.
-            if not _bot_full:
+            # Nor for an agent turn (POST /chat with `agent`): same reason, the stale model is the agent's.
+            if not _bot_full and not agent:
                 try:
                     _fix = cfgmod.read_settings()
                     _set_main_model(_fix, "openai-oauth", actual_model)
                     cfgmod.write_settings(_fix)
                 except Exception as _e:
                     print(f"[codex model self-heal] {_e}", file=__import__('sys').stderr)
-            canh_bao = (f"⚠ Model '{api_model}' không chạy được qua Codex (tài khoản ChatGPT) - "
-                        f"đã tự đổi sang '{actual_model}'. Đổi model khác ở trang Models nếu muốn.\n\n")
+            if agent:
+                # The main model was not touched, so pointing at the Models page would be wrong: the
+                # model to change is the one in the agent's settings.
+                canh_bao = localefmt.chu(
+                    f"⚠ Model '{api_model}' của agent '{agent['slug']}' không chạy được qua Codex (tài khoản "
+                    f"ChatGPT) - lượt này dùng '{actual_model or 'mặc định của Codex'}'. Đổi model trong cài đặt "
+                    f"của agent để hết thông báo này.",
+                    f"⚠ Model '{api_model}' of agent '{agent['slug']}' does not run through Codex (ChatGPT "
+                    f"account) - this turn fell back to '{actual_model or 'the Codex default'}'. Change the model "
+                    f"in the agent's settings to stop this notice.") + "\n\n"
+            else:
+                canh_bao = (f"⚠ Model '{api_model}' không chạy được qua Codex (tài khoản ChatGPT) - "
+                            f"đã tự đổi sang '{actual_model}'. Đổi model khác ở trang Models nếu muốn.\n\n")
         openai_oauth.write_codex_auth()
         ccli = sess.get("codex")
         if ccli is None:
