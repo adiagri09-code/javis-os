@@ -480,6 +480,7 @@
   "pet.menu.mic_on": "Bật mic",
   "pet.menu.mic_off": "Tắt mic",
   "pet.menu.settings": "Cài đặt pet",
+  "pet.menu.teams": "Chat Team",
   "settings.grp_voice": "Giọng nói, thương hiệu & truy cập",
   "settings.grp_voice_sub": "TTS, avatar và tên miền riêng",
   "settings.grp_autostart": "Khởi động cùng Windows",

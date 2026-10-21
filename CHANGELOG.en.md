@@ -8,10 +8,17 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
-## [0.263.0] - 2026-10-21
+## [0.264.0] - 2026-10-21
 ### Improved
 - **Running the test suite no longer fills drive C.** Each run used to leave over 1,000 leftover folders in the Windows Temp folder, at one point piling up to 50,000 folders and about 30 GB. Each test file now gets its own temporary folder, deleted when it finishes.
 - **An interrupted run doesn't leave junk for long.** Folders from a run that was stopped halfway are cleared on the next test run.
+
+## [0.263.0] - 2026-10-20
+### Fixed
+- **Bots no longer vanish from the Chatbot page.** A bot saved with the full path of Brain Default (created from Telegram, from chat or by an older version) now shows in the list together with its channel accounts, so you can change its token or settings right away instead of deleting and recreating it. Bots of other brains still stay out.
+- Deleting an assistant that a bot still uses is now always blocked, however the assistant's brain was written.
+### Added
+- **The star button menu has a Team chat item** on its last row, which opens the Team page.
 
 ## [0.262.0] - 2026-10-20
 ### Added
