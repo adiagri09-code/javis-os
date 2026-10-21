@@ -47,7 +47,7 @@ _os.environ["JAVIS_NO_REAL_TEAM_ENGINE"] = "1"
 
 # ─────────── Thư mục tạm: một thư mục riêng cho mỗi tiến trình test, tự xoá khi thoát ───────────
 #
-# VÌ SAO (0.270.0): ~460 file test gọi `tempfile.mkdtemp(...)` (nhiều chỗ ngay ở mức module) mà
+# VÌ SAO (0.271.0): ~460 file test gọi `tempfile.mkdtemp(...)` (nhiều chỗ ngay ở mức module) mà
 # không xoá. Mỗi lượt chạy để lại ~1200 thư mục trong %TEMP%, dồn lại tới 50.277 thư mục (~30 GB)
 # làm đầy ổ C nhiều lần. Sửa từng chỗ là ~850 chỗ trong ~460 file và test mới lại quên,
 # nên sửa MỘT chỗ ở đây: mọi file test đều import `_paths` trước khi đụng tới tempfile, nên chỉ

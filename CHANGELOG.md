@@ -6,10 +6,17 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.270.0] - 2026-10-21
+## [0.271.0] - 2026-10-21
 ### Cải thiện
 - **Chạy bộ test không còn làm đầy ổ C.** Trước đây mỗi lượt chạy để lại hơn 1000 thư mục rác trong thư mục Temp của Windows, dồn lại có lúc tới 50.000 thư mục, khoảng 30 GB. Giờ mỗi file test dùng một thư mục tạm riêng và tự xoá khi chạy xong.
 - **Lần chạy bị dừng ngang cũng không để lại rác lâu.** Thư mục của lượt bị tắt giữa chừng được dọn ở lần chạy test kế tiếp.
+
+## [0.270.0] - 2026-10-21
+### Sửa lỗi
+- **Kết nối chạy bằng npx không còn hỏng vĩnh viễn sau lần cài đầu.** Trước đây nếu Javis vừa khởi động lại mà một kết nối còn đang tải gói, nó có thể bị ngắt giữa chừng, để lại bản cài dở và báo lỗi MODULE_NOT_FOUND mãi. Giờ Javis chờ lần cài đầu xong, tự dọn bản cài dở, và sau mỗi lần khởi động lại sẽ thử mọi kết nối rồi báo một lần nếu có cái không chạy. Kết nối đang cài lần đầu hiện chấm vàng thay vì đỏ. (Đóng góp của @dev23072005.)
+- **Agent có model Codex cũ không còn đổi model chính của bạn.** Áp dụng cho cả chat với trợ lý trên dashboard lẫn lượt chạy qua `/chat`: Javis chỉ sửa model của đúng trợ lý hoặc phiên đó.
+### Thêm mới
+- **Gọi đúng một trợ lý qua `/chat` và lệnh `javis`.** Ứng dụng ngoài gửi thêm `agent=<slug>` (hoặc `javis --agent <slug>`) là lượt đó chạy bằng lời nhắc, skill và model của trợ lý ấy, có phiên riêng và vẫn ghi bài học như khi chat trên dashboard. Trợ lý hay brain không có thật thì báo lỗi rõ, không lặng lẽ chạy model chính. (Đóng góp của @QuanAMG.)
 
 ## [0.269.0] - 2026-10-21
 ### Sửa lỗi
