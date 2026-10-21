@@ -20772,9 +20772,10 @@ async def _tg_answer(text, meta=None, progress=None, channel="telegram", bot=Non
     và `ghi_kho=False` khi người gọi tự lo phần ghi (việc nền ghi bằng `push_to_chat`), nên
     lịch sử chỉ được ĐỌC làm ngữ cảnh chứ không bị chèn thêm tin nào.
 
-    `agent` = {"brain", "slug"} ĐÃ KIỂM (xem `_cli_agent`): lượt của CHỦ chạy bằng prompt, kỹ
-    năng và model của một trợ lý trong brain đó. Khác `bot` ở chỗ người hỏi vẫn là chủ: phiên,
-    quyền và lưu kho y như lượt thường, chỉ đổi prompt và model.
+    `agent` = {"brain", "slug"}, ALREADY CHECKED (see `_cli_agent`): an OWNER turn that runs with the
+    prompt, skills and model of one agent of that brain. Unlike `bot`, the person asking is still
+    the owner: permissions and storage are those of a normal turn; the prompt, the model and the
+    end of turn (lessons, rules, run log) are the agent's.
     """
     # Gỡ ký tự vô hình (tag U+E0000, ghi đè hướng chữ, zero-width...) ngay ở cửa chung của mọi kênh: người lạ
     # giấu lệnh vào đó, model đọc được còn chủ thì không thấy. Gỡ TRƯỚC khi ghi kho vì vòng tự học đọc lại kho (0.83.2).
@@ -20796,14 +20797,15 @@ async def _tg_answer(text, meta=None, progress=None, channel="telegram", bot=Non
         channel = f"bot:{bot.get('slug') or bot['id']}"
     else:
         sess = _tg_session(chat_id)
-        # brain riêng của phiên (đổi bằng /brain), mặc định theo Settings. Có agent thì chạy ĐÚNG
-        # brain đã kiểm agent, không tra lại: tra lại mà ra brain khác là prompt của agent một nơi,
-        # file và bộ nhớ một nẻo.
+        # The session's own brain (changed with /brain), Settings by default. An agent turn runs in
+        # EXACTLY the brain the agent was checked in, without a second lookup: a lookup that landed
+        # elsewhere would put the agent's prompt in one brain and its files and memory in another.
         brain = agent["brain"] if agent else _tg_brain(chat_id)
     mcfg = cfgmod.read_settings().get("model", {})
     # Chủ chat trên Telegram thì theo ghim của kênh (nếu có). Bot chuyên trách KHÔNG ăn theo
     # ghim của chủ: nó phục vụ khách, và model của nó là model của chính Agent nó trỏ tới.
-    # Lượt có agent mượn đúng đường đó (cùng luật rơi về model chính khi agent để "Mặc định").
+    # An agent turn borrows that same path (same fall back to the main model when the agent is on
+    # "Default").
     prov, kind, api_key, api_model = (_chat_provider_bot(mcfg, bot) if bot
                                       else _chat_provider_bot(mcfg, {"agent": agent}) if agent
                                       else _chat_provider_kenh(mcfg, channel))
@@ -21638,7 +21640,7 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
         sysprompt = _cli_agent_prompt(brain, agent["slug"], conv_sid)
     try:
         if _bot_full or agent:
-            raise _BoQua()   # nguồn chọn lọc thay prompt bằng giọng Javis: không dùng cho bot hay agent
+            raise _BoQua()   # selected sources swap the prompt for Javis's voice: not for a bot or an agent
         _p8 = await asyncio.to_thread(
             _get_adaptive_context().prepare, runtime_trace, text, _brain_root(brain),
             str(conv_sid or chat_id), [], channel, prov,
@@ -21669,8 +21671,9 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
             "codex" if prov == "openai-oauth" else "cli",
             api_model or mcfg.get("claude_model") or "mặc định", kind,
         )
-    # Gateway huỷ lịch bằng câu chữ là lối tắt của chủ; bot Toàn quyền và lượt có agent vẫn huỷ được
-    # qua tool javis_schedule. Lối tắt trả lời bằng giọng Javis, không bằng vai của agent.
+    # The plain-words schedule cancel gateway is the owner's shortcut; a full-access bot and an agent
+    # turn still cancel through the javis_schedule tool. The shortcut answers in Javis's voice, not
+    # in the agent's role.
     schedule_action = None if (_bot_full or agent) else await _schedule_cancel_action(text, brain)
     if schedule_action:
         for call in schedule_action.get("calls") or []:
@@ -21827,8 +21830,11 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
                     f"account) - this turn fell back to '{actual_model or 'the Codex default'}'. Change the model "
                     f"in the agent's settings to stop this notice.") + "\n\n"
             else:
-                canh_bao = (f"⚠ Model '{api_model}' không chạy được qua Codex (tài khoản ChatGPT) - "
-                            f"đã tự đổi sang '{actual_model}'. Đổi model khác ở trang Models nếu muốn.\n\n")
+                canh_bao = localefmt.chu(
+                    f"⚠ Model '{api_model}' không chạy được qua Codex (tài khoản ChatGPT) - "
+                    f"đã tự đổi sang '{actual_model}'. Đổi model khác ở trang Models nếu muốn.",
+                    f"⚠ Model '{api_model}' does not run through Codex (ChatGPT account) - switched to "
+                    f"'{actual_model}' automatically. Pick another model on the Models page if you like.") + "\n\n"
         openai_oauth.write_codex_auth()
         ccli = sess.get("codex")
         if ccli is None:
@@ -23459,26 +23465,27 @@ def _cli_sess_key(session: str) -> str:
 
 
 def _cli_agent(brain: str, session: str, agent: str):
-    """Agent mà lượt CLI xin chạy. Trả ({"brain", "slug"}, "") khi hợp lệ, (None, câu lỗi) khi không,
-    (None, "") khi không xin agent nào.
+    """The agent a CLI turn asks for. Returns ({"brain", "slug"}, "") when valid, (None, error) when
+    not, and (None, "") when no agent was asked for.
 
-    Kiểm theo brain ĐÃ GIẢI, và brain sai tên là LỖI chứ không rơi về brain mặc định như lượt
-    thường (`_cli_turn`): rơi về thì một agent trùng slug ở brain mặc định sẽ chạy thay, tức đúng
-    đường lách luật "agent của brain khác trả 400".
+    Checked against the RESOLVED brain, and a wrong brain is an ERROR instead of falling back to
+    the default brain as a plain turn does (`_cli_turn`): falling back would let an agent with the
+    same slug in the default brain answer instead, exactly the way around "an agent of another
+    brain is a 400".
     """
     slug = str(agent or "").strip()
     if not slug:
         return None, ""
-    ten = str(brain or "").strip()
-    if ten and ten != "brain" and not os.path.isdir(ten):
-        return None, localefmt.chu(f"Không có brain '{ten}'", f"Brain '{ten}' does not exist")
-    # Không gửi brain thì kiểm trong brain của phiên, đúng brain lượt này sẽ chạy.
-    root = _brain_root(ten or _tg_brain(_cli_sess_key(session)))
+    name = str(brain or "").strip()
+    if name and name != "brain" and not os.path.isdir(name):
+        return None, localefmt.chu(f"Không có brain '{name}'", f"Brain '{name}' does not exist")
+    # No brain sent: check in the session's brain, the brain this turn will run in.
+    root = _brain_root(name or _tg_brain(_cli_sess_key(session)))
     f = _agent_md_path(root, slug)
     if f is None:
         return None, localefmt.chu(f"Brain này không có agent '{slug}'", f"This brain has no agent '{slug}'")
-    # Slug theo TÊN FILE thật: các hàm đọc agent phía sau ghép thẳng `<slug>.md`, còn `_agent_md_path`
-    # tìm được cả tên khác dạng Unicode (NFC/NFD) với slug gửi lên.
+    # The slug is the REAL file name: the readers further on join `<slug>.md` directly, while
+    # `_agent_md_path` also finds a name in the other Unicode form (NFC/NFD) than the one sent.
     return {"brain": root, "slug": f.stem}, ""
 
 
@@ -23494,7 +23501,8 @@ def _cli_agent_prompt(brain, slug, conv_sid="") -> str:
 async def _cli_turn(message: str, brain: str, session: str, host: str, progress=None, agent=None):
     """Một lượt chat của kênh CLI. Trả (out, key) với out là dict (trả lời thật) hoặc str (lỗi).
 
-    `agent`: kết quả hợp lệ của `_cli_agent`, người gọi kiểm TRƯỚC để trả 400 thay vì chạy lượt.
+    `agent`: a valid result of `_cli_agent`; the caller checks it FIRST to answer 400 instead of
+    running the turn.
 
     An agent turn runs in its own session, keyed `<session key>@<slug>`: its own RAM session (the
     API engines build the system prompt only when that session is new, and Claude Code / Codex
@@ -23539,14 +23547,15 @@ async def chat_once(message: str = Form(...), brain: str = Form(""),
     chừng là mất luôn công đã bỏ ra. Client tự chọn thời gian chờ; muốn thấy tiến độ thì dùng
     /chat/stream.
 
-    `agent` (tuỳ chọn) = slug một trợ lý của brain được chọn: lượt chạy bằng prompt, kỹ năng và
-    model của trợ lý đó. Agent không có trong brain, hay brain sai tên, trả 400.
+    `agent` (optional) = slug of an agent of the chosen brain: the turn runs with that agent's
+    prompt, skills and model, in its own session. An agent missing from the brain, or a brain
+    that does not exist, is a 400.
     """
     if not str(message or "").strip():
         return JSONResponse({"ok": False, "error": localefmt.chu("message rỗng", "message is empty")}, status_code=400)
-    ag, loi = _cli_agent(brain, session, agent)
-    if loi:
-        return JSONResponse({"ok": False, "error": loi}, status_code=400)
+    ag, error = _cli_agent(brain, session, agent)
+    if error:
+        return JSONResponse({"ok": False, "error": error}, status_code=400)
     out, key = await _cli_turn(message, brain, session, host, agent=ag)
     return _cli_payload(out, key)
 
@@ -23565,13 +23574,13 @@ async def chat_stream(message: str = Form(...), brain: str = Form(""),
     Client PHẢI bỏ qua im lặng mọi `type` nó chưa biết: server thêm loại gói mới là chuyện
     thường, và một CLI cũ không được vỡ vì điều đó.
 
-    `agent` như ở /chat. Kiểm TRƯỚC khi mở luồng: luồng đã mở thì mã trạng thái đã là 200.
+    `agent` as on /chat. Checked BEFORE the stream opens: once it is open the status is already 200.
     """
     if not str(message or "").strip():
         return JSONResponse({"ok": False, "error": localefmt.chu("message rỗng", "message is empty")}, status_code=400)
-    ag, loi = _cli_agent(brain, session, agent)
-    if loi:
-        return JSONResponse({"ok": False, "error": loi}, status_code=400)
+    ag, error = _cli_agent(brain, session, agent)
+    if error:
+        return JSONResponse({"ok": False, "error": error}, status_code=400)
 
     hang = asyncio.Queue()
 
