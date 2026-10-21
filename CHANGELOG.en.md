@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.267.0] - 2026-10-21
+### Fixed
+- (in progress)
+
 ## [0.266.0] - 2026-10-21
 ### Improved
 - **Holding a message on a phone selects and copies text again.** The main chat drops the dimmed screen, the emoji row and the Reply / Copy card on a long press: holding a finger now brings up the phone's own selection handles and Copy button, so you copy exactly the part you need. Reply, Copy, Edit and Send again stay in the small row that appears when you tap a message, and swiping a message left still quotes it. To pick another emoji, hold the like button at the corner of the bubble.
