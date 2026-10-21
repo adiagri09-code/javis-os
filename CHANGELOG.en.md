@@ -10,7 +10,10 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.263.0] - 2026-10-20
 ### Fixed
-- In progress.
+- **Bots no longer vanish from the Chatbot page.** A bot saved with the full path of Brain Default (created from Telegram, from chat or by an older version) now shows in the list together with its channel accounts, so you can change its token or settings right away instead of deleting and recreating it. Bots of other brains still stay out.
+- Deleting an assistant that a bot still uses is now always blocked, however the assistant's brain was written.
+### Added
+- **The star button menu has a Team chat item** on its last row, which opens the Team page.
 
 ## [0.262.0] - 2026-10-20
 ### Added

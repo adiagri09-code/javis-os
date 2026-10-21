@@ -480,6 +480,7 @@
   "pet.menu.mic_on": "Turn mic on",
   "pet.menu.mic_off": "Turn mic off",
   "pet.menu.settings": "Mascot settings",
+  "pet.menu.teams": "Team chat",
   "settings.grp_voice": "Voice, branding & access",
   "settings.grp_voice_sub": "TTS, avatar and your own domain",
   "settings.grp_autostart": "Start with Windows",

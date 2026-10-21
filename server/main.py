@@ -166,6 +166,7 @@ import chatbot_reply_policy_store  # kho quyết định, ca đã học, ngưỡ
 import chatbot_reply_policy_review  # vòng tự soát bộ phán xử bằng bộ não chính (0.77.0)
 import chatbot_store     # kho bản ghi bot + token qua secrets_store
 import channel_accounts  # tài khoản kênh dạng token (0.61.0), bot chỉ trỏ tới
+import brain_ident       # one brain, many spellings ("brain", absolute path), #716
 import channels          # sổ đăng ký kênh của Hộp thư hội thoại (0.61.0)
 import conversations     # Hộp thư hội thoại khách: kho khách -> hội thoại -> tin (Chatbot V2)
 import zalo_personal_channel   # Hộp thư hội thoại: đọc tin Zalo cá nhân từ MCP theo cursor
@@ -6217,6 +6218,9 @@ def _default_brain_dir() -> Path:
     except Exception:
         pass
     return p
+
+brain_ident.set_default_dir(_default_brain_dir)
+
 
 def _brain_root(brain: str) -> str:
     if not brain or brain == "brain":
@@ -22980,7 +22984,8 @@ async def chatbots_list(brain: str = ""):
     loc = str(brain or "").strip()
     out = []
     for b in chatbot_store.list_bots():
-        if loc and str(b.get("brain") or "") != loc:
+        # Same brain in any spelling: "brain", "path:<dir>" or the absolute path a bot was saved with (#716).
+        if loc and not brain_ident.same_brain(b.get("brain"), loc):
             continue
         b = dict(b)
         b["status"] = chatbot_runtime.status(b["id"])

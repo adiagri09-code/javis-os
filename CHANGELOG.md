@@ -8,7 +8,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.263.0] - 2026-10-20
 ### Sửa lỗi
-- Đang soạn.
+- **Bot không còn biến mất khỏi trang Chatbot.** Bot lưu bằng đường dẫn đầy đủ của Brain Default (tạo từ Telegram, từ chat hay từ bản cũ) giờ hiện đúng trong danh sách, kèm tài khoản kênh của nó, nên sửa token hay cấu hình được ngay, không phải xoá tạo lại. Bot của brain khác vẫn không lẫn vào.
+- Xoá một trợ lý còn bot đang dùng giờ luôn bị chặn đúng, dù brain của trợ lý được ghi theo kiểu nào.
+### Thêm mới
+- **Menu nút ngôi sao có thêm mục Chat Team** ở dòng cuối, bấm là mở thẳng trang Team.
 
 ## [0.262.0] - 2026-10-20
 ### Thêm mới
