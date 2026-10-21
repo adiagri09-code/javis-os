@@ -215,6 +215,10 @@ check("agent of another brain: 400", r.status_code == 400, r.text[:200])
 r = chat(brain=BRAIN + "-typo", session="s6", agent="quick-check")
 check("wrong brain: 400, no fall back to the default brain's agent of the same slug",
       r.status_code == 400 and r.json().get("ok") is False, r.text[:200])
+check("wrong brain: the error says brain must be a brain folder path on the server",
+      any(w in r.json().get("error", "") for w in ("path of a brain folder on the server",
+                                                    "đường dẫn tới một thư mục brain trên máy chủ")),
+      r.text[:200])
 r = chat(brain=BRAIN, session="s6", agent="../agents/quick-check")
 check("slug that leaves the agents folder: 400", r.status_code == 400, r.text[:200])
 r = chat("/chat/stream", brain=BRAIN, session="s6", agent="no-such-agent")

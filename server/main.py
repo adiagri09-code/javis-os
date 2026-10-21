@@ -23478,7 +23478,9 @@ def _cli_agent(brain: str, session: str, agent: str):
         return None, ""
     name = str(brain or "").strip()
     if name and name != "brain" and not os.path.isdir(name):
-        return None, localefmt.chu(f"Không có brain '{name}'", f"Brain '{name}' does not exist")
+        return None, localefmt.chu(
+            f"Không có brain '{name}': với agent, brain phải là đường dẫn tới một thư mục brain trên máy chủ.",
+            f"Brain '{name}' not found: with agent, brain must be the path of a brain folder on the server.")
     # No brain sent: check in the session's brain, the brain this turn will run in.
     root = _brain_root(name or _tg_brain(_cli_sess_key(session)))
     f = _agent_md_path(root, slug)
