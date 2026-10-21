@@ -23475,7 +23475,15 @@ def _cli_agent_prompt(brain, slug) -> str:
 async def _cli_turn(message: str, brain: str, session: str, host: str, progress=None, agent=None):
     """Một lượt chat của kênh CLI. Trả (out, key) với out là dict (trả lời thật) hoặc str (lỗi).
 
-    `agent`: kết quả hợp lệ của `_cli_agent`, người gọi kiểm TRƯỚC để trả 400 thay vì chạy lượt."""
+    `agent`: kết quả hợp lệ của `_cli_agent`, người gọi kiểm TRƯỚC để trả 400 thay vì chạy lượt.
+
+    An agent turn runs in its own session, keyed `<session key>@<slug>`: its own RAM session (the
+    API engines build the system prompt only when that session is new, and Claude Code / Codex
+    resume its native thread), its own `_TG_SID_MAP` entry and its own stored conversation. Sharing
+    the plain session made the first turn's prompt stick: a plain turn then `agent=x` ran with
+    Javis's prompt, and `agent=x` then `agent=y` ran with x's. `@` never survives
+    `_cli_sess_key`, so no plain session can collide with an agent one. The reply still names the
+    plain session the client sent."""
     key = _cli_sess_key(session)
     sess = _tg_session(key)
     if brain:
@@ -23487,7 +23495,8 @@ async def _cli_turn(message: str, brain: str, session: str, host: str, progress=
                 sess["brain"] = root
         except Exception:  # noqa: BLE001 - brain sai tên thì dùng mặc định, không phá lượt
             pass
-    meta = {"chat_id": key, "host": (host or "")[:64]}
+    turn_key = key + (f"@{agent['slug']}" if agent else "")
+    meta = {"chat_id": turn_key, "host": (host or "")[:64]}
     out = await _tg_answer(message, meta=meta, progress=progress, channel="cli", agent=agent)
     return out, key
 
