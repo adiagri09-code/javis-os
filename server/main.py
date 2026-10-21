@@ -20858,13 +20858,12 @@ async def _tg_answer(text, meta=None, progress=None, channel="telegram", bot=Non
             store=store, conv_sid=conv_sid, channel=channel, bot=bot, agent=agent)
 
         if agent and isinstance(out, dict):
-            # Prompt của agent dặn phát JAVIS_LESSON / JAVIS_RULE ở cuối câu trả lời. Bóc TRƯỚC khi
-            # lưu phiên và trả cho client, không thì máy gọi /chat nhận cả dòng điều khiển. CHỈ bóc,
-            # KHÔNG ghi vào bộ nhớ agent: lượt HTTP đọc nội dung của bên thứ ba (trang web mà skill
-            # mở ra), và ghi bài học rút từ đó là cho một câu lệnh cài cắm sống lâu dài trong
-            # MEMORY.md của agent, chạy lại ở mọi lượt sau của agent ấy, kể cả trên dashboard.
-            _rules, _sach = agent_rules.extract_rules(out.get("text") or "")
-            _lessons, out["text"] = _boc_bai_hoc(_sach)
+            # The agent prompt asks for JAVIS_LESSON / JAVIS_RULE lines and says they are saved. The
+            # /chat caller is the authenticated owner, as on the dashboard, so end the turn through
+            # the same handler as an agent chat there: owner rules and lessons are recorded, the run
+            # is logged, and the lines are stripped before the turn is stored or returned.
+            out["text"] = _ket_luot_agent(brain, agent["slug"], text, out.get("text") or "",
+                                          conv_sid=conv_sid)
 
         # Cùng luật với dashboard: hứa "xong em báo" mà không có việc nền nào thì nói thẳng.
         # Ở kênh này tin nhắn CHƯA gửi đi nên nối luôn vào cuối, khỏi phải bắn thêm một tin.
