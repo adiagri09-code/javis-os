@@ -142,6 +142,40 @@ check("nothing left beside it", sorted(p.name for p in npx_root.iterdir()) == []
 check("the next start is a cold start", npx_cache.prepare("npx", ["-y", "fake-mcp@latest"], env).get("state") == "absent")
 check("not npx: skipped", npx_cache.prepare(sys.executable, ["x.py"], env).get("state") == "skipped")
 
+# ---------- 5b. A symlink cycle in node_modules does not send the walk round in circles ----------
+if os.name != "nt":
+    loop_dir = _TMP / "t-loop"
+    tree(loop_dir)
+    nm = loop_dir / "node_modules"
+    plain = sorted(p.relative_to(loop_dir).as_posix() for p in npx_cache._package_dirs(nm))
+    # conn-pkg/node_modules/cycle -> conn-pkg, and a scoped one: @scope/lib/node_modules/@in/cyc -> @scope/lib
+    (nm / "conn-pkg/node_modules").mkdir(parents=True)
+    os.symlink("..", nm / "conn-pkg/node_modules/cycle")
+    (nm / "@scope/lib/node_modules/@in").mkdir(parents=True)
+    os.symlink("../..", nm / "@scope/lib/node_modules/@in/cyc")
+    os.symlink(".", nm / "self-link")
+    t0 = time.time()
+    walked = sorted(p.relative_to(loop_dir).as_posix() for p in npx_cache._package_dirs(nm))
+    check("symlink cycle: the package walk skips symlinked entries and ends",
+          walked == plain and time.time() - t0 < 5, walked)
+    check("symlink cycle: inspect_tree returns normally (healthy tree, no problem)",
+          npx_cache.inspect_tree(loop_dir) == [], npx_cache.inspect_tree(loop_dir))
+    loop_folder = npx_root / npx_cache.install_dir(["loop-mcp@latest"], npx_root).name
+    tree(loop_folder)
+    lnm = loop_folder / "node_modules"
+    (lnm / "conn-pkg/node_modules").mkdir(parents=True)
+    os.symlink("..", lnm / "conn-pkg/node_modules/cycle")
+    age(loop_folder, 3600)
+    r = npx_cache.prepare("npx", ["-y", "loop-mcp@latest"], env)
+    check("symlink cycle: prepare returns normally on a healthy folder", r.get("state") == "ok", r)
+    (lnm / "ajv/package.json").unlink()
+    age(loop_folder, 3600)
+    r = npx_cache.prepare("npx", ["-y", "loop-mcp@latest"], env)
+    check("symlink cycle: prepare still repairs a broken folder",
+          r.get("state") == "repaired" and not loop_folder.exists(), r)
+else:
+    print("skip symlink cycle check on Windows (symlinks need extra rights)")
+
 # ---------- 6. A real session: the broken folder is gone before npx runs ----------
 import mcp_client  # noqa: E402
 

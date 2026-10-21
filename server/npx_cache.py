@@ -155,6 +155,8 @@ def install_dir(packages: list[str], root: Path) -> Path:
 
 
 def _package_dirs(node_modules: Path):
+    # Symlinked entries are skipped: npx installs real folders, and a link back up the tree
+    # (a cycle) would make this walk recurse until the path is too long.
     try:
         names = sorted(os.listdir(node_modules))
     except OSError:
@@ -163,6 +165,8 @@ def _package_dirs(node_modules: Path):
         if name.startswith("."):
             continue
         p = node_modules / name
+        if p.is_symlink():
+            continue
         if name.startswith("@"):
             try:
                 subs = sorted(os.listdir(p))
@@ -170,10 +174,10 @@ def _package_dirs(node_modules: Path):
                 continue
             for sub in subs:
                 q = p / sub
-                if q.is_dir():
+                if q.is_dir() and not q.is_symlink():
                     yield q
                     yield from _package_dirs(q / "node_modules")
-        elif p.is_dir():
+        elif p.is_dir() and not p.is_symlink():
             yield p
             yield from _package_dirs(p / "node_modules")
 
