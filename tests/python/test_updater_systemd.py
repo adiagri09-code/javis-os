@@ -85,4 +85,78 @@ if hasattr(os, "getuid"):
     check("systemd-run refused: Javis is left running and the screen says why",
           rc == 1 and "stop" not in ran and st.get("phase") == "error" and "Access denied" in (st.get("error") or ""), st)
 
+    # ---- 0.269.0: a service running as a normal user (User= in the unit) ----
+    # Real case (2026-10-21): every click on Update failed with "Failed to start transient service unit: Interactive
+    # authentication required", because a normal user may not create system units. The worker now falls back to the
+    # user's own systemd manager and restarts Javis by signal, which needs no privileges.
+    def fake_run(answers, seen):
+        def _run(c, **k):
+            seen.append((c, k.get("env")))
+            if c[:2] == ["systemctl", "show"]:
+                return SimpleNamespace(returncode=0, stdout=answers.get(c[3], "") + "\n", stderr="")
+            if c[:2] == ["systemd-run", "--user"]:
+                return answers["user"]
+            if c[0] == "systemd-run":
+                return SimpleNamespace(returncode=1, stdout="",
+                                       stderr="Failed to start transient service unit: Interactive authentication required.")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return _run
+
+    OK = SimpleNamespace(returncode=0, stdout="", stderr="")
+    NO_BUS = SimpleNamespace(returncode=1, stdout="", stderr="Failed to connect to bus: No medium found")
+    a = SimpleNamespace(old_sha="abc123", old_version="0.1.0", target="0.2.0", port="7777", server_pid=42)
+
+    seen = []
+    with patch.object(updater.os, "geteuid", lambda: 1000), \
+            patch.object(updater.subprocess, "run", fake_run({"Restart": "always", "user": OK}, seen)):
+        ok = updater._launch_systemd_worker(a)
+    user_cmd = next((c for c, _ in seen if c[:2] == ["systemd-run", "--user"]), None)
+    check("normal user: the system unit is refused, the user's own manager takes the worker", ok and user_cmd, seen)
+    check("normal user: the worker restarts Javis by signal and asks for no User=/Group=",
+          user_cmd and user_cmd[-2:] == ["--systemd-worker", "--restart-by-signal"]
+          and not any(x.startswith("--property=User=") for x in user_cmd))
+    check("normal user: the worker gets the user bus even from inside a system service",
+          all((env or {}).get("XDG_RUNTIME_DIR") is not None or not Path(f"/run/user/{os.getuid()}").is_dir()
+              for c, env in seen if c[:2] == ["systemd-run", "--user"]))
+
+    us.write_state({"phase": "preparing", "result": None, "error": None})
+    seen = []
+    with patch.object(updater.os, "geteuid", lambda: 1000), \
+            patch.object(updater.subprocess, "run", fake_run({"Restart": "always", "user": NO_BUS}, seen)):
+        ok = updater._launch_systemd_worker(a)
+    err = us.read_state().get("error") or ""
+    check("no user manager either: Javis is left running and the screen says how to update and how to fix the button",
+          not ok and "Interactive authentication required" in err and "git pull --ff-only" in err
+          and "systemctl restart" in err and "enable-linger" in err, err)
+
+    us.write_state({"phase": "preparing", "result": None, "error": None})
+    seen = []
+    with patch.object(updater.os, "geteuid", lambda: 1000), \
+            patch.object(updater.subprocess, "run", fake_run({"Restart": "on-failure", "user": OK}, seen)):
+        ok = updater._launch_systemd_worker(a)
+    check("only Restart=always is restarted by signal (on-failure treats SIGTERM as clean and stays down)",
+          not ok and not any(c[:2] == ["systemd-run", "--user"] for c, _ in seen), seen)
+
+    # The worker in signal mode: the old server keeps running while the release is merged, then one signal swaps it.
+    killed, logs = [], []
+    with patch.object(updater, "_unit_main_pid", lambda name: 4242), \
+            patch.object(updater, "_kill_pid", lambda pid, timeout_s=15: killed.append(pid)), \
+            patch.object(updater, "log", logs.append):
+        updater.stop_server("systemd-signal", 4242, "7777")
+        check("signal mode: stopping does not touch the running server", killed == [])
+        updater.start_server("systemd-signal", "7777")
+        check("signal mode: starting signals the unit's main process so systemd brings up the new code",
+              killed == [4242])
+
+    modes = []
+    with patch.object(updater, "service_mode", lambda *x, **k: "systemd"), \
+            patch.object(updater, "stop_server", lambda m, *x, **k: modes.append(m) or (_ for _ in ()).throw(SystemExit(7))), \
+            patch.object(sys, "argv", ["updater.py", "--old-sha", "abc", "--port", "7777",
+                                       "--systemd-worker", "--restart-by-signal"]):
+        try:
+            updater.main()
+        except SystemExit:
+            pass
+    check("--restart-by-signal puts the worker in signal mode", modes == ["systemd-signal"], modes)
+
 sys.exit(1 if fails else 0)

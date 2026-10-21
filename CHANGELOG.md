@@ -8,7 +8,9 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.269.0] - 2026-10-21
 ### Sửa lỗi
-- Đang soạn.
+- **Nút Cập nhật chạy lại được trên máy cài Javis dưới user thường.** Từ 0.267.0, máy chạy service Javis bằng user không phải root bấm cập nhật là báo "Interactive authentication required" và đứng nguyên bản cũ. Giờ Javis tự chuyển sang cách không cần quyền quản trị: tải bản mới trong lúc Javis cũ vẫn chạy, rồi khởi động lại một lần. Máy chạy bằng root không đổi gì.
+- Nếu máy vẫn chưa cho phép, màn hình nói rõ lệnh cập nhật tay và một lệnh (`sudo loginctl enable-linger`) để nút cập nhật dùng được từ lần sau.
+- **Lưu ý:** máy đang kẹt ở 0.267.0 hoặc 0.268.0 cần cập nhật tay đúng một lần để lên bản này (`git pull --ff-only`, cài thư viện, `sudo systemctl restart javis`). Từ đó nút Cập nhật chạy bình thường.
 
 ## [0.268.0] - 2026-10-21
 ### Sửa lỗi
