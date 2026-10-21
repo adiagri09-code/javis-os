@@ -38,7 +38,7 @@ NPX_NAMES = {"npx", "npx.cmd", "npx.exe", "npx.ps1"}
 # check at the wrong folder.
 _FLAGS_NO_VALUE = {"-y", "--yes", "-q", "--quiet", "-s", "--silent", "--no", "-n",
                    "--prefer-offline", "--prefer-online", "--offline", "--no-update-notifier",
-                   "--ignore-scripts", "--no-audit", "--no-fund", "--loglevel=silent"}
+                   "--ignore-scripts", "--no-audit", "--no-fund"}
 
 # A folder whose newest entry is younger than this may still be mid-install by a process this
 # server does not know about (a second Javis, a terminal). Leave it alone.
