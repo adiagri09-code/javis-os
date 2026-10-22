@@ -77,6 +77,12 @@ check("CANARY: caret còn trong dấu mục thì không chèn dấu mục lồng
 check("caret vừa qua dấu mục thì nối được", !!E("- [ ] a", 6));
 check("vị trí caret vô nghĩa thì trả null", E("- [ ] a", null) === null && E("- [ ] a", 99) === null);
 
+// Inside a code fence "- a" is code, not a list: Enter must not continue it.
+check("CANARY: no list continuation inside a ``` fence", E("```\n- a\n```", 7) === null);
+check("CANARY: no list continuation inside a ~~~ fence", E("~~~\n- [ ] a\n~~~", 11) === null);
+check("no continuation in an unclosed fence either", E("text\n```js\n1. a", 15) === null);
+check("lists after a closed fence continue again", ap("```\ncode\n```\n- a", 16) === "```\ncode\n```\n- a\n- |");
+
 // Đúng dòng đang đứng, không phải dòng đầu file
 check("nối đúng dòng đang đứng trong file nhiều dòng",
       ap("# Ghi chú\n\n- [ ] một\n", 20) === "# Ghi chú\n\n- [ ] một\n- [ ] |\n");

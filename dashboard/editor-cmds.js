@@ -134,11 +134,20 @@
 
   // Enter trong o nguon tho. Tra mo ta thay doi {s, e, text}: thay doan [s, e) bang text, caret
   // dung sau text. Tra null = de trinh duyet xuong dong binh thuong.
+  // True when the line starting at lineStart sits inside a ``` or ~~~ code fence: an odd number
+  // of fence lines comes before it.
+  function insideCodeFence(v, lineStart) {
+    var fences = v.slice(0, lineStart).split("\n").filter(function (ln) {
+      return /^ {0,3}(```|~~~)/.test(ln);
+    });
+    return fences.length % 2 === 1;
+  }
   function enterDanhSach(value, pos) {
     var v = String(value == null ? "" : value);
     if (typeof pos !== "number" || pos !== Math.floor(pos) || pos < 0 || pos > v.length) return null;
     var ls = v.lastIndexOf("\n", pos - 1) + 1;
     var le = v.indexOf("\n", pos); if (le < 0) le = v.length;
+    if (insideCodeFence(v, ls)) return null;         // "- a" inside a code block is code, not a list
     var d = dongDanhSach(v.slice(ls, le));
     if (!d) return null;
     if (pos - ls < d.dau.length) return null;        // caret con nam trong dau muc
