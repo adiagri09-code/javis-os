@@ -299,3 +299,12 @@ Protected trial mode takes full texts/all rows and rejects an incomplete prepare
 It preserves raw CRLF/whitespace and known empty sources; a strict collector must reject
 required unreadable/binary sources before declaring complete coverage. These renderers
 never authorize or load source content themselves.
+
+The exact Windows2.1.308 CLI/SHA256c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53
+and SDK0.2.116 tuple is also verified by explicit developer-only synthetic native
+qualification; see agent-skill-runtime-2.1.308-qualification.json. Unknown tuples still
+cannot execute through production verification, even for version/auth probes. The isolated
+single-query worker temporarily adds the shared no-window flags to SDK descendant launches
+and restores its transport afterward. This does not patch the shared chat process or the
+installed SDK. Qualification proves the recorded dummy-provider boundaries, not real model,
+account, reasoning fidelity, business quality, or an OS filesystem/network sandbox.

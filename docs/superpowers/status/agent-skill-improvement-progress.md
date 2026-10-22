@@ -368,3 +368,14 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   regression reproduced it and bounded prefix/original-length observations restored ordinary
   retention. Incomplete prefixes cannot claim full protected text. Parent's fresh attachment/
   renderer/project/agent/prefix regression passed6/6 scripts in17s, including13 new checks.
+- Exact Windows CLI2.1.308/SHA256c9796b…ea53 with SDK0.2.116 is now technically qualified
+  and allowlisted. The developer opt-in uses scratch HOME, dummy authentication and bounded
+  localhost fake responses only. Actual native tools remained fixture-only; ambient hooks,
+  skills/plugins, unauthorized tools, fast override and session persistence were absent.
+  Pending-query job close killed all4 owned processes after1 request and0 retries.
+- Qualification caught SDK descendant launches missing CREATE_NO_WINDOW. A temporary,
+  restored wrapper exists only in the single-query isolated worker; actual native SDK
+  version/query launches both observed flags134217728. Parent independently reran native
+  qualification/profile/worker/selection/console5/5 scripts in17s. Raw qualification evidence
+  is in docs/dev/agent-skill-runtime-2.1.308-qualification.json. No real account auth/model
+  query occurred; actual reasoning and asset-use coverage remain unknown.

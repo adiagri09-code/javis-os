@@ -1,0 +1,159 @@
+{
+  "label": "synthetic/native-technical-qualification-only",
+  "production_billing": false,
+  "passed": true,
+  "profile_hash": "06e75c3046a666790035fd4ef8910abe3a1113baba5bc67f6f96a9378a98abed",
+  "scenarios": [
+    {
+      "scenario": "synthetic/native-pending-query-cancellation",
+      "elapsed_s": 4.0,
+      "production_billing": false,
+      "query_count": 1,
+      "owned_process_count": 4,
+      "all_owned_processes_closed": true,
+      "sdk_spawn_flags": [
+        134217728,
+        134217728
+      ],
+      "requests": [
+        "/v1/messages"
+      ],
+      "usage_coverage": "unknown: cancelled before synthetic response",
+      "retry_count": 0
+    },
+    {
+      "scenario": "synthetic/native-local-fake-provider",
+      "elapsed_s": 4.25,
+      "production_billing": false,
+      "runtime": {
+        "version": "2.1.308",
+        "sha256": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
+        "sdk": "0.2.116"
+      },
+      "sdk_spawn_flags": [
+        134217728,
+        134217728
+      ],
+      "worker_has_console": false,
+      "requests": [
+        {
+          "path": "/v1/messages",
+          "model": "claude-opus-5-5",
+          "method": "POST",
+          "dummy_auth_only": true,
+          "effort": "medium",
+          "tools": [
+            "mcp__fixture__fixture_read"
+          ],
+          "fast_requested": false,
+          "ambient_markers": [],
+          "results": {}
+        },
+        {
+          "path": "/v1/messages",
+          "model": "claude-opus-5-5",
+          "method": "POST",
+          "dummy_auth_only": true,
+          "effort": "medium",
+          "tools": [
+            "mcp__fixture__fixture_read"
+          ],
+          "fast_requested": false,
+          "ambient_markers": [],
+          "results": {
+            "bad-bash": true,
+            "bad-read": true,
+            "bad-web": true,
+            "bad-mcp": true,
+            "hit": false,
+            "miss": true,
+            "bad-agent": true,
+            "bad-task": true,
+            "bad-skill": true,
+            "bad-search": true,
+            "bad-deferred": true
+          }
+        }
+      ],
+      "tool_denials": [
+        "bad-agent",
+        "bad-task",
+        "bad-skill",
+        "bad-search",
+        "bad-deferred"
+      ],
+      "fixture_statuses": [
+        "fixture_hit",
+        "fixture_miss"
+      ],
+      "ambient_plugin_hook_ran": false,
+      "session_transcripts_persisted": false,
+      "coverage": {
+        "model": "observed",
+        "reasoning": "unknown",
+        "asset_use": "unknown"
+      },
+      "sdk_children_closed": true
+    }
+  ],
+  "runtime": {
+    "platform": "win32",
+    "cli_version": "2.1.308",
+    "pe_file_version": "2.1.308.0",
+    "cli_sha256": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
+    "sdk_version": "0.2.116"
+  },
+  "selected_configuration": {
+    "provider": "anthropic-cli",
+    "model": "claude-opus-5-5",
+    "reasoning": "medium",
+    "auth_mode": "subscription",
+    "fast": false
+  },
+  "selected_configuration_hash": "3bf3fc794eb7c1d9fd9470903d90105f292c998dd84f587b219e7de4ebae6cf8",
+  "source_sha256": {
+    "server/improvement_worker.py": "6b5222f7b034095ecd2fed10b629a8adb12688d9260e9eb273ec06d733a80851",
+    "server/improvement_claude.py": "0b175c683fdf43eebc6db87667c3e84ccf70cf17fcb57a7f184648d22b967ada",
+    "server/improvement_sandbox.py": "1af0f887ed9a198e6c840e266dd42f28a3704aa8747c61321624b81469215470",
+    "server/claude_sdk_engine.py": "6b13f5b77f78e0dfe3ffc1268e46ef70d8d800324e8dd2664f793f0b8df49906",
+    "tests/python/test_improvement_native.py": "869d1cb826d8396e684bccaa04fde3103921c596ecb1e75bb35351a93348a929",
+    "tests/python/test_improvement_runtime_qualification.py": "73b39b1a6bf04bb3c661d686c673eb1b2679e8b1be82f799217b871ce4ab2423"
+  },
+  "verification": {
+    "qualification_tests": 5,
+    "qualification_passed": 5,
+    "worker_tests": 6,
+    "profile_tests": 20,
+    "selection_tests": 20,
+    "windows_no_console": "passed",
+    "unknown_runtime_no_execution": "passed"
+  },
+  "reused_blackbox_assertions": [
+    "outside Bash marker absent",
+    "outside Read canary unchanged and not in model request",
+    "ambient SessionStart hook absent",
+    "ambient MCP and forbidden WebFetch endpoints untouched",
+    "fixture-only native tool inventory",
+    "exact final native result artifact and installation receipt",
+    "fixture_hit and structured fixture_miss with no live fallback"
+  ],
+  "constraints": [
+    "explicit candidate hash and SDK validated before developer-only native execution",
+    "fresh empty auth HOME and config; dummy API credential only",
+    "all inference requests terminate at localhost fake provider; proxy CONNECT/GET attempts rejected",
+    "at most three fake model responses per exchange; process bound under 45 seconds",
+    "no production configuration decryption, account authentication, real model inference or account usage"
+  ],
+  "limitations": [
+    "Technical native isolation qualification only; no real model or business capability evidence",
+    "Actual reasoning and asset use remain unknown",
+    "No OS filesystem or network sandbox is claimed",
+    "Permission denial is observed through absent native capability/tool-error results, not inferred permission callback invocation"
+  ],
+  "reproduce": {
+    "runtime": "D:/Project/Javis-OS/.venv/Scripts/python.exe",
+    "script": "tests/python/test_improvement_runtime_qualification.py",
+    "opt_in_environment": "JAVIS_TEST_NATIVE_QUALIFICATION_CLI=<explicit exact candidate path>",
+    "default": "native tests skipped; engineering/unknown-runtime tests run without opt-in"
+  }
+}

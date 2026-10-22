@@ -19,7 +19,8 @@ from improvement_store import _hash
 
 PROFILE_VERSION = "claude-isolated-trial-v1"
 VERIFIED_NATIVE_RUNTIMES = {("win32", "2.1.304",
-    "019e5174d5d954585edb1a946fe280e44a973050b4897034adf0e16306f85fdd", "0.2.116")}
+    "019e5174d5d954585edb1a946fe280e44a973050b4897034adf0e16306f85fdd", "0.2.116"),
+    ("win32", "2.1.308", "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53", "0.2.116")}
 
 
 def profile_hash():

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 # Isolated Python removes the script directory; restore only this trusted host source root.
@@ -14,6 +15,28 @@ import winproc
 
 def process_flags():
     return winproc.no_window()
+
+
+@contextmanager
+def _sdk_hidden_processes():
+    """Single-query worker scope: hide SDK version/query descendants on Windows.
+
+    SDK0.2.116 does not pass creation flags to its transport. This temporary
+    boundary belongs only to this isolated worker, never the shared chat server
+    or installed SDK. Preserve caller flags and restore the transport on exit.
+    """
+    from claude_agent_sdk._internal.transport import subprocess_cli
+    original = subprocess_cli.anyio.open_process
+
+    async def hidden(*args, **kwargs):
+        kwargs["creationflags"] = kwargs.get("creationflags", 0) | winproc.no_window()
+        return await original(*args, **kwargs)
+
+    subprocess_cli.anyio.open_process = hidden
+    try:
+        yield
+    finally:
+        subprocess_cli.anyio.open_process = original
 
 
 class WorkerGroup:
@@ -127,11 +150,12 @@ async def run_request(payload, read_control, emit, *, adapter_factory=None, engi
     prompt = _json({"task": manifest["case"]["task"], "fixtures": [
         {"snapshot_id": item["snapshot_id"], "source": item["source"]} for item in manifest["case"]["fixtures"]]})
     fixture_sequence = 0
-    async for event in engine.query(prompt):
-        await emit({"type": "engine_event", **identity, "event": event})
-        for observation in broker.events[fixture_sequence:]:
-            await emit({"type": "fixture_event", **identity, "event": observation})
-        fixture_sequence = len(broker.events)
+    with _sdk_hidden_processes():
+        async for event in engine.query(prompt):
+            await emit({"type": "engine_event", **identity, "event": event})
+            for observation in broker.events[fixture_sequence:]:
+                await emit({"type": "fixture_event", **identity, "event": observation})
+            fixture_sequence = len(broker.events)
     await emit({"type": "worker_complete", **identity, "fixture_events": broker.events, "tool_denials": profile.denials})
 
 
