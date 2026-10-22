@@ -1,0 +1,339 @@
+"""Durable isolated trial references and leases in the existing shared execution database."""
+from __future__ import annotations
+
+import json
+import math
+import secrets
+import time
+from contextlib import closing
+
+from agent_ledger import CallLedger
+import improvement_cases as IC
+import improvement_store as IM
+
+TERMINAL = frozenset({"completed", "failed", "unknown", "interrupted", "cancelled", "not_run"})
+
+
+def _request(value):
+    request = IC._frozen(value)
+    IC._fields(request, {"version", "pins", "case_set_id", "case_id", "variant", "repeat", "engine_config",
+        "baseline_context_hash", "target_generations", "deadline_at"}, {"qualification_id"})
+    if (type(request["version"]) is not int or request["version"] != 1
+            or request["variant"] not in {"baseline", "candidate"}
+            or type(request["repeat"]) is not int or not 1 <= request["repeat"] <= 1_000_000):
+        raise ValueError("invalid_trial_request")
+    for key in ("case_set_id", "case_id"):
+        if not isinstance(request[key], str) or not IC._ID.fullmatch(request[key]):
+            raise ValueError("invalid_trial_identity")
+    IC.CaseStore._pin_shape(request["pins"])
+    import turn_context
+    if turn_context.execution_metadata({"experiment_id": request["pins"]["experiment_id"], "trial_id": "pending",
+            "case_id": request["case_id"], "variant": request["variant"], "repeat": request["repeat"], "attempt": 1,
+            "execution_id": "improvement_trial:pending", "role": "solver", "purpose": "improve_probe",
+            "learning_origin": "trial"}) is None:
+        raise ValueError("invalid_trial_execution_identity")
+    IC._digest(request["baseline_context_hash"])
+    from improvement_claude import ClaudeTrialAdapter
+    ClaudeTrialAdapter(request["engine_config"])  # Schema validation only; never invokes a binary.
+    if request["engine_config"]["provider"] != "anthropic-cli" or request["engine_config"]["engine_id"] != "claude-sdk":
+        raise ValueError("unsupported_trial_configuration")
+    if request["pins"]["engine_config_hash"] != IM._hash(request["engine_config"]):
+        raise IM.ConflictError("trial_configuration_drift")
+    generations = request["target_generations"]
+    if (not isinstance(generations, dict) or not generations
+            or any(not isinstance(key, str) or type(value) is not int or value < 1 for key, value in generations.items())):
+        raise ValueError("invalid_trial_target_generations")
+    deadline = request["deadline_at"]
+    if type(deadline) not in (int, float) or not math.isfinite(deadline) or deadline <= 0:
+        raise ValueError("invalid_trial_deadline")
+    return request
+
+
+class TrialStore:
+    def __init__(self, improvement_store):
+        self.assets = improvement_store
+        self.store, self.blobs = improvement_store.store, improvement_store.blobs
+        self.cases = IC.CaseStore(improvement_store)
+        self.ledger = CallLedger(self.store)
+        from improvement_sandbox import TrialWorkspace
+        self.workspace = TrialWorkspace(self.blobs.root.parent / "trials")
+
+    @staticmethod
+    def _row(connection, brain, identifier):
+        row = connection.execute("SELECT * FROM improvement_trials WHERE id=? AND brain_id=?", (identifier, brain)).fetchone()
+        if not row:
+            raise PermissionError("trial_record_unavailable")
+        return row
+
+    def _current(self, connection, brain, request):
+        pins = request["pins"]
+        self.cases._enabled(connection, brain)
+        if IM.ImprovementStore._policy(connection, brain)["version"] != pins["policy_version"]:
+            raise IM.ConflictError("stale_trial_policy")
+        case_set = self.cases._row(connection, "improvement_case_sets", brain, request["case_set_id"])
+        if case_set["manifest_hash"] != pins["case_set_hash"]:
+            raise IM.ConflictError("stale_trial_case_set")
+        if not connection.execute("SELECT 1 FROM improvement_contracts WHERE brain_id=? AND manifest_hash=?",
+                                  (brain, pins["contract_hash"])).fetchone():
+            raise PermissionError("trial_record_unavailable")
+        case = self.cases._case(connection, brain, request["case_set_id"], request["case_id"])
+        for identifier in case["snapshot_ids"]:
+            snapshot = self.cases._row(connection, "improvement_snapshots", brain, identifier)
+            if snapshot["status"] != "sufficient" or json.loads(snapshot["manifest_json"])["grant_hash"] != pins["grant_hash"]:
+                raise IM.ConflictError("stale_trial_source")
+        bundle = None
+        for variant, field in (("baseline", "base_bundle_hash"), ("candidate", "candidate_bundle_hash")):
+            row = connection.execute("SELECT * FROM improvement_bundles WHERE brain_id=? AND manifest_hash=?",
+                                     (brain, pins[field])).fetchone()
+            if not row:
+                raise PermissionError("trial_record_unavailable")
+            if variant == request["variant"]:
+                bundle = json.loads(row["manifest_json"])
+        generations = request["target_generations"]
+        if set(generations) != {asset["target_id"] for asset in bundle}:
+            raise IM.ConflictError("stale_trial_targets")
+        for target, generation in generations.items():
+            row = IM.ImprovementStore._target(connection, brain, target)
+            if row["status"] != "live" or row["generation"] != generation:
+                raise IM.ConflictError("stale_trial_target")
+        if case["split"] == "qualification":
+            claim = self.cases._row(connection, "improvement_qualification", brain, request.get("qualification_id"))
+            if claim["case_set_id"] != request["case_set_id"] or claim["pins_hash"] != IM._hash(pins):
+                raise IM.ConflictError("stale_qualification_pin")
+        elif request.get("qualification_id"):
+            raise ValueError("unexpected_qualification_claim")
+        return case
+
+    @staticmethod
+    def _public(connection, row):
+        attempts = [dict(item) for item in connection.execute(
+            "SELECT attempt,status,call_id,engine_at,created_at,updated_at FROM improvement_trial_attempts "
+            "WHERE trial_id=? ORDER BY attempt", (row["id"],))]
+        return {"trial_id": row["id"], "brain_id": row["brain_id"], "status": row["status"],
+                "generation": row["generation"], "attempt": row["attempt"],
+                "request": json.loads(row["request_json"]), "attempts": attempts}
+
+    def get(self, principal, identifier):
+        brain = IM._brain(principal)
+        if IM._schema_version(self.store) < 3:
+            raise PermissionError("trial_record_unavailable")
+        with closing(self.store._conn()) as connection:
+            return self._public(connection, self._row(connection, brain, identifier))
+
+    def reserve(self, principal, request, *, event_key):
+        brain = IM._brain(principal)
+        request = _request(request)
+        IM.ensure(self.store)
+        logical = IM._hash([request["pins"]["experiment_id"], request["variant"], request["case_set_id"],
+                            request["case_id"], request["repeat"]])
+        with self.store._Tx(self.store) as connection:
+            replay = self.assets._replay(connection, brain, event_key, "trial_reserve", request)
+            if replay is not None:
+                return replay
+            self._current(connection, brain, request)
+            old = connection.execute("SELECT * FROM improvement_trials WHERE brain_id=? AND logical_key=?", (brain, logical)).fetchone()
+            if old:
+                if old["request_hash"] != IM._hash(request):
+                    raise IM.ConflictError("trial_identity_conflict")
+                result = self._public(connection, old)
+            else:
+                now = time.time()
+                if request["deadline_at"] <= now:
+                    raise ValueError("trial_deadline_expired")
+                identifier = "it_" + secrets.token_hex(12)
+                connection.execute("INSERT INTO improvement_trials VALUES(?,?,?,?,?,?,?,?,?,?)", (
+                    identifier, brain, logical, IM._hash(request), IM._json(request), "reserved", 1, 1, now, now))
+                call = self.ledger.reserve(purpose="improve_probe", reason_ref=f"improvement_trial:{identifier}:attempt:1",
+                    brain_id=brain, context_ref="improvement:" + request["pins"]["experiment_id"], obligation=True,
+                    mirror_ref="improvement_trial:" + identifier, attempt=1, now=now, c=connection)
+                if call is None:
+                    raise IM.ConflictError("trial_call_capacity_unavailable")
+                connection.execute("INSERT INTO improvement_trial_attempts(trial_id,brain_id,attempt,status,call_id,created_at,updated_at) "
+                                   "VALUES(?,?,1,'reserved',?,?,?)", (identifier, brain, call, now, now))
+                result = self._public(connection, self._row(connection, brain, identifier))
+            self.assets._event(connection, principal, event_key, "trial_reserve", request, result)
+            return result
+
+    def claim(self, principal, identifier, *, expected_generation, now=None, lease_seconds=60):
+        brain = IM._brain(principal)
+        if type(lease_seconds) not in (int, float) or not 1 <= lease_seconds <= 3600:
+            raise ValueError("invalid_trial_lease")
+        with self.store._Tx(self.store) as connection:
+            row = self._row(connection, brain, identifier)
+            request = json.loads(row["request_json"])
+            self._current(connection, brain, request)
+            now = time.time() if now is None else now
+            attempt = connection.execute("SELECT * FROM improvement_trial_attempts WHERE trial_id=? AND attempt=?",
+                                         (identifier, row["attempt"])).fetchone()
+            if (type(expected_generation) is not int or row["generation"] != expected_generation
+                    or row["status"] != "reserved" or attempt["lease_token"]
+                    or request["deadline_at"] <= now):
+                raise IM.ConflictError("trial_claim_stale")
+            token = secrets.token_urlsafe(32)
+            connection.execute("UPDATE improvement_trial_attempts SET lease_token=?,lease_until=?,updated_at=? "
+                               "WHERE trial_id=? AND attempt=?", (token, min(now + lease_seconds, request["deadline_at"]), now,
+                                                                  identifier, row["attempt"]))
+            connection.execute("UPDATE improvement_trials SET generation=generation+1,updated_at=? WHERE id=?", (now, identifier))
+            return {**self._public(connection, self._row(connection, brain, identifier)), "lease_token": token}
+
+    def _leased(self, connection, principal, identifier, expected_generation, lease_token, now):
+        brain = IM._brain(principal)
+        row = self._row(connection, brain, identifier)
+        attempt = connection.execute("SELECT * FROM improvement_trial_attempts WHERE trial_id=? AND attempt=?",
+                                     (identifier, row["attempt"])).fetchone()
+        if (type(expected_generation) is not int or row["generation"] != expected_generation
+                or row["status"] in TERMINAL or not lease_token or attempt["lease_token"] != lease_token
+                or attempt["lease_until"] is None or attempt["lease_until"] <= now):
+            raise IM.ConflictError("trial_lease_stale")
+        return row, attempt
+
+    def _materialization(self, connection, row, baseline_context):
+        request = json.loads(row["request_json"])
+        if IM._hash(baseline_context) != request["baseline_context_hash"]:
+            raise IM.ConflictError("trial_context_drift")
+        brain = row["brain_id"]
+        case = self._current(connection, brain, request)
+        pins = request["pins"]
+        field = "base_bundle_hash" if request["variant"] == "baseline" else "candidate_bundle_hash"
+        bundle = connection.execute("SELECT manifest_json FROM improvement_bundles WHERE brain_id=? AND manifest_hash=?",
+                                     (brain, pins[field])).fetchone()
+        assets = []
+        for item in json.loads(bundle[0]):
+            revision = connection.execute("SELECT * FROM improvement_revisions WHERE id=? AND brain_id=?",
+                                          (item["id"], brain)).fetchone()
+            manifest = json.loads(revision["manifest_json"])
+            assets.append({"id": item["id"], "path": manifest["canonical_ref"], "hash": revision["content_hash"],
+                           "content": self.blobs.read(brain, revision["content_hash"]).decode("utf-8")})
+        contract = json.loads(connection.execute("SELECT contract_json FROM improvement_contracts WHERE brain_id=? AND manifest_hash=?",
+                                                 (brain, pins["contract_hash"])).fetchone()[0])
+        public = IC.public_contract(contract)
+        from improvement_sandbox import _manifest
+        return _manifest({"version": 1, "brain_id": brain, "bundle_hash": pins[field],
+            "engine_config_hash": pins["engine_config_hash"], "contract_hash": pins["contract_hash"],
+            "grant_hash": pins["grant_hash"], "baseline_context": baseline_context,
+            "public_contract": {"content": public, "hash": IM._hash(public)}, "assets": assets,
+            "case": self.cases._solver(connection, brain, case),
+            "learning_origin": "qualification" if case["split"] == "qualification" else "trial"})
+
+    def materialize(self, principal, identifier, *, expected_generation, lease_token, baseline_context):
+        baseline_context = IC._frozen(baseline_context)
+        with self.store._Tx(self.store) as connection:
+            now = time.time()
+            row, _ = self._leased(connection, principal, identifier, expected_generation, lease_token, now)
+            if row["status"] != "reserved":
+                raise IM.ConflictError("trial_materialization_stale")
+            # Validate every public byte before consuming a holdout or returning any input.
+            manifest = self._materialization(connection, row, baseline_context)
+            now = time.time()
+            self._leased(connection, principal, identifier, expected_generation, lease_token, now)
+            request = json.loads(row["request_json"])
+            if request.get("qualification_id"):
+                connection.execute("UPDATE improvement_qualification SET status='consumed',consumed_at=? "
+                                   "WHERE id=? AND brain_id=? AND status='reserved'",
+                                   (now, request["qualification_id"], row["brain_id"]))
+            else:
+                case = self.cases._case(connection, row["brain_id"], request["case_set_id"], request["case_id"])
+                for fingerprint in case["fingerprints"]:
+                    qualification = connection.execute("SELECT 1 FROM improvement_case_families WHERE brain_id=? "
+                        "AND fingerprint=? AND split='qualification' LIMIT 1", (row["brain_id"], fingerprint)).fetchone()
+                    claim = connection.execute("SELECT q.status FROM improvement_qualification_claims c JOIN improvement_qualification q "
+                        "ON q.id=c.reservation_id AND q.brain_id=c.brain_id WHERE c.brain_id=? AND c.fingerprint=?",
+                        (row["brain_id"], fingerprint)).fetchone()
+                    if qualification and (not claim or claim["status"] != "consumed"):
+                        raise IM.ConflictError("qualification_exposure_denied")
+                    connection.execute("INSERT OR IGNORE INTO improvement_case_exposures VALUES(?,?,?,?)",
+                                       (row["brain_id"], fingerprint, request["case_set_id"], now))
+            connection.execute("UPDATE improvement_trial_attempts SET materialization_hash=?,updated_at=? "
+                               "WHERE trial_id=? AND attempt=?", (IM._hash(manifest), now, identifier, row["attempt"]))
+            return manifest
+
+    def prepared(self, principal, identifier, *, expected_generation, lease_token, receipt):
+        receipt = IC._frozen(receipt)
+        manifest = self.workspace.validate(receipt)
+        with self.store._Tx(self.store) as connection:
+            now = time.time()
+            row, attempt = self._leased(connection, principal, identifier, expected_generation, lease_token, now)
+            if row["status"] != "reserved" or receipt["trial_id"] != identifier or receipt["attempt"] != row["attempt"]:
+                raise IM.ConflictError("trial_preparation_stale")
+            if attempt["materialization_hash"] != IM._hash(manifest):
+                raise IM.ConflictError("trial_exposure_not_committed")
+            expected = self._materialization(connection, row, manifest["baseline_context"])
+            if IM._hash(expected) != IM._hash(manifest):
+                raise IM.ConflictError("trial_materialization_drift")
+            request = json.loads(row["request_json"])
+            if request.get("qualification_id"):
+                claim = self.cases._row(connection, "improvement_qualification", row["brain_id"], request["qualification_id"])
+                if claim["status"] != "consumed":
+                    raise IM.ConflictError("qualification_not_consumed")
+            now = time.time()
+            self._leased(connection, principal, identifier, expected_generation, lease_token, now)
+            connection.execute("UPDATE improvement_trial_attempts SET status='prepared',workspace_json=?,updated_at=? "
+                               "WHERE trial_id=? AND attempt=?", (IM._json(receipt), now, identifier, row["attempt"]))
+            connection.execute("UPDATE improvement_trials SET status='prepared',generation=generation+1,updated_at=? WHERE id=?", (now, identifier))
+            return self._public(connection, self._row(connection, row["brain_id"], identifier))
+
+    def start_engine(self, principal, identifier, *, expected_generation, lease_token, now=None):
+        with self.store._Tx(self.store) as connection:
+            marker_now = time.time() if now is None else now
+            row, attempt = self._leased(connection, principal, identifier, expected_generation, lease_token, marker_now)
+            if row["status"] != "prepared":
+                raise IM.ConflictError("trial_not_prepared")
+            request = json.loads(row["request_json"])
+            self._current(connection, row["brain_id"], request)
+            engine = request["engine_config"]
+            marker_now = time.time() if now is None else now
+            self._leased(connection, principal, identifier, expected_generation, lease_token, marker_now)
+            if not self.ledger._mark_engine_in(connection, attempt["call_id"], engine["provider"], engine["model"], marker_now):
+                raise IM.ConflictError("trial_engine_marker_stale")
+            connection.execute("UPDATE improvement_trial_attempts SET status='running',engine_at=?,updated_at=? "
+                               "WHERE trial_id=? AND attempt=?", (marker_now, marker_now, identifier, row["attempt"]))
+            connection.execute("UPDATE improvement_trials SET status='running',generation=generation+1,updated_at=? WHERE id=?", (marker_now, identifier))
+            return self._public(connection, self._row(connection, row["brain_id"], identifier))
+
+    def _stop(self, connection, row, status, now):
+        attempt = connection.execute("SELECT * FROM improvement_trial_attempts WHERE trial_id=? AND attempt=?",
+                                     (row["id"], row["attempt"])).fetchone()
+        call = connection.execute("SELECT * FROM agent_calls WHERE id=?", (attempt["call_id"],)).fetchone()
+        if call["engine_at"] is None:
+            if not self.ledger._refund_in(connection, call["id"], now):
+                raise IM.ConflictError("trial_call_state_stale")
+        else:
+            self.ledger._settle_in(connection, call["id"], "interrupted", None, None, None, now)
+        connection.execute("UPDATE improvement_trial_attempts SET status=?,lease_token=NULL,lease_until=NULL,updated_at=? "
+                           "WHERE trial_id=? AND attempt=?", (status, now, row["id"], row["attempt"]))
+        connection.execute("UPDATE improvement_trials SET status=?,generation=generation+1,updated_at=? WHERE id=?", (status, now, row["id"]))
+        return self._public(connection, self._row(connection, row["brain_id"], row["id"]))
+
+    def cancel(self, principal, identifier, *, expected_generation, event_key):
+        brain = IM._brain(principal)
+        payload = {"trial_id": identifier, "expected_generation": expected_generation}
+        with self.store._Tx(self.store) as connection:
+            replay = self.assets._replay(connection, brain, event_key, "trial_cancel", payload)
+            if replay is not None:
+                return replay
+            row = self._row(connection, brain, identifier)
+            if type(expected_generation) is not int or row["generation"] != expected_generation or row["status"] in TERMINAL:
+                raise IM.ConflictError("trial_cancel_stale")
+            result = self._stop(connection, row, "cancelled", time.time())
+            self.assets._event(connection, principal, event_key, "trial_cancel", payload, result)
+            return result
+
+    def recover(self, principal, *, now=None):
+        brain = IM._brain(principal)
+        if IM._schema_version(self.store) < 3:
+            return {"not_run": 0, "unknown": 0}
+        result = {"not_run": 0, "unknown": 0}
+        with self.store._Tx(self.store) as connection:
+            now = time.time() if now is None else now
+            rows = list(connection.execute("SELECT t.* FROM improvement_trials t JOIN improvement_trial_attempts a "
+                "ON t.id=a.trial_id AND t.attempt=a.attempt WHERE t.brain_id=? "
+                "AND t.status IN ('reserved','prepared','running','evaluating') AND "
+                "((a.lease_until IS NOT NULL AND a.lease_until<=?) OR "
+                "(a.lease_until IS NULL AND json_extract(t.request_json,'$.deadline_at')<=?))", (brain, now, now)))
+            for row in rows:
+                call = connection.execute("SELECT c.engine_at FROM agent_calls c JOIN improvement_trial_attempts a "
+                    "ON c.id=a.call_id WHERE a.trial_id=? AND a.attempt=?", (row["id"], row["attempt"])).fetchone()
+                status = "not_run" if call["engine_at"] is None else "unknown"
+                self._stop(connection, row, status, now)
+                result[status] += 1
+        return result

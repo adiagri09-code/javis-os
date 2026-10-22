@@ -67,3 +67,40 @@ M1 implements the records and recovery behavior above with behavioral tests for 
 E01–E06, U01 and S02–S04 from the design. A fake runner is labeled synthetic. Real smoke
 requires the owner's selected, verified model configuration and reports actual coverage
 and usage. Supporting an API adapter never authorizes switching a CLI-selected user to API.
+
+## M1 internal durable request and evaluator boundary
+
+The unreleased request has the closed fields `version=1`, `pins`, `case_set_id`, `case_id`,
+`variant=baseline|candidate`, positive `repeat`, `engine_config`, `baseline_context_hash`,
+`target_generations`, `deadline_at`, and optional `qualification_id` for qualification only.
+`pins` reuses CaseStore's exact experiment/base/candidate/contract/case-set/config/grant/
+policy/scope pin shape. `engine_config` is the full adapter pin, never an alternative
+provider chosen by the runner. `baseline_context_hash` binds the complete host context
+record (content, raw content hash and coverage), not just its text. API clients must not
+assert that host context collection was complete.
+
+Schema3 adds trial/attempt/observation tables to the existing resonance database. Metadata
+reads still support schemas1 and2 without migrating. A write upgrades in one transaction
+after a serialized backup. Trial reservation and its real CallLedger reservation share
+that transaction. The logical experiment/variant/case/repeat identity cannot produce two
+calls through different idempotency keys.
+
+Leases are internal host capabilities; ordinary trial reads omit their tokens. Input
+materialization commits holdout consumption or tuning/regression exposure plus the exact
+materialization hash before returning solver-visible input. Preparation validates the real
+workspace journal and public projection against host records. Engine start changes the
+trial and existing call marker atomically, before query acknowledgement. Cancellation
+before that marker refunds; after it, the call remains counted and uncertain recovery is
+`unknown`. Neither recovery path creates another attempt implicitly.
+
+`evaluate_trial(contract, artifact_root, case_private, checker_registry)` consumes the exact
+CaseStore private projection. Its optional keyword-only `owner_decisions` accepts typed
+host records from authorized durable history, never answer/request JSON claiming owner
+authority. Evaluator and registered checker ID/version/hash pins must match. Checkers get
+immutable artifact data and private answers; they receive no executable or solver path.
+Command/candidate-code execution remains unsupported without a separately verified isolated
+checker. Structural, business and owner verdicts remain distinct, with exact raw output
+hashes. The runner must additionally enforce execution/installation invariants; a standalone
+artifact evaluator cannot attest native isolation, permission or actual configuration.
+
+This boundary does not advertise a complete TrialRunner or an owner execution endpoint.

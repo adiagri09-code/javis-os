@@ -244,3 +244,25 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   passed9/9 files in32s before the last boundary-only test (then usage30 passed separately).
   All inputs were synthetic SDK messages; no real model call. Task4's durable runner must
   still persist its atomic start/lease and bind this recorder before releasing the ACK.
+- Task4 storage component is in progress. Added schema3 trial/attempt/observation references
+  in the same database; old metadata reads remain non-migrating and failed upgrade rolls
+  back. Trial and CallLedger reservation/start are atomic. Concurrent logical reservation
+  dedup, private host leases, pinned materialization, qualification consumption before input
+  return, pre-engine refund and post-engine unknown recovery have14 passing store checks.
+- Behavioral tests also found and fixed a forged effective hash despite a matching journal,
+  boolean generation admission and preparation bypassing committed input exposure. Sandbox
+  now recomputes its effective hash from actual manifest bytes. Native fake-provider and
+  improvement/ledger regression passed12/12 files in52s before the last storage-only fix;
+  store14 then passed. These are synthetic tests; no real query was started.
+- Independent host evaluator component has23 tests:22 pass and1 file-symlink check skipped
+  for unavailable Windows privilege; real junction protection passed. It preserves exact
+  byte hashes, pinned checker/evaluator identity, separate structural/business verdicts and
+  typed owner decisions. Candidate code/commands are never executed. Task4 still lacks the
+  complete runner, heartbeat, event/result persistence and owner-decision service. M1 run
+  capability remains disabled; no milestone/business/rollout completion is claimed.
+- Storage review found one P2: sampling time before SQLite lock acquisition could authorize
+  an expired lease. A deterministic transaction-entry clock test reproduced the defect;
+  transitions now sample time inside the transaction and engine start rechecks immediately
+  before its marker. Store suite15 passed after the fix. Final expanded improvement/native/
+  ledger/Windows-console regression passed13/13 files in47s before this isolated clock fix;
+  all native inference was a dummy localhost provider. No live/model/business evidence added.

@@ -98,9 +98,13 @@ class CallLedger:
     def mark_engine(self, call_id: int, engine: str = "", model: str = "", now: Optional[float] = None) -> bool:
         """Mốc gọi engine: từ đây lượt luôn tính (không hoàn được). Chỉ dòng `reserved` chuyển `running`."""
         with self._tx() as c:
-            return c.execute("UPDATE agent_calls SET status='running', engine=?, model=?, engine_at=? "
-                             "WHERE id=? AND status='reserved'",
-                             (str(engine or ""), str(model or ""), _now(now), int(call_id))).rowcount == 1
+            return self._mark_engine_in(c, call_id, engine, model, _now(now))
+
+    @staticmethod
+    def _mark_engine_in(c, call_id, engine, model, now):
+        return c.execute("UPDATE agent_calls SET status='running', engine=?, model=?, engine_at=? "
+                         "WHERE id=? AND status='reserved' AND engine_at IS NULL",
+                         (str(engine or ""), str(model or ""), now, int(call_id))).rowcount == 1
 
     def settle(self, call_id: int, status: str, tokens_in: Optional[int] = None, tokens_out: Optional[int] = None,
                cost_usd: Optional[float] = None, now: Optional[float] = None) -> bool:
@@ -108,9 +112,13 @@ class CallLedger:
         if status not in ("ok", "error", "interrupted"):
             raise ValueError("kết cục lượt không hợp lệ")
         with self._tx() as c:
-            return c.execute("UPDATE agent_calls SET status=?, tokens_in=?, tokens_out=?, cost_usd=?, settled_at=? "
-                             "WHERE id=? AND status IN ('reserved','running')",
-                             (status, tokens_in, tokens_out, cost_usd, _now(now), int(call_id))).rowcount == 1
+            return self._settle_in(c, call_id, status, tokens_in, tokens_out, cost_usd, _now(now))
+
+    @staticmethod
+    def _settle_in(c, call_id, status, tokens_in, tokens_out, cost_usd, now):
+        return c.execute("UPDATE agent_calls SET status=?, tokens_in=?, tokens_out=?, cost_usd=?, settled_at=? "
+                         "WHERE id=? AND status IN ('reserved','running')",
+                         (status, tokens_in, tokens_out, cost_usd, now, int(call_id))).rowcount == 1
 
     def refund(self, call_id: int, now: Optional[float] = None) -> bool:
         """Hoàn lượt CHẮC CHẮN chưa gọi model (mốc engine chưa ghi). Dòng đã qua mốc thì không hoàn được: trả False."""

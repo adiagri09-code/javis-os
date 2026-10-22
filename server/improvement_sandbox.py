@@ -153,6 +153,11 @@ def trial_system_prompt(input_manifest):
     return prompt
 
 
+def _effective_hash(manifest):
+    return _hash({"context": manifest["baseline_context"]["hash"], "bundle": manifest["bundle_hash"],
+                  "assets": [{key: asset[key] for key in ("id", "path", "hash")} for asset in manifest["assets"]]})
+
+
 def _atomic(path, content):
     check_ancestry(path)
     descriptor, temporary = tempfile.mkstemp(prefix=".trial-", dir=path.parent)
@@ -227,9 +232,7 @@ class TrialWorkspace:
             inputs = path / "input.json"
             receipt = {"trial_id": trial_id, "attempt": attempt, "path": str(path), "input_path": str(inputs),
                        "output_root": str(outputs), "input_hash": _bytes_hash(encoded),
-                       "effective_hash": _hash({"context": manifest["baseline_context"]["hash"],
-                           "bundle": manifest["bundle_hash"], "assets": [
-                               {key: asset[key] for key in ("id", "path", "hash")} for asset in manifest["assets"]]})}
+                       "effective_hash": _effective_hash(manifest)}
             journal.parent.mkdir(exist_ok=True)
             record = {"state": "preparing", "input_hash": receipt["input_hash"], "receipt": receipt}
             _atomic(journal, _json(record).encode())
@@ -251,7 +254,10 @@ class TrialWorkspace:
         record = json.loads(journal.read_text(encoding="utf-8"))
         if record["state"] != "prepared" or record["receipt"] != receipt:
             raise ValueError("trial_journal_mismatch")
-        return _manifest(json.loads(raw))
+        manifest = _manifest(json.loads(raw))
+        if receipt["effective_hash"] != _effective_hash(manifest):
+            raise ValueError("trial_effective_hash_mismatch")
+        return manifest
 
     def cleanup(self, trial_id, attempt):
         path, journal = self._paths(trial_id, attempt)

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES, RevisionBlobs  # noqa: F401
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 _SOURCE = re.compile(r"(?:skills/[a-z0-9][a-z0-9_-]*/SKILL\.md|agents/[a-z0-9][a-z0-9_-]*\.md)")
 _SCHEMA = (
     "CREATE TABLE improvement_schema(id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL)",
@@ -91,7 +91,7 @@ def _schema_version(store) -> int:
         if not row:
             return 0
         version = connection.execute("SELECT version FROM improvement_schema WHERE id=1").fetchone()
-        if not version or version["version"] not in (1, SCHEMA_VERSION):
+        if not version or version["version"] not in (1, 2, SCHEMA_VERSION):
             raise SchemaError("unsupported_improvement_schema")
         return version["version"]
 
@@ -127,19 +127,27 @@ def ensure(store) -> None:
     with store._Tx(store) as connection:
         exists = connection.execute("SELECT name FROM sqlite_master WHERE name='improvement_schema'").fetchone()
         installed = connection.execute("SELECT version FROM improvement_schema WHERE id=1").fetchone() if exists else None
-        if exists and (not installed or installed["version"] not in (1, SCHEMA_VERSION)):
+        if exists and (not installed or installed["version"] not in (1, 2, SCHEMA_VERSION)):
             raise SchemaError("unsupported_improvement_schema")
         if installed and installed["version"] == SCHEMA_VERSION:
             return
         # Serialize the backup with the migration; two first writers otherwise race on its .tmp file.
-        store._backup_before("improvement_case_sets" if exists else "improvement_schema",
-                             ".pre-improvement-m1.bak" if exists else ".pre-improvement-m0.bak")
+        if installed and installed["version"] == 2:
+            store._backup_before("improvement_trials", ".pre-improvement-m1-trials.bak")
+        else:
+            store._backup_before("improvement_case_sets" if exists else "improvement_schema",
+                                 ".pre-improvement-m1.bak" if exists else ".pre-improvement-m0.bak")
         if not exists:
             for statement in _SCHEMA:
                 connection.execute(statement)
             _immutable_triggers(connection, ("improvement_revisions", "improvement_bundles",
                                               "improvement_bundle_assets", "improvement_events"))
-        from improvement_case_schema import SCHEMA, IMMUTABLE
+        if not installed or installed["version"] < 2:
+            from improvement_case_schema import SCHEMA, IMMUTABLE
+            for statement in SCHEMA:
+                connection.execute(statement)
+            _immutable_triggers(connection, IMMUTABLE)
+        from improvement_trial_schema import SCHEMA, IMMUTABLE
         for statement in SCHEMA:
             connection.execute(statement)
         _immutable_triggers(connection, IMMUTABLE)

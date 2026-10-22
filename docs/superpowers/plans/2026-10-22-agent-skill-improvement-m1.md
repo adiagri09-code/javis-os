@@ -258,7 +258,7 @@ remaining runner integration is not an enabled M1 trial or a real-model smoke.
 ## Task 4: durable orchestrator and independent evaluator
 
 Files: improvement_trials.py, improvement_evaluation.py, store migration additions,
-test_improvement_trials.py, test_improvement_evaluation.py.
+improvement_trial_schema.py, test_improvement_trials.py, test_improvement_evaluation.py.
 Trial lifecycle reserved/prepared/running/evaluating/completed with alternate terminal
 states, lease owner/generation and idempotency. Persist workspace journal, installation
 receipt, artifact hashes, ledger linkage and evaluation separately. Check pinned source/
@@ -285,6 +285,12 @@ contract mutation/owner stale decision, injection treated as data, unknown evalu
 - [ ] Implement durable transitions/journal, scoped host evaluation and clean output sink.
 - [ ] Require lifecycle/owner/learning/ledger/checker regressions GREEN.
 - [ ] Commit the complete fake-runner path and recovery behavior.
+
+In-progress component checkpoint: schema3 reservation/materialization/lease/engine marker/
+cancel/recover and data-only evaluator are implemented. The concrete internal request and
+typed owner-decision boundary are in docs/dev/agent-skill-trial-contract-v1.md. This is not
+the complete fake runner: heartbeat, trace/result persistence, owner decision history and
+Runner start/usage/evaluator integration remain required before these boxes can close.
 
 ## Task 5: explicit owner service/API and operating report
 
