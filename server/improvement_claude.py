@@ -23,6 +23,18 @@ VERIFIED_NATIVE_RUNTIMES = {("win32", "2.1.304",
     ("win32", "2.1.308", "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53", "0.2.116")}
 
 
+async def _settled_owned(future):
+    """Retain an owned operation through repeated caller cancellation."""
+    cancelled = None
+    while True:
+        try:
+            return await asyncio.shield(future), cancelled
+        except asyncio.CancelledError as error:
+            if future.cancelled():
+                raise
+            cancelled = error
+
+
 def profile_hash():
     root = Path(__file__).parent
     return _hash({name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in
@@ -177,14 +189,36 @@ class ClaudeTrialAdapter:
             while await asyncio.to_thread(process.stderr.read, 4096):
                 pass
 
+        async def close_worker():
+            if guard is not None:
+                await asyncio.to_thread(guard.close)
+            elif process is not None and process.poll() is None:
+                await asyncio.to_thread(winproc.kill_tree, process.pid)
+            if process is not None:
+                try:
+                    await asyncio.to_thread(process.wait, timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    await asyncio.to_thread(process.wait, timeout=5)
+                for stream in (process.stdin, process.stdout, process.stderr):
+                    stream.close()
+            if stderr_task is not None:
+                await asyncio.gather(stderr_task, return_exceptions=True)
+
         try:
             async with asyncio.timeout(max(0.0, deadline - time.time())):
-                process = await asyncio.to_thread(subprocess.Popen,
+                spawn = asyncio.create_task(asyncio.to_thread(subprocess.Popen,
                     [sys.executable, "-I", "-X", "utf8", str(Path(__file__).with_name("improvement_worker.py"))],
                     cwd=receipt["path"], env=environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE, start_new_session=sys.platform != "win32", creationflags=process_flags())
+                    stderr=subprocess.PIPE, start_new_session=sys.platform != "win32", creationflags=process_flags()))
+                spawned, cancelled = await _settled_owned(asyncio.gather(spawn, return_exceptions=True))
+                if isinstance(spawned[0], BaseException):
+                    raise spawned[0]
+                process = spawned[0]
                 # The child blocks on its first input until its whole lifetime is owned.
                 guard = WorkerGroup(process.pid)
+                if cancelled is not None:
+                    raise cancelled
                 stderr_task = asyncio.create_task(drain_stderr())
                 await send({"version": 1, "config_pin": self.pin, "workspace_root": str(self.workspace_root),
                             "receipt": receipt, "capability_hash": request["capability_hash"]})
@@ -230,20 +264,12 @@ class ClaudeTrialAdapter:
                 if await asyncio.to_thread(process.wait, timeout=5) != 0:
                     raise RuntimeError("trial_worker_failed")
         finally:
-            if guard is not None:
-                guard.close()
-            elif process is not None and process.poll() is None:
-                await asyncio.to_thread(winproc.kill_tree, process.pid)
-            if process is not None:
-                try:
-                    await asyncio.to_thread(process.wait, timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    await asyncio.to_thread(process.wait, timeout=5)
-                for stream in (process.stdin, process.stdout, process.stderr):
-                    stream.close()
-            if stderr_task is not None:
-                await asyncio.gather(stderr_task, return_exceptions=True)
+            closed, cancelled = await _settled_owned(asyncio.gather(
+                asyncio.create_task(close_worker()), return_exceptions=True))
+            if isinstance(closed[0], BaseException):
+                raise closed[0]
+            if cancelled is not None:
+                raise cancelled
 
 
 class TrialProfile:

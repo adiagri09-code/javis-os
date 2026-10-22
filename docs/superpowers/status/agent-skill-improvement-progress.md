@@ -498,3 +498,17 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   execution observed partial3/2 tokens and null requests; product/execution/aggregate verdicts
   remain separate. Fresh whole-branch review/CI/rebase/publication are still pending.
   No additional real model query, business pilot, activation or production restart occurred.
+
+- The branch is rebased onto main046ea863 (0.290.0); its reserved release is0.291.0,
+  draftPR795. CI runs39841676424/39841707666 on90610221 are in progress and cannot
+  validate subsequent review fixes. Fresh whole-M1 review reproduced three gaps:
+  cancellation during threaded worker creation, plaintext workspace retention, and the
+  missing default single-model-trial limit per brain. Integration remains gated.
+- The worker creation gap now has two actual-child RED-to-GREEN tests plus a repeated
+  cleanup-cancellation check. Spawn and complete cleanup remain owned through repeated
+  cancellation; interrupted spawn sends no worker input. Independent original reproduction
+  confirms the child is closed. Adapter20/worker9/Runner24/selection32/console checks pass;
+  isolated native qualification5 also passes with dummy credentials and a local fake
+  provider. The lifetime cleanup fix changes the profile again, so qualification must run
+  on the final frozen profile. Historical real smoke remains attributed to06e75, with its
+  original aggregate unknown verdict. Plaintext cleanup and concurrency fixes are ongoing.

@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -255,6 +256,100 @@ class WorkerProcessTests(unittest.TestCase):
         self.assertTrue(result.stdout, result.stderr.decode(errors="replace"))
         self.assertEqual(json.loads(result.stdout)["type"], "worker_error")
         self.assertFalse(canary.exists())
+
+
+class WorkerSpawnOwnershipTests(unittest.IsolatedAsyncioTestCase):
+    async def check_interrupted_spawn(self, *, timeout, interrupt_cleanup=False):
+        import improvement_claude as IC
+        from improvement_store import _hash
+        payload = WorkerProcessTests().payload()
+        entered, release = threading.Event(), threading.Event()
+        closing, release_close = threading.Event(), threading.Event()
+        children = []
+        original_spawn = subprocess.Popen
+        original_group = IW.WorkerGroup
+
+        class Group:
+            def __init__(self, pid):
+                self.guard = original_group(pid)
+
+            def close(self):
+                closing.set()
+                if interrupt_cleanup and not release_close.wait(10):
+                    raise RuntimeError("test_close_barrier_expired")
+                self.guard.close()
+
+        def spawn(*args, **kwargs):
+            child = original_spawn(*args, **kwargs)
+            if str(args[0][-1]).endswith("improvement_worker.py"):
+                children.append(child)
+                entered.set()
+                if not release.wait(10):
+                    raise RuntimeError("test_spawn_barrier_expired")
+            return child
+
+        async def forbidden_start():
+            self.fail("An interrupted spawn must not release a query")
+
+        adapter = IC.ClaudeTrialAdapter(payload["config_pin"], workspace_root=payload["workspace_root"],
+                                       before_engine_start=forbidden_start)
+        request = {"version": 1, "trial_id": "trial-a", "attempt": 1,
+                   "deadline_at": time.time() + (0.6 if timeout else 20),
+                   "engine_config_hash": _hash(payload["config_pin"]), "capability_hash": "c" * 64}
+
+        async def consume():
+            return [event async for event in adapter.execute(request, payload["receipt"])]
+
+        task = None
+        try:
+            with patch.object(adapter, "verify", return_value={"supported": True, "capability_hash": "c" * 64}), \
+                    patch.object(subprocess, "Popen", side_effect=spawn), \
+                    patch.object(IW, "WorkerGroup", side_effect=Group) as group:
+                task = asyncio.create_task(consume())
+                self.assertTrue(await asyncio.to_thread(entered.wait, 5))
+                if timeout:
+                    await asyncio.sleep(max(0, request["deadline_at"] - time.time()) + 0.1)
+                else:
+                    task.cancel()
+                    await asyncio.sleep(0.05)
+                    task.cancel()
+                    await asyncio.sleep(0.05)
+                self.assertFalse(task.done(), "Cancellation returned before the spawned child was owned")
+                release.set()
+                if interrupt_cleanup:
+                    self.assertTrue(await asyncio.to_thread(closing.wait, 5))
+                    task.cancel()
+                    await asyncio.sleep(0.05)
+                    task.cancel()
+                    await asyncio.sleep(0.05)
+                    self.assertFalse(task.done(), "Repeated cancellation interrupted owned worker cleanup")
+                    release_close.set()
+                with self.assertRaises(TimeoutError if timeout else asyncio.CancelledError):
+                    await asyncio.wait_for(task, 5)
+                group.assert_called_once_with(children[0].pid)
+                self.assertIsNotNone(children[0].poll(), "Interrupted worker survived cleanup")
+                self.assertTrue(all(stream.closed for stream in
+                                    (children[0].stdin, children[0].stdout, children[0].stderr)))
+        finally:
+            release.set()
+            release_close.set()
+            if task is not None:
+                await asyncio.gather(task, return_exceptions=True)
+            for child in children:
+                if child.poll() is None:
+                    child.kill()
+                child.wait(timeout=5)
+                for stream in (child.stdin, child.stdout, child.stderr):
+                    stream.close()
+
+    async def test_repeated_cancellation_retains_spawn_until_child_is_owned_and_closed(self):
+        await self.check_interrupted_spawn(timeout=False)
+
+    async def test_deadline_retains_spawn_until_child_is_owned_and_closed(self):
+        await self.check_interrupted_spawn(timeout=True)
+
+    async def test_repeated_cancellation_also_retains_worker_cleanup(self):
+        await self.check_interrupted_spawn(timeout=False, interrupt_cleanup=True)
 
 
 if __name__ == "__main__":
