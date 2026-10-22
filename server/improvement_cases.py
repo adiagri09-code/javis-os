@@ -473,6 +473,8 @@ class CaseStore:
         replay = IM.ImprovementStore._replay(connection, brain, event_key, "qualification_reserve", payload)
         if replay is not None:
             return replay
+        from improvement_experiment_qualification import require_legacy_qualification
+        require_legacy_qualification(connection, brain, case_set_id, pins)
         self._enabled(connection, brain)
         case_set = self._row(connection, "improvement_case_sets", brain, case_set_id)
         policy = IM.ImprovementStore._policy(connection, brain)
@@ -521,6 +523,8 @@ class CaseStore:
             if replay is not None:
                 return replay
             row = self._row(connection, "improvement_qualification", brain, reservation_id)
+            from improvement_experiment_qualification import require_legacy_qualification
+            require_legacy_qualification(connection, brain, row["case_set_id"], pins)
             if row["pins_hash"] != IM._hash(pins):
                 raise IM.ConflictError("stale_qualification_pin")
             if row["status"] == "reserved":

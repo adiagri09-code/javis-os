@@ -27,10 +27,9 @@ def _same(expected, actual):
 
 def require_experiment_version(connection, brain, request):
     """A legacy shape cannot erase ownership by an existing B experiment."""
-    if request.get("version") != 2 and connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='improvement_experiments'").fetchone():
-        if connection.execute("SELECT 1 FROM improvement_experiments WHERE id=? AND brain_id=?",
-                              (request["pins"]["experiment_id"], brain)).fetchone():
+    if request.get("version") != 2:
+        from improvement_experiment_qualification import experiment_owned
+        if experiment_owned(connection, brain, request.get("case_set_id"), request["pins"]):
             raise PermissionError("experiment_request_version_required")
 
 

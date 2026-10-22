@@ -79,6 +79,19 @@
   E2E288->40s. This is measured technical overhead reduction, not model/business
   effectiveness. No real native/model/auth query or four-file profile change.
   Tasks4–6 and final whole-B review, exact-head CI/merge/publication remain open.
+- Task4 denial-boundary checkpoint is PARTIAL: lower qualification ownership
+  follows frozen experiment/set/hash and shared qualification fingerprints even
+  after renaming/reclassification. Fresh bare-pin reserve/consume and legacy
+  execution reject; historical replay and global claims survive. Original5 tests
+  RED->GREEN; renamed owner early-preflight RED->GREEN. Expanded14 qualification
+  tests GREEN46s, including verified actual frozen final lineage for both
+  variants/splits with zero allocations, concurrent aliases and actual pre-B
+  consumption replay. Independent scoped review found no Important issue and
+  passed four focused checks15.65s. Related seven-script regression GREEN190s
+  (Cases, Trials, M1 Admission/transactions and v2 Lineage/Admission/Qualification).
+  No unused positive v2 qualification helper or readiness flag was added. Positive
+  final allocation/linked consumption and drift/resume remain C+D dependencies;
+  Task4 and complete M2 remain open. Task5 reports can proceed independently.
 
 ## M2A engineering continuation
 

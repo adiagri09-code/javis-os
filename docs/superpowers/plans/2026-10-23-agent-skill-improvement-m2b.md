@@ -192,9 +192,28 @@ before call/plaintext/trial evidence; historical v2 reads without native probes.
 
 ## Task4 — one final qualification and both-variant readiness
 
-- [ ] Reproduce the named behavioral RED cases.
+- [x] Reproduce the bare-pin/renamed-owner behavioral RED cases.
 - [ ] Implement this unit and inspect its exact source/authority boundaries.
 - [ ] Run named GREEN/regression checks, record actual evidence and commit the unit.
+
+Partial checkpoint: SQL-only ownership now follows experiment ID, frozen case-set
+ID/hash and any incoming split sharing a frozen qualification fingerprint. Fresh
+legacy reserve/consume and execution cannot erase that ownership; historical
+event replay precedes the guard. The existing global claims/exposures are retained.
+Original five tests reproduced3 failures/1 error; the guard made5/5 GREEN.
+An additional renamed-owner admission test reproduced preparation before the
+early ownership check; passing the actual case-set ID fixed it RED->GREEN.
+
+Ruling: do not add an unused positive v2 reservation/consumption path or synthetic
+readiness flags while C semantic evidence and D effective-view execution do not
+exist. Full-v2 final qualification AND regression remain hard closed for both
+variants in the actual TrialStore/Host/Admission boundaries. The technical test
+fixture first verifies real frozen final lineage, then checks zero new claims,
+calls or exposures at those boundaries. Positive selected-proposal allocation,
+linked consumption and drift/resume tests remain C+D integration requirements;
+Task4 stays PARTIAL. Task5 reporting can proceed independently of that closed
+execution gate. Independent scoped review found no Important issue and passed
+four focused final/alias/replay checks; this is not whole-B acceptance.
 
 
 Extend existing CaseStore qualification branch; no parallel registry. Preserve

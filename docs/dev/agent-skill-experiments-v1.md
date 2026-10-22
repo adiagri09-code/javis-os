@@ -137,3 +137,16 @@ at most32 paths, under a lock. No source-permission, grant or match verdict is
 cached. Independent cached/uncached captures match; measured revalidation improved
 5.352->0.699s and the old owner E2E288->40s on this development machine. These
 timings are diagnostic evidence, not a latency guarantee.
+
+Qualification ownership also applies at the lower CaseStore boundary. Bare nine
+pins cannot reserve or freshly consume a B-owned holdout, even with a renamed
+experiment, case set or family, or a qualification case relabeled tuning. The
+guard follows brain-scoped source/family fingerprints across all incoming splits
+and retains stopped history. It does not blanket-disable unrelated M1 work.
+Historical reserve/consume event replay remains cold and readable; existing
+global claims and exposures are never reset. Legacy owner admission rejects
+aliases before source/native preflight. Full-v2 final qualification/regression
+still has no positive execution path before actual C+D readiness; the lower v2
+allocation/consumption integration is intentionally unfinished, not enabled by a
+caller readiness flag. A CaseStore source change also changes EVALUATOR_PIN;
+historical records do not become fresh execution authority automatically.
