@@ -13,14 +13,15 @@
 - Original checkout remains untouched by implementation; only the three relevant source documents were copied.
 - Current engineering branch: `codex/agent-skill-improvement-m1`; 0.288.0 reservation
   `884bfbca`, dependent draft https://github.com/blogminhquy/javis-os/pull/795 (attached).
-  M0 is still awaiting CI/integration on `e6637d33`; M1 cannot merge ahead of it.
+  M0 merged as `0990331574e617fa1a79cd69fcd7b87d465448c5` after final-head CI passed;
+  publication run39797072172 is queued. Rebase M1 onto published M0 before its final review.
 
 ## Milestones
 
 | Milestone | Engineering | Business evidence | Rollout |
 |---|---|---|---|
-| M0 | Review fixes and migration backup race verified; PR #794 awaiting final-head CI/integration | Not applicable to foundation | Off/suggest only; no live activation |
-| M1 | Engineering-only Task 1 implemented/tested: pinned contract/snapshot/private cases/qualification; worker/runtime still pending | No real-engine smoke yet | Not enabled; M0 integration gate remains open |
+| M0 | PR #794 merged09903315; final-head CI39793439501 passed; publication queued | Not applicable to foundation | Off/suggest only; no live activation |
+| M1 | Engineering-only Task1 complete; isolated workspace/profile/native enforcement verified, worker/verify in progress | No real-engine smoke yet | Not enabled; rebase/publication gate pending |
 | M2 | Pending | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
@@ -59,9 +60,9 @@
 
 ## Next action
 
-Push the review fixes and final documentation, wait for final-head CI on PR #794, merge only
-when green and verify publication. Prepare M1 from the frozen trial boundary while waiting;
-continue its implementation on the integrated baseline. Full M0–M8 Goal remains active.
+Verify M0 publication39797072172, preserve M1 work and rebase onto integrated main. Continue
+M1 worker/verified runtime, shared ledger/usage, lifecycle/evaluation and owner service.
+Full M0–M8 Goal remains active; no business or live rollout gate is closed by a code merge.
 
 ## M0 implementation evidence
 
@@ -109,6 +110,9 @@ continue its implementation on the integrated baseline. Full M0–M8 Goal remain
   M0 regression passed **3/3 files, 40 tests, 19 seconds** (21 store + 10 assets + 9 API).
   This fix is isolated in the temporary `agent-skill-improvement-m0-race` managed worktree;
   the original implementation worktree is now used by the engineering-only M1 branch.
+- Final head e6637d33 passed CI39793439501, including Python suite and Docker size. Fresh
+  main0.286.0/version/PR checks passed; PR794 squash-merged as09903315 with expected-head CAS.
+  Build/publication39797072172 is queued. Merge is not publication or production deployment.
 
 ## M1 engineering evidence
 

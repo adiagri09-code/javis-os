@@ -178,5 +178,65 @@ class ProfileTests(unittest.TestCase):
         self.assertIsNone(next(e for e in events if e["type"] == "usage")["usage"])
 
 
+class AdapterVerificationTests(unittest.TestCase):
+    def setUp(self):
+        self.assertTrue(IC is not None and hasattr(IC, "ClaudeTrialAdapter"), "Verified trial adapter is missing")
+        self.pin = {"version": 1, "provider": "anthropic-cli", "engine_id": "claude-sdk",
+                    "model": "claude-opus-5-5", "reasoning": "medium", "cli_path": str(TEST_ROOT / "claude.exe"),
+                    "cli_hash": "a" * 64, "cli_version": "2.1.304", "sdk_version": "0.2.116",
+                    "profile_version": IC.PROFILE_VERSION, "profile_hash": "b" * 64}
+        self.observation = {"platform": "win32", "cli_hash": "a" * 64, "cli_version": "2.1.304",
+                            "sdk_version": "0.2.116", "profile_hash": "b" * 64, "managed_policy": "absent",
+                            "auth": {"logged_in": True, "method": "claude.ai", "provider": "firstParty", "plan": "max"}}
+
+    def verify(self):
+        known = {("win32", "2.1.304", "a" * 64, "0.2.116")}
+        with patch.object(IC, "_runtime_observation", return_value=self.observation), \
+                patch.object(IC, "VERIFIED_NATIVE_RUNTIMES", known):
+            return IC.ClaudeTrialAdapter(self.pin).verify()
+
+    def test_supported_verification_has_a_pinned_capability_hash_without_account_data(self):
+        result = self.verify()
+        self.assertTrue(result["supported"], result)
+        self.assertEqual(result["requested"]["model"], "claude-opus-5-5")
+        self.assertEqual(result["requested"]["reasoning"], "medium")
+        self.assertEqual(len(result["capability_hash"]), 64)
+        self.assertNotIn("email", json.dumps(result))
+        self.assertNotIn("token", json.dumps(result))
+
+    def test_managed_unknown_or_present_policy_is_unsupported(self):
+        for state in ("unknown", "present"):
+            self.observation["managed_policy"] = state
+            self.assertFalse(self.verify()["supported"])
+
+    def test_native_sdk_profile_or_login_drift_never_switches_configuration(self):
+        for field, value in (("cli_hash", "c" * 64), ("cli_version", "999"), ("sdk_version", "999"),
+                             ("profile_hash", "c" * 64), ("platform", "unverified-os")):
+            original = self.observation[field]
+            self.observation[field] = value
+            with self.subTest(field=field):
+                self.assertFalse(self.verify()["supported"])
+            self.observation[field] = original
+        self.observation["auth"]["plan"] = "enterprise"
+        self.assertFalse(self.verify()["supported"])
+
+    def test_unavailable_verification_returns_a_reason_without_creating_an_engine(self):
+        with patch.object(IC, "_runtime_observation", side_effect=OSError("native unavailable")), \
+                patch("claude_cli.claude_engine", side_effect=AssertionError("Engine created before verification")):
+            result = IC.ClaudeTrialAdapter(self.pin).verify()
+        self.assertFalse(result["supported"])
+        self.assertEqual(result["reason"], "runtime_unavailable")
+
+    def test_unknown_binary_is_never_executed_even_for_version_or_auth(self):
+        path = TEST_ROOT / "unverified-binary"
+        path.write_text("Never execute this file")
+        pin = {**self.pin, "cli_path": str(path)}
+        with patch.object(IC, "profile_hash", return_value="b" * 64), \
+                patch.object(IC, "_managed_policy", return_value="absent"), \
+                patch.object(IC.subprocess, "run", side_effect=AssertionError("Unverified binary executed")):
+            observed = IC._runtime_observation(pin)
+        self.assertEqual(observed["auth"], {})
+
+
 if __name__ == "__main__":
     unittest.main()
