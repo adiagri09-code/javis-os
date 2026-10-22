@@ -66,6 +66,7 @@ class SourceSnapshot:
     enabled: bool
     ownership: str
     identity: str
+    agent_key: str = ""
 
 
 def _json(value) -> str:
@@ -188,6 +189,8 @@ class ImprovementStore:
                 or len(content) > MAX_ASSET_BYTES or source.kind not in ("skill", "agent")
                 or not _SOURCE.fullmatch(source.canonical_ref) or not source.enabled or not source.identity
                 or not source.canonical_ref.startswith("skills/" if source.kind == "skill" else "agents/")
+                or (source.kind == "agent" and not source.agent_key)
+                or (source.kind == "skill" and source.agent_key)
                 or source.ownership not in ("user_protected", "user_managed")
                 or source.source_hash != hashlib.sha256(content).hexdigest()
                 or not re.fullmatch(r"[0-9a-f]{64}", source.protected_hash)
