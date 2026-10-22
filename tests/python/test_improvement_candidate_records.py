@@ -82,15 +82,15 @@ class CandidateRecordTests(unittest.TestCase):
         self.assertEqual(self.history(), self.before)
         self.assertEqual(before_files, {str(path.relative_to(self.f.root)) for path in self.f.root.rglob("*") if path.is_file()})
 
-    def test_schema4_upgrade_preserves_real_m1_trial_history(self):
+    def test_latest_upgrade_preserves_real_m1_trial_history(self):
         IM.ensure(self.rs)
-        self.assertEqual(IM._schema_version(self.rs), 4, "Candidate migration must install schema4")
+        self.assertEqual(IM._schema_version(self.rs), IM.SCHEMA_VERSION, "Upgrade must include candidate history")
         after = self.history()
         self.assertEqual({name: after[name] for name in self.before}, self.before)
         self.assertEqual(self.f.trials.get(self.owner, self.trial["trial_id"])["status"], "reserved")
         self.assertEqual(self.h.host.get(self.owner, "experiment-host"), self.context)
-        backup = self.rs.path.with_name(self.rs.path.name + ".pre-improvement-m2-candidates.bak")
-        self.assertTrue(backup.is_file(), "Existing schema3 needs a recoverable pre-candidate backup")
+        backup = self.rs.path.with_name(self.rs.path.name + ".pre-improvement-m2-experiments.bak")
+        self.assertTrue(backup.is_file(), "Existing schema3 needs a recoverable complete pre-upgrade backup")
         with closing(sqlite3.connect(backup)) as connection:
             self.assertEqual(connection.execute("SELECT version FROM improvement_schema").fetchone()[0], 3)
             self.assertEqual(connection.execute("SELECT id FROM improvement_trials").fetchone()[0], self.trial["trial_id"])
@@ -113,8 +113,8 @@ class CandidateRecordTests(unittest.TestCase):
 
         with patch.object(self.rs, "_backup_before", side_effect=backup), ThreadPoolExecutor(max_workers=2) as pool:
             list(pool.map(migrate, (1, 2)))
-        self.assertEqual(backups, [("improvement_skill_candidates", ".pre-improvement-m2-candidates.bak")])
-        self.assertEqual(IM._schema_version(self.rs), 4)
+        self.assertEqual(backups, [("improvement_experiments", ".pre-improvement-m2-experiments.bak")])
+        self.assertEqual(IM._schema_version(self.rs), IM.SCHEMA_VERSION)
         self.assertEqual({name: self.history()[name] for name in self.before}, self.before)
 
     def test_failed_upgrade_rolls_back(self):
@@ -125,7 +125,7 @@ class CandidateRecordTests(unittest.TestCase):
         self.assertEqual(IM._schema_version(self.rs), 3)
         self.assertEqual(self.history(), self.before)
         IM.ensure(self.rs)
-        self.assertEqual(IM._schema_version(self.rs), 4)
+        self.assertEqual(IM._schema_version(self.rs), IM.SCHEMA_VERSION)
 
     def seed(self):
         """Seed records through real SQL to test constraints before owner staging exists."""

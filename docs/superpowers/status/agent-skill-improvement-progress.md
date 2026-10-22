@@ -33,14 +33,24 @@
   against actual source. Six units cover schema5/experiment ownership, real A
   arms/full counterbalanced matrix, closed request-v2/baseline execution,
   both-variant qualification preflight, immutable complete-pair reports and
-  owner cancellation/recovery. No B implementation code has been written yet.
+  owner cancellation/recovery. Task1 now implements schema5, proposed metadata
+  and owner CAS/block/resume/stop fences; source/runtime execution remains gated.
 - Read-only B–F audits identified exact case-set association, fresh proposal
   lineage after context changes, chosen active edit authority, native delivery
   limits and missing preparation/navigation. Those boundaries are in the plan;
   actual effort/internal semantic use stay unknown where unobservable.
-- Reserve VERSION/both changelogs and an attached draft PR before code.
+- Reserved VERSION/both changelogs in a2f1b074 and attached draft PR800 before
+  implementation: https://github.com/blogminhquy/javis-os/pull/800.
   Changed-candidate execution, compose, real activation and live canary remain
   unavailable until their actual prerequisites and owner scope grants exist.
+- Task1 tests preserve actual A encrypted authoring and M1 context/case/contract/
+  qualification/trial/ledger history. Migration and actual released-A-reader
+  checks pass; metadata creation/CAS/revocation, SQL NULL constraints and active
+  capacity retention are covered. Interim independent Task1 review found no
+  Important issues and independently checked five migration/reader/CAS/SQL cases
+  plus a distinct valid context competing in proposed/blocked/stopping phases.
+  Root final unit regression7/7 GREEN84s (new experiment suite19 tests GREEN29s).
+  This is not the final whole-B review; Tasks2–6 and final CI/publication remain.
 
 ## M2A engineering continuation
 

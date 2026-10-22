@@ -39,9 +39,15 @@ No compose, activation, eligibility from manual edit grant or alternate model.
 
 ## Task1 — schema5, records and state CAS
 
-- [ ] Reproduce the named behavioral RED cases.
-- [ ] Implement this unit and inspect its exact source/authority boundaries.
-- [ ] Run named GREEN/regression checks, record actual evidence and commit the unit.
+- [x] Reproduce the named behavioral RED cases.
+- [x] Implement this unit and inspect its exact source/authority boundaries.
+- [x] Run named GREEN/regression checks, record actual evidence and commit the unit.
+
+Evidence: experiment suite19 tests GREEN29s; combined CandidateRecords, Cases,
+Experiments, PrivateReview, SkillCandidates, Store and Trials7/7 GREEN84s.
+Interim independent Task1 review found no Important issues, including a distinct
+valid context competing for proposed/blocked/stopping capacity. This is a tested
+unit checkpoint, not whole-B acceptance or runtime/activation qualification.
 
 
 New server/improvement_experiment_schema.py, improvement_experiments.py and
