@@ -7,6 +7,7 @@ import hashlib
 import http.server
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -18,7 +19,8 @@ from pathlib import Path
 
 def worker(root):
     from improvement_claude import TrialProfile
-    from improvement_sandbox import FixtureBroker
+    from improvement_sandbox import FixtureBroker, TrialWorkspace, trial_system_prompt
+    from improvement_store import _hash
     from claude_cli import claude_engine
 
     async def run():
@@ -34,14 +36,37 @@ def worker(root):
 
         pin = {"provider": "anthropic-cli", "model": "claude-opus-5-5", "reasoning": "medium",
                "cli_path": os.environ["JAVIS_TEST_NATIVE_CLI"], "sdk_version": "0.2.116"}
-        engine = claude_engine(cwd=str(root), tag="improvement:synthetic-native", model=pin["model"])
-        profile = TrialProfile(pin, broker, "Exercise only the synthetic fixture boundary.", before_query=ack)
+        sha = lambda text: hashlib.sha256(text.encode()).hexdigest()
+        acceptance = {"version": 1, "objective": "Exercise only the synthetic fixture boundary.",
+            "output": {"kind": "text", "path": "result.txt", "media_type": "text/plain"},
+            "criteria": [{"id": "artifact", "category": "mandatory", "critical": True,
+                "description": "Return a text artifact.", "kind": "file_exists", "config": {"path": "result.txt"}},
+                {"id": "synthetic", "category": "business", "critical": True,
+                 "description": "Finish the local synthetic capability exercise.", "kind": "independent_check"}]}
+        manifest = {"version": 1, "brain_id": "synthetic-brain", "bundle_hash": sha("synthetic-bundle"),
+            "engine_config_hash": _hash(pin), "contract_hash": sha("synthetic-private-contract"), "grant_hash": grant,
+            "baseline_context": {"content": "Exercise only the synthetic fixture boundary.",
+                "hash": sha("Exercise only the synthetic fixture boundary."), "coverage": "complete"},
+            "public_contract": {"content": acceptance, "hash": _hash(acceptance)},
+            "assets": [{"id": "revision-synthetic", "path": "skills/synthetic/SKILL.md",
+                        "content": "Use only the authorized fixture.", "hash": sha("Use only the authorized fixture.")}],
+            "case": {"id": "synthetic-case", "task": "Exercise the local boundary.", "fixtures": list(broker.fixtures.values())},
+            "learning_origin": "trial"}
+        workspace = TrialWorkspace(root / "trial-workspaces").prepare("synthetic-native", 1, manifest)
+        actual_root = Path(workspace["path"])
+        shutil.copytree(root / ".claude", actual_root / ".claude")
+        for name in ("CLAUDE.md", ".mcp.json"):
+            shutil.copyfile(root / name, actual_root / name)
+        engine = claude_engine(cwd=str(actual_root), tag="improvement:synthetic-native", model=pin["model"])
+        profile = TrialProfile(pin, broker, trial_system_prompt(manifest), before_query=ack)
+        profile.bind_installation(manifest, workspace, sha("synthetic-profile-capability"))
         engine.trial_profile = profile
         events = []
         async for event in engine.query("Exercise the local boundary."):
             events.append(event)
             print("native-probe-event=" + event["type"], file=sys.stderr, flush=True)
-        print(json.dumps({"events": events, "broker_events": broker.events, "denials": profile.denials}))
+        print(json.dumps({"label": "synthetic/native-local-fake-provider", "production_billing": False,
+                          "events": events, "broker_events": broker.events, "denials": profile.denials}))
 
     asyncio.run(run())
 
@@ -167,6 +192,16 @@ class NativeBoundaryTests(unittest.TestCase):
         self.assertEqual(process.returncode, 0, stderr[-1500:])
         observed = json.loads(stdout)
         self.assertFalse([e for e in observed["events"] if e["type"] == "error"], observed)
+        initializations = [e["data"] for e in observed["events"] if e["type"] == "native_system" and e["subtype"] == "init"]
+        self.assertEqual(len(initializations), 1)
+        self.assertEqual(initializations[0]["tools"], ["mcp__fixture__fixture_read"])
+        receipts = [e["receipt"] for e in observed["events"] if e["type"] == "installation_receipt"]
+        self.assertEqual(len(receipts), 1)
+        self.assertEqual(receipts[0]["coverage"]["tool_inventory"], "observed")
+        self.assertEqual(receipts[0]["coverage"]["model"], "observed")
+        self.assertEqual(receipts[0]["asset_revisions"][0]["observed_use"], "unknown")
+        self.assertEqual(receipts[0]["coverage"]["reasoning"], "unknown")
+        self.assertEqual(observed["label"], "synthetic/native-local-fake-provider")
         self.assertEqual([e["content"] for e in observed["events"] if e["type"] == "artifact"], ["LOCAL_NATIVE_DONE"])
         self.assertEqual([e["status"] for e in observed["broker_events"]], ["fixture_hit", "fixture_miss"])
         self.assertEqual((outside / "keep.txt").read_text(), canary)

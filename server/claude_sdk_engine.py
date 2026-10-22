@@ -1176,7 +1176,11 @@ class ClaudeSDK:
                 chan_doan = self._startup_diagnosis(started)
                 print(f"[claude init timeout] tag={self.tag} sau={time.time() - started:.0f}s "
                       f"chan_doan={chan_doan}", file=sys.stderr)
-            yield {"type": "error", "content": loi_de_hieu(e, tran_init, chan_doan)}
+            error_event = {"type": "error", "content": loi_de_hieu(e, tran_init, chan_doan)}
+            if getattr(self, "trial_profile", None) is not None:
+                status = getattr(e, "status_code", None)
+                error_event.update(error_type=type(e).__name__, status_code=status if type(status) is int else None)
+            yield error_event
         finally:
             with _LOCK:
                 _ACTIVE.pop(client, None)

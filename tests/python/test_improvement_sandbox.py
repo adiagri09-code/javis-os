@@ -40,12 +40,55 @@ class SandboxTests(unittest.TestCase):
                            "cutoff": "2026-09-30T23:59:59+07:00", "schema": "text/plain"}}
 
     def request(self):
+        public = self.public_acceptance()
         return {"version": 1, "brain_id": "brain-a", "bundle_hash": sha("bundle"),
                 "engine_config_hash": sha("engine"), "contract_hash": sha("contract"), "grant_hash": sha("grant"),
                 "baseline_context": {"content": "Keep the owner rule.", "hash": sha("Keep the owner rule."), "coverage": "complete"},
+                "public_contract": {"content": public, "hash": SB._hash(public)},
                 "assets": [{"id": "ir_skill", "path": "skills/report/SKILL.md", "hash": sha("Skill body"), "content": "Skill body"}],
                 "case": {"id": "case-a", "task": "Report the authorized fixture", "fixtures": [self.fixture()]},
                 "learning_origin": "trial"}
+
+    def public_acceptance(self):
+        return {"version": 1, "objective": "Report the authorized fixture accurately.",
+                "output": {"kind": "text", "path": "answer.json", "media_type": "application/json"},
+                "criteria": [{"id": "shape", "category": "mandatory", "critical": True,
+                              "description": "Return JSON with the value field.", "kind": "json_keys",
+                              "config": {"path": "answer.json", "keys": ["value"]}},
+                             {"id": "accuracy", "category": "business", "critical": True,
+                              "description": "The value accurately reflects the authorized input.", "kind": "independent_check"}]}
+
+    def test_workspace_pins_public_acceptance_without_private_checker_material(self):
+        request = self.request()
+        public = self.public_acceptance()
+        request["public_contract"] = {"content": public, "hash": SB._hash(public)}
+        try:
+            receipt = self.workspaces.prepare("public-contract", 1, request)
+        except ValueError:
+            receipt = None
+        self.assertIsNotNone(receipt, "The workspace does not materialize a public acceptance contract")
+        self.assertEqual(self.workspaces.validate(receipt)["public_contract"]["content"], public)
+        for private in ("evaluator", "answer", "checker_id"):
+            changed = self.request()
+            leaked = self.public_acceptance()
+            leaked[private] = "private-evaluator-material"
+            changed["public_contract"] = {"content": leaked, "hash": SB._hash(leaked)}
+            with self.subTest(private=private), self.assertRaises(ValueError):
+                self.workspaces.prepare("leaked-contract", 1, changed)
+
+    def test_public_acceptance_hash_drift_is_rejected_before_materialization(self):
+        request = self.request()
+        public = self.public_acceptance()
+        request["public_contract"] = {"content": public, "hash": SB._hash(public)}
+        public["objective"] = "Changed intent after pinning"
+        with self.assertRaises(ValueError):
+            self.workspaces.prepare("changed-contract", 1, request)
+
+    def test_missing_public_acceptance_is_not_an_executable_input(self):
+        request = self.request()
+        request.pop("public_contract", None)
+        with self.assertRaises(ValueError):
+            self.workspaces.prepare("missing-contract", 1, request)
 
     def test_fixture_broker_uses_exact_grant_version_and_argument_identity(self):
         broker = SB.FixtureBroker([self.fixture()], sha("grant"))
@@ -69,6 +112,16 @@ class SandboxTests(unittest.TestCase):
         fixture["content"] = "Different source"
         with self.assertRaises(ValueError):
             SB.FixtureBroker([fixture], sha("grant"))
+
+    def test_fixture_inventory_view_cannot_mutate_the_pinned_broker(self):
+        broker = SB.FixtureBroker([self.fixture()], sha("grant"))
+        view = broker.fixtures
+        view["is_fixture"]["content"] = "Changed behind the receipt"
+        view.clear()
+        self.assertEqual(broker.read("fixture.read", {"snapshot_id": "is_fixture"}, "v1", sha("grant")).get("content"),
+                         "Authorized fixture\r\n")
+        with self.assertRaises(AttributeError):
+            broker.grant_hash = sha("different-grant")
 
     def test_prepare_is_pinned_and_each_attempt_has_a_separate_context(self):
         first = self.workspaces.prepare("trial-a", 1, self.request())

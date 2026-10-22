@@ -22,7 +22,7 @@
 | Milestone | Engineering | Business evidence | Rollout |
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
-| M1 | Engineering-only Task1 complete; isolated workspace/profile/native/worker foundation verified; receipts/runner/usage/API pending | No real-engine smoke yet | Not enabled; base M0 integrated and published |
+| M1 | Tasks1–2 complete as engineering components; shared ledger/usage, durable runner/evaluation/API pending | No real-engine smoke yet | Not enabled; base M0 integrated and published |
 | M2 | Pending | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
@@ -61,8 +61,8 @@
 
 ## Next action
 
-Finish M1 installation receipts/public-contract materialization, shared ledger/usage,
-lifecycle/evaluation and owner service. PR795 stays draft on published main09903315.
+Implement M1 shared ledger/usage, then durable lifecycle/evaluation and owner service.
+PR795 stays draft on published main09903315; full M0–M8 Goal remains active.
 Full M0–M8 Goal remains active; no business or live rollout gate is closed by a code merge.
 
 ## M0 implementation evidence
@@ -189,3 +189,19 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   Behavioral RED -> GREEN, case suite now28 checks, PASS1/1 in8s. M1 has not been released
   or enabled, so this tightens the draft contract before external records exist. Worker
   materialization of this public projection and complete installation receipts remain next.
+- Task2 subsequently completed its public materialization and receipt components. Workspace
+  requires a hash-pinned public contract and rejects private checker fields, missing intent
+  and hash drift. Worker assembles all baseline instructions, assets and public requirements;
+  no source truncation. Receipt binds journal/input/effective/prompt/contract/grant/fixture
+  hashes, selected revision IDs and actual native inventory/model observations. Asset
+  observed_use and actual reasoning remain unknown when unobserved, regardless of model claims.
+- The fixture inventory view is a defensive copy, its grant is immutable, and binding rejects
+  another broker/grant. Unexpected native tools or successful outside tool results are
+  isolation failures. Native unavailable tools get explicit denial events; provider quota
+  envelopes retain error/status metadata and nullable usage. No fallback was added.
+- Fresh Python uses `-I -X utf8`, restoring only the trusted server source directory. A real
+  child ignored malicious workspace sitecustomize/winproc modules even with hostile PYTHONPATH.
+  Final explicit-native improvement/console run passed9/9 files in33s; SDK/completion
+  regression passed2/2 in17s with an empty auth HOME, not a real credential/model call.
+  Task2 is complete as a component; the parent start callback still needs Task3/4's durable
+  shared ledger binding. No owner run endpoint or production capability is enabled yet.

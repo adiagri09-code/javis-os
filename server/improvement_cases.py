@@ -138,6 +138,47 @@ def public_contract(value):
     return {key: contract[key] for key in ("version", "objective", "output")} | {"criteria": criteria}
 
 
+def validate_public_contract(value):
+    """Reject private evaluator material even when a caller recomputes the public hash."""
+    value = _frozen(value)
+    _fields(value, {"version", "objective", "output", "criteria"})
+    if type(value["version"]) is not int or value["version"] != 1:
+        raise ValueError("unsupported_public_trial_contract")
+    _text(value["objective"], 4000)
+    _fields(value["output"], {"kind", "path", "media_type"})
+    if value["output"]["kind"] != "text":
+        raise ValueError("unsupported_trial_output_kind")
+    output_path(value["output"]["path"])
+    _text(value["output"]["media_type"], 128)
+    if not isinstance(value["criteria"], list) or not 1 <= len(value["criteria"]) <= 12:
+        raise ValueError("invalid_trial_criteria")
+    identities, categories = set(), set()
+    for item in value["criteria"]:
+        _fields(item, {"id", "category", "critical", "description", "kind"}, {"config"})
+        if (not isinstance(item["id"], str) or not _ID.fullmatch(item["id"]) or item["id"] in identities
+                or item["category"] not in ("mandatory", "business") or type(item["critical"]) is not bool):
+            raise ValueError("invalid_trial_criterion")
+        identities.add(item["id"])
+        categories.add(item["category"])
+        _text(item["description"], 2000)
+        kind = item["kind"]
+        if kind == "independent_check":
+            if "config" in item:
+                raise ValueError("private_trial_checker_material")
+            continue
+        allowed = {"file_exists": ({"path"}, set()), "file_contains": ({"path"}, {"min_chars", "must_contain"}),
+                   "json_keys": ({"path", "keys"}, set()), "owner_confirm": (set(), {"path", "target"})}
+        if not isinstance(kind, str) or kind not in allowed or (item["category"] == "business" and kind != "owner_confirm"):
+            raise ValueError("invalid_public_trial_criterion")
+        config = item.get("config")
+        _fields(config, *allowed[kind])
+        import team_acceptance as TA
+        TA.clean_criteria([{"kind": kind, **config}])
+    if categories != {"mandatory", "business"}:
+        raise ValueError("business_criteria_required")
+    return value
+
+
 class CaseStore:
     def __init__(self, improvement_store):
         self.assets = improvement_store

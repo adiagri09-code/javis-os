@@ -171,6 +171,16 @@ Fresh worker environment, explicit SDK fields and native tool denial enforce iso
 actual options/runtime capability are verified before constructing the model engine.
 Strict requested configuration has no fallback; unobserved actual config is unknown.
 Receipt separates available, selected, observed_use and config/install coverage.
+The materialized input includes `public_contract:{content,hash}`, generated from the full
+host contract with `public_contract()`. The host runner verifies that relationship; the
+worker checks the public schema/hash without receiving evaluator-private data. A shared
+`trial_system_prompt()` assembles the complete baseline/assets/public requirements and
+rejects oversize input without truncation. Receipt binding checks the journal, prompt,
+working directory and exact immutable fixture inventory/grant before native options.
+The Python child starts with `-I -X utf8` and only restores the trusted server source root;
+workspace modules/PYTHONPATH/user startup hooks cannot become worker code. Native receipt
+records exact prompt/inventory hashes and revision availability/selection. Claimed model
+use does not upgrade observed_use; missing inventory/model/reasoning remains unknown.
 Use `ResultMessage.result` as the declared final text artifact (raw UTF-8, no fence stripping)
 and preserve intermediate messages only as trace. A missing result envelope is unknown;
 do not concatenate interim tool narration into a supposedly valid JSON product. Raw native
@@ -198,13 +208,13 @@ demonstrate actual host tool denial. Run real selected-model smoke only after th
 - [x] Add inherited-env and adversarial native tool tests; assert no outside marker file,
   fixture_miss with zero live-dispatch calls, no answer/config in worker request/env.
 - [x] Run sandbox/Claude scripts; observe RED before adding the dedicated profile.
-- [ ] Implement hermetic worker, explicit native options, fixture broker and receipt.
+- [x] Implement hermetic worker, explicit native options, fixture broker and receipt.
   Set ENABLE_TOOL_SEARCH=false in the explicit worker environment: the verified profile
   has exactly the fixture MCP tool and no inert deferred placeholder. Persist broker errors
   independently of protocol formatting. Native research confirmed the SDK handler key is
   is_error; pre-query empty MCP status is not installation proof.
-- [ ] Run synthetic local provider/native integration and M0 source tests; require GREEN.
-- [ ] Commit profile and isolation tests; real engine support remains gated by verify().
+- [x] Run synthetic local provider/native integration and M0 source tests; require GREEN.
+- [x] Commit profile and isolation tests; real engine support remains gated by verify().
 
 ## Task 3: shared ledger and usage provenance
 

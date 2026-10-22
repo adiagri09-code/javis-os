@@ -78,9 +78,16 @@ class WorkerProcessTests(unittest.TestCase):
                "reasoning": "medium", "cli_path": str(root / "unused-native"), "cli_hash": "a" * 64,
                "cli_version": "2.1.304", "sdk_version": "0.2.116", "profile_version": IC.PROFILE_VERSION,
                "profile_hash": "b" * 64}
+        public = {"version": 1, "objective": "Report input accurately.",
+                  "output": {"kind": "text", "path": "result.txt", "media_type": "text/plain"},
+                  "criteria": [{"id": "shape", "category": "mandatory", "critical": True,
+                                "description": "Return the final artifact.", "kind": "file_exists", "config": {"path": "result.txt"}},
+                               {"id": "accuracy", "category": "business", "critical": True,
+                                "description": "Accuracy must be verified against the authorized fixture.", "kind": "independent_check"}]}
         manifest = {"version": 1, "brain_id": "brain-a", "bundle_hash": sha("bundle"),
             "engine_config_hash": _hash(pin), "contract_hash": sha("contract"), "grant_hash": sha("grant"),
             "baseline_context": {"content": "Full owner rules", "hash": sha("Full owner rules"), "coverage": "complete"},
+            "public_contract": {"content": public, "hash": _hash(public)},
             "assets": [{"id": "revision-a", "path": "skills/report/SKILL.md", "hash": sha("Full skill"), "content": "Full skill"}],
             "case": {"id": "case-a", "task": "Return final text", "fixtures": []}, "learning_origin": "trial"}
         receipt = TrialWorkspace(root).prepare("trial-a", 1, manifest)
@@ -89,6 +96,7 @@ class WorkerProcessTests(unittest.TestCase):
     def test_worker_verifies_workspace_and_requires_exact_host_ack_before_query(self):
         self.assertTrue(hasattr(IW, "run_request"), "Worker execution protocol is missing")
         payload, events, order = self.payload(), [], []
+        testcase = self
 
         class Adapter:
             def __init__(self, pin):
@@ -99,6 +107,10 @@ class WorkerProcessTests(unittest.TestCase):
 
         class Engine:
             def __init__(self, **kwargs):
+                testcase.assertIn("Full owner rules", kwargs["system_prompt"])
+                testcase.assertIn("Full skill", kwargs["system_prompt"])
+                testcase.assertIn("Accuracy must be verified against the authorized fixture.", kwargs["system_prompt"])
+                testcase.assertIn('"path":"result.txt"', kwargs["system_prompt"])
                 order.append("engine_created")
 
             async def query(self, prompt):
@@ -186,6 +198,7 @@ class WorkerProcessTests(unittest.TestCase):
         def spawn(*args, **kwargs):
             if not str(args[0][-1]).endswith("improvement_worker.py"):
                 return original_spawn(*args, **kwargs)
+            self.assertIn("-I", args[0], "Worker must ignore ambient Python paths and user startup modules")
             environment.update(kwargs["env"])
             return process
 
@@ -225,6 +238,23 @@ class WorkerProcessTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "trial_start_boundary_unbound"):
             asyncio.run(run())
+
+    def test_isolated_worker_entrypoint_ignores_workspace_python_startup_modules(self):
+        from improvement_sandbox import worker_environment
+        root = Path(tempfile.mkdtemp(prefix="python-isolation-", dir=TEST_ROOT))
+        (root / "tmp").mkdir()
+        canary = root / "ambient-startup-ran"
+        (root / "sitecustomize.py").write_text("from pathlib import Path\nPath(" + repr(str(canary)) + ").write_text('ambient')\n")
+        (root / "winproc.py").write_text("raise RuntimeError('Loaded a workspace module instead of the host module')\n")
+        environment = worker_environment(root, auth_home=root / "empty-auth")
+        environment["PYTHONPATH"] = str(root)  # Deliberately hostile even if env filtering regresses.
+        result = subprocess.run([sys.executable, "-I", "-X", "utf8", str(SERVER / "improvement_worker.py")],
+            input=b'{"version":1}\n', cwd=root, env=environment, capture_output=True, timeout=15,
+            creationflags=IW.process_flags())
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue(result.stdout, result.stderr.decode(errors="replace"))
+        self.assertEqual(json.loads(result.stdout)["type"], "worker_error")
+        self.assertFalse(canary.exists())
 
 
 if __name__ == "__main__":

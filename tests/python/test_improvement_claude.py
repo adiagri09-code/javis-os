@@ -42,6 +42,79 @@ class ProfileTests(unittest.TestCase):
         engine.effort = "low"
         return engine
 
+    def installation(self):
+        from improvement_sandbox import TrialWorkspace
+        import improvement_sandbox as SB
+        self.assertTrue(hasattr(SB, "trial_system_prompt"), "Materialized system prompt needs an exact common hash")
+        self.assertTrue(hasattr(IC.TrialProfile, "bind_installation"), "The native profile has no installation binding")
+        sha = lambda text: hashlib.sha256(text.encode()).hexdigest()
+        public = {"version": 1, "objective": "Return accurate source content.",
+                  "output": {"kind": "text", "path": "result.txt", "media_type": "text/plain"},
+                  "criteria": [{"id": "artifact", "category": "mandatory", "critical": True,
+                    "description": "Return a text artifact.", "kind": "file_exists", "config": {"path": "result.txt"}},
+                    {"id": "accuracy", "category": "business", "critical": True,
+                     "description": "Accurately reflect the authorized input.", "kind": "independent_check"}]}
+        manifest = {"version": 1, "brain_id": "brain-a", "bundle_hash": sha("bundle"), "engine_config_hash": SB._hash(self.pin),
+                    "contract_hash": sha("private-contract"), "grant_hash": self.broker.grant_hash,
+                    "public_contract": {"content": public, "hash": SB._hash(public)},
+                    "baseline_context": {"content": "Exact owner rules\r\n", "hash": sha("Exact owner rules\r\n"), "coverage": "complete"},
+                    "assets": [{"id": "revision-a", "path": "skills/report/SKILL.md", "content": "Exact skill\r\n", "hash": sha("Exact skill\r\n")}],
+                    "case": {"id": "case-a", "task": "Return source content", "fixtures": []}, "learning_origin": "trial"}
+        root = Path(tempfile.mkdtemp(prefix="install-", dir=TEST_ROOT))
+        receipt = TrialWorkspace(root).prepare("trial-install", 1, manifest)
+        profile = IC.TrialProfile(self.pin, self.broker, SB.trial_system_prompt(manifest))
+        profile.bind_installation(manifest, receipt, sha("verified-capability"))
+        engine = self.engine(profile)
+        engine.cwd = receipt["path"]
+        return profile, engine, manifest, receipt
+
+    def test_installation_receipt_distinguishes_selected_assets_from_observed_use(self):
+        from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, TextBlock
+        profile, engine, manifest, workspace = self.installation()
+        options = engine._options()
+        profile.observe(SystemMessage("init", {"tools": ["mcp__fixture__fixture_read"], "session_id": "session"}))
+        profile.observe(AssistantMessage([TextBlock("I used revision-a perfectly")], model="claude-opus-5-5"))
+        events = profile.observe(ResultMessage("success", 0, 0, False, 1, "session", result="Exact output\r\n"))
+        receipt = next(e["receipt"] for e in events if e["type"] == "installation_receipt")
+        self.assertEqual(receipt["input_hash"], workspace["input_hash"])
+        self.assertEqual(receipt["public_contract_hash"], manifest["public_contract"]["hash"])
+        self.assertEqual(receipt["system_prompt_hash"], hashlib.sha256(options.system_prompt.encode()).hexdigest())
+        self.assertEqual(receipt["asset_revisions"], [{"id": "revision-a", "path": "skills/report/SKILL.md",
+            "hash": manifest["assets"][0]["hash"], "available": True, "selected": True, "observed_use": "unknown"}])
+        self.assertEqual(receipt["coverage"]["tool_inventory"], "observed")
+        self.assertEqual(receipt["coverage"]["model"], "observed")
+        self.assertEqual(receipt["coverage"]["reasoning"], "unknown")
+        self.assertIsNone(receipt["actual_reasoning"])
+
+    def test_missing_native_inventory_is_unknown_and_extra_native_tools_are_rejected(self):
+        from claude_agent_sdk import ResultMessage, SystemMessage
+        profile, engine, manifest, workspace = self.installation()
+        engine._options()
+        events = profile.observe(ResultMessage("success", 0, 0, False, 1, "session", result="Output"))
+        receipt = next(e["receipt"] for e in events if e["type"] == "installation_receipt")
+        self.assertEqual(receipt["coverage"]["tool_inventory"], "unknown")
+        self.assertEqual(receipt["coverage"]["model"], "unknown")
+        with self.assertRaisesRegex(ValueError, "trial_native_tool_inventory_mismatch"):
+            profile.observe(SystemMessage("init", {"tools": ["Bash", "mcp__fixture__fixture_read"]}))
+
+    def test_bound_prompt_or_working_directory_cannot_drift_from_the_manifest(self):
+        profile, engine, manifest, workspace = self.installation()
+        original = profile.system_prompt
+        profile.system_prompt = "Silently reduced owner instructions"
+        with self.assertRaisesRegex(ValueError, "trial_prompt_installation_mismatch"):
+            engine._options()
+        profile.system_prompt = original
+        engine.cwd = str(TEST_ROOT)
+        with self.assertRaisesRegex(ValueError, "trial_workspace_installation_mismatch"):
+            engine._options()
+
+    def test_fixture_broker_must_match_the_bound_manifest_and_grant(self):
+        from improvement_sandbox import FixtureBroker
+        profile, engine, manifest, workspace = self.installation()
+        other = IC.TrialProfile(self.pin, FixtureBroker([], "d" * 64), profile.system_prompt)
+        with self.assertRaisesRegex(ValueError, "trial_fixture_installation_mismatch"):
+            other.bind_installation(manifest, workspace, "c" * 64)
+
     def test_trial_options_do_not_load_chat_plugins_settings_or_tools(self):
         profile = self.profile()
         engine = self.engine(profile)
@@ -64,6 +137,7 @@ class ProfileTests(unittest.TestCase):
         self.assertIsNone(options.fallback_model)
         self.assertIsNone(options.max_budget_usd)
         self.assertIsNone(options.max_turns)
+        self.assertEqual(options.max_buffer_size, 8 * 1024 * 1024)
         self.assertIn("no-session-persistence", options.extra_args)
         self.assertTrue(json.loads(options.settings)["disableAllHooks"])
         denied = asyncio.run(options.can_use_tool("Bash", {"command": "touch outside"}, None))
@@ -107,6 +181,58 @@ class ProfileTests(unittest.TestCase):
         self.assertFalse(any(e["type"] == "artifact" for e in events))
         self.assertEqual(next(e for e in events if e["type"] == "usage")["cost_usd"], 0.0)
         self.assertEqual(next(e for e in events if e["type"] == "terminal")["artifact_status"], "unknown")
+
+    def test_native_unavailable_tool_is_recorded_as_denied_not_just_a_tool_error(self):
+        from claude_agent_sdk import AssistantMessage, ToolResultBlock, ToolUseBlock, UserMessage
+        profile = self.profile()
+        profile.observe(AssistantMessage([ToolUseBlock("outside", "Bash", {"command": "forbidden"})], model=self.pin["model"]))
+        events = profile.observe(UserMessage([ToolResultBlock("outside", "Tool is not available", is_error=True)]))
+        self.assertTrue(any(e["type"] == "tool_denied" and e["name"] == "Bash" for e in events), events)
+        self.assertEqual(profile.denials[0]["tool_use_id"], "outside")
+
+    def test_successful_outside_tool_result_is_an_isolation_failure(self):
+        from claude_agent_sdk import AssistantMessage, ToolResultBlock, ToolUseBlock, UserMessage
+        profile = self.profile()
+        profile.observe(AssistantMessage([ToolUseBlock("outside", "Read", {"file_path": "outside"})], model=self.pin["model"]))
+        with self.assertRaisesRegex(ValueError, "trial_unknown_tool_execution"):
+            profile.observe(UserMessage([ToolResultBlock("outside", "Unexpected success", is_error=False)]))
+
+    def test_provider_error_envelopes_keep_quota_status_and_unknown_usage(self):
+        from claude_agent_sdk import AssistantMessage, ResultMessage
+        profile = self.profile()
+        observation = profile.observe(AssistantMessage([], model=self.pin["model"], error="rate_limit"))[0]
+        self.assertEqual(observation.get("error"), "rate_limit")
+        events = profile.observe(ResultMessage("error_during_execution", 0, 0, True, 1, "session",
+                                             errors=["rate_limit"], api_error_status=429))
+        terminal = next(e for e in events if e["type"] == "terminal")
+        self.assertEqual(terminal.get("api_error_status"), 429)
+        self.assertEqual(terminal.get("errors"), ["rate_limit"])
+        self.assertIsNone(next(e for e in events if e["type"] == "usage")["usage"])
+
+    def test_transport_exception_keeps_host_error_type_and_status_for_trial_only(self):
+        class QuotaFailure(Exception):
+            status_code = 429
+
+        class Client:
+            def __init__(self, options):
+                pass
+
+            async def connect(self):
+                raise QuotaFailure("Synthetic quota failure")
+
+            async def disconnect(self):
+                pass
+
+        async def run():
+            engine = self.engine(self.profile())
+            with patch.object(engine, "is_available", return_value=True), patch("claude_agent_sdk.ClaudeSDKClient", Client), \
+                    patch("claude_token_gate.xep_hang", new=AsyncMock(return_value="")):
+                return [event async for event in engine.query("Pinned task")]
+
+        events = asyncio.run(run())
+        error = next(e for e in events if e["type"] == "error")
+        self.assertEqual(error.get("error_type"), "QuotaFailure")
+        self.assertEqual(error.get("status_code"), 429)
 
     def test_parent_permission_must_arrive_before_native_query(self):
         from claude_agent_sdk import ResultMessage

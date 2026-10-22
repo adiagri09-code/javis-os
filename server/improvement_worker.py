@@ -2,8 +2,13 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
+# Isolated Python removes the script directory; restore only this trusted host source root.
+_SERVER_DIR = str(Path(__file__).resolve().parent)
+if _SERVER_DIR not in sys.path:
+    sys.path.insert(0, _SERVER_DIR)
 import winproc
 
 
@@ -83,7 +88,7 @@ async def run_request(payload, read_control, emit, *, adapter_factory=None, engi
     """Validate host materialization before creating an engine; model text is always data."""
     from improvement_cases import _digest, _fields, _frozen
     from improvement_store import _hash, _json
-    from improvement_sandbox import FixtureBroker, TrialWorkspace
+    from improvement_sandbox import FixtureBroker, TrialWorkspace, trial_system_prompt
     from improvement_claude import ClaudeTrialAdapter, TrialProfile
     payload = _frozen(payload)
     _fields(payload, {"version", "config_pin", "workspace_root", "receipt", "capability_hash"})
@@ -108,9 +113,10 @@ async def run_request(payload, read_control, emit, *, adapter_factory=None, engi
             raise ValueError("trial_engine_start_not_acknowledged")
 
     broker = FixtureBroker(manifest["case"]["fixtures"], manifest["grant_hash"])
-    instructions = manifest["baseline_context"]["content"] + "\n\n<effective_assets>\n" + _json(manifest["assets"]) + "\n</effective_assets>"
+    instructions = trial_system_prompt(manifest)
     profile_pin = {key: pin[key] for key in ("provider", "model", "reasoning", "cli_path", "sdk_version")}
     profile = TrialProfile(profile_pin, broker, instructions, before_query=before_query)
+    profile.bind_installation(manifest, receipt, payload["capability_hash"])
     if engine_factory is None:
         from claude_cli import claude_engine
         engine_factory = claude_engine

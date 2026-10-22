@@ -179,7 +179,7 @@ class ClaudeTrialAdapter:
         try:
             async with asyncio.timeout(max(0.0, deadline - time.time())):
                 process = await asyncio.to_thread(subprocess.Popen,
-                    [sys.executable, str(Path(__file__).with_name("improvement_worker.py"))],
+                    [sys.executable, "-I", "-X", "utf8", str(Path(__file__).with_name("improvement_worker.py"))],
                     cwd=receipt["path"], env=environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE, start_new_session=sys.platform != "win32", creationflags=process_flags())
                 # The child blocks on its first input until its whole lifetime is owned.
@@ -263,6 +263,62 @@ class TrialProfile:
         self.observed_models = set()
         self.actual_reasoning_coverage = "unknown"
         self.denials = []
+        self._installation = None
+        self._selection = None
+        self._native_tools = None
+        self._native_session_id = None
+        self._tool_names = {}
+        self._denied_calls = set()
+
+    def bind_installation(self, manifest, workspace, capability_hash):
+        from improvement_sandbox import TrialWorkspace, _manifest, trial_system_prompt
+        if self._installation is not None or self._started:
+            raise ValueError("trial_installation_already_bound")
+        _digest(capability_hash)
+        manifest = _manifest(manifest)
+        workspace = _frozen(workspace)
+        actual = TrialWorkspace(Path(workspace["path"]).parents[1]).validate(workspace)
+        if _hash(actual) != _hash(manifest):
+            raise ValueError("trial_installation_input_mismatch")
+        if (self.broker.grant_hash != manifest["grant_hash"]
+                or _hash(list(self.broker.fixtures.values())) != _hash(manifest["case"]["fixtures"])):
+            raise ValueError("trial_fixture_installation_mismatch")
+        prompt_hash = hashlib.sha256(trial_system_prompt(manifest).encode("utf-8")).hexdigest()
+        if hashlib.sha256(self.system_prompt.encode("utf-8")).hexdigest() != prompt_hash:
+            raise ValueError("trial_prompt_installation_mismatch")
+        self._installation = {"manifest": manifest, "workspace": workspace,
+                              "capability_hash": capability_hash, "prompt_hash": prompt_hash}
+
+    def installation_receipt(self, session_id):
+        if self._installation is None:
+            return None
+        bound = self._installation
+        manifest, workspace = bound["manifest"], bound["workspace"]
+        selection = self._selection or {}
+        tools = ["mcp__fixture__fixture_read"]
+        model_coverage = ("observed" if self.observed_models == {self.pin["model"]}
+                          else "mismatch" if self.observed_models else "unknown")
+        return {"version": 1, "trial_id": workspace["trial_id"], "attempt": workspace["attempt"], "session_id": session_id,
+                "input_hash": workspace["input_hash"], "effective_hash": workspace["effective_hash"],
+                "bundle_hash": manifest["bundle_hash"], "contract_hash": manifest["contract_hash"],
+                "public_contract_hash": manifest["public_contract"]["hash"], "engine_config_hash": manifest["engine_config_hash"],
+                "grant_hash": manifest["grant_hash"], "capability_hash": bound["capability_hash"],
+                "baseline_context_hash": manifest["baseline_context"]["hash"],
+                "expected_system_prompt_hash": bound["prompt_hash"], "system_prompt_hash": selection.get("system_prompt_hash"),
+                "tool_inventory_hash": _hash(tools),
+                "observed_tool_inventory_hash": _hash(self._native_tools) if self._native_tools is not None else None,
+                "fixture_inventory_hash": _hash([{key: item[key] for key in ("snapshot_id", "hash", "source")}
+                                                 for item in manifest["case"]["fixtures"]]),
+                "asset_revisions": [{**{key: asset[key] for key in ("id", "path", "hash")}, "available": True,
+                                     "selected": self._selection is not None, "observed_use": "unknown"}
+                                    for asset in manifest["assets"]],
+                "requested": {key: self.pin[key] for key in ("provider", "model", "reasoning")},
+                "actual_models": sorted(self.observed_models), "actual_reasoning": None,
+                "coverage": {"input": "host_verified", "runtime": "host_verified",
+                             "context": manifest["baseline_context"]["coverage"],
+                             "prompt": "host_attested" if self._selection is not None else "unknown",
+                             "tool_inventory": "observed" if self._native_tools == tools else "unknown",
+                             "model": model_coverage, "reasoning": "unknown"}}
 
     async def before_query(self):
         if self._started:
@@ -276,6 +332,11 @@ class TrialProfile:
         from claude_agent_sdk import ClaudeAgentOptions, PermissionResultDeny, create_sdk_mcp_server, tool
         if engine.session_id:
             raise ValueError("trial_resume_forbidden")
+        if self._installation is not None:
+            if hashlib.sha256(self.system_prompt.encode("utf-8")).hexdigest() != self._installation["prompt_hash"]:
+                raise ValueError("trial_prompt_installation_mismatch")
+            if Path(engine.cwd).resolve() != Path(self._installation["workspace"]["path"]).resolve():
+                raise ValueError("trial_workspace_installation_mismatch")
 
         @tool("fixture_read", "Read a pinned authorized fixture by snapshot identity and source version",
               {"snapshot_id": str, "source_version": str})
@@ -292,7 +353,7 @@ class TrialProfile:
             self.denials.append({"type": "tool_denied", "name": str(name), "reason": "outside_trial_fixture_grant"})
             return PermissionResultDeny(message="Only the pinned fixture tool is authorized in this trial")
 
-        return ClaudeAgentOptions(cli_path=self.pin["cli_path"], cwd=engine.cwd,
+        options = ClaudeAgentOptions(cli_path=self.pin["cli_path"], cwd=engine.cwd,
             system_prompt=self.system_prompt, model=self.pin["model"], effort=self.pin["reasoning"],
             tools=[], skills=[], setting_sources=[], plugins=[], agents={}, hooks={}, add_dirs=[],
             mcp_servers={"fixture": create_sdk_mcp_server("fixture", tools=[fixture_read])}, strict_mcp_config=True,
@@ -300,27 +361,49 @@ class TrialProfile:
             settings='{"fastMode":false,"disableAllHooks":true}',
             extra_args={"no-session-persistence": None, "disable-slash-commands": None, "no-chrome": None,
                         "restricted": None, "safe-mode": None},
-            stderr=engine._on_stderr)
+            max_buffer_size=8 * 1024 * 1024, stderr=engine._on_stderr)
+        self._selection = {"system_prompt_hash": hashlib.sha256(options.system_prompt.encode("utf-8")).hexdigest()}
+        return options
 
     def observe(self, message):
         """Never fabricate a missing usage field or assemble an artifact from narration."""
         from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, ToolUseBlock, UserMessage, ToolResultBlock
         events = []
         if isinstance(message, SystemMessage):
+            if message.subtype == "init":
+                tools = message.data.get("tools")
+                if tools is not None:
+                    if tools != ["mcp__fixture__fixture_read"]:
+                        raise ValueError("trial_native_tool_inventory_mismatch")
+                    self._native_tools = list(tools)
+                self._native_session_id = message.data.get("session_id")
             events.append({"type": "native_system", "subtype": message.subtype, "data": _frozen(message.data)})
         elif isinstance(message, AssistantMessage):
             if message.model:
                 self.observed_models.add(message.model)
             events.append({"type": "observation", "model": message.model, "message_id": message.message_id,
-                           "usage": _frozen(message.usage), "session_id": message.session_id})
+                           "usage": _frozen(message.usage), "session_id": message.session_id, "error": message.error})
             for block in message.content:
                 if isinstance(block, ToolUseBlock):
+                    self._tool_names[block.id] = block.name
                     events.append({"type": "tool_call", "name": block.name, "id": block.id})
         elif isinstance(message, UserMessage) and isinstance(message.content, list):
             for block in message.content:
                 if isinstance(block, ToolResultBlock):
+                    name = self._tool_names.get(block.tool_use_id)
+                    if name is not None and name != "mcp__fixture__fixture_read":
+                        if not block.is_error:
+                            raise ValueError("trial_unknown_tool_execution")
+                        if block.tool_use_id not in self._denied_calls:
+                            denial = {"type": "tool_denied", "name": name, "tool_use_id": block.tool_use_id,
+                                      "reason": "tool_unavailable_in_trial"}
+                            self._denied_calls.add(block.tool_use_id)
+                            self.denials.append(denial)
+                            events.append(denial)
                     events.append({"type": "tool_result", "id": block.tool_use_id, "is_error": block.is_error})
         elif isinstance(message, ResultMessage):
+            if self._native_session_id and self._native_session_id != message.session_id:
+                raise ValueError("trial_native_session_mismatch")
             events.append({"type": "usage", "usage": _frozen(message.usage), "cost_usd": message.total_cost_usd,
                            "model_usage": _frozen(message.model_usage), "session_id": message.session_id})
             content = message.result
@@ -329,7 +412,11 @@ class TrialProfile:
                 events.append({"type": "artifact", "content": content,
                                "hash": hashlib.sha256(content.encode("utf-8")).hexdigest()})
                 artifact_status = "observed"
+            receipt = self.installation_receipt(message.session_id)
+            if receipt is not None:
+                events.append({"type": "installation_receipt", "receipt": receipt, "hash": _hash(receipt)})
             events.append({"type": "terminal", "subtype": message.subtype, "is_error": message.is_error,
                            "artifact_status": artifact_status, "session_id": message.session_id,
+                           "api_error_status": message.api_error_status, "errors": _frozen(message.errors),
                            "actual_models": sorted(self.observed_models), "actual_reasoning_coverage": "unknown"})
         return events

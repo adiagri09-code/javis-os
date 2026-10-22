@@ -16,7 +16,7 @@ from pathlib import Path
 import winproc
 
 from improvement_blobs import MAX_ASSET_BYTES, check_ancestry
-from improvement_cases import _digest, _fields, _frozen, _text
+from improvement_cases import _digest, _fields, _frozen, _text, validate_public_contract
 from improvement_store import _SOURCE, _hash, _json
 from evidence_store import redact
 
@@ -36,12 +36,12 @@ class FixtureBroker:
         _digest(grant_hash)
         if not isinstance(fixtures, list) or len(fixtures) > 100:
             raise ValueError("invalid_trial_fixtures")
-        self.grant_hash = grant_hash
-        self.fixtures, self.events = {}, []
+        self._grant_hash = grant_hash
+        self._fixtures, self.events = {}, []
         for fixture in _frozen(fixtures):
             _fields(fixture, {"snapshot_id", "hash", "content", "source"})
             identifier = fixture["snapshot_id"]
-            if not isinstance(identifier, str) or not _IDENTITY.fullmatch(identifier) or identifier in self.fixtures:
+            if not isinstance(identifier, str) or not _IDENTITY.fullmatch(identifier) or identifier in self._fixtures:
                 raise ValueError("invalid_trial_fixture_id")
             _digest(fixture["hash"])
             if not isinstance(fixture["content"], str) or len(fixture["content"].encode("utf-8")) > MAX_ASSET_BYTES:
@@ -51,11 +51,19 @@ class FixtureBroker:
             _fields(fixture["source"], _SOURCE_FIELDS)
             for value in fixture["source"].values():
                 _text(value)
-            self.fixtures[identifier] = fixture
+            self._fixtures[identifier] = fixture
+
+    @property
+    def grant_hash(self):
+        return self._grant_hash
+
+    @property
+    def fixtures(self):
+        return _frozen(self._fixtures)
 
     def read(self, capability_id, args: dict, snapshot_version, grant_hash) -> dict:
         valid = isinstance(args, dict) and set(args) == {"snapshot_id"} and isinstance(args.get("snapshot_id"), str)
-        fixture = self.fixtures.get(args["snapshot_id"]) if valid else None
+        fixture = self._fixtures.get(args["snapshot_id"]) if valid else None
         matched = bool(capability_id == "fixture.read" and fixture and grant_hash == self.grant_hash
                        and snapshot_version == fixture["source"]["source_version"])
         event = {"sequence": len(self.events) + 1, "status": "fixture_hit" if matched else "fixture_miss",
@@ -69,7 +77,7 @@ def _manifest(value):
     if redact(manifest) != manifest:
         raise ValueError("insufficient_source: trial_input_contains_credentials")
     _fields(manifest, {"version", "brain_id", "bundle_hash", "engine_config_hash", "contract_hash", "grant_hash",
-                       "baseline_context", "assets", "case", "learning_origin"})
+                       "baseline_context", "public_contract", "assets", "case", "learning_origin"})
     if type(manifest["version"]) is not int or manifest["version"] != 1:
         raise ValueError("unsupported_trial_input")
     _text(manifest["brain_id"], 1000)
@@ -84,6 +92,12 @@ def _manifest(value):
         raise ValueError("invalid_trial_context")
     if _bytes_hash(context["content"].encode("utf-8")) != context["hash"]:
         raise ValueError("trial_context_hash_mismatch")
+    acceptance = manifest["public_contract"]
+    _fields(acceptance, {"content", "hash"})
+    _digest(acceptance["hash"])
+    validate_public_contract(acceptance["content"])
+    if _hash(acceptance["content"]) != acceptance["hash"]:
+        raise ValueError("trial_public_contract_hash_mismatch")
     assets = manifest["assets"]
     if not isinstance(assets, list) or not assets or len(assets) > 100:
         raise ValueError("invalid_trial_assets")
@@ -127,6 +141,16 @@ def _private_directory(path: Path):
         creationflags=winproc.no_window())
     if permissions.returncode:
         raise OSError("workspace_permissions_unavailable")
+
+
+def trial_system_prompt(input_manifest):
+    manifest = _manifest(input_manifest)
+    prompt = (manifest["baseline_context"]["content"] + "\n\n<effective_assets>\n"
+              + _json(manifest["assets"]) + "\n</effective_assets>\n\n<public_acceptance>\n"
+              + _json(manifest["public_contract"]["content"]) + "\n</public_acceptance>")
+    if len(prompt.encode("utf-8")) > MAX_ASSET_BYTES:
+        raise ValueError("insufficient_source: trial_system_prompt_too_large")
+    return prompt
 
 
 def _atomic(path, content):
