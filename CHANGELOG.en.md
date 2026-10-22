@@ -15,6 +15,10 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 ### Improved
 - The webhook guide uses POSCake's real field names and adds a one-webhook-for-every-source setup where the prompt decides what to do.
 
+## [0.287.0] - 2026-10-22
+### Added
+- **Lay the foundation for evidence-based improvements.** Track agent and skill revisions for isolated comparisons while preserving current content. Trials and activation on live brains remain disabled.
+
 ## [0.286.0] - 2026-10-22
 ### Fixed
 - **Choosing a model in an assistant's chat no longer changes the main chat's model.** For every assistant and Javis Core: the model chosen there is pinned to that chat only. An assistant with no model of its own follows the main model, and a new "Follow the main chat's model" row removes the pin.

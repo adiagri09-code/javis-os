@@ -26763,3 +26763,27 @@ async def voice_elevenlabs_voices():
             res.get("reason"), "Không tải được danh sách giọng ElevenLabs."),
         {"no_key": "No ElevenLabs API key yet.", "bad_key": "ElevenLabs refused this API key."}.get(
             res.get("reason"), "Could not load the ElevenLabs voices."))}
+
+
+# Improvement M0 is metadata-only: importing or reading status never starts a trial.
+import improvement_api  # noqa: E402
+from improvement_blobs import RevisionBlobs  # noqa: E402
+from improvement_store import ImprovementStore, read_existing as _read_improvement_existing  # noqa: E402
+
+
+def _improvement_write_store():
+    return ImprovementStore(_resonance_store(), RevisionBlobs(Path(cfgmod.STATE_DIR) / "improvement"))
+
+
+def _improvement_read_store():
+    return _read_improvement_existing(Path(cfgmod.STATE_DIR) / "resonance.sqlite3",
+                                      RevisionBlobs(Path(cfgmod.STATE_DIR) / "improvement"))
+
+
+improvement_api.register(app, improvement_api.ImprovementApiDeps(
+    read_store=_improvement_read_store,
+    write_store=_improvement_write_store,
+    resolve_brain=lambda value: improvement_api.strict_brain(value,
+        default_root=Path(BRAINS_DIR) / "Brain Default", brains_root=Path(BRAINS_DIR)),
+    agent_key=lambda root, slug: _agent_jobs_key(root, slug, register=True),
+))

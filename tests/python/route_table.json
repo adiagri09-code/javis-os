@@ -5648,5 +5648,65 @@
    "GET"
   ],
   "trong": null
+ },
+ {
+  "order": 567,
+  "type": "APIRoute",
+  "path": "/improvement-policy",
+  "name": "improvement_policy",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 568,
+  "type": "APIRoute",
+  "path": "/improvement-policy",
+  "name": "improvement_set_policy",
+  "methods": [
+   "PUT"
+  ],
+  "trong": null
+ },
+ {
+  "order": 569,
+  "type": "APIRoute",
+  "path": "/improvement-targets",
+  "name": "improvement_targets",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 570,
+  "type": "APIRoute",
+  "path": "/improvement-targets/capture",
+  "name": "improvement_capture",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 571,
+  "type": "APIRoute",
+  "path": "/improvement-targets/{target_id}/revisions",
+  "name": "improvement_revisions",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 572,
+  "type": "APIRoute",
+  "path": "/improvement-targets/{target_id}/retire",
+  "name": "improvement_retire",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
  }
 ]
