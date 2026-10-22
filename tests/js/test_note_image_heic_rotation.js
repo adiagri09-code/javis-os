@@ -36,7 +36,7 @@ check("CANARY: decoding rotates by EXIF", /imageOrientation: "from-image"/.test(
 check("a browser that rejects that option still decodes", /\.catch\(function \(\) \{ return open\(\); \}\)/.test(SRC));
 check("a broken createImageBitmap falls back to an <img> tag", /return decodeWithTag\(file\);/.test(SRC));
 
-check("does NOT use the em dash character", !SRC.includes("—"));
+check("does NOT use the em dash character", !SRC.includes("\u2014"));
 
 console.log(fails.length ? "\nFAIL: " + fails.length : "\nAll green");
 process.exit(fails.length ? 1 : 0);

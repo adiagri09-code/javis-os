@@ -182,7 +182,7 @@ check("SHARES the editor lookup of editor-cmds, no second copy",
       /EC\.contextFor/.test(SRC) && typeof EC.contextFor === "undefined");   // contextFor exists only in the browser
 check("the grip follows page scrolling", /addEventListener\("scroll"/.test(SRC));
 check("double-clicking the grip restores the original size", /dblclick/.test(SRC) && /removeAttribute\("data-img-size"\)/.test(SRC));
-check("does NOT use the em dash character", !SRC.includes("—"));
+check("does NOT use the em dash character", !SRC.includes("\u2014"));
 
 // The grip and the status toast are appended to <body>: they must sit above the full-screen
 // editor (.ne-full) and the file-editor modal (.jvfe-modal), or they are hidden under them.
@@ -244,7 +244,7 @@ check("filtering the '/' menu by 'chen anh' finds the image button", EC.filterCm
 check("CANARY: the image command has no keyboard shortcut", !!imageCmd && !imageCmd.key && EC.keyLabel(imageCmd) === "");
 check("Ctrl/Cmd+Alt+I and Ctrl+Shift+I trigger no editor command",
       EC.matchCmd({ ctrlKey: true, altKey: true, code: "KeyI", key: "i" }) === null &&
-      EC.matchCmd({ metaKey: true, altKey: true, code: "KeyI", key: "ˆ" }) === null &&
+      EC.matchCmd({ metaKey: true, altKey: true, code: "KeyI", key: "\u02c6" }) === null &&
       EC.matchCmd({ ctrlKey: true, shiftKey: true, code: "KeyI", key: "I" }) === null);
 
 ["ecmd.image", "nimg.working", "nimg.done", "nimg.too_large", "nimg.failed", "nimg.upload_failed",
