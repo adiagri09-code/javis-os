@@ -6,7 +6,7 @@ Javis OS release history, newest first. You can also read it inside the app unde
 
 English entries start at 0.66.0. Every earlier release is described in the Vietnamese [CHANGELOG.md](CHANGELOG.md), which remains the maintainer's original; the in-app Updates page shows those older entries in Vietnamese.
 
-Format: each release is a `## [0.288.0] - 2026-10-22
+Format: each release is a `## [0.291.0] - 2026-10-23
 ### Added
 - **Prepare reproducible agent and skill trials.** Build isolated execution, fixed cases and acceptance evidence to test changes without touching live content or actions. Live brains are not enabled automatically.
 
