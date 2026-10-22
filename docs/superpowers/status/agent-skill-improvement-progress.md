@@ -43,6 +43,12 @@
   passed independent RED/GREEN reproduction and narrow review. Final CI and
   integration remain pending. Trial/activation flags stay false; no actual engine
   calls in A.
+- Old M2 CI39851845888 failed only the existing fastyaml architectural guard:
+  the patch validator directly called the slow YAML loader. The failure was
+  reproduced locally and corrected to use the shared fastyaml parser after the
+  unchanged strict token/node/duplicate-key checks. Five focused scripts pass25s;
+  independent review passes2 scripts,12 parser-parity inputs and8 unsafe-input
+  rejections with no Important findings. A fresh fixed-head CI is required.
 - Owner delegated pilot choice. An objective Python bug-fix/test pilot is selected
   for reproducibility alongside the spec's required business pilots. This choice
   does not supply an accepted business dataset or owner acceptance evidence.

@@ -9,6 +9,7 @@ import hashlib
 import re
 
 import yaml
+import fastyaml
 
 import improvement_cases as IC
 import improvement_store as IM
@@ -58,7 +59,7 @@ def _header(raw):
             keys.append(key.value)
         if len(keys) != len(set(keys)):
             raise ValueError("ambiguous_skill_layout")
-        return yaml.safe_load(text) or {}
+        return fastyaml.safe_load(text) or {}
     except (yaml.YAMLError, UnicodeError, RecursionError) as error:
         raise ValueError("ambiguous_skill_layout") from error
 
