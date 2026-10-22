@@ -27,7 +27,7 @@ from improvement_cases import output_path
 from improvement_store import _hash
 from improvement_trial_catalog import capture_catalog, _directory
 from improvement_trial_context import ContextSource, _read, _root, _check_path
-from improvement_trial_file_sources import _root as _owner_root, _authority, _incarnation
+from improvement_trial_file_sources import _root as _owner_root, _authority, _incarnation, _acl_hash
 from improvement_trial_plugins import PluginCapabilityProjection
 from improvement_trial_selection import _read_stable, MAX_SETTINGS_BYTES
 from improvement_trial_semantics import capture_semantics, validate_capture
@@ -40,6 +40,32 @@ _SERVER = Path(__file__).resolve().parent
 
 def _utc_now():
     return datetime.now(timezone.utc)
+
+
+def _semantic_incarnation(info):
+    # ctime is modification/metadata-change time on POSIX, not creation time.
+    # Semantic-only projections must survive unrelated writes to the same inode.
+    # Stable reads still compare full read stamps, and selected fields are hashed.
+    return {"device": info.st_dev, "inode": info.st_ino, "kind": stat.S_IFMT(info.st_mode),
+            "birth": getattr(info, "st_birthtime_ns", None), "mode": stat.S_IMODE(info.st_mode),
+            "uid": getattr(info, "st_uid", None), "gid": getattr(info, "st_gid", None),
+            "attributes": getattr(info, "st_file_attributes", 0)}
+
+
+def _protected_authority(root, relative):
+    authority = _authority(root, relative)
+    path = root
+    for index, entry in enumerate(authority[:-1]):
+        if index:
+            path /= relative.split("/")[index - 1]
+        info = path.lstat()
+        if _incarnation(info) != entry["incarnation"]:
+            raise ValueError("dashboard_protected_authority_changed")
+        # Keep native ACL, mode/uid/gid/attributes and real directory identity.
+        # A sibling SQL journal is not a change to this protected file's authority.
+        # The protected file itself retains the original exact incarnation guard.
+        entry["incarnation"] = _semantic_incarnation(info)
+    return authority
 
 
 def _semantic(kind, ref, locator, projection, *, role="authority", identity=None):
@@ -95,10 +121,10 @@ class _Sources:
                 raise ValueError("insufficient_source: linked_dashboard_source")
         except FileNotFoundError:
             pass
-        authority = _authority(root, relative) if protected and path.exists() else None
+        authority = _protected_authority(root, relative) if protected and path.exists() else None
         record, text = _read(ContextSource("dashboard:" + relative, root, relative, required))
         if authority is not None:
-            if _authority(root, relative) != authority:
+            if _protected_authority(root, relative) != authority:
                 raise ValueError("dashboard_protected_authority_changed")
             self.semantic("inventory", "dashboard:protected-authority:" + _hash(str(path)),
                           {"root": str(root), "relative": relative}, authority)
@@ -294,7 +320,7 @@ class DashboardContextCapture:
             if _settings_projection(_strict_json(cache["cfg"])) != projected:
                 raise ValueError("dashboard_runtime_config_stale")
         sources.semantic("inventory", "dashboard:settings", {"source": str(path), "fields": "dashboard-nonsecret-v1"}, projected,
-            identity=_hash(_incarnation(info)))
+            identity=_hash({"file": _semantic_incarnation(info), "acl_hash": _acl_hash(path)}))
         return projected
 
     def _runtime(self, sources, language):
@@ -453,7 +479,7 @@ class DashboardContextCapture:
             # Only selected-session absence is semantic; do not retain other brains.
         sources.semantic("inventory", "dashboard:coding-binding", {"source": str(coding_path), "session_id": surface["session_id"]},
             {"registry_present": coding_raw is not None, "version": 2 if coding_raw is not None else None, "selected_session_binding": None},
-            identity=_hash(_incarnation(coding_info)) if coding_info is not None else None)
+            identity=_hash({"file": _semantic_incarnation(coding_info), "acl_hash": _acl_hash(coding_path)}) if coding_info is not None else None)
         catalog = capture_catalog(root, language=language)
         for item in catalog["files"]:
             sources.file_record(item, item["projection"] or {}, "discovery")
@@ -609,7 +635,7 @@ class DashboardContextCapture:
             telegram_running=tg, port=int(port_raw), brain_root=str(root))
         sources.semantic("inventory", "dashboard:host", {"profile": "ordinary-dashboard-v1"},
             {"port": int(port_raw), "telegram_running": tg, "selection": selection, "language": language,
-             "memory_layout": memory_dir, "target_refs": sorted(target_paths), "root_identity": _hash(_incarnation(root.stat()))})
+             "memory_layout": memory_dir, "target_refs": sorted(target_paths), "root_identity": _hash(_semantic_incarnation(root.stat()))})
         for filename in ("main.py", "main_prompt_rendering.py", "main_attachment_rendering.py", "channel_context.py", "context_compiler.py",
             "memory_control.py", "lang.py", "lang_registry.py", "localefmt.py", "usage_store.py", "config.py", "coding_store.py",
             "improvement_claude.py", "claude_sdk_engine.py", "adaptive_context_runtime.py", "fast_path_runtime.py", "workflow_runs.py",

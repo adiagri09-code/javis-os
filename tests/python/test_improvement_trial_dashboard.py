@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -47,6 +48,35 @@ if importlib.util.find_spec("improvement_trial_dashboard"):
     import improvement_trial_dashboard as D
 else:
     D = None
+
+
+@contextlib.contextmanager
+def _posix_change_time_stats():
+    """Exercise no-birthtime filesystems without requiring a second OS.
+
+    Actual scratch I/O supplies each file's identity, permissions and timestamps.
+    POSIX ctime changes on edits; mtime gives that behavior deterministically on
+    Windows too. Descriptor and path observations share the same projection.
+    """
+    original_stat, original_lstat, original_fstat = Path.stat, Path.lstat, os.fstat
+
+    class ChangeTimeStat:
+        def __init__(self, observed):
+            self.observed = observed
+
+        def __getattr__(self, key):
+            if key in {"st_birthtime", "st_birthtime_ns"}:
+                raise AttributeError(key)
+            if key == "st_ctime_ns":
+                return self.observed.st_mtime_ns
+            if key == "st_ctime":
+                return self.observed.st_mtime
+            return getattr(self.observed, key)
+
+    with patch.object(Path, "stat", lambda path, *a, **kw: ChangeTimeStat(original_stat(path, *a, **kw))), \
+            patch.object(Path, "lstat", lambda path, *a, **kw: ChangeTimeStat(original_lstat(path, *a, **kw))), \
+            patch.object(os, "fstat", lambda *a, **kw: ChangeTimeStat(original_fstat(*a, **kw))):
+        yield
 
 
 class DashboardTests(unittest.TestCase):
@@ -344,6 +374,55 @@ class DashboardTests(unittest.TestCase):
         self.write(self.state, "coding.json", '{"version":2,"thu_muc":[],"phien":{"foreign":{"thu_muc":"PRIVATE FOREIGN PATH"}}}')
         self.assertEqual(first, self.capture(frozen=first))
         self.assertNotIn("PRIVATE FOREIGN PATH", json.dumps(self.capture()))
+
+    def test_posix_nonsemantic_settings_and_coding_edits_preserve_selected_context(self):
+        with _posix_change_time_stats():
+            self.write(self.state, "coding.json", '{"version":2,"thu_muc":[],"phien":{}}')
+            first = self.capture()
+            self.settings["api"] = {"provider_key": "SYNTHETIC_UNRELATED_VALUE"}
+            self.save_settings()
+            self.write(self.state, "coding.json", '{"version":2,"thu_muc":[],"phien":{"foreign":{"thu_muc":"unselected"}}}')
+            self.assertEqual(first, self.capture(frozen=first))
+            self.settings["locale"]["tz"] = "UTC"
+            self.save_settings()
+            with self.assertRaisesRegex(ValueError, "changed"):
+                self.capture(frozen=first)
+
+    def test_posix_sql_journal_directory_change_preserves_protected_file_authority(self):
+        connection = sqlite3.connect(self.state / "bookkeeping.sqlite3")
+        self.addCleanup(connection.close)
+        connection.execute("PRAGMA journal_mode=DELETE")
+        connection.execute("CREATE TABLE bookkeeping(value TEXT)")
+        connection.commit()
+        with _posix_change_time_stats():
+            first = self.capture()
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute("INSERT INTO bookkeeping VALUES('host transaction')")
+            try:
+                self.assertTrue((self.state / "bookkeeping.sqlite3-journal").is_file())
+                self.assertEqual(first, self.capture(frozen=first))
+            finally:
+                connection.rollback()
+            self.write(self.state, "user_profile.md", "Changed protected owner instruction")
+            with self.assertRaisesRegex(ValueError, "changed"):
+                self.capture(frozen=first)
+
+    def test_posix_semantic_source_replacement_is_not_an_unrelated_edit(self):
+        with _posix_change_time_stats():
+            first = self.capture()
+            replacement = self.state / "replacement.json"
+            replacement.write_bytes((self.state / "settings.json").read_bytes())
+            replacement.replace(self.state / "settings.json")
+            with self.assertRaisesRegex(ValueError, "changed"):
+                self.capture(frozen=first)
+
+    def test_posix_semantic_source_native_acl_change_is_not_an_unrelated_edit(self):
+        with _posix_change_time_stats():
+            first = self.capture()
+            original = D._acl_hash
+            with patch.object(D, "_acl_hash", lambda path: "b" * 64 if path == self.state / "settings.json" else original(path)):
+                with self.assertRaisesRegex(ValueError, "changed"):
+                    self.capture(frozen=first)
 
     def test_replaced_pure_renderer_is_rejected_before_calling_it(self):
         called = []
