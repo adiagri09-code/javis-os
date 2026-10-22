@@ -8857,72 +8857,74 @@
     _vtRenderResults(box, items, true);
   }
 
-  // ===== Nhật ký hôm nay (nút lịch trên thanh Vault + phím Ctrl/Cmd+D) =====
-  // Sổ Daily Log có nhiều tên ngoài đời ("01 - Daily Log", "Daily Log", "Daily"), dò y hệt
-  // STANDARD_STRUCTURE bên server. Gõ cứng một tên là đẻ thư mục thứ hai cạnh cái đang dùng.
+  // ===== Today's daily note (calendar button on the Vault bar + Ctrl/Cmd+D) =====
+  // The Daily Log folder goes by several names in practice ("01 - Daily Log", "Daily Log",
+  // "Daily"), detected exactly like STANDARD_STRUCTURE on the server. Hard-coding one name would
+  // create a second folder next to the one in use.
   const _VT_DAILY_RE = /^(\d+\s*[-_.]\s*)?daily(\s*log)?$/i;
-  // Ngày theo GIỜ MÁY. toISOString() là UTC: buổi tối ở UTC+7 trước 7h sáng sẽ lệch ngày.
-  function _vtNgayHomNay(d) {
+  // The date in LOCAL time. toISOString() is UTC: in UTC+7 it is off by a day before 7am.
+  function _vtTodayDate(d) {
     d = d || new Date();
     const p = (n) => String(n).padStart(2, "0");
     return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
   }
-  function _vtThuMucNhatKy(items) {
-    const so = (items || []).find(it => it && it.type === "dir" && _VT_DAILY_RE.test(String(it.name || "").trim()));
-    return so ? so.name : "01 - Daily Log";
+  function _vtDailyFolder(items) {
+    const found = (items || []).find(it => it && it.type === "dir" && _VT_DAILY_RE.test(String(it.name || "").trim()));
+    return found ? found.name : "01 - Daily Log";
   }
-  function _vtMauNhatKy(ngay) {
-    const [y, m, d] = ngay.split("-").map(Number);
-    let thu = "";
-    try { thu = new Date(y, m - 1, d).toLocaleDateString(LOC(), { weekday: "long" }); } catch (e) {}
-    thu = thu ? thu.charAt(0).toUpperCase() + thu.slice(1) : "";
-    return "---\ntype: daily\ndate: " + ngay + "\ntags: [daily]\n---\n\n"
-      + "# " + ngay + (thu ? " - " + thu : "") + "\n\n"
+  function _vtDailyTemplate(date) {
+    const [y, m, d] = date.split("-").map(Number);
+    let weekday = "";
+    try { weekday = new Date(y, m - 1, d).toLocaleDateString(LOC(), { weekday: "long" }); } catch (e) {}
+    weekday = weekday ? weekday.charAt(0).toUpperCase() + weekday.slice(1) : "";
+    return "---\ntype: daily\ndate: " + date + "\ntags: [daily]\n---\n\n"
+      + "# " + date + (weekday ? " - " + weekday : "") + "\n\n"
       + "## " + window.t("cs.vt_daily_tasks") + "\n\n- [ ] \n\n"
       + "## " + window.t("cs.vt_daily_notes") + "\n\n";
   }
-  // Mở ghi chú của HÔM NAY: có rồi thì chỉ mở, chưa có thì tạo theo mẫu rồi mở.
-  // Kiểm bằng /files/read TRƯỚC: bấm lần hai trong ngày mà ghi lại mẫu là xoá sạch bài đã viết.
-  let _vtNhatKyDangMo = false;
-  async function _vtMoNhatKyHomNay() {
-    if (_vtNhatKyDangMo) return;          // giữ phím hay bấm đúp không tạo hai lần
-    _vtNhatKyDangMo = true;
+  // Open TODAY's note: if it exists just open it, otherwise create it from the template and open it.
+  // Checked with /files/read FIRST: writing the template again on a second click that day would
+  // wipe everything written since morning.
+  let _vtDailyOpening = false;
+  async function _vtOpenTodayNote() {
+    if (_vtDailyOpening) return;          // a held key or a double click does not create twice
+    _vtDailyOpening = true;
     try {
-      const goc = await _vtList(null);
-      const thuMuc = _vtThuMucNhatKy(goc);
-      const ngay = _vtNgayHomNay();
-      const rel = (_vtHome ? _vtHome + "/" : "") + thuMuc + "/" + ngay + ".md";
-      // CHỈ 404 mới là chưa có. Lỗi khác (500, file quá to) vẫn là file CÓ THẬT, coi là chưa có
-      // thì ghi mẫu đè lên mất bài. Mất mạng thì dừng hẳn, không đoán.
-      let daCo;
+      const rootItems = await _vtList(null);
+      const folder = _vtDailyFolder(rootItems);
+      const date = _vtTodayDate();
+      const rel = (_vtHome ? _vtHome + "/" : "") + folder + "/" + date + ".md";
+      // ONLY a 404 means missing. Any other error (500, file too large) is a file that DOES exist;
+      // treating it as missing would write the template over the note. Offline: stop, do not guess.
+      let exists;
       try {
         const r = await fetch(`/files/read?brain=${encodeURIComponent(fbrain())}&path=${encodeURIComponent(rel)}`);
-        daCo = r.status !== 404;
+        exists = r.status !== 404;
       } catch (e) { alert(window.t("cs.vt_daily_fail")); return; }
-      if (!daCo) {
+      if (!exists) {
         const fd = new FormData();
-        fd.append("brain", fbrain()); fd.append("path", rel); fd.append("content", _vtMauNhatKy(ngay));
+        fd.append("brain", fbrain()); fd.append("path", rel); fd.append("content", _vtDailyTemplate(date));
         let ok = false;
         try { const w = await fetch("/files/write", { method: "POST", body: fd }); ok = w.ok; } catch (e) {}
         if (!ok) { alert(window.t("cs.vt_daily_fail")); return; }
         _vtCache.clear(); _vtIndex = null;
-        try { await _vtRebuildReExpand((_vtHome ? _vtHome + "/" : "") + thuMuc); } catch (e) {}
+        try { await _vtRebuildReExpand((_vtHome ? _vtHome + "/" : "") + folder); } catch (e) {}
       }
-      openNote(rel, { name: ngay + ".md", ext: ".md", type: "file" }, { giuKhung: true });
+      openNote(rel, { name: date + ".md", ext: ".md", type: "file" }, { inPlace: true });
       try { _vtRevealInTree(rel); } catch (e) {}
-    } finally { _vtNhatKyDangMo = false; }
+    } finally { _vtDailyOpening = false; }
   }
   // Cmd+D on Mac, Ctrl+D elsewhere, and only inside the note editor or the Vault panel: the
   // browser's bookmark shortcut keeps working everywhere else (chat box, other pages).
-  function _vtPhimNhatKy(e) {
+  function _vtDailyKey(e) {
     const mac = /Mac|iPhone|iPad/.test(navigator.platform || "");
     if (!(mac ? e.metaKey : e.ctrlKey) || e.shiftKey || e.altKey || e.code !== "KeyD") return;
     if (!(e.target && e.target.closest && e.target.closest("#noteEditor, .hud-left"))) return;
     e.preventDefault();
     if (e.repeat) return;
-    _vtMoNhatKyHomNay();
+    _vtOpenTodayNote();
   }
-  document.addEventListener("keydown", _vtPhimNhatKy);
+  document.addEventListener("keydown", _vtDailyKey);
 
   function _vtWire() {
     if (_vtWired) return; _vtWired = true;
@@ -8953,7 +8955,7 @@
     chipContent.onclick = () => setMode("content");
     const nf = document.getElementById("vtNewFile"), nd = document.getElementById("vtNewDir"), rf = document.getElementById("vtRefresh");
     const dn = document.getElementById("vtDaily");
-    if (dn) dn.onclick = () => _vtMoNhatKyHomNay();
+    if (dn) dn.onclick = () => _vtOpenTodayNote();
     if (rf) rf.onclick = () => { _vtCache.clear(); _vtIndex = null; renderVaultTree(); };
     if (nf) nf.onclick = () => _vtCreateMenu(nf, _vtHome || "", true);
     if (nd) nd.onclick = async () => {
@@ -9458,10 +9460,11 @@
     _neDangDiLichSu = false;
     if (!laLichSu) _neDayLichSu(rel, it);
     _neVeNutLui();
-    // `giuKhung`: mở NGAY TRONG khung đang đứng (cột giữa màn chính, chỗ khung chat), không phủ
-    // kín màn hình. Nhật ký hôm nay dùng cái này: bấm Ctrl+D là để gõ vài dòng cạnh việc đang
-    // làm, không phải để rời màn đó. Nút phóng to trên thanh công cụ vẫn bật toàn màn hình được.
-    ed.hidden = false; ed.classList.toggle("ne-full", !(opts && opts.giuKhung)); _neSyncFull();
+    // `inPlace`: open RIGHT IN the current frame (the middle column of the main screen, where the
+    // chat sits) instead of covering the whole screen. Today's daily note uses it: Ctrl+D is for
+    // jotting a few lines next to the work at hand, not for leaving that screen. The toolbar's
+    // maximize button can still go full screen.
+    ed.hidden = false; ed.classList.toggle("ne-full", !(opts && opts.inPlace)); _neSyncFull();
     _neOpenRel = rel || "";     // để chip "file đang mở" biết có cần nạp lại hay chỉ cần đưa mắt về
     _neLayNoiDung = null; _neGocText = null;   // file mới: mốc so sánh dựng lại ở dưới
     // Đang ở trang Trò chuyện thì trình sửa chiếm chỗ khung chat thay vì đè lên visual não
