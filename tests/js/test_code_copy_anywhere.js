@@ -8,6 +8,7 @@ const path = require("path");
 const vm = require("vm");
 const D = path.join(__dirname, "..", "..", "dashboard");
 const src = fs.readFileSync(path.join(D, "chat-render.js"), "utf8");
+const actsSrc = fs.readFileSync(path.join(D, "chat-acts.js"), "utf8");
 const app = fs.readFileSync(path.join(D, "app.js"), "utf8");
 const indexHtml = fs.readFileSync(path.join(D, "index.html"), "utf8");
 let fails = 0;
@@ -26,6 +27,7 @@ function load(secure) {
     createElement() {
       return { style: {}, select() {}, remove() {}, set value(v) { this._v = v; }, get value() { return this._v; } };
     },
+    querySelector() { return null; },
     execCommand(cmd) { execs.push(cmd); return true; },
     body: { appendChild(n) { execs.push("append:" + n.value); }, classList: { add() {}, remove() {} } },
   };
@@ -38,7 +40,9 @@ function load(secure) {
   const navigator = { clipboard: { writeText: (s) => { copied.push(s); return Promise.resolve(); } } };
   const ctx = { window, document, navigator, history: {}, setTimeout, clearTimeout, console, Promise };
   window.document = document;
-  vm.runInNewContext(src, ctx);
+  vm.createContext(ctx);
+  vm.runInContext(src, ctx);
+  vm.runInContext(actsSrc, ctx);   // index.html loads chat-acts.js (the shared copy helper) after chat-render.js
   return { listeners, copied, execs, window };
 }
 

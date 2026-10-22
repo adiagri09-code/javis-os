@@ -2715,20 +2715,8 @@ function scrollBottom(force) {
 // Copy code block / copy tin nhắn / xem thêm tin dài - event delegation
 // (bubble re-render liên tục khi stream nên KHÔNG gắn handler từng nút)
 // ============================================
-function copyFallback(s) {   // HTTP LAN/VPS chưa https, hoặc clipboard API bị chặn quyền
-  return new Promise((res) => {
-    const ta = document.createElement("textarea");
-    ta.value = s; ta.style.cssText = "position:fixed;opacity:0";
-    document.body.appendChild(ta); ta.select();
-    try { document.execCommand("copy"); } catch (e) {}
-    ta.remove(); res();
-  });
-}
-function copyText(s) {
-  if (navigator.clipboard && window.isSecureContext)
-    return navigator.clipboard.writeText(s).catch(() => copyFallback(s));
-  return copyFallback(s);
-}
+// Shared with the Team chat and the code block Copy button (chat-acts.js): clipboard API, textarea fallback on plain HTTP.
+function copyText(s) { return window.JavisActs.copy(s); }
 function flashCopied(btn, label) {
   const old = btn.textContent;
   btn.innerHTML = ic("check", { cls: "ic-ok" }) + " " + window.t("app.copied");

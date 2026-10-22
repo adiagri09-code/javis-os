@@ -2161,17 +2161,28 @@
     if (inp) { try { inp.focus(); } catch (e) {} }
   }
 
+  // What Copy puts on the clipboard, the same as the main chat: an assistant's answer as its visible markdown (headings,
+  // bold, links kept; hidden metadata blocks dropped), the owner's own words without the quote of an earlier message.
+  function copyTextOf(m) {
+    if (!m) return "";
+    var text = String(m.content == null ? "" : m.content);
+    if (m.author_kind === "owner") {
+      var Q = quoteApi();
+      return Q ? Q.tach(text).rest : text;
+    }
+    var vm = typeof window !== "undefined" && window.JavisVisibleMarkdown;
+    return vm ? vm(text) : text;
+  }
+
   function copyMsg(mid) {
     var m = msgById(Number(mid));
     if (!m) return;
-    var Q = quoteApi();
-    var text = m.author_kind === "owner" && Q ? Q.tach(m.content).rest : String(m.content || "");
-    var done = function () { setNote(tw("teams.copied")); };
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done, function () { setNote(tw("teams.err_network")); });
-      }
-    } catch (e) { /* old browser: nothing to copy with */ }
+    var A = actsApi();
+    var text = copyTextOf(m);
+    // chat-acts.js: clipboard API, or a textarea fallback on plain HTTP (a LAN or VPS address), so copying no longer
+    // fails silently there. The note says whether it worked.
+    var run = A && A.copy ? A.copy(text) : Promise.resolve(false);
+    run.then(function (ok) { if (S) setNote(tw(ok ? "teams.copied" : "common.copy_fail")); });
     S.picker = null;
     drawMsgs(false);
   }
@@ -4299,7 +4310,7 @@
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, capsPayload: capsPayload, saveCapsFlow: saveCapsFlow, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
     levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml,
     bannersHtml: bannersHtml, reactCornerHtml: reactCornerHtml, reactBarHtml: reactBarHtml, sheetHtml: sheetHtml,
-    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, plainPreview: plainPreview, previewText: previewText,
+    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, copyTextOf: copyTextOf, plainPreview: plainPreview, previewText: previewText,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
     searchResultsHtml: searchResultsHtml, replyStatusHtml: replyStatusHtml, headLine: headLine,
     typingHtml: typingHtml, pinsHtml: pinsHtml, markMentions: markMentions, replyRefHtml: replyRefHtml,

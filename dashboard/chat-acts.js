@@ -93,7 +93,36 @@
     return !!(el && el.classList && el.classList.contains("msg-user"));
   }
 
+  // Copy text to the clipboard, shared by the main chat, the Team chat and the code block Copy button. The clipboard
+  // API needs a secure context; on plain HTTP (a LAN or a VPS without https) or with the permission blocked it falls back
+  // to a hidden textarea and execCommand. Resolves true when the text was copied, false when every way failed; never
+  // rejects. `doc`/`nav`/`win` are for tests only.
+  function copy(text, env) {
+    env = env || {};
+    var doc = env.doc || (typeof document !== "undefined" ? document : null);
+    var nav = env.nav || (typeof navigator !== "undefined" ? navigator : null);
+    var win = env.win || (typeof window !== "undefined" ? window : {});
+    var s = String(text == null ? "" : text);
+    function fallback() {
+      if (!doc || !doc.body) return false;
+      var ok = false;
+      var ta = doc.createElement("textarea");
+      ta.value = s; ta.style.cssText = "position:fixed;opacity:0";
+      doc.body.appendChild(ta); ta.select();
+      try { ok = doc.execCommand("copy") !== false; } catch (e) { ok = false; }
+      ta.remove();
+      return ok;
+    }
+    try {
+      if (nav && nav.clipboard && nav.clipboard.writeText && win.isSecureContext) {
+        return Promise.resolve(nav.clipboard.writeText(s)).then(function () { return true; }, fallback);
+      }
+    } catch (e) { /* fall through to the textarea */ }
+    return Promise.resolve().then(fallback);
+  }
+
   var API = {
+    copy: copy,
     fmtTime: fmtTime,
     fmtTimeFull: fmtTimeFull,
     actsHtml: actsHtml,

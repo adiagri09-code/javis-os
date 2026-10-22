@@ -868,33 +868,23 @@
     else if (act === "download" && curArt) downloadArt(curArt);
   }
   function copyText(text, btn) {
-    var run = (navigator.clipboard && window.isSecureContext)
-      ? navigator.clipboard.writeText(text) : Promise.reject();
-    run.catch(function () {
-      var ta = document.createElement("textarea");
-      ta.value = text; ta.style.cssText = "position:fixed;opacity:0";
-      document.body.appendChild(ta); ta.select();
-      try { document.execCommand("copy"); } catch (e) {}
-      ta.remove();
-    }).then(function () {
+    copyPlain(text).then(function () {
       // Nho lai innerHTML chu KHONG phai textContent: tu 0.62.1 nut Copy la mot icon SVG, ma
       // textContent cua no la chuoi rong - tra lai bang textContent thi sau mot giay nut
       // trong khong, khong con gi de bam.
       if (btn) { var o = btn.innerHTML; btn.innerHTML = ic("check", { cls: "ic-ok" }); setTimeout(function () { btn.innerHTML = o; }, 1000); }
     });
   }
-  // Copy plain text: the clipboard API when the page is a secure context, otherwise (plain HTTP on a LAN or VPS, or a
-  // blocked permission) a hidden textarea and execCommand. Always resolves.
+  // Copy plain text through the shared helper (chat-acts.js, clipboard API with a textarea fallback on plain HTTP).
+  // chat-acts.js loads after this file but before any click can happen; the inline copy is for pages without it.
   function copyPlain(text) {
-    var fallback = function () {
-      var ta = document.createElement("textarea");
-      ta.value = text; ta.style.cssText = "position:fixed;opacity:0";
-      document.body.appendChild(ta); ta.select();
-      try { document.execCommand("copy"); } catch (e) {}
-      ta.remove();
-    };
-    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text).catch(fallback);
-    return Promise.resolve().then(fallback);
+    if (typeof window !== "undefined" && window.JavisActs && window.JavisActs.copy) return window.JavisActs.copy(text);
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.cssText = "position:fixed;opacity:0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    ta.remove();
+    return Promise.resolve(true);
   }
   function flashCodeCopied(btn, label) {
     var old = btn.textContent;
