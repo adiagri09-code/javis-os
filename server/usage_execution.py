@@ -77,6 +77,7 @@ def _aggregate(events, details=(), telemetry_errors=0):
     statuses = defaultdict(int)
     attempts = list(_attempts(events, details))
     for attempt in attempts:
+        missing_before = missing
         group = attempt["group"]
         lifecycle = [e for e in group if e.get("event_kind") == "execution"]
         fallback, requests = attempt["fallback"], attempt["requests"]
@@ -124,9 +125,14 @@ def _aggregate(events, details=(), telemetry_errors=0):
         else:
             missing += 1
             requests_complete = False
+        if any(event.get("usage_complete") is False for event in lifecycle):
+            if missing == missing_before:
+                missing += 1
+            requests_complete = False
     known = [e for e in observed if e.get("tokens_known")]
     telemetry_errors = max(telemetry_errors, persisted_errors)
-    tokens_complete = len(known) == len(observed) and missing == 0 and missing_requests == 0 and unresolved == 0
+    tokens_complete = len(known) == len(observed) and missing == 0 and missing_requests == 0 and unresolved == 0 and not telemetry_errors
+    requests_complete = requests_complete and not telemetry_errors
     money = _money(money_events)
     coverage = {"status": "observed" if events and tokens_complete and requests_complete and not telemetry_errors
                 and not money["unknown_requests"] else

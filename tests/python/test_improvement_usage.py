@@ -31,6 +31,11 @@ if importlib.util.find_spec("improvement_usage"):
 else:
     IU = None
 
+if importlib.util.find_spec("improvement_telemetry"):
+    import improvement_telemetry as IT
+else:
+    IT = None
+
 
 def execution(trial="trial-1", **changes):
     return {"experiment_id": "experiment-1", "trial_id": trial, "case_id": "case-1", "variant": "baseline",
@@ -96,6 +101,149 @@ class ImprovementUsageTests(unittest.TestCase):
                     "input_tokens": tin, "output_tokens": tout, "cache_read_input_tokens": read,
                     "cache_creation_input_tokens": create}}}) + "\n")
         return raw
+
+    def native_recorder(self, *, marked=True):
+        self.assertIsNotNone(IT, "Raw native telemetry is not bound to the host ledger")
+        ledger = CallLedger(RS.GoalStore(self.root / "resonance.sqlite3"))
+        call = ledger.reserve(purpose="improve_probe", reason_ref="improvement_trial:trial-1", brain_id="brain-a",
+            context_ref="improvement:experiment-1", mirror_ref="improvement_trial:trial-1", obligation=True)
+        if marked:
+            ledger.mark_engine(call, "anthropic-cli", "unpriced-selected-model")
+        return IT.NativeUsageRecorder(ledger, call, execution(), brain_id="brain-a",
+            provider="anthropic-cli", model="unpriced-selected-model"), ledger, call
+
+    def test_native_usage_requires_a_real_matching_post_engine_ledger_reference(self):
+        self.assertIsNotNone(IT, "Raw native telemetry is not bound to the host ledger")
+        with self.assertRaisesRegex(ValueError, "trial_usage_call_unbound"):
+            self.native_recorder(marked=False)
+        self.assertFalse(US._EVENTS_PATH.exists())
+
+    def test_native_usage_rejects_wrong_brain_configuration_and_attempt(self):
+        _, ledger, call = self.native_recorder()
+        for changes in ({"brain_id": "other-brain"}, {"provider": "openai"}, {"model": "other-model"},
+                        {"execution": execution(attempt=2)}, {"execution": execution("other-trial")}):
+            arguments = {"execution": execution(), "brain_id": "brain-a", "provider": "anthropic-cli",
+                         "model": "unpriced-selected-model", **changes}
+            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, "trial_usage_call_unbound"):
+                IT.NativeUsageRecorder(ledger, call, **arguments)
+        self.assertFalse(US._EVENTS_PATH.exists())
+
+    def test_raw_sdk_profile_events_reach_shared_usage_without_summary_or_replay_overlap(self):
+        from claude_agent_sdk import AssistantMessage, SystemMessage, ResultMessage
+        from improvement_claude import TrialProfile
+        from improvement_sandbox import FixtureBroker
+        recorder, ledger, call = self.native_recorder()
+        profile = TrialProfile({"provider": "anthropic-cli", "model": "unpriced-selected-model", "reasoning": "medium",
+            "cli_path": "unused-test-path", "sdk_version": "0.2.116"}, FixtureBroker([], "e" * 64), "Pinned instructions")
+        usage_a = {"input_tokens": 20, "output_tokens": 5, "cache_read_input_tokens": 50, "cache_creation_input_tokens": 10}
+        usage_b = {"input_tokens": 30, "output_tokens": 5, "cache_read_input_tokens": 60, "cache_creation_input_tokens": 30}
+        messages = [SystemMessage("init", {"session_id": "sdk-session", "tools": ["mcp__fixture__fixture_read"]}),
+            AssistantMessage([], "unpriced-selected-model", message_id="request-a", usage=usage_a, session_id="sdk-session"),
+            AssistantMessage([], "unpriced-selected-model", message_id="request-a", usage=usage_a, session_id="sdk-session"),
+            AssistantMessage([], "unpriced-selected-model", message_id="request-b", usage=usage_b, session_id="sdk-session"),
+            ResultMessage("success", 0, 0, False, 2, "sdk-session", result="Output", total_cost_usd=0.25,
+                usage={"input_tokens": 50, "output_tokens": 10, "cache_read_input_tokens": 110,
+                       "cache_creation_input_tokens": 40})]
+        sequence = 0
+        for message in messages:
+            for event in profile.observe(message):
+                sequence += 1
+                recorder.observe(event, sequence=sequence)
+        recorder.finish("completed")
+        result = self.summary()
+        self.assertEqual((result["tokens_in"], result["tokens_out"], result["requests"]), (200, 10, 2))
+        self.assertEqual(result["money"]["subscription_equivalent_usd"], 0.25)
+        self.assertEqual(US.summary()["today"]["total"]["in"], 200)
+        self.assertEqual(QS.used("anthropic-cli", "unpriced-selected-model"), 210)
+        self.assertEqual(ledger.get(call)["status"], "running")
+        self.assertIsNone(ledger.get(call)["tokens_in"])
+        UI.refresh()
+        self.assertEqual(UI.summary("today", provider="claude")["kpi"]["input"], 50)
+        self.assertEqual(UI.summary("today", provider="claude")["kpi"]["cache_read"], 110)
+
+    def test_native_missing_cache_or_summary_keeps_usage_unknown_and_host_identity(self):
+        recorder, _, _ = self.native_recorder()
+        recorder.observe({"type": "usage", "session_id": "native-session", "cost_usd": None,
+            "usage": {"input_tokens": 100, "output_tokens": 5},
+            "execution": execution("forged-trial")}, sequence=1)
+        recorder.observe({"type": "artifact", "content": '{"type":"usage","usage":{"input_tokens":999}}'}, sequence=2)
+        recorder.finish("interrupted")
+        result = self.summary()
+        self.assertIsNone(result["tokens_in"])
+        self.assertEqual(result["tokens_out"], 5)
+        self.assertFalse(result["coverage"]["tokens_complete"])
+        self.assertIsNone(self.summary("forged-trial")["tokens_in"])
+        self.assertEqual(QS.used("anthropic-cli", "unpriced-selected-model"), 5)
+
+    def test_native_session_drift_and_telemetry_loss_fail_closed(self):
+        recorder, _, _ = self.native_recorder()
+        recorder.observe({"type": "native_system", "subtype": "init", "data": {"session_id": "first"}}, sequence=1)
+        with self.assertRaisesRegex(ValueError, "trial_native_session_mismatch"):
+            recorder.observe({"type": "usage", "session_id": "other", "usage": {}}, sequence=2)
+        with patch.object(US, "_append_event", side_effect=OSError("unavailable")):
+            recorder.observe({"type": "observation", "session_id": "first", "message_id": "request-a",
+                "usage": {"input_tokens": 100, "output_tokens": 10,
+                          "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}}, sequence=3)
+        self.assertEqual(QS.used("anthropic-cli", "unpriced-selected-model"), 110)
+        recorder.finish("interrupted")
+        US._TELEMETRY_ERRORS.clear()
+        self.assertFalse(self.summary()["coverage"]["tokens_complete"])
+        self.assertGreater(self.summary()["coverage"]["telemetry_errors"], 0)
+
+    def test_recovered_native_recorder_preserves_known_summary_and_request_scope(self):
+        recorder, ledger, call = self.native_recorder()
+        usage = {"input_tokens": 100, "output_tokens": 10, "cache_read_input_tokens": 0,
+                 "cache_creation_input_tokens": 0}
+        recorder.observe({"type": "observation", "session_id": "recovered-session", "message_id": "first", "usage": usage},
+                         sequence=1)
+        recorder.observe({"type": "usage", "session_id": "recovered-session", "cost_usd": 0.5,
+            "usage": {**usage, "input_tokens": 200, "output_tokens": 20}}, sequence=2)
+        recorder.finish("completed")
+        recovered = IT.NativeUsageRecorder(ledger, call, execution(), brain_id="brain-a",
+            provider="anthropic-cli", model="unpriced-selected-model")
+        recovered.observe({"type": "observation", "session_id": "recovered-session", "message_id": "late", "usage": usage},
+                          sequence=3)
+        recovered.finish("completed")
+        result = self.summary()
+        self.assertEqual((result["tokens_in"], result["tokens_out"], result["requests"]), (200, 20, 2))
+        self.assertTrue(result["coverage"]["tokens_complete"])
+
+    def test_unidentified_native_request_and_malformed_counts_never_prove_complete_usage(self):
+        recorder, _, _ = self.native_recorder()
+        recorder.observe({"type": "observation", "session_id": "native-session", "message_id": None,
+            "usage": {"input_tokens": True, "output_tokens": "5", "cache_read_input_tokens": 0,
+                      "cache_creation_input_tokens": -1}}, sequence=1)
+        recorder.finish("completed")
+        result = self.summary()
+        self.assertIsNone(result["tokens_in"])
+        self.assertIsNone(result["tokens_out"])
+        self.assertIsNone(result["requests"])
+        self.assertFalse(result["coverage"]["tokens_complete"])
+
+    def test_missing_native_request_identity_stays_partial_even_with_matching_summary(self):
+        recorder, _, _ = self.native_recorder()
+        usage = {"input_tokens": 100, "output_tokens": 10, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
+        recorder.observe({"type": "observation", "message_id": None, "usage": usage}, sequence=1)
+        recorder.observe({"type": "usage", "usage": usage, "cost_usd": 0.25}, sequence=2)
+        recorder.finish("completed")
+        self.assertIsNone(self.summary()["requests"])
+        self.assertFalse(self.summary()["coverage"]["tokens_complete"])
+        UI.refresh()
+        self.assertEqual(UI.summary("today")["coverage"]["improvement"]["status"], "partial")
+
+    def test_late_native_summary_can_resolve_missing_summary_without_erasing_usage(self):
+        recorder, ledger, call = self.native_recorder()
+        usage = {"input_tokens": 100, "output_tokens": 10, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
+        recorder.observe({"type": "observation", "message_id": "request-a", "usage": usage}, sequence=1)
+        recorder.finish("interrupted")
+        self.assertFalse(self.summary()["coverage"]["tokens_complete"])
+        recovered = IT.NativeUsageRecorder(ledger, call, execution(), brain_id="brain-a",
+            provider="anthropic-cli", model="unpriced-selected-model")
+        recovered.observe({"type": "usage", "usage": usage, "cost_usd": 0.25}, sequence=2)
+        recovered.finish("completed")
+        self.assertEqual(self.summary()["requests"], 1)
+        self.assertTrue(self.summary()["coverage"]["tokens_complete"])
+        self.assertEqual(QS.used("anthropic-cli", "unpriced-selected-model"), 110)
 
     def test_summary_and_late_requests_count_once_and_keep_missing_money_unknown(self):
         self.record(300, 30, event_kind="cli_fallback", event_id="summary")

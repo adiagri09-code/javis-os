@@ -625,6 +625,9 @@ def _project_improvement_usage(conn):
             continue
         path = _IMPROVEMENT_PATH + hashlib.sha256(json.dumps(attempt["key"]).encode()).hexdigest()
         project = "(improvement)"
+        if any(event.get("telemetry_errors") or event.get("usage_complete") is False for event in group):
+            conn.execute("INSERT INTO usage_projection_gaps VALUES(?,?,?,?)",
+                         (path, anchor.get("day") or "", project, "incomplete_telemetry"))
         if attempt["ambiguous_session"]:
             conn.execute("INSERT INTO usage_projection_gaps VALUES(?,?,?,?)",
                          (path, anchor.get("day") or "", project, "ambiguous_session"))

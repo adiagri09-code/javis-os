@@ -219,7 +219,8 @@ demonstrate actual host tool denial. Run real selected-model smoke only after th
 ## Task 3: shared ledger and usage provenance
 
 Files: agent_ledger.py (closed improvement purpose), turn_context.py, usage_store.py,
-usage_index.py, improvement_usage.py, test_improvement_usage.py.
+usage_index.py, improvement_usage.py, improvement_telemetry.py, usage_execution.py,
+quota_scheduler.py, test_improvement_usage.py.
 Reserve before worker/engine; mark durable engine_started immediately before transport;
 settle/refund through the existing CallLedger. Bound experiment/trial/case/variant/repeat/
 attempt and learning origin in host execution metadata. Preserve existing Team consumers.
@@ -244,9 +245,15 @@ without provider/reasoning change or extra USD caps.
 - [x] Add summary+late-request dedupe/unknown test without team_id, assert null cost stays
   null and total tokens count each request once; capture metadata survives host context.
 - [x] Run improvement_usage plus existing Team usage, observe missing-attribution RED.
-- [ ] Extend real telemetry/index/projection and bind existing CallLedger at host boundary.
-- [ ] Require improvement/Team usage and ledger regressions GREEN.
-- [ ] Commit shared telemetry changes.
+- [x] Extend real telemetry/index/projection and bind existing CallLedger at host boundary.
+- [x] Require improvement/Team usage and ledger regressions GREEN.
+- [x] Commit shared telemetry changes.
+
+Component boundary: `NativeUsageRecorder` requires a matching real call/brain/attempt/
+provider/model after durable engine_at; it cannot start a query or settle/refund the call.
+Task4 must construct it after its atomic lease/ledger start transition and before ACK,
+persist validated raw trace first and call finish in recovery/cancellation paths. This
+remaining runner integration is not an enabled M1 trial or a real-model smoke.
 
 ## Task 4: durable orchestrator and independent evaluator
 

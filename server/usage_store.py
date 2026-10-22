@@ -188,7 +188,7 @@ def _project_improvement(provider, model, metadata):
 def record(provider: str, model: str, tin=0, tout=0, cost=None, *, execution=None,
            event_id=None, request_id=None, source_id=None, event_kind="request", status=None,
            billing_mode=None, price_version=None, cache_read=0, cache_create=0,
-           expected_requests=None, telemetry_errors=0) -> None:
+           expected_requests=None, telemetry_errors=0, usage_complete=None) -> None:
     """Cộng dồn 1 lượt vào ngày hôm nay + tổng. Bỏ qua nếu không có token nào (lượt lỗi)."""
     import turn_context
     ex = turn_context.execution_metadata(execution or (turn_context.current() or {}).get("execution"))
@@ -231,6 +231,7 @@ def record(provider: str, model: str, tin=0, tout=0, cost=None, *, execution=Non
                     "in": tin if input_known else None, "out": tout if output_known else None,
                     "cache_read": cache_read, "cache_create": cache_create,
                     "expected_requests": expected_requests, "telemetry_errors": int(telemetry_errors or 0),
+                    "usage_complete": usage_complete if type(usage_complete) is bool else None,
                     "money": {"currency": "USD", "amount": amount, "provenance": provenance,
                               "billing_mode": mode,
                               "price_version": price_version or ("usage_pricing.json:" + str(_PRICE_CACHE["mtime"]))
@@ -240,6 +241,9 @@ def record(provider: str, model: str, tin=0, tout=0, cost=None, *, execution=Non
     if ex and ex.get("experiment_id") and provider in {"anthropic-cli", "cli", "claude"}:
         try:
             _append_event(provider, model, tin, tout, cost_ev, **metadata)
+        except Exception:
+            note_telemetry_error(ex)
+        try:
             _project_improvement(provider, model, metadata)
         except Exception:
             note_telemetry_error(ex)

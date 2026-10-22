@@ -232,3 +232,15 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   passed4/4 files in8s. Expanded ledger/context regression passed7/7 in28s before the final
   retention-only fix. Host native recorder and durable runner binding remain next; no real
   model call, owner run endpoint or production activation has occurred.
+- Task3 telemetry component now consumes raw SDK profile events in the host, bound to a
+  matching genuine post-engine CallLedger row, brain, attempt and configured model. It
+  records cache-inclusive token totals, nullable fields, request identity and subscription
+  equivalents through the existing pipeline. Artifact/model text cannot set its execution
+  identity. Session drift rejects; incomplete terminal coverage stays partial.
+- Recovery reconstructs request/session/summary evidence from existing observations. Late
+  summary can resolve missing coverage, while persisted telemetry errors remain. Even if
+  event append fails, known usage reaches legacy/TPM and coverage reports the failure.
+  Latest usage suite30 checks passed; expanded ledger/context/adapter/worker/usage regression
+  passed9/9 files in32s before the last boundary-only test (then usage30 passed separately).
+  All inputs were synthetic SDK messages; no real model call. Task4's durable runner must
+  still persist its atomic start/lease and bind this recorder before releasing the ACK.
