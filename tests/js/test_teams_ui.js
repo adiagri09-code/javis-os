@@ -366,7 +366,8 @@ check("tin được nhảy tới được tô sáng", TM.messageHtml(am, { membe
 check("nhảy tới tin: tải trang kết thúc ở đúng tin đó, có nút về tin mới nhất",
       /before_ts=" \+ q\(ts\) \+ "&before_id=" \+ q\(Number\(mid\) \+ 1\)/.test(teamsJs) && teamsJs.includes("tm-jump-back"));
 check("đang xem tin cũ: tin mới tới không chèn vào giữa khúc cũ",
-      teamsJs.includes("else if (!S.filterTask && (S.jumped === null || S.jumped === undefined)) { S.msgs.push(nm); queueReveal(nm); }"));
+      teamsJs.includes("else if (!S.filterTask && (S.jumped === null || S.jumped === undefined) &&")
+      && teamsJs.includes("(!S.msgs.length || Number(nm.id) > Number(S.msgs[S.msgs.length - 1].id))) { S.msgs.push(nm); queueReveal(nm); }"));
 check("CSS: lớp flex mới của tìm có [hidden], vùng chạm 44px trên điện thoại",
       /\.tm-search\[hidden\]/.test(css) && /\.tm-search-row\[hidden\]/.test(css) && /\.tm-jumped\[hidden\]/.test(css)
       && /\.tm-search-btn, \.tm-search-go, \.tm-search-input, \.tm-search-hit, \.tm-jump-back \{ min-height: 44px; \}/.test(css));

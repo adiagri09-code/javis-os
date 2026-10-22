@@ -1987,6 +1987,86 @@
     }, function (err) { undo({ code: 0, j: {}, network: true, error: String(err && err.message || err) }); });
   }
 
+  // ───────────── keyed update of the message list ─────────────
+  // Every event (a message, a status, a reaction) used to rebuild the whole list, which wiped a text selection, an open
+  // "Show more", a picture that had loaded, a half-typed field in a card, and the bubble under a finger mid-swipe. The list
+  // is now a series of keyed items, each the HTML of one part (a message, its reply status rows, the bars on top); an
+  // item whose HTML did not change keeps its nodes, a changed one is replaced in place, new ones are inserted where they
+  // belong and gone ones removed. A full rebuild is left for the first draw and a team switch.
+
+  // Reconcile `box` with `items` ([{ key, html }]) given the previous items (with their `nodes`), or rebuild when `prev`
+  // is null. make(html) turns HTML into an array of nodes. Returns the items with their nodes, for the next call.
+  // Pure DOM calls only (insertBefore, removeChild, appendChild, firstChild, nextSibling), so node tests can run it.
+  function listSync(box, items, prev, make) {
+    var usable = !!prev && prev.every(function (it) {
+      return it.nodes.every(function (n) { return n.parentNode === box; });
+    });
+    var keep = box.lastChild && box.lastChild.classList && box.lastChild.classList.contains("jv-new-msg") ? box.lastChild : null;
+    if (!usable) {
+      while (box.firstChild) box.removeChild(box.firstChild);
+      items.forEach(function (it) {
+        it.nodes = make(it.html);
+        it.nodes.forEach(function (n) { box.appendChild(n); });
+      });
+      if (keep) box.appendChild(keep);
+      return items;
+    }
+    var old = {}, want = {};
+    prev.forEach(function (it) { old[it.key] = it; });
+    items.forEach(function (it) { want[it.key] = true; });
+    prev.forEach(function (it) {
+      if (!want[it.key]) it.nodes.forEach(function (n) { box.removeChild(n); });
+    });
+    var cursor = box.firstChild;
+    items.forEach(function (it) {
+      var was = old[it.key];
+      if (was && was.html === it.html) {
+        it.nodes = was.nodes;
+        if (!it.nodes.length) return;
+        if (it.nodes[0] === cursor) cursor = it.nodes[it.nodes.length - 1].nextSibling;
+        else it.nodes.forEach(function (n) { box.insertBefore(n, cursor); });
+        return;
+      }
+      if (was && was.nodes.length && was.nodes[0] === cursor) cursor = was.nodes[was.nodes.length - 1].nextSibling;
+      it.nodes = make(it.html);
+      it.nodes.forEach(function (n) { box.insertBefore(n, cursor); });
+      if (was) was.nodes.forEach(function (n) { if (n.parentNode === box) box.removeChild(n); });
+    });
+    return items;
+  }
+
+  function htmlNodes(html) {
+    if (!html) return [];
+    var t = document.createElement("template");
+    t.innerHTML = html;
+    return Array.prototype.slice.call(t.content.childNodes);
+  }
+
+  // The keyed parts of the list for the open team: the bars on top, then each message and its reply status rows.
+  // `lastAgent` is NOT baked into the HTML (it moves with every new answer and would replace the previous answer's
+  // nodes, wiping a selection in it); drawMsgs marks it on the nodes instead.
+  function listItems() {
+    var list = S.msgs.filter(function (m) { return !S.skipped[m.id]; });
+    var c = ctx(null);
+    var items = [
+      { key: "jumped", html: S.jumped !== null && S.jumped !== undefined ? '<div class="tm-jumped">' + esc(tw("teams.search_viewing")) +
+        ' <button type="button" class="ws-btn tm-jump-back">' + ic("chevrons-down") + esc(tw("teams.search_back")) + "</button></div>" : "" },
+      { key: "older", html: S.hasMore ? '<button type="button" class="ws-btn tm-older">' + esc(tw("teams.older")) + "</button>" : "" },
+      { key: "empty", html: !list.length && !S.hasMore ? '<div class="tm-empty tm-empty-chat">' + esc(tw("teams.chat_empty")) + "</div>" : "" }];
+    list.forEach(function (m) {
+      var mm = m;
+      if (S.skipped["p" + m.id] && m.meta && m.meta.proposal) mm = Object.assign({}, m, { meta: Object.assign({}, m.meta, { proposal: null }) });
+      var h = messageHtml(mm, c);
+      // An owner's message ends with its reply status rows: a key of their own, so a status change leaves the bubble alone.
+      var rs = mm.author_kind === "owner" ? replyStatusHtml(mm, c) : "";
+      if (rs && h.slice(-rs.length) === rs) {
+        items.push({ key: "m" + m.id, html: h.slice(0, h.length - rs.length) });
+        items.push({ key: "r" + m.id, html: rs });
+      } else items.push({ key: "m" + m.id, html: h });
+    });
+    return { items: items, list: list };
+  }
+
   function drawMsgs(stick) {
     var box = S.el.querySelector(".tm-msgs");
     if (!box) return;
@@ -1994,25 +2074,21 @@
     // T3 (6.2): khung tin của nhóm đang mở; pulse-seen.js đọc mã nhóm ở đây để báo tin của trợ lý đã được xem.
     if (S.team) box.setAttribute("data-seen-team", S.team.team_id); else box.removeAttribute("data-seen-team");
     if (!S.team) {
+      S.listCache = null;
       box.innerHTML = S.teams.length ? '<div class="tm-empty tm-empty-chat">' + esc(tw("teams.pick_team")) + "</div>" : "";
       return;
     }
-    var list = S.msgs.filter(function (m) { return !S.skipped[m.id]; });
+    var built = listItems();
+    var prev = S.listCache && S.listCache.team === S.team.team_id && S.listCache.box === box ? S.listCache.items : null;
+    S.listCache = { team: S.team.team_id, box: box, items: listSync(box, built.items, prev, htmlNodes) };
     // The latest assistant message keeps its Like button visible (like Zalo); older ones show it on hover.
     var lastAgent = null;
-    for (var li = list.length - 1; li >= 0; li--) if (list[li].author_kind === "agent") { lastAgent = list[li].id; break; }
-    var c = ctx(lastAgent);
-    box.innerHTML = (S.jumped !== null && S.jumped !== undefined ? '<div class="tm-jumped">' + esc(tw("teams.search_viewing")) +
-      ' <button type="button" class="ws-btn tm-jump-back">' + ic("chevrons-down") + esc(tw("teams.search_back")) +
-      "</button></div>" : "") + (S.hasMore ? '<button type="button" class="ws-btn tm-older">' + esc(tw("teams.older")) + "</button>" : "") +
-      (!list.length && !S.hasMore ? '<div class="tm-empty tm-empty-chat">' + esc(tw("teams.chat_empty")) + "</div>" : "") +
-      list.map(function (m) {
-        var mm = m;
-        if (S.skipped["p" + m.id] && m.meta && m.meta.proposal) mm = Object.assign({}, m, { meta: Object.assign({}, m.meta, { proposal: null }) });
-        return messageHtml(mm, c);
-      }).join("");
+    for (var li = built.list.length - 1; li >= 0; li--) if (built.list[li].author_kind === "agent") { lastAgent = built.list[li].id; break; }
+    Array.prototype.forEach.call(box.querySelectorAll(".tm-rx.is-last"), function (x) { x.classList.remove("is-last"); });
+    var lastRx = lastAgent !== null ? box.querySelector('.tm-msg[data-mid="' + lastAgent + '"] .tm-rx') : null;
+    if (lastRx) lastRx.classList.add("is-last");
     // The jump-to-latest button (chat-scroll.js) is the list's last child, so `position: sticky` keeps it at the bottom.
-    if (S.scroll) { box.appendChild(S.scroll.button); S.scroll.update(); }
+    if (S.scroll) { if (box.lastChild !== S.scroll.button) box.appendChild(S.scroll.button); S.scroll.update(); }
     applyReveal(box);
     // Bảng đang "mở" mà không vẽ ra (tin đã đổi, đã ghim): bỏ trạng thái mở, kẻo tin mới không còn tự cuộn xuống.
     if (S.picker !== null && !box.querySelector('[data-panel="' + S.picker + '"]')) S.picker = null;
@@ -2723,7 +2799,7 @@
     S.team = null; S.queue = null; S.msgs = []; S.taskTitles = {}; S.side = false; S.openMember = null; S.turns = [];
     S.picker = null; S.draft = null; S.picked = []; S.retrying = {};
     S.replyTo = null; S.plusOpen = false; S.renamingHead = false; forgetAtts(S.atts); S.atts = []; S.folder = null; S.info = null;
-    S.typing = []; S.pinned = []; S.pinsOpen = false; S.unclamped = {}; stopReveal();
+    S.typing = []; S.pinned = []; S.pinsOpen = false; S.unclamped = {}; S.listCache = null; stopReveal();
     closeFolderPanel();
     stopMic();
     var input = S.el.querySelector(".tm-input");
@@ -4224,7 +4300,10 @@
       // Khung lọc theo việc (hợp đồng T2 mục 5): chỉ vẽ lại tin ĐANG hiện (reaction đổi ở tab khác), không chèn tin mới
       // vào danh sách của việc; khung thường thì chèn như cũ.
       if (i >= 0) S.msgs[i] = S.filterTask ? Object.assign({}, S.msgs[i], nm) : nm;
-      else if (!S.filterTask && (S.jumped === null || S.jumped === undefined)) { S.msgs.push(nm); queueReveal(nm); }
+      // A message not on screen is appended only when it is newer than the latest one shown: an update of an older
+      // message that is not loaded (a reaction, a label) must not land at the bottom out of order.
+      else if (!S.filterTask && (S.jumped === null || S.jumped === undefined) &&
+          (!S.msgs.length || Number(nm.id) > Number(S.msgs[S.msgs.length - 1].id))) { S.msgs.push(nm); queueReveal(nm); }
       if (i >= 0 || !S.filterTask) drawMsgs(false);
       // A new message while the owner reads higher up: the jump button becomes "New messages" (at the end it follows).
       if (i < 0 && S.scroll && !S.scroll.stuck()) toLatest(false);
@@ -4457,7 +4536,7 @@
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, capsPayload: capsPayload, saveCapsFlow: saveCapsFlow, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
     levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml,
     bannersHtml: bannersHtml, reactCornerHtml: reactCornerHtml, reactBarHtml: reactBarHtml, sheetHtml: sheetHtml,
-    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, copyTextOf: copyTextOf, fileChipHtml: fileChipHtml, uploadError: uploadError, plainPreview: plainPreview, previewText: previewText,
+    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, listSync: listSync, copyTextOf: copyTextOf, fileChipHtml: fileChipHtml, uploadError: uploadError, plainPreview: plainPreview, previewText: previewText,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
     searchResultsHtml: searchResultsHtml, replyStatusHtml: replyStatusHtml, headLine: headLine,
     typingHtml: typingHtml, pinsHtml: pinsHtml, markMentions: markMentions, replyRefHtml: replyRefHtml,

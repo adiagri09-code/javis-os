@@ -88,7 +88,7 @@ check("detach removes the listeners", area.fire("scroll") === undefined && ctl.s
 // Team wiring.
 check("Team attaches the shared scroll to its message list with its selectors, the anchor key and picture follow",
   /S\.scroll = CS && msgsBox \? CS\.attach\(msgsBox, \{ buttonClass: "jv-new-msg tm-new-msg", msg: "\.tm-msg",\s*hold: "\.tm-hacts:hover, \.tm-rx:hover", key: "data-mid", followLoads: true \}\) : null;/.test(teamsJs));
-check("Team puts the jump button last in the list on every redraw", /if \(S\.scroll\) \{ box\.appendChild\(S\.scroll\.button\); S\.scroll\.update\(\); \}/.test(teamsJs));
+check("Team puts the jump button last in the list on every redraw", /if \(S\.scroll\) \{ if \(box\.lastChild !== S\.scroll\.button\) box\.appendChild\(S\.scroll\.button\); S\.scroll\.update\(\); \}/.test(teamsJs));
 check("Team: open or own message jumps; other redraws follow only at the end",
   /if \(stick\) toLatest\(true\);\s*else if \(!S\.scroll \|\| S\.scroll\.stuck\(\)\) toLatest\(false\);/.test(teamsJs)
   && !/var atEnd = box\.scrollHeight - box\.scrollTop - box\.clientHeight < 80;/.test(teamsJs));
