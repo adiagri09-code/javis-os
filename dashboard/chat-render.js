@@ -883,6 +883,24 @@
       if (btn) { var o = btn.innerHTML; btn.innerHTML = ic("check", { cls: "ic-ok" }); setTimeout(function () { btn.innerHTML = o; }, 1000); }
     });
   }
+  // Copy plain text: the clipboard API when the page is a secure context, otherwise (plain HTTP on a LAN or VPS, or a
+  // blocked permission) a hidden textarea and execCommand. Always resolves.
+  function copyPlain(text) {
+    var fallback = function () {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      ta.remove();
+    };
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text).catch(fallback);
+    return Promise.resolve().then(fallback);
+  }
+  function flashCodeCopied(btn, label) {
+    var old = btn.textContent;
+    btn.innerHTML = ic("check", { cls: "ic-ok" }) + " " + tw("app.copied");
+    setTimeout(function () { btn.textContent = label || old; }, 1200);
+  }
   function extFor(art) {
     if (art.type === "html") return "html";
     if (art.type === "svg") return "svg";
@@ -1437,6 +1455,17 @@
       // Dang SOAN trong editor (contenteditable/.ne-wys) hoac trong khung sua file -> khong mo gi ca,
       // de nguoi dung bam anh ma sua binh thuong (tranh bung editor long nhau).
       if (trongTrinhSua(e.target)) return;
+    });
+    // Copy button of a code block (codeBlockHtml). Delegated on the document so it works in every container that
+    // renders markdown: the main chat, the Team chat, the file viewer. Before this the only handler sat on the main
+    // chat's #chatArea, so the button was dead everywhere else.
+    document.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains("code-copy")) return;
+      var wrap = t.closest(".code-wrap");
+      var pre = wrap && wrap.querySelector("pre");
+      if (!pre) return;
+      copyPlain(pre.innerText).then(function () { flashCodeCopied(t, "\u29c9 Copy"); });
     });
     document.addEventListener("keydown", function (e) {
       if ((e.key === "Enter" || e.key === " ") && document.activeElement &&

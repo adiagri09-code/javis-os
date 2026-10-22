@@ -2795,11 +2795,8 @@ chatArea.addEventListener("click", (e) => {
   const t = e.target;
   const actBtn = t.closest && t.closest(".msg-act");
   if (actBtn) { runMsgAct(actBtn); return; }
-  if (t.classList.contains("code-copy")) {
-    const wrap = t.closest(".code-wrap");
-    const pre = wrap && wrap.querySelector("pre");
-    if (pre) copyText(pre.innerText).then(() => flashCopied(t, "⧉ Copy"));
-  } else if (t.classList.contains("clamp-more")) {
+  // The code block Copy button is handled by chat-render.js on the document (works in every chat container).
+  if (t.classList.contains("clamp-more")) {
     const u = t.closest(".bubble") && t.closest(".bubble").querySelector(".utext");
     if (u) { u.classList.toggle("clamped"); t.textContent = u.classList.contains("clamped") ? window.t("app.show_more") : window.t("app.show_less"); }
   }
