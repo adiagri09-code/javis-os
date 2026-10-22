@@ -9,8 +9,6 @@ import hashlib
 import json
 from contextlib import closing
 
-from cryptography.fernet import InvalidToken
-
 import improvement_cases as IC
 import improvement_store as IM
 from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES
@@ -88,6 +86,8 @@ class PrivateReview:
         identifier(candidate_id)
         if IM._schema_version(self.store) < 4:
             raise PermissionError("candidate_unavailable")
+        from cryptography.fernet import InvalidToken
+
         try:
             with closing(self.store._conn()) as connection:
                 connection.execute("BEGIN")
@@ -186,6 +186,8 @@ class PrivateReview:
             raise ValueError("invalid_trial_attempt")
         if IM._schema_version(self.store) < 3:
             raise PermissionError("trial_product_unavailable")
+        from cryptography.fernet import InvalidToken
+
         try:
             with closing(self.store._conn()) as connection:
                 connection.execute("BEGIN")

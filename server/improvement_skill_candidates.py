@@ -12,8 +12,6 @@ from contextlib import closing
 from dataclasses import asdict
 from pathlib import Path
 
-from cryptography.fernet import InvalidToken
-
 import improvement_assets as IA
 import improvement_cases as IC
 import improvement_store as IM
@@ -93,6 +91,8 @@ class SkillCandidates:
 
     def read_proposal(self, connection, principal, candidate, state, observed, base_raw):
         """Verify immutable authoring evidence before private review or a new edit grant."""
+        from cryptography.fernet import InvalidToken
+
         brain = _brain(principal)
         try:
             provenance = json.loads(self.blobs.read(brain, candidate["provenance_hash"]))

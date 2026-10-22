@@ -57,6 +57,15 @@
   all four old failures and verified the correction without Important findings.
   The updated complete JavaScript suite passes266/266 in43s; vi/en mobile browser
   checks pass. Final-head Linux CI still gates integration.
+- CI39858827459 on bf17f891 failed only the existing lightweight-startup test:
+  two new modules imported cryptography's InvalidToken at module load. The timing
+  ratio itself passed4.08. The same deterministic failure reproduced locally;
+  deferring those exact imports to private review/proposal operations preserves
+  exception handling and all source/grant checks. Startup, private review,
+  staging, API and actual-main scripts now pass5/5 in44s. Peer independently
+  confirmed old/corrected fresh-main behavior and corrupt-blob rejection (two
+  suites pass18s), with no Important findings. New final-head Linux CI is still
+  required before merge; earlier runs do not qualify the corrected source.
 - Owner delegated pilot choice. An objective Python bug-fix/test pilot is selected
   for reproducibility alongside the spec's required business pilots. This choice
   does not supply an accepted business dataset or owner acceptance evidence.

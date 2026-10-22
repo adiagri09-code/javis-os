@@ -30,6 +30,10 @@ association report an empty objective list. Metadata may remain visible after a
 grant is revoked; current context and edit-grant statuses are separate fields.
 Viewing metadata creates no private-content authority.
 
+Importing the server does not load cryptography for candidate review. Its exact
+InvalidToken handler is loaded only when a private review or proposal read needs
+it; corrupt encrypted data remains unavailable under the same error handling.
+
 `revoke_authority` uses the existing serialized writer transaction and owner event
 ledger. It validates expected generation and event-key payload, records revocation
 and its event atomically, and replays historical results without restoring a grant.
