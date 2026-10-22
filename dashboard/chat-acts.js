@@ -163,8 +163,39 @@
     return "";
   }
 
+  // Long messages the user wrote collapse to ten lines with "Show more" (main chat and Team chat): more than CLAMP_LINES
+  // lines or CLAMP_CHARS characters. The text sits in `.utext` (class `clamped` while collapsed) and the toggle is a
+  // `button.clamp-more` in the same bubble; one delegated listener below handles every chat container.
+  var CLAMP_LINES = 10, CLAMP_CHARS = 900;
+  function isLongText(text) {
+    var s = String(text == null ? "" : text);
+    return !!s && (s.split("\n").length > CLAMP_LINES || s.length > CLAMP_CHARS);
+  }
+  function clampButtonHtml(open) {
+    return '<button class="clamp-more" type="button">' + esc(tw(open ? "app.show_less" : "app.show_more")) + "</button>";
+  }
+  // Open or close the long message the button belongs to. Returns true when it is open after the click.
+  function toggleClamp(btn) {
+    var host = (btn.closest && btn.closest(".bubble, .tm-bubble")) || btn.parentNode;
+    var u = host && host.querySelector(".utext");
+    if (!u) return false;
+    u.classList.toggle("clamped");
+    var open = !u.classList.contains("clamped");
+    btn.textContent = tw(open ? "app.show_less" : "app.show_more");
+    return open;
+  }
+  if (typeof document !== "undefined" && document.addEventListener) {
+    document.addEventListener("click", function (e) {
+      var t = e.target;
+      if (t && t.classList && t.classList.contains("clamp-more")) toggleClamp(t);
+    });
+  }
+
   var API = {
     copy: copy,
+    isLongText: isLongText,
+    clampButtonHtml: clampButtonHtml,
+    toggleClamp: toggleClamp,
     selectedIn: selectedIn,
     enterSends: enterSends,
     trackComposition: trackComposition,

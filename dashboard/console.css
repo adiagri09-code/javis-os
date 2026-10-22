@@ -3487,6 +3487,8 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 .tm-file.is-img img { width: 160px; max-height: 120px; object-fit: cover; border-radius: 8px; }
 .tm-file.is-img span { font-size: 12.5px; color: var(--text2); padding: 2px 4px; }
 .tm-file.is-img { cursor: zoom-in; }
+/* A long owner message collapses to ten lines with "Show more" (chat-acts.js), like the main chat's .utext.clamped. */
+.tm-msg-owner .tm-text.utext.clamped { display: -webkit-box; -webkit-line-clamp: 10; -webkit-box-orient: vertical; overflow: hidden; }
 /* The picture could not load (jvImgGone put the "not available" box in its place, with the name): no second name. */
 .tm-file.is-img .chat-img-gone { margin: 0; max-width: 160px; white-space: normal; }
 .tm-file.is-img .chat-img-gone + span { display: none; }

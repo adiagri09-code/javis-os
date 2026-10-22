@@ -231,7 +231,8 @@
     return { html: out, me: me };
   }
 
-  function bodyHtml(m, mine) {
+  // `open`: the owner opened this long message with "Show more" (kept across redraws of the list).
+  function bodyHtml(m, mine, open) {
     var text = String(m.content == null ? "" : m.content);
     if (mine) {
       var Q = quoteApi();
@@ -239,7 +240,11 @@
       // 0.191.0: files sent with the message show as chips; the paperclip names line stored for the team turns is not repeated.
       var files = ((m.meta || {}).files || []).filter(function (f) { return f && f.path; });
       var rest = files.length ? t.rest.replace(/(?:\n\n)?\uD83D\uDCCE [^\n]*$/, "") : t.rest;
-      return (t.quote ? quoteHtml(t.quote) : "") + (rest ? '<div class="tm-text">' + esc(rest).replace(/\n/g, "<br>") + "</div>" : "") +
+      // A long message collapses to ten lines with "Show more", like the main chat (chat-acts.js).
+      var A = actsApi();
+      var long = !!(A && A.isLongText && A.isLongText(rest));
+      return (t.quote ? quoteHtml(t.quote) : "") + (rest ? '<div class="tm-text utext' + (long && !open ? " clamped" : "") + '">' +
+        esc(rest).replace(/\n/g, "<br>") + "</div>" + (long ? A.clampButtonHtml(!!open) : "") : "") +
         (files.length ? '<div class="tm-files">' + files.map(function (f) { return fileChipHtml(f, m.ts); }).join("") + "</div>" : "");
     }
     var md = typeof window !== "undefined" && window.mdToHtml;
@@ -679,7 +684,7 @@
     }
     if (meta.job_result) head.push('<span class="tm-result">' + esc(tw("teams.job_result")) + "</span>");
     var late = !mine && LATE.indexOf(meta.status) >= 0;
-    var body = bodyHtml(m, mine);
+    var body = bodyHtml(m, mine, !!(ctx.unclamped && ctx.unclamped[m.id]));
     var asksMe = false;
     if (!mine && m.author_kind === "agent") {
       var mk = markMentions(body, ctx.members);
@@ -1759,7 +1764,7 @@
       picked: [], retrying: {}, pickSt: null, pickOpener: null, pickHost: null, roster: [],
       renaming: "", renamingHead: false, replyTo: null, plusOpen: false, dict: null, dictBase: "", dictState: "idle",
       atts: [], folder: null, info: null, typing: [], pinned: [], pinsOpen: false, tagFilter: readTagFilter(),
-      autoOpened: false };
+      autoOpened: false, unclamped: {} };
   }
 
   function teamUrl(path) { return "/teams/" + q(S.activeId) + (path || ""); }
@@ -1946,7 +1951,7 @@
     (S.msgs || []).forEach(function (m) { byId[Number(m.id)] = m; });
     return { members: S.team ? S.team.members : [], authors: S.team ? S.team.authors : null, byId: byId,
       leaderKey: S.team && S.team.leader_key, taskTitles: S.taskTitles,
-      picker: S.picker, jumped: S.jumped, retrying: S.retrying, lastAgent: lastAgent };
+      picker: S.picker, jumped: S.jumped, retrying: S.retrying, lastAgent: lastAgent, unclamped: S.unclamped };
   }
 
   // Inline name editor: a redraw (new message, team event) must not wipe what is being typed. Read the box before the
@@ -2671,7 +2676,7 @@
     S.team = null; S.queue = null; S.msgs = []; S.taskTitles = {}; S.side = false; S.openMember = null; S.turns = [];
     S.picker = null; S.draft = null; S.picked = []; S.retrying = {};
     S.replyTo = null; S.plusOpen = false; S.renamingHead = false; forgetAtts(S.atts); S.atts = []; S.folder = null; S.info = null;
-    S.typing = []; S.pinned = []; S.pinsOpen = false; stopReveal();
+    S.typing = []; S.pinned = []; S.pinsOpen = false; S.unclamped = {}; stopReveal();
     closeFolderPanel();
     stopMic();
     var input = S.el.querySelector(".tm-input");
@@ -3473,6 +3478,14 @@
       drawMsgs(false);
     }
     if (!t || !(S.el.contains(t) || (S.pickHost && S.pickHost.contains(t)))) return;
+    // "Show more" on a long owner message: chat-acts.js toggles it (document listener, after this one). Remember the
+    // state so a redraw of the list keeps the message open.
+    if (t.classList && t.classList.contains("clamp-more")) {
+      var cm = t.closest(".tm-msg");
+      var cu = cm && cm.querySelector(".utext");
+      if (cm && cu) S.unclamped[cm.getAttribute("data-mid")] = cu.classList.contains("clamped");
+      return;
+    }
     var d = t.dataset || {};
     if (d.rowMenu) {
       if (S.rowMenu === d.rowMenu) return closeRowMenu(true);

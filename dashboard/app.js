@@ -2353,11 +2353,11 @@ function appendUserMessage(text, attachments, ts) {
   div.className = "msg msg-user";
   div.dataset.text = text || "";   // giữ nguyên văn để gửi lại / sửa lại đúng chữ gốc
   const attHtml = attachHtml(attachments);
-  // Tin dài (>10 dòng hoặc >900 ký tự) thu gọn lại, bấm "Xem thêm" để mở
-  const isLong = text && (text.split("\n").length > 10 || text.length > 900);
+  // Tin dài (>10 dòng hoặc >900 ký tự) thu gọn lại, bấm "Xem thêm" để mở (chat-acts.js, dùng chung với trang Nhóm)
+  const isLong = window.JavisActs.isLongText(text);
   const textHtml = text
     ? `<div class="utext${isLong ? " clamped" : ""}">${window.JavisQuote ? window.JavisQuote.utextHtml(text, escapeHtml) : escapeHtml(text)}</div>` +
-      (isLong ? `<button class="clamp-more" type="button">${window.t("app.show_more")}</button>` : "")
+      (isLong ? window.JavisActs.clampButtonHtml(false) : "")
     : "";
   div.innerHTML = `<div class="bubble">${textHtml}${attHtml}</div>` +
     actsHtml("user", ts === undefined ? Date.now() : ts, !!(text || "").trim());
@@ -2777,11 +2777,8 @@ chatArea.addEventListener("click", (e) => {
   const t = e.target;
   const actBtn = t.closest && t.closest(".msg-act");
   if (actBtn) { runMsgAct(actBtn); return; }
-  // The code block Copy button is handled by chat-render.js on the document (works in every chat container).
-  if (t.classList.contains("clamp-more")) {
-    const u = t.closest(".bubble") && t.closest(".bubble").querySelector(".utext");
-    if (u) { u.classList.toggle("clamped"); t.textContent = u.classList.contains("clamped") ? window.t("app.show_more") : window.t("app.show_less"); }
-  }
+  // The code block Copy button (chat-render.js) and "Show more" on a long message (chat-acts.js) are handled on the
+  // document, so they work in every chat container.
 });
 // Điện thoại không có hover: chạm vào tin để bật/tắt hàng nút của đúng tin đó.
 chatArea.addEventListener("click", (e) => {
