@@ -9259,15 +9259,15 @@
           }
           return "[" + (c || p) + "](" + p + ")";                    // link markdown vault: giữ dạng [chữ](đường-dẫn)
         } });
-      // Ảnh vault: giữ ĐÚNG cú pháp gốc. ![[a|300]] (cỡ kéo tay hoặc alt text sau dấu |) lưu lại
-      // y nguyên; ![chữ](a) vẫn là ![chữ](a). Riêng ảnh ![](..) bị kéo đổi cỡ thì chuyển sang
-      // ![[..|cỡ]], vì cú pháp ![](..) không có chỗ ghi cỡ - giữ nguyên là bỏ mất thao tác kéo.
+      // Vault image: keep the ORIGINAL syntax. ![[a|300]] (dragged size or alt text after |) saves
+      // back as-is; ![text](a) stays ![text](a). Only a ![](..) image that was resized switches to
+      // ![[..|size]], since ![](..) has nowhere to store a size - keeping it would drop the resize.
       _td.addRule("wikiimg", { filter: (n) => n.nodeName === "IMG" && n.getAttribute("data-vault-path") != null,
         replacement: (c, n) => {
           const p = n.getAttribute("data-vault-path");
-          const co = n.getAttribute("data-img-size");
+          const size = n.getAttribute("data-img-size");
           const alias = n.getAttribute("data-img-alias");
-          if (co) return "![[" + p + "|" + co + "]]";
+          if (size) return "![[" + p + "|" + size + "]]";
           if (n.getAttribute("data-img-wiki") === "1") return "![[" + p + (alias ? "|" + alias : "") + "]]";
           // A space ends the link target in markdown: "![a](my pic.webp)" is not an image elsewhere.
           return "![" + (n.getAttribute("alt") || "") + "](" + p.replace(/ /g, "%20") + ")";

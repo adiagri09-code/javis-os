@@ -24,7 +24,7 @@ function id(c) { return c ? c.id : null; }
 
 // ---- 1. Bảng lệnh đủ mặt ----
 const MONG = ["bold", "italic", "h1", "h2", "h3", "ul", "ol", "task", "quote", "code", "link", "image", "hr"];
-check("có đủ 13 lệnh (thêm nút chèn ảnh, test_anh_trong_note.js), đúng thứ tự hiển thị", EC.CMDS.map(c => c.id).join(",") === MONG.join(","));
+check("all 13 commands (plus the insert-image button, test_note_images.js), in display order", EC.CMDS.map(c => c.id).join(",") === MONG.join(","));
 check("lệnh checkbox tồn tại", !!EC.CMDS.find(c => c.id === "task"));
 // Nút checkbox phải đứng CÙNG HÀNG, ngay sau hai kiểu danh sách (yêu cầu "cùng hàng với các nút kia").
 const iOl = EC.CMDS.findIndex(c => c.id === "ol"), iTask = EC.CMDS.findIndex(c => c.id === "task");

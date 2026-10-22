@@ -270,13 +270,13 @@
         if (c.mode() === "wys") exec(c, "createLink", u); else wrapTa(c, "[", "](" + u + ")", dich("ecmd.ph_text"));
       } },
 
-    // Chen anh (note-images.js lo nen, tai len images/ va nhung ![[..]]). No keyboard shortcut:
+    // Insert an image (note-images.js compresses it, uploads it to images/ and embeds ![[..]]). No keyboard shortcut:
     // Ctrl+Shift+I opens devtools everywhere and Cmd+Option+I does on macOS. Toolbar button,
     // "/image" and paste cover it.
     { id: "image", label: "ecmd.image", kw: "chen anh hinh image picture photo", btn: { icon: "image" },
       run: function (c) {
         var NI = (typeof window !== "undefined") && window.JavisNoteImages;
-        if (NI && NI.chonTep) NI.chonTep(c);
+        if (NI && NI.pickFiles) NI.pickFiles(c);
       } },
 
     { id: "hr", label: "ecmd.hr", kw: "duong ke ngan cach", btn: { text: "―" },
@@ -375,8 +375,8 @@
       }
       return null;
     }
-    // note-images.js dung CHUNG ham tim khung soan nay, khong chep ban thu hai.
-    api.ctxTu = ctxTu;
+    // note-images.js SHARES this editor lookup instead of keeping a second copy.
+    api.contextFor = ctxTu;
 
     // ----- phim tat -----
     document.addEventListener("keydown", function (e) {

@@ -412,34 +412,34 @@
   function phienBanAnh(u) {
     return (_anhVForRender && /^\/files\/raw\?/.test(u)) ? u + "&v=" + encodeURIComponent(_anhVForRender) : u;
   }
-  // Phan sau dau | cua ![[anh|..]] kieu Obsidian: "300" / "300x200" la CO anh, chu thi la
-  // alt text. Tra null khi khong co gi.
-  function coAnh(s) {
+  // The part after | in an Obsidian-style ![[image|..]]: "300" / "300x200" is the image SIZE,
+  // text is alt text. Returns null when empty.
+  function imageSize(s) {
     s = String(s == null ? "" : s).trim();
     if (!s) return null;
     var m = /^(\d{1,5})(?:x(\d{1,5}))?$/i.exec(s);
     if (m) return { w: +m[1], h: m[2] ? +m[2] : 0 };
     return { alias: s };
   }
-  // the: thuoc tinh them cho the <img> (wiki, co, alias). data-vault-path nam TREN the <img>
-  // de luat turndown "wikiimg" cua trinh sua nhan ra va luu nguoc dung ![[..]] / ![](..),
-  // khong thi anh luu ra thanh ![x](/files/raw?brain=...) dinh cung ten brain vao note.
-  function imgHtml(u, alt, rawpath, duPhong, the) {
+  // attrs: extra attributes for the <img> tag (wiki, size, alias). data-vault-path sits ON the
+  // <img> so the editor's turndown rule "wikiimg" recognizes it and saves back exactly ![[..]] /
+  // ![](..); otherwise the image saves as ![x](/files/raw?brain=...) with the brain name baked in.
+  function imgHtml(u, alt, rawpath, duPhong, attrs) {
     u = phienBanAnh(u);
-    the = the || {};
+    attrs = attrs || {};
     var con = (duPhong || []).map(phienBanAnh).filter(function (x) { return x && x !== u; });
-    var laVault = !!(rawpath && isVaultRel(rawpath));
-    var phu = "";
-    if (laVault) phu += ' data-vault-path="' + esc(String(rawpath).replace(/^\.?\//, "")) + '"';
-    if (the.wiki) phu += ' data-img-wiki="1"';
-    if (the.co && the.co.w) {
-      var cs = the.co.w + (the.co.h ? "x" + the.co.h : "");
-      phu += ' data-img-size="' + esc(cs) + '" style="width:' + the.co.w + "px" +
-        (the.co.h ? ";height:" + the.co.h + "px" : "") + '"';
-    } else if (the.co && the.co.alias) {
-      phu += ' data-img-alias="' + esc(the.co.alias) + '"';
+    var isVault = !!(rawpath && isVaultRel(rawpath));
+    var extra = "";
+    if (isVault) extra += ' data-vault-path="' + esc(String(rawpath).replace(/^\.?\//, "")) + '"';
+    if (attrs.wiki) extra += ' data-img-wiki="1"';
+    if (attrs.size && attrs.size.w) {
+      var sizeAttr = attrs.size.w + (attrs.size.h ? "x" + attrs.size.h : "");
+      extra += ' data-img-size="' + esc(sizeAttr) + '" style="width:' + attrs.size.w + "px" +
+        (attrs.size.h ? ";height:" + attrs.size.h + "px" : "") + '"';
+    } else if (attrs.size && attrs.size.alias) {
+      extra += ' data-img-alias="' + esc(attrs.size.alias) + '"';
     }
-    var img = '<img class="chat-img" src="' + esc(u) + '" alt="' + esc(alt || "") + '"' + phu +
+    var img = '<img class="chat-img" src="' + esc(u) + '" alt="' + esc(alt || "") + '"' + extra +
       (con.length ? ' data-jv-thu="' + esc(con.join("|")) + '"' : "") +
       ' loading="lazy" onerror="jvImgGone(this)">';
     // Bam vao anh = XEM PHONG TO (lightbox), khong phai tai ve. Truoc day anh trong vault duoc
@@ -645,12 +645,12 @@
       return put(code);
     });
     // 3) anh vault ![[..]] + anh markdown ![]() (giu URL qua placeholder de khong bi escape)
-    raw = raw.replace(/!\[\[([^\]|]+?)(?:\|([^\]]*))?\]\]/g, function (_m, name, sau) {
+    raw = raw.replace(/!\[\[([^\]|]+?)(?:\|([^\]]*))?\]\]/g, function (_m, name, after) {
       name = name.trim();
       var uvW = ungVienAnh(name);
-      var co = coAnh(sau);
-      return put(imgHtml(uvW[0] || resolveSrc(name), (co && co.alias) || name, name, uvW.slice(1),
-                         { wiki: true, co: co }));
+      var size = imageSize(after);
+      return put(imgHtml(uvW[0] || resolveSrc(name), (size && size.alias) || name, name, uvW.slice(1),
+                         { wiki: true, size: size }));
     });
     // 3b) wikilink [[target]] / [[target|alias]] (anh ![[..]] da an o tren) -> link dieu huong nhu Wikipedia
     raw = raw.replace(/\[\[([^\[\]\n|]+?)(?:\|([^\[\]\n]*))?\]\]/g, function (_m, target, alias) {
@@ -1470,7 +1470,7 @@
     module.exports = { mdToHtml: mdToHtml, visibleMarkdown: visibleMarkdown,
       highlight: highlight, wkResolve: wkResolve,
       appFilePath: appFilePath, appFileRef: appFileRef, fileUriPath: fileUriPath,
-      isDownloadFile: isDownloadFile, coAnh: coAnh,
+      isDownloadFile: isDownloadFile, imageSize: imageSize,
       laLinkTaiFile: laLinkTaiFile, laIOS: laIOS,
       // Xuat them de test chay THAT chuoi du phong cua anh (xem ungVienAnh / imgGone).
       ungVienAnh: ungVienAnh, ghepDuong: ghepDuong, imgGone: imgGone,

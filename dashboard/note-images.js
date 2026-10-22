@@ -1,53 +1,56 @@
-/* note-images.js - chen anh vao note .md: DAN (Ctrl+V) / THA / bam nut chon tep -> nen lai ->
-   luu vao `images/` -> nhung `![[images/2026-09-11-15-04-22.webp]]` vao dung cho caret. Kem
-   tay keo doi co anh ngay trong ban render, luu thanh "|300" kieu Obsidian.
+/* note-images.js - insert images into a .md note: PASTE (Ctrl+V) / DROP / toolbar file picker ->
+   re-compress -> save into `images/` -> embed `![[images/2026-09-11-15-04-22.webp]]` at the
+   caret. Also a drag grip to resize an image right in the render pane, saved as an
+   Obsidian-style "|300".
 
-   Chay o CA HAI trinh sua .md - editor cay o trang Tep tin (console.js) va khung sua tu chat
-   (file-editor.js) - vi ca hai dung cung lop .ne-wys / .ne-src, nen mot bo nghe o tang
-   document la phu het, khong phai goi lap dat o tung noi mo editor.
+   Runs in BOTH .md editors - the tree editor on the Files page (console.js) and the editor opened
+   from chat (file-editor.js) - because both use the same .ne-wys / .ne-src classes, so one set of
+   document-level listeners covers both; nothing has to be installed wherever an editor opens.
 
-   VI SAO ANH KHONG VAO `attachments/`: media_gc.media_dirs() coi `attachments/` + `inbox/` la
-   VUNG CACHE, mac dinh xoa moi file qua 30 ngay hoac khi vung do vuot 300MB. Anh cua mot note
-   thi CO NGUOI TRO VAO - don nó đi la mo note ra thay o xam "anh khong con", mat du lieu am
-   tham khong mot dong bao. `images/` nam ngoai tam may don nen anh o lai vinh vien.
+   WHY IMAGES DO NOT GO INTO `attachments/`: media_gc.media_dirs() treats `attachments/` and
+   `inbox/` as a CACHE AREA and by default deletes every file older than 30 days, or when the area
+   grows past 300MB. A note image IS referenced by someone - sweeping it means the note later
+   shows a grey "image is gone" box, silent data loss with no warning. `images/` is outside the
+   sweeper's reach, so images stay for good.
 
-   Nen anh lam o TRINH DUYET bang canvas, khong phai o server: repo co y KHONG phu thuoc Pillow
-   (xem chu thich trong requirements.txt), va nen truoc khi gui thi tiet kiem luon duong truyen.
+   Compression happens in the BROWSER with a canvas, not on the server: the repo deliberately
+   does NOT depend on Pillow (see the note in requirements.txt), and compressing before sending
+   also saves bandwidth.
 
-   File chay duoc CA duoi node (test require) lan trong trinh duyet: phan DOM boc trong
-   `if (typeof document !== "undefined")`, phan logic thuan de tran de test.
-   Ghi chu: KHONG dung ky tu em dash o bat ky dau. */
+   The file runs BOTH under node (tests require it) and in the browser: the DOM part is wrapped in
+   `if (typeof document !== "undefined")`, the pure logic sits at the top level for tests.
+   Note: never use the em dash character anywhere. */
 (function () {
   "use strict";
 
-  // ---------------------------------------------------------------- so do
-  var CANH_TOI_DA = 1920;        // canh dai nhat sau khi nen (du net cho man hinh 2K)
-  var CHAT_LUONG = 0.82;         // chat luong webp/jpeg: mat mat khong thay bang mat
-  var TRAN_MB = 25;              // to hon nua thi chan tu dau, khong nen noi trong tab
+  // ---------------------------------------------------------------- limits
+  var MAX_EDGE = 1920;           // longest edge after compression (sharp enough for a 2K screen)
+  var QUALITY = 0.82;            // webp/jpeg quality: the loss is invisible to the eye
+  var MAX_MB = 25;               // bigger than this is refused up front, not compressed in the tab
 
-  function tw(khoa, tham) {
-    if (typeof window !== "undefined" && window.t) return window.t(khoa, tham);
+  function tw(key, params) {
+    if (typeof window !== "undefined" && window.t) return window.t(key, params);
     try {
-      var s = require("./i18n/vi.json")[khoa] || khoa;
-      if (tham) for (var k in tham) s = s.split("{" + k + "}").join(tham[k]);
+      var s = require("./i18n/vi.json")[key] || key;
+      if (params) for (var k in params) s = s.split("{" + k + "}").join(params[k]);
       return s;
-    } catch (e) { return khoa; }
+    } catch (e) { return key; }
   }
 
-  // ---------------------------------------------------------------- ham thuan (test duoc)
-  function hai(n) { return (n < 10 ? "0" : "") + n; }
+  // ---------------------------------------------------------------- pure functions (testable)
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
 
-  // Ten anh theo THOI GIAN MAY (khong phai UTC): buoi toi o Viet Nam ma lay gio UTC thi ten
-  // anh lui ve hom truoc, xep thu muc theo ten la lech ngay. Chu repo chot dinh dang
-  // yyyy-mm-dd-hh-mm-ss.
-  function tenAnhTheoGio(d, duoi) {
+  // Image name from LOCAL time (not UTC): in the evening in Vietnam, UTC time would push the name
+  // back to the previous day and sorting the folder by name would be off by a day. The owner
+  // settled on yyyy-mm-dd-hh-mm-ss.
+  function timestampName(d, ext) {
     d = d || new Date();
-    return d.getFullYear() + "-" + hai(d.getMonth() + 1) + "-" + hai(d.getDate()) + "-" +
-      hai(d.getHours()) + "-" + hai(d.getMinutes()) + "-" + hai(d.getSeconds()) +
-      (duoi || ".png");
+    return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + "-" +
+      pad2(d.getHours()) + "-" + pad2(d.getMinutes()) + "-" + pad2(d.getSeconds()) +
+      (ext || ".png");
   }
 
-  var DUOI_THEO_LOAI = {
+  var EXT_BY_TYPE = {
     "image/webp": ".webp", "image/jpeg": ".jpg", "image/jpg": ".jpg", "image/png": ".png",
     "image/gif": ".gif", "image/bmp": ".bmp", "image/avif": ".avif",
     "image/heic": ".heic", "image/heif": ".heif",
@@ -56,197 +59,196 @@
   var STORABLE_EXTS = [".webp", ".jpg", ".jpeg", ".png", ".gif", ".avif", ".bmp"];
   // Extension from the MIME type; when the type is unknown (the clipboard sometimes sends an
   // empty one) the original name's extension counts only if it is a storable one. Null = unknown.
-  function knownExt(mime, tenGoc) {
+  function knownExt(mime, origName) {
     var m = String(mime == null ? "" : mime).toLowerCase().split(";")[0].trim();
-    if (DUOI_THEO_LOAI[m]) return DUOI_THEO_LOAI[m];
-    var t = /(\.[a-z0-9]{2,5})$/i.exec(String(tenGoc == null ? "" : tenGoc));
+    if (EXT_BY_TYPE[m]) return EXT_BY_TYPE[m];
+    var t = /(\.[a-z0-9]{2,5})$/i.exec(String(origName == null ? "" : origName));
     var x = t ? t[1].toLowerCase() : "";
     return STORABLE_EXTS.indexOf(x) >= 0 ? x : null;
   }
-  function duoiTheoLoai(mime, tenGoc) {
-    return knownExt(mime, tenGoc) || ".png";
+  function extForType(mime, origName) {
+    return knownExt(mime, origName) || ".png";
   }
   // Extension to upload the ORIGINAL file under, or null when it may not be stored as-is
   // (HEIC, or a type we cannot vouch for).
-  function storableExt(mime, tenGoc) {
-    var x = knownExt(mime, tenGoc);
+  function storableExt(mime, origName) {
+    var x = knownExt(mime, origName);
     return x && STORABLE_EXTS.indexOf(x) >= 0 ? x : null;
   }
   // SVG is never treated as an image here: it can carry script, so it is never stored.
-  function laAnh(mime, tenGoc) {
+  function isImage(mime, origName) {
     var m = String(mime || "");
     if (/^image\/svg/i.test(m)) return false;
     if (/^image\//i.test(m)) return true;
-    return /\.(png|jpe?g|gif|webp|bmp|avif|heic|heif)$/i.test(String(tenGoc || ""));
+    return /\.(png|jpe?g|gif|webp|bmp|avif|heic|heif)$/i.test(String(origName || ""));
   }
-  // Anh HEIC/HEIF cua iPhone: Safari doc duoc (nen ra webp binh thuong), con Chrome/Edge tren
-  // Windows thi KHONG. Gui nguyen file .heic len la note hien o xam o moi trinh duyet khong phai
-  // Safari, nen doc khong duoc thi phai chan va noi ro, khong am tham luu mot file khong xem duoc.
-  function laHeic(mime, tenGoc) {
+  // iPhone HEIC/HEIF photos: Safari can decode them (they compress to webp as usual), Chrome/Edge
+  // on Windows CANNOT. Uploading the raw .heic shows a grey box in every browser but Safari, so
+  // when decoding fails it must be refused with a clear message, not silently stored unviewable.
+  function isHeic(mime, origName) {
     if (/^image\/hei[cf]/i.test(String(mime || ""))) return true;
-    return /\.hei[cf]$/i.test(String(tenGoc || ""));
+    return /\.hei[cf]$/i.test(String(origName || ""));
   }
-  // Dinh dang KHONG duoc dua qua canvas: gif mat anh dong, svg la vector (ve ra canvas la
-  // bien thanh anh diem, vua mo vua to hon ban goc).
-  function khongNen(mime, tenGoc) {
+  // Formats that must NOT go through the canvas: a gif would lose its animation.
+  function skipCompress(mime, origName) {
     var m = String(mime || "").toLowerCase();
     if (m === "image/gif") return true;
-    return /\.gif$/i.test(String(tenGoc || ""));
+    return /\.gif$/i.test(String(origName || ""));
   }
-  // Khung moi sau khi thu nho theo canh dai nhat. KHONG bao gio phong to anh nho len.
-  function khungMoi(w, h, max) {
+  // New box after shrinking by the longest edge. NEVER upscales a small image.
+  function fitBox(w, h, max) {
     w = Math.max(1, Math.round(w || 0)); h = Math.max(1, Math.round(h || 0));
-    max = max || CANH_TOI_DA;
-    var canh = Math.max(w, h);
-    if (canh <= max) return { w: w, h: h, doi: false };
-    var k = max / canh;
-    return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)), doi: true };
+    max = max || MAX_EDGE;
+    var edge = Math.max(w, h);
+    if (edge <= max) return { w: w, h: h, resized: false };
+    var k = max / edge;
+    return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)), resized: true };
   }
-  // Nen xong roi moi biet co an khong: anh PNG nho da toi uu san thi ban "nen" con NANG HON.
-  // Luc do giu ban GOC - nen de tiet kiem dung luong, nen ra to hon la phan tac dung.
-  function chonBanNhe(cyGoc, cyNen, daThuNho) {
-    if (!cyNen) return "goc";
-    if (daThuNho) return "nen";                 // da giam so diem anh: van lay ban nen
-    return cyNen < cyGoc ? "nen" : "goc";
+  // Only after compressing do we know whether it paid off: a small, already optimized PNG comes
+  // out HEAVIER. Then keep the ORIGINAL - compression is there to save space, not add to it.
+  function pickSmaller(origSize, compressedSize, shrunk) {
+    if (!compressedSize) return "original";
+    if (shrunk) return "compressed";            // pixel count went down: keep the compressed one
+    return compressedSize < origSize ? "compressed" : "original";
   }
-  // Co moi khi keo tay: giu trong khoang doc duoc, lam tron ve so nguyen px.
-  function coKhiKeo(coDau, dx, rongKhung) {
-    var w = Math.round((coDau || 0) + (dx || 0));
-    var tran = Math.max(80, Math.round(rongKhung || 0) || 2000);
-    return Math.max(40, Math.min(w, tran));
+  // New width while dragging: kept in a readable range, rounded to whole px.
+  function dragWidth(startWidth, dx, frameWidth) {
+    var w = Math.round((startWidth || 0) + (dx || 0));
+    var cap = Math.max(80, Math.round(frameWidth || 0) || 2000);
+    return Math.max(40, Math.min(w, cap));
   }
 
   var api = {
-    tenAnhTheoGio: tenAnhTheoGio, duoiTheoLoai: duoiTheoLoai, storableExt: storableExt, laAnh: laAnh,
-    khongNen: khongNen, laHeic: laHeic, khungMoi: khungMoi, chonBanNhe: chonBanNhe, coKhiKeo: coKhiKeo,
-    CANH_TOI_DA: CANH_TOI_DA, TRAN_MB: TRAN_MB,
+    timestampName: timestampName, extForType: extForType, storableExt: storableExt, isImage: isImage,
+    skipCompress: skipCompress, isHeic: isHeic, fitBox: fitBox, pickSmaller: pickSmaller, dragWidth: dragWidth,
+    MAX_EDGE: MAX_EDGE, MAX_MB: MAX_MB,
   };
 
-  // ---------------------------------------------------------------- phan DOM
+  // ---------------------------------------------------------------- DOM part
   if (typeof document !== "undefined") {
-    function brainHienTai() {
+    function currentBrain() {
       try { return (window.currentBrainPath && window.currentBrainPath()) || "brain"; }
       catch (e) { return "brain"; }
     }
-    function ctxTu(target) {
+    function contextFor(target) {
       var EC = window.JavisEditorCmds;
-      return (EC && EC.ctxTu) ? EC.ctxTu(target) : null;
+      return (EC && EC.contextFor) ? EC.contextFor(target) : null;
     }
 
-    // ----- bang trang thai nho o goc man hinh -----
-    var bang = null, bangHen = null;
-    function noi(chu, loai) {
-      if (!bang) {
-        bang = document.createElement("div");
-        bang.className = "ni-status";
-        document.body.appendChild(bang);
+    // ----- small status toast in the screen corner -----
+    var toast = null, toastTimer = null;
+    function showStatus(text, kind) {
+      if (!toast) {
+        toast = document.createElement("div");
+        toast.className = "ni-status";
+        document.body.appendChild(toast);
       }
-      bang.textContent = chu;
-      bang.className = "ni-status show" + (loai ? " ni-" + loai : "");
-      clearTimeout(bangHen);
-      // Loi thi de lau hon: nguoi dung can doc kip xem vi sao anh khong vao.
-      bangHen = setTimeout(function () { if (bang) bang.className = "ni-status"; },
-                           loai === "err" ? 5000 : 1800);
+      toast.textContent = text;
+      toast.className = "ni-status show" + (kind ? " ni-" + kind : "");
+      clearTimeout(toastTimer);
+      // Errors stay longer: the user needs time to read why the image did not go in.
+      toastTimer = setTimeout(function () { if (toast) toast.className = "ni-status"; },
+                              kind === "err" ? 5000 : 1800);
     }
 
-    // ----- nen anh bang canvas -----
-    function doAnh(file) {
+    // ----- compress with a canvas -----
+    function decodeImage(file) {
       if (window.createImageBitmap) {
-        // imageOrientation "from-image": xoay theo the EXIF. Anh dien thoai chup doc luu diem
-        // anh nam ngang kem the xoay; ve thang ra canvas ma bo qua the do la anh nam nghieng,
-        // va canvas bo luon EXIF nen ve sau khong con gi de xoay lai. (Ve qua canvas cung bo
-        // luon toa do GPS trong anh, co loi khi chia se note.)
-        var mo = function (tuyChon) {
-          return window.createImageBitmap(file, tuyChon).then(function (bm) {
-            return { nguon: bm, w: bm.width, h: bm.height, dong: function () { try { bm.close(); } catch (e) {} } };
+        // imageOrientation "from-image": rotate by the EXIF tag. A phone photo taken upright stores
+        // its pixels landscape plus a rotation tag; drawing straight to the canvas while ignoring
+        // the tag leaves the image on its side, and the canvas drops EXIF so nothing can rotate it
+        // later. (Going through the canvas also drops GPS coordinates, a plus when sharing notes.)
+        var open = function (options) {
+          return window.createImageBitmap(file, options).then(function (bm) {
+            return { source: bm, w: bm.width, h: bm.height, close: function () { try { bm.close(); } catch (e) {} } };
           });
         };
-        return mo({ imageOrientation: "from-image" }).catch(function () { return mo(); })
-          .catch(function () { return doBangThe(file); });
+        return open({ imageOrientation: "from-image" }).catch(function () { return open(); })
+          .catch(function () { return decodeWithTag(file); });
       }
-      return doBangThe(file);
+      return decodeWithTag(file);
     }
-    // Duong du phong: the <img> (CSS image-orientation mac dinh from-image nen cung xoay dung).
-    function doBangThe(file) {
+    // Fallback: an <img> tag (CSS image-orientation defaults to from-image, so it rotates right too).
+    function decodeWithTag(file) {
       return new Promise(function (res, rej) {
         var url = URL.createObjectURL(file);
         var im = new Image();
         im.onload = function () {
-          res({ nguon: im, w: im.naturalWidth, h: im.naturalHeight,
-                dong: function () { URL.revokeObjectURL(url); } });
+          res({ source: im, w: im.naturalWidth, h: im.naturalHeight,
+                close: function () { URL.revokeObjectURL(url); } });
         };
         im.onerror = function () { URL.revokeObjectURL(url); rej(new Error("decode")); };
         im.src = url;
       });
     }
-    function veRaBlob(canvas, loai, chatLuong) {
+    function canvasToBlob(canvas, type, quality) {
       return new Promise(function (res) {
-        if (canvas.toBlob) canvas.toBlob(function (b) { res(b); }, loai, chatLuong);
+        if (canvas.toBlob) canvas.toBlob(function (b) { res(b); }, type, quality);
         else res(null);
       });
     }
-    // Tra { blob, duoi, goc } - goc=true nghia la giu nguyen ban goc, khong nen.
-    function nenAnh(file) {
+    // Returns { blob, ext, original } - original=true means the original file is kept as-is.
+    function compressImage(file) {
       // Null when the original may not be uploaded as-is: then only a re-encoded copy goes up.
-      var duoiGoc = storableExt(file.type, file.name);
-      if (khongNen(file.type, file.name)) {
-        return Promise.resolve({ blob: file, duoi: ".gif", goc: true });
+      var origExt = storableExt(file.type, file.name);
+      if (skipCompress(file.type, file.name)) {
+        return Promise.resolve({ blob: file, ext: ".gif", original: true });
       }
-      return doAnh(file).then(function (a) {
-        var k = khungMoi(a.w, a.h, CANH_TOI_DA);
+      return decodeImage(file).then(function (a) {
+        var k = fitBox(a.w, a.h, MAX_EDGE);
         var cv = document.createElement("canvas");
         cv.width = k.w; cv.height = k.h;
         var ct = cv.getContext("2d");
-        ct.drawImage(a.nguon, 0, 0, k.w, k.h);
-        a.dong();
-        return veRaBlob(cv, "image/webp", CHAT_LUONG).then(function (b) {
-          if (!b) return duoiGoc ? { blob: file, duoi: duoiGoc, goc: true } : { unsupported: true };
-          // Trinh duyet khong biet webp thi no tra ve png ma KHONG bao loi - phai lay duoi
-          // theo loai blob THAT, khong thi file .webp ben trong lai la png.
-          var duoi = duoiTheoLoai(b.type, "") || ".webp";
+        ct.drawImage(a.source, 0, 0, k.w, k.h);
+        a.close();
+        return canvasToBlob(cv, "image/webp", QUALITY).then(function (b) {
+          if (!b) return origExt ? { blob: file, ext: origExt, original: true } : { unsupported: true };
+          // A browser without webp support returns png WITHOUT an error - the extension must
+          // follow the REAL blob type, or a .webp file would hold a png.
+          var ext = extForType(b.type, "") || ".webp";
           // An original that may not be stored as-is (e.g. HEIC) always goes up re-encoded.
-          if (duoiGoc && chonBanNhe(file.size, b.size, k.doi) === "goc") {
-            return { blob: file, duoi: duoiGoc, goc: true };
+          if (origExt && pickSmaller(file.size, b.size, k.resized) === "original") {
+            return { blob: file, ext: origExt, original: true };
           }
-          return { blob: b, duoi: duoi, goc: false };
+          return { blob: b, ext: ext, original: false };
         });
       }).catch(function () {
-        // Khong doc duoc: HEIC thi chan (xem laHeic). Another type goes up as-is only when its
+        // Could not decode: HEIC is refused (see isHeic). Another type goes up as-is only when its
         // extension is a storable one; an unknown type is not uploaded.
-        if (laHeic(file.type, file.name)) return { heic: true };
-        if (!duoiGoc) return { unsupported: true };
-        return { blob: file, duoi: duoiGoc, goc: true };
+        if (isHeic(file.type, file.name)) return { heic: true };
+        if (!origExt) return { unsupported: true };
+        return { blob: file, ext: origExt, original: true };
       });
     }
 
-    // ----- tai len -----
-    function taiLen(blob, ten) {
+    // ----- upload -----
+    function upload(blob, name) {
       var fd = new FormData();
-      fd.append("file", blob, ten);
-      fd.append("brain", brainHienTai());
-      fd.append("folder", "images");          // server tu tim/tao dung thu muc that
+      fd.append("file", blob, name);
+      fd.append("brain", currentBrain());
+      fd.append("folder", "images");          // the server finds/creates the real folder
       return fetch("/files/upload", { method: "POST", body: fd })
         .then(function (r) { return r.json().catch(function () { return {}; }); })
         .then(function (d) {
-          if (!d || !d.ok || !d.path) throw new Error((d && d.error) || tw("nimg.loi_tai"));
+          if (!d || !d.ok || !d.path) throw new Error((d && d.error) || tw("nimg.upload_failed"));
           return d.path;
         });
     }
 
-    // ----- chen vao editor -----
-    // Ban render: dung DUNG markup ma mdToHtml sinh ra cho ![[..]], nho vay luat turndown
-    // "wikiimg" nhan lai duoc va luu nguoc ra ![[..]] y nguyen.
-    function htmlAnh(path) {
+    // ----- insert into the editor -----
+    // Render pane: use EXACTLY the markup mdToHtml produces for ![[..]], so the turndown rule
+    // "wikiimg" recognizes it and saves it back to the same ![[..]].
+    function imageHtml(path) {
       var md = "![[" + path + "]]";
       var h = window.mdToHtml ? window.mdToHtml(md) : "";
-      var hop = document.createElement("div");
-      hop.innerHTML = h;
-      // mdToHtml boc trong <p>; chen ca the <p> vao giua mot doan dang go la bi xe doan.
-      var con = (hop.children.length === 1 && hop.firstElementChild.tagName === "P")
-        ? hop.firstElementChild.innerHTML : hop.innerHTML;
-      return con || null;
+      var box = document.createElement("div");
+      box.innerHTML = h;
+      // mdToHtml wraps in <p>; inserting a whole <p> in the middle of a paragraph splits it.
+      var inner = (box.children.length === 1 && box.firstElementChild.tagName === "P")
+        ? box.firstElementChild.innerHTML : box.innerHTML;
+      return inner || null;
     }
-    function chen(ctx, path) {
+    function insertLink(ctx, path) {
       if (!ctx) return false;
       // The upload takes a while: if that note was closed or another one opened meanwhile, the
       // editor body was rebuilt and this host is detached. Bail out so the link never lands in
@@ -271,70 +273,70 @@
       }
       var wys = ctx.wys;
       if (!wys) return false;
-      var html = htmlAnh(path);
+      var html = imageHtml(path);
       if (!html) return false;
       try { wys.focus(); } catch (e) {}
-      // Caret co the dang o ngoai (vua bam nut tren thanh cong cu): dat ve cuoi bai cho khoi
-      // chen anh vao hu khong.
+      // The caret may be outside (a toolbar button was just clicked): move it to the end of the
+      // note so the image does not go nowhere.
       try {
         var sel = window.getSelection();
-        var trong = !sel || !sel.rangeCount ||
+        var outside = !sel || !sel.rangeCount ||
           !(sel.anchorNode && (sel.anchorNode === wys || wys.contains(sel.anchorNode)));
-        if (trong) {
+        if (outside) {
           var r = document.createRange(); r.selectNodeContents(wys); r.collapse(false);
           sel.removeAllRanges(); sel.addRange(r);
         }
       } catch (e) {}
       try { document.execCommand("insertHTML", false, html + "&nbsp;"); } catch (e) { return false; }
-      // Tu luu: chen anh xong ma chua luu, dong khung la link anh bay mat con file anh nam lai
-      // trong images/ khong ai tro toi.
+      // Autosave: insert an image without saving, close the editor, and the link is gone while
+      // the file stays in images/ with nothing pointing at it.
       try { wys.dispatchEvent(new Event("input", { bubbles: true })); } catch (e) {}
       return true;
     }
 
-    // ----- duong di chinh: tep -> nen -> tai len -> chen -----
-    function xuLyMotTep(ctx, file) {
-      if (!laAnh(file.type, file.name)) return Promise.resolve(false);
-      if (file.size > TRAN_MB * 1024 * 1024) {
-        noi(tw("nimg.qua_lon", { mb: TRAN_MB }), "err");
+    // ----- main path: file -> compress -> upload -> insert -----
+    function handleFile(ctx, file) {
+      if (!isImage(file.type, file.name)) return Promise.resolve(false);
+      if (file.size > MAX_MB * 1024 * 1024) {
+        showStatus(tw("nimg.too_large", { mb: MAX_MB }), "err");
         return Promise.resolve(false);
       }
-      noi(tw("nimg.dang_xu_ly"));
-      return nenAnh(file).then(function (kq) {
-        if (kq.heic) { noi(tw("nimg.heic"), "err"); return false; }
-        if (kq.unsupported) { noi(tw("nimg.unsupported"), "err"); return false; }
-        return taiLen(kq.blob, tenAnhTheoGio(new Date(), kq.duoi)).then(function (path) {
-          if (!chen(ctx, path)) throw new Error(tw("nimg.loi_chen"));
-          noi(tw("nimg.xong", { kb: Math.max(1, Math.round(kq.blob.size / 1024)) }), "ok");
+      showStatus(tw("nimg.working"));
+      return compressImage(file).then(function (res) {
+        if (res.heic) { showStatus(tw("nimg.heic"), "err"); return false; }
+        if (res.unsupported) { showStatus(tw("nimg.unsupported"), "err"); return false; }
+        return upload(res.blob, timestampName(new Date(), res.ext)).then(function (path) {
+          if (!insertLink(ctx, path)) throw new Error(tw("nimg.no_place"));
+          showStatus(tw("nimg.done", { kb: Math.max(1, Math.round(res.blob.size / 1024)) }), "ok");
           return true;
         });
       }).catch(function (err) {
-        noi(tw("nimg.loi", { loi: (err && err.message) || "?" }), "err");
+        showStatus(tw("nimg.failed", { error: (err && err.message) || "?" }), "err");
         return false;
       });
     }
-    // Nhieu anh mot luot: lam TUAN TU de thu tu chen dung nhu thu tu nguoi dung chon, va de
-    // ten theo giay khong doi dau nhau trong cung mot lan.
-    function xuLyNhieuTep(ctx, files) {
-      var ds = [];
-      for (var i = 0; i < files.length; i++) if (laAnh(files[i].type, files[i].name)) ds.push(files[i]);
-      if (!ds.length) return Promise.resolve(0);
+    // Several images at once: run them IN SEQUENCE so they land in the order the user picked,
+    // and so per-second names within one batch do not collide.
+    function handleFiles(ctx, files) {
+      var list = [];
+      for (var i = 0; i < files.length; i++) if (isImage(files[i].type, files[i].name)) list.push(files[i]);
+      if (!list.length) return Promise.resolve(0);
       var n = 0;
-      return ds.reduce(function (chuoi, f) {
-        return chuoi.then(function () {
-          return xuLyMotTep(ctx, f).then(function (ok) { if (ok) n++; });
+      return list.reduce(function (chain, f) {
+        return chain.then(function () {
+          return handleFile(ctx, f).then(function (ok) { if (ok) n++; });
         });
       }, Promise.resolve()).then(function () { return n; });
     }
 
-    // ----- DAN (Ctrl+V) -----
+    // ----- PASTE (Ctrl+V) -----
     document.addEventListener("paste", function (e) {
-      var ctx = ctxTu(e.target);
+      var ctx = contextFor(e.target);
       if (!ctx) return;
       var dt = e.clipboardData;
       if (!dt) return;
       var files = [];
-      // dt.files rong tren mot so ban Firefox khi dan anh chup man hinh -> phai doc ca items.
+      // dt.files is empty in some Firefox versions when pasting a screenshot -> read items too.
       if (dt.files && dt.files.length) {
         for (var i = 0; i < dt.files.length; i++) files.push(dt.files[i]);
       } else if (dt.items) {
@@ -345,15 +347,15 @@
           }
         }
       }
-      var anh = files.filter(function (f) { return laAnh(f.type, f.name); });
-      if (!anh.length) return;             // dan CHU thi de editor lo binh thuong
+      var images = files.filter(function (f) { return isImage(f.type, f.name); });
+      if (!images.length) return;          // pasting TEXT: leave it to the editor as usual
       e.preventDefault();
-      xuLyNhieuTep(ctx, anh);
+      handleFiles(ctx, images);
     }, true);
 
-    // ----- THA tep vao khung soan -----
+    // ----- DROP files into the editor -----
     document.addEventListener("dragover", function (e) {
-      var ctx = ctxTu(e.target);
+      var ctx = contextFor(e.target);
       if (!ctx) return;
       var dt = e.dataTransfer;
       if (!dt || !dt.types || Array.prototype.indexOf.call(dt.types, "Files") < 0) return;
@@ -361,23 +363,23 @@
       try { dt.dropEffect = "copy"; } catch (err) {}
     });
     document.addEventListener("drop", function (e) {
-      var ctx = ctxTu(e.target);
+      var ctx = contextFor(e.target);
       if (!ctx) return;
       var dt = e.dataTransfer;
       if (!dt || !dt.files || !dt.files.length) return;
-      var anh = [];
+      var images = [];
       for (var i = 0; i < dt.files.length; i++) {
-        if (laAnh(dt.files[i].type, dt.files[i].name)) anh.push(dt.files[i]);
+        if (isImage(dt.files[i].type, dt.files[i].name)) images.push(dt.files[i]);
       }
-      if (!anh.length) return;
+      if (!images.length) return;
       e.preventDefault();
-      // Tha KHONG dat duoc caret theo diem tha trong moi trinh duyet, nen chen tai caret dang
-      // co. Bam mot cai vao cho muon chen roi tha la dung y.
-      xuLyNhieuTep(ctx, anh);
+      // Not every browser can place the caret at the drop point, so insert at the current caret.
+      // Click where the image should go, then drop.
+      handleFiles(ctx, images);
     }, true);
 
-    // ----- nut tren thanh cong cu: chon tep -----
-    function chonTep(ctx) {
+    // ----- toolbar button: pick files -----
+    function pickFiles(ctx) {
       var inp = document.createElement("input");
       inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
       inp.style.display = "none";
@@ -385,103 +387,103 @@
       inp.addEventListener("change", function () {
         var fs = inp.files;
         inp.remove();
-        if (fs && fs.length) xuLyNhieuTep(ctx, fs);
+        if (fs && fs.length) handleFiles(ctx, fs);
       });
       inp.click();
     }
 
-    // ================================================================ TAY KEO DOI CO ANH
-    // Chromium KHONG con tay keo anh san trong contenteditable (Firefox co, qua
-    // enableObjectResizing) nen phai tu ve mot tay keo noi tuyen tren anh.
-    var tay = null, anhDangTro = null, keo = null;
+    // ================================================================ RESIZE GRIP
+    // Chromium NO LONGER has a built-in image grip in contenteditable (Firefox does, through
+    // enableObjectResizing), so we draw our own floating grip on the image.
+    var grip = null, hoverImg = null, drag = null;
 
-    function anhTrongEditor(el) {
+    function editorImage(el) {
       if (!el || el.tagName !== "IMG") return null;
       var wys = el.closest ? el.closest(".ne-wys") : null;
       return wys ? el : null;
     }
-    function veTay() {
-      if (!anhDangTro || !anhDangTro.isConnected) return anTay();
-      var r = anhDangTro.getBoundingClientRect();
-      if (!r.width && !r.height) return anTay();
-      tay.style.left = (r.right - 7) + "px";
-      tay.style.top = (r.bottom - 7) + "px";
-      tay.classList.add("show");
+    function placeGrip() {
+      if (!hoverImg || !hoverImg.isConnected) return hideGrip();
+      var r = hoverImg.getBoundingClientRect();
+      if (!r.width && !r.height) return hideGrip();
+      grip.style.left = (r.right - 7) + "px";
+      grip.style.top = (r.bottom - 7) + "px";
+      grip.classList.add("show");
     }
-    function anTay() {
-      anhDangTro = null;
-      if (tay) tay.classList.remove("show");
+    function hideGrip() {
+      hoverImg = null;
+      if (grip) grip.classList.remove("show");
     }
-    function hienTay(img) {
-      if (!tay) {
-        tay = document.createElement("div");
-        tay.className = "ni-grip";
-        tay.title = tw("nimg.tay_keo");
-        document.body.appendChild(tay);
-        tay.addEventListener("mousedown", batDauKeo);
-        // Bam dup vao tay keo = ve co GOC (bo "|300"), khong phai doan mo lai note de sua tay.
-        tay.addEventListener("dblclick", function (e) {
+    function showGrip(img) {
+      if (!grip) {
+        grip = document.createElement("div");
+        grip.className = "ni-grip";
+        grip.title = tw("nimg.resize_grip");
+        document.body.appendChild(grip);
+        grip.addEventListener("mousedown", startDrag);
+        // Double-click the grip = back to ORIGINAL size (drop "|300"), no need to edit the note by hand.
+        grip.addEventListener("dblclick", function (e) {
           e.preventDefault();
-          if (!anhDangTro) return;
-          anhDangTro.style.width = ""; anhDangTro.style.height = "";
-          anhDangTro.removeAttribute("data-img-size");
-          banInput(anhDangTro);
-          veTay();
+          if (!hoverImg) return;
+          hoverImg.style.width = ""; hoverImg.style.height = "";
+          hoverImg.removeAttribute("data-img-size");
+          fireInput(hoverImg);
+          placeGrip();
         });
       }
-      anhDangTro = img;
-      veTay();
+      hoverImg = img;
+      placeGrip();
     }
-    function banInput(img) {
+    function fireInput(img) {
       try {
         var wys = img.closest(".ne-wys");
         if (wys) wys.dispatchEvent(new Event("input", { bubbles: true }));
       } catch (e) {}
     }
-    function batDauKeo(e) {
-      if (!anhDangTro) return;
+    function startDrag(e) {
+      if (!hoverImg) return;
       e.preventDefault(); e.stopPropagation();
-      var wys = anhDangTro.closest(".ne-wys");
-      keo = {
-        img: anhDangTro, x: e.clientX,
-        w: anhDangTro.getBoundingClientRect().width,
-        tran: wys ? wys.clientWidth - 28 : 0,
+      var wys = hoverImg.closest(".ne-wys");
+      drag = {
+        img: hoverImg, x: e.clientX,
+        w: hoverImg.getBoundingClientRect().width,
+        cap: wys ? wys.clientWidth - 28 : 0,
       };
-      document.body.classList.add("ni-keo");
-      document.addEventListener("mousemove", dangKeo, true);
-      document.addEventListener("mouseup", xongKeo, true);
+      document.body.classList.add("ni-dragging");
+      document.addEventListener("mousemove", onDrag, true);
+      document.addEventListener("mouseup", endDrag, true);
     }
-    function dangKeo(e) {
-      if (!keo) return;
+    function onDrag(e) {
+      if (!drag) return;
       e.preventDefault();
-      var w = coKhiKeo(keo.w, e.clientX - keo.x, keo.tran);
-      keo.img.style.width = w + "px";
-      keo.img.style.height = "";            // giu ti le: chi dat mot chieu
-      keo.img.setAttribute("data-img-size", String(w));
-      veTay();
+      var w = dragWidth(drag.w, e.clientX - drag.x, drag.cap);
+      drag.img.style.width = w + "px";
+      drag.img.style.height = "";           // keep the aspect ratio: set one dimension only
+      drag.img.setAttribute("data-img-size", String(w));
+      placeGrip();
     }
-    function xongKeo() {
-      document.removeEventListener("mousemove", dangKeo, true);
-      document.removeEventListener("mouseup", xongKeo, true);
-      document.body.classList.remove("ni-keo");
-      if (keo) banInput(keo.img);           // co moi -> tu luu
-      keo = null;
-      veTay();
+    function endDrag() {
+      document.removeEventListener("mousemove", onDrag, true);
+      document.removeEventListener("mouseup", endDrag, true);
+      document.body.classList.remove("ni-dragging");
+      if (drag) fireInput(drag.img);        // new size -> autosave
+      drag = null;
+      placeGrip();
     }
 
     document.addEventListener("mouseover", function (e) {
-      if (keo) return;
-      if (tay && (e.target === tay || (tay.contains && tay.contains(e.target)))) return;
-      var img = anhTrongEditor(e.target);
-      if (img) hienTay(img);
-      else if (anhDangTro) anTay();
+      if (drag) return;
+      if (grip && (e.target === grip || (grip.contains && grip.contains(e.target)))) return;
+      var img = editorImage(e.target);
+      if (img) showGrip(img);
+      else if (hoverImg) hideGrip();
     });
-    // Cuon hoac doi co cua so: toa do tay keo (position:fixed) lech ngay -> ve lai.
-    window.addEventListener("scroll", function () { if (anhDangTro && !keo) veTay(); }, true);
-    window.addEventListener("resize", function () { if (anhDangTro) anTay(); });
+    // Scrolling or resizing the window moves the image under the fixed grip -> redraw.
+    window.addEventListener("scroll", function () { if (hoverImg && !drag) placeGrip(); }, true);
+    window.addEventListener("resize", function () { if (hoverImg) hideGrip(); });
 
-    api.chonTep = chonTep;
-    api.xuLyNhieuTep = xuLyNhieuTep;
+    api.pickFiles = pickFiles;
+    api.handleFiles = handleFiles;
     window.JavisNoteImages = api;
   }
 
