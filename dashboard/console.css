@@ -2838,6 +2838,9 @@ body.on-teams .cview-head { display: none; }
 /* Khung soạn một hàng: công tắc Giao việc, ô chữ tự cao, nút gửi tròn. */
 .tm-composer { border-top: 1px solid var(--border); padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); position: relative; background: var(--bg); }
 .tm-composer[hidden] { display: none; }
+/* Keyboard open on a phone (mobile-chat.js sets body.kb-open from visualViewport): the Home bar sits under the keyboard,
+   so the safe-area gap under the input is dropped, like the main composer. */
+body.kb-open .tm-composer { padding-bottom: 8px; }
 .tm-row { display: flex; align-items: flex-end; gap: 6px; }
 .tm-row[hidden] { display: none; }
 /* 0.176.0 composer, the same shape as the main chat: "+" (menu: Assign job, Mention, Search), the input, mic, send. */

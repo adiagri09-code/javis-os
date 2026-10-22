@@ -3735,58 +3735,12 @@ function clearAttachments() {
 //   1. Chip hiện PHẦN TRĂM đã gửi, và tách hẳn hai khúc: "đang gửi 45%" (việc của mạng) với
 //      "máy chủ đang lưu" (việc của máy chủ). Nhìn là biết kẹt ở đâu.
 //   2. Canh KẸT thay cho trần cứng 3 phút: file to trên mạng chậm vẫn đi hết miễn còn nhích;
-//      còn đứng im TAI_KET_MS không nhích byte nào thì cắt và TỰ THỬ LẠI (tối đa TAI_THU_LAI lần).
+//      còn đứng im JavisUpload.STALL_MS không nhích byte nào thì cắt và TỰ THỬ LẠI (tối đa TAI_THU_LAI lần).
 //   3. Hỏng hẳn thì chip có nút tải lại, bấm là gửi lại đúng file đó, không phải chọn lại.
-const TAI_KET_MS = 30000;        // đứng im bao lâu (không nhích byte nào) thì coi là kết nối chết
-const TAI_CHO_MAY_CHU_MS = 90000; // gửi xong 100% mà máy chủ im bao lâu thì thôi
-const TAI_THU_LAI = 2;           // số lần tự thử lại khi mạng đứt/đứng (ngoài lần đầu)
-
-// Một lượt POST /upload bằng XHR (fetch không cho biết tiến độ GỬI lên). Trả Promise
-// {status, text}; lỗi thì reject Error có `kind`: "stall" (mạng đứng giữa chừng), "server"
-// (gửi xong mà máy chủ không trả lời), "net" (đứt kết nối). `XHR` và `dongHo` truyền vào được
-// để test chạy không cần trình duyệt.
-function guiUpload(fd, onTien, opt) {
-  opt = opt || {};
-  const XHR = opt.XHR || XMLHttpRequest;
-  // PHẢI bọc bằng hàm mũi tên (0.64.51). Bản 0.64.43 viết `{ setInterval, clearInterval }` rồi
-  // gọi `dongHo.setInterval(...)`: trình duyệt thấy `this` là object này chứ không phải window
-  // và ném "TypeError: Illegal invocation" ngay trước khi gửi. Mọi file đính kèm đều hỏng, chip
-  // báo "lỗi mạng" (chủ repo báo 25/09). Node không kiểm `this` nên test cũ không bắt được.
-  const dongHo = opt.dongHo || {
-    now: () => Date.now(),
-    setInterval: (fn, ms) => setInterval(fn, ms),
-    clearInterval: (id) => clearInterval(id),
-  };
-  const ketMs = opt.ketMs || TAI_KET_MS, choMs = opt.choMs || TAI_CHO_MAY_CHU_MS;
-  return new Promise((resolve, reject) => {
-    const xhr = new XHR();
-    // Lỗi ném ngay trong lúc DỰNG yêu cầu (không phải lỗi mạng) phải nói đúng tên, không được
-    // rơi thành "lỗi mạng" rồi tự thử lại vô ích như vụ 25/09.
-    let moc = dongHo.now(), guiXong = false, xong = false, ly = null;
-    const ket = (loai) => { if (xong) return; ly = loai; try { xhr.abort(); } catch (e) {} };
-    const canh = dongHo.setInterval(() => {
-      const im = dongHo.now() - moc;
-      if (!guiXong && im > ketMs) ket("stall");
-      else if (guiXong && im > choMs) ket("server");
-    }, 2000);
-    const het = (fn, v) => { if (xong) return; xong = true; dongHo.clearInterval(canh); fn(v); };
-    const loi = (loai) => { const e = new Error(loai); e.kind = loai; return e; };
-    xhr.upload.onprogress = (e) => {
-      moc = dongHo.now();
-      if (onTien && e.lengthComputable) onTien(e.loaded, e.total);
-    };
-    xhr.upload.onload = () => { guiXong = true; moc = dongHo.now(); if (onTien) onTien(-1, -1); };
-    xhr.onload = () => het(resolve, { status: xhr.status, text: xhr.responseText });
-    xhr.onerror = () => het(reject, loi("net"));
-    xhr.onabort = () => het(reject, loi(ly || "net"));
-    try {
-      xhr.open("POST", "/upload");
-      xhr.send(fd);
-    } catch (e) {
-      het(reject, Object.assign(loi("client"), { chiTiet: (e && e.message) || String(e) }));
-    }
-  });
-}
+// The XHR with progress and the stall watch live in chat-upload.js (JavisUpload.send, shared with the Team chat); errors
+// carry `kind`: "stall" (network stopped mid way), "server" (sent but no answer), "net" (dropped), "client" (browser).
+const TAI_THU_LAI = window.JavisUpload.RETRIES;   // automatic retries after a stall or a dropped connection
+function guiUpload(fd, onTien, opt) { return window.JavisUpload.send(fd, onTien, opt); }
 
 async function uploadFile(file, att) {
   const isImg = file.type.startsWith("image/");
@@ -3853,7 +3807,7 @@ async function _taiLen(file, att) {
       if (kind === "client") {
         try { console.error("[upload] browser-side error:", e); } catch (_e) {}
         att.loi = true;
-        att.statusText = window.t("app.att_client_err", { msg: String((e && (e.chiTiet || e.message)) || e).slice(0, 80) });
+        att.statusText = window.t("app.att_client_err", { msg: String((e && (e.detail || e.message)) || e).slice(0, 80) });
         return;
       }
       // Mạng đứng/đứt thì tự thử lại (máy chủ có lưu dở cũng vô hại: mỗi lần là một tên

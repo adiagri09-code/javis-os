@@ -283,6 +283,8 @@
     var Q = quoteApi();
     var s = String(text == null ? "" : text);
     if (Q) s = Q.tach(s).rest;
+    // Hidden blocks (JAVIS_CARD, JAVIS_ASK... are HTML comments) never show in a preview or a quote.
+    s = s.replace(/<!--[\s\S]*?-->/g, " ").replace(/<!--[\s\S]*$/, " ");
     // 0.192.0: a preview reads as text: pictures dropped, [label](path) and [[note|label]] become their label.
     s = s.replace(/!\[[^\]]*\]\([^)]*\)/g, " ").replace(/!\[\[[^\]]*\]\]/g, " ")
       .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
@@ -2157,24 +2159,51 @@
 
   // ───────────── reply to a message ─────────────
 
-  function startReply(mid) {
-    var m = msgById(Number(mid));
-    if (!m || !S.team) return;
+  // What a reply to message `m` carries: the author's name, the preview for the reply bar, the quote sent on top (just
+  // `part` when the owner selected part of the message) and the assistant to call. Replying to an assistant also calls
+  // that assistant (when nobody else is @-mentioned), so the correction lands with the one who wrote the answer.
+  function replyTarget(m, part) {
+    if (!m || !S.team) return null;
     var mine = m.author_kind === "owner";
     var author = mine ? null : (memberOf(S.team.members, m.author_ref) || (S.team.authors || {})[m.author_ref] || null);
     var who = mine ? tw("teams.owner") : author ? (author.name || author.slug || m.author_ref) : (m.author_ref || tw("teams.system"));
+    var Q = quoteApi();
+    var partShort = function (n) { return Q ? Q.xemTruoc(part, n) : part.replace(/\s+/g, " ").slice(0, n); };
+    var active = author && memberOf(S.team.members, m.author_ref);
+    return { id: Number(m.id), who: who, preview: part ? partShort(160) : plainPreview(m.content, 160),
+      quote: who + ": " + (part || plainPreview(m.content, 280)),
+      key: !mine && active && (!active.status || active.status === "active") ? m.author_ref : "" };
+  }
+
+  // A button of a JAVIS_CARD in an assistant's message (chat-card.js): its words are sent as the owner's reply to that
+  // message, in this team (they used to go to the hidden main chat).
+  function sendCardReply(btn, text) {
+    var host = btn && btn.closest && btn.closest(".tm-msg");
+    var target = host ? replyTarget(msgById(Number(host.getAttribute("data-mid"))), "") : null;
+    text = String(text || "").trim();
+    if (!target || !text || S.team.status === "archived") return;
+    var Q = quoteApi();
+    var body = { text: Q ? Q.ghep(target.quote, text) : text, mentions: target.key ? [target.key] : [], as_job: false,
+      client_msg_id: newClientId() };
+    var forTeam = S.activeId;
+    var post = function () {
+      return call("POST", teamUrl("/messages"), body).then(function (r) {
+        if (S.activeId !== forTeam) return;
+        if (r.code !== 200) { fail(r); return; }
+        loadMsgs(false); loadQueue();
+      }).catch(function () { setNote(tw("teams.err_network"), post); });   // retry sends the same client id: never twice
+    };
+    post();
+  }
+
+  function startReply(mid) {
+    var m = msgById(Number(mid));
+    if (!m || !S.team) return;
     // Part of the message selected: quote just that part, like the main chat (read before the redraw below drops it).
     var A = actsApi();
     var el = S.el.querySelector('.tm-msg[data-mid="' + Number(m.id) + '"]');
-    var part = A && A.selectedIn && el ? A.selectedIn(el) : "";
-    var Q = quoteApi();
-    var partShort = function (n) { return Q ? Q.xemTruoc(part, n) : part.replace(/\s+/g, " ").slice(0, n); };
-    // Replying to an assistant also calls that assistant (when nobody else is @-mentioned), so the correction lands
-    // with the one who wrote the answer, like replying to someone in a group chat.
-    var active = author && memberOf(S.team.members, m.author_ref);
-    S.replyTo = { id: Number(m.id), who: who, preview: part ? partShort(160) : plainPreview(m.content, 160),
-      quote: who + ": " + (part || plainPreview(m.content, 280)),
-      key: !mine && active && (!active.status || active.status === "active") ? m.author_ref : "" };
+    S.replyTo = replyTarget(m, A && A.selectedIn && el ? A.selectedIn(el) : "");
+    if (!S.replyTo) return;
     S.picker = null;
     S.pending = null;
     var box = S.el.querySelector(".tm-msgs");
@@ -2353,10 +2382,13 @@
     rv.shown = 0;
     var msgs = S.el && S.el.querySelector(".tm-msgs");
     if (!msgs) return;
+    // Follow the next answer down only when the owner is at the latest message: reading higher up in the history, the
+    // view stays where it is (it used to jump to the bottom at the end of every revealed answer).
+    var atEnd = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 120;
     var w = rv.active !== null ? msgs.querySelector('[data-mid="' + rv.active + '"]') : null;
     if (w) w.classList.remove("tm-rv-wait");
     if (rv.active !== null) applyReveal(msgs);
-    msgs.scrollTop = msgs.scrollHeight;
+    if (atEnd) msgs.scrollTop = msgs.scrollHeight;
   }
   function stopReveal() {
     if (S && S.rv && S.rv.timer) clearTimeout(S.rv.timer);
@@ -2764,13 +2796,72 @@
   // A team is a normal conversation underneath: its documents are that conversation's documents
   // (/sessions/{session_id}/assets) and its working folder is that conversation's pinned folder (/coding/session/...).
 
-  function upload(file) {
-    var fd = new FormData();
-    fd.append("file", file);
-    fd.append("brain", brain());
-    return fetch("/upload", { method: "POST", body: fd, credentials: "same-origin" }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (j) { return { code: r.status, j: j || {} }; });
-    });
+  // One file to /upload with progress and the main chat's stall watch (chat-upload.js): a dead connection is cut after
+  // 30 s without a byte and retried, a server silent after the upload is reported, so a chip never spins forever and
+  // Send is never blocked for good (it waits for busy chips). Resolves { code, j } like call(); rejects an Error with
+  // `kind` once the retries are spent.
+  function upload(file, a) {
+    var U = typeof window !== "undefined" && window.JavisUpload;
+    if (!U) {
+      var fd0 = new FormData();
+      fd0.append("file", file);
+      fd0.append("brain", brain());
+      return fetch("/upload", { method: "POST", body: fd0, credentials: "same-origin" }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) { return { code: r.status, j: j || {} }; });
+      });
+    }
+    var tries = 0;
+    var once = function () {
+      var fd = new FormData();
+      fd.append("file", file, (a && a.name) || file.name);
+      fd.append("brain", brain());
+      return U.send(fd, function (loaded, total) {
+        if (!a) return;
+        a.status = loaded < 0 ? tw("app.att_saving")
+          : tw("app.att_progress", { pct: total ? Math.min(99, Math.floor(loaded * 100 / total)) : 0 });
+        drawAttStatus(a);
+      }).then(function (r) {
+        var j = {};
+        try { j = JSON.parse(r.text) || {}; } catch (e) { j = {}; }
+        return { code: r.status, j: j };
+      }, function (e) {
+        var kind = (e && e.kind) || "net";
+        if ((kind === "stall" || kind === "net") && tries < U.RETRIES) {
+          tries++;
+          if (a) { a.status = tw("app.att_retrying", { n: tries + 1 }); drawAttStatus(a); }
+          return new Promise(function (res) { setTimeout(res, 1500 * tries); }).then(once);
+        }
+        throw e;
+      });
+    };
+    return once();
+  }
+
+  // The words a failed upload shows on its chip (the main chat's wording).
+  function uploadError(e) {
+    var kind = (e && e.kind) || "net";
+    if (kind === "server") return tw("app.att_server_slow");
+    if (kind === "stall") return tw("app.att_stalled");
+    if (kind === "client") return tw("app.att_client_err", { msg: String((e && (e.detail || e.message)) || e).slice(0, 80) });
+    return tw("teams.err_network");
+  }
+
+  // Progress fires often: update the status words of that one chip in place (redrawing the composer would take the
+  // focus out of the input the owner may be typing in).
+  function drawAttStatus(a) {
+    var i = S.atts.indexOf(a);
+    var st = i >= 0 && S.el.querySelector('.tm-chip[data-att="' + i + '"] .tm-chip-st');
+    if (st) st.textContent = a.status || tw("teams.uploading");
+  }
+
+  function startUpload(a) {
+    a.busy = true; a.err = ""; a.status = "";
+    upload(a.file, a).then(function (r) {
+      a.busy = false;
+      if (r.code !== 200 || !r.j.staged) a.err = (r.j && (r.j.error || r.j.detail)) || tw("teams.attach_err");
+      else { a.path = r.j.staged; a.file = null; }
+      drawComposer();
+    }).catch(function (e) { a.busy = false; a.err = uploadError(e); drawComposer(); });
   }
 
   function pickFiles(onDone) {
@@ -2782,16 +2873,13 @@
 
   function attachFiles(files) {
     files.slice(0, 10).forEach(function (f) {
-      var a = { name: f.name, size: f.size, kind: /^image\//.test(f.type || "") ? "image" : "file", path: "", busy: true, err: "" };
+      // The File stays on the chip until it is uploaded, so a failed chip can be sent again without picking it again.
+      var a = { name: f.name, size: f.size, kind: /^image\//.test(f.type || "") ? "image" : "file", path: "", busy: true, err: "",
+        file: f };
       // 0.192.0: a picture shows itself on its chip, like the main chat.
       if (a.kind === "image") { try { a.url = URL.createObjectURL(f); } catch (e) { a.url = ""; } }
       S.atts.push(a);
-      upload(f).then(function (r) {
-        a.busy = false;
-        if (r.code !== 200 || !r.j.staged) a.err = (r.j && (r.j.error || r.j.detail)) || tw("teams.attach_err");
-        else a.path = r.j.staged;
-        drawComposer();
-      }).catch(function () { a.busy = false; a.err = tw("teams.err_network"); drawComposer(); });
+      startUpload(a);
     });
     drawComposer();
   }
@@ -2868,10 +2956,13 @@
         esc(tw("cp.pin_unpin")) + '">' + ic("x") + "</button></span>";
     }
     S.atts.forEach(function (a, i) {
-      h += '<span class="tm-chip' + (a.err ? " is-err" : "") + (a.url ? " has-thumb" : "") + '">' +
+      h += '<span class="tm-chip' + (a.err ? " is-err" : "") + (a.url ? " has-thumb" : "") + '" data-att="' + i + '">' +
         (a.url ? '<img class="tm-chip-thumb" src="' + esc(a.url) + '" alt="">' : ic(a.kind === "image" ? "image" : "paperclip")) +
         '<span class="tm-chip-name">' + esc(a.name) + "</span>" +
-        (a.busy ? '<span class="tm-chip-st">' + esc(tw("teams.uploading")) + "</span>" : a.err ? '<span class="tm-chip-st">' + esc(a.err) + "</span>" : "") +
+        (a.busy ? '<span class="tm-chip-st">' + esc(a.status || tw("teams.uploading")) + "</span>" : a.err ? '<span class="tm-chip-st">' + esc(a.err) + "</span>" : "") +
+        // A failed upload: send the same file again from here (the main chat's chip retry).
+        (a.err && a.file ? '<button type="button" class="tm-chip-x tm-chip-retry" data-att-retry="' + i + '" aria-label="' +
+          esc(tw("app.att_retry")) + '" title="' + esc(tw("app.att_retry")) + '">' + ic("rotate-cw") + "</button>" : "") +
         '<button type="button" class="tm-chip-x" data-att-x="' + i + '" aria-label="' + esc(tw("teams.attach_remove")) + '" title="' +
         esc(tw("teams.attach_remove")) + '">' + ic("x") + "</button></span>";
     });
@@ -3035,6 +3126,8 @@
     if (!input || !S.team) return;
     var typed = input.value.trim();
     if (S.atts.some(function (a) { return a.busy; })) { setNote(tw("teams.attach_wait")); return; }
+    // A file that failed to upload is not dropped silently: remove it or send it again first (main chat wording).
+    if (S.atts.some(function (a) { return a.err; })) { setNote(tw("app.att_failed_send")); return; }
     var atts = S.atts.filter(function (a) { return a.path && !a.err; });
     if (!typed && !atts.length) return;
     stopMic();
@@ -3478,6 +3571,8 @@
       drawMsgs(false);
     }
     if (!t || !(S.el.contains(t) || (S.pickHost && S.pickHost.contains(t)))) return;
+    // A JAVIS_CARD button carries data-reply too (its words, not a message id): chat-card.js sends it (sendCardReply).
+    if (t.classList && t.classList.contains("jv-card-btn")) return;
     // "Show more" on a long owner message: chat-acts.js toggles it (document listener, after this one). Remember the
     // state so a redraw of the list keeps the message open.
     if (t.classList && t.classList.contains("clamp-more")) {
@@ -3536,6 +3631,11 @@
     if (d.plusFolder || d.folderOpen) { setPlus(false); return openFolderPanel(); }
     if (d.folderUnpin) return pinTeamFolder("");
     if (d.attX !== undefined) { forgetAtts(S.atts.splice(+d.attX, 1)); drawComposer(); return; }
+    if (d.attRetry !== undefined) {
+      var ra = S.atts[+d.attRetry];
+      if (ra && ra.file && !ra.busy) { startUpload(ra); drawComposer(); }
+      return;
+    }
     if (d.infoAddFile) return pickFiles(addTeamFiles);
     if (d.infoDelFile) return assetPost("/files/" + q(d.infoDelFile) + "/delete");
     if (d.infoDelLink) return assetPost("/links/" + q(d.infoDelLink) + "/delete");
@@ -4125,7 +4225,8 @@
     if (colResize()) colResize().miniTip.hide();
     if (S && S.pickSt) closePicker();
     if (S) { S.side = false; S.picker = null; stopMic(); stopReveal(); if (S.unpress) { S.unpress(); S.unpress = null; }
-      if (S.unswipe) { S.unswipe(); S.unswipe = null; } }
+      if (S.unswipe) { S.unswipe(); S.unswipe = null; }
+      if (S.uncard) { S.uncard(); S.uncard = null; } }
   }
 
   // ───────────── column widths (0.196.0) ─────────────
@@ -4259,6 +4360,9 @@
     // Phone: swipe a message to the left to reply to it, like Zalo, with the same gesture as the main chat (msg-swipe.js:
     // the bubble follows the finger, a quote mark shows once far enough, vertical moves keep scrolling, a wide code block
     // or table scrolls sideways instead). Own and assistant messages both reply, as before.
+    // JAVIS_CARD buttons inside this page answer in this team, not in the hidden main chat (chat-card.js).
+    var JC = typeof window !== "undefined" && window.JavisCard;
+    if (JC && JC.onSend) S.uncard = JC.onSend(el, function (text, btn) { sendCardReply(btn, text); });
     var SW = typeof window !== "undefined" && window.JavisMsgSwipe;
     if (SW) {
       S.unswipe = SW.bind(el, {
@@ -4331,7 +4435,7 @@
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, capsPayload: capsPayload, saveCapsFlow: saveCapsFlow, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
     levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml,
     bannersHtml: bannersHtml, reactCornerHtml: reactCornerHtml, reactBarHtml: reactBarHtml, sheetHtml: sheetHtml,
-    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, copyTextOf: copyTextOf, fileChipHtml: fileChipHtml, plainPreview: plainPreview, previewText: previewText,
+    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, copyTextOf: copyTextOf, fileChipHtml: fileChipHtml, uploadError: uploadError, plainPreview: plainPreview, previewText: previewText,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
     searchResultsHtml: searchResultsHtml, replyStatusHtml: replyStatusHtml, headLine: headLine,
     typingHtml: typingHtml, pinsHtml: pinsHtml, markMentions: markMentions, replyRefHtml: replyRefHtml,

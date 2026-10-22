@@ -33,7 +33,7 @@ check("no element: nothing", A.selectedIn(null, win(sel("x", inside))) === "");
 check("main chat quote uses the shared helper", /const chon = window\.JavisActs\.selectedIn\(msgEl\);/.test(app)
   && !/sel\.getRangeAt\(0\)\.commonAncestorContainer/.test(app));
 check("Team reply reads the selection in the message before redrawing",
-  /var part = A && A\.selectedIn && el \? A\.selectedIn\(el\) : "";/.test(teamsJs)
+  /S\.replyTo = replyTarget\(m, A && A\.selectedIn && el \? A\.selectedIn\(el\) : ""\);/.test(teamsJs)
   && teamsJs.indexOf("A.selectedIn(el)") < teamsJs.indexOf("drawMsgs(false);", teamsJs.indexOf("function startReply")));
 check("Team quote and reply bar use the selected part when there is one",
   /preview: part \? partShort\(160\) : plainPreview\(m\.content, 160\)/.test(teamsJs)
