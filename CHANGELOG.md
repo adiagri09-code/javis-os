@@ -6,10 +6,19 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.271.0] - 2026-10-21
+## [0.274.0] - 2026-10-22
 ### Cải thiện
 - **Chạy bộ test không còn làm đầy ổ C.** Trước đây mỗi lượt chạy để lại hơn 1000 thư mục rác trong thư mục Temp của Windows, dồn lại có lúc tới 50.000 thư mục, khoảng 30 GB. Giờ mỗi file test dùng một thư mục tạm riêng và tự xoá khi chạy xong.
 - **Lần chạy bị dừng ngang cũng không để lại rác lâu.** Thư mục của lượt bị tắt giữa chừng được dọn ở lần chạy test kế tiếp.
+
+## [0.272.0] - 2026-10-22
+### Thêm mới
+- **Dán hoặc kéo ảnh thẳng vào ghi chú.** Ảnh được nén sang WebP ngay trên trình duyệt, lưu vào thư mục `images/` của brain và chèn sẵn vào ghi chú; kéo góc ảnh để đổi cỡ. (Đóng góp của @quangndna.)
+- **Danh sách tự nối dòng trong trình soạn ghi chú.** Enter ở cuối một gạch đầu dòng, việc cần làm hay danh sách đánh số sẽ tự thêm dòng mới cùng loại; Tab và Shift+Tab thụt lề. Trong khối code thì không tự nối. (Đóng góp của @quangndna.)
+- **Mở nhanh nhật ký hôm nay:** nút lịch trên thanh công cụ ghi chú, hoặc Ctrl+D (Cmd+D trên Mac) khi đang ở khung ghi chú. Đã có thì mở, chưa có thì tạo mới, không ghi đè. (Đóng góp của @quangndna.)
+### Sửa lỗi
+- **Bấm Dừng là Antigravity dừng thật.** Trước đây lượt chạy bằng Antigravity vẫn tiếp tục chạy ngầm sau khi bấm Dừng, có khi tới 15 phút. Lượt im lặng quá lâu giờ cũng có hạn chót thật. (Đóng góp của @Aurus2207.)
+- Bấm Dừng giờ tắt luôn các tiến trình con mà engine sinh ra, không để sót.
 
 ## [0.270.0] - 2026-10-21
 ### Sửa lỗi
