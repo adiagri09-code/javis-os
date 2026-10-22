@@ -289,6 +289,8 @@ class TeamApi:
                     busy=self.runner().busy_view(team["team_id"]),
                     authority=self.runner().authority_view(team["team_id"]),
                     usage=self.runner().usage(team["team_id"]),
+                    quality_policy=self.runner().quality.policy(team["team_id"]),
+                    acceptance_template=self.runner().quality.template(team["team_id"]),
                     mandate=self.mandate_summary(team["team_id"]))
 
     def mandate_summary(self, team_id: str) -> Optional[dict]:
@@ -656,7 +658,10 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             pinned = [{"id": m["id"], "ts": m["ts"], "author_kind": m["author_kind"], "author_ref": m["author_ref"],
                        "content": str(m.get("content") or "")[:400]}
                       for m in deps.session_store().team_decisions(team["session_id"], PINNED_SHOWN)]
-            return {"ok": True, "team": api.view(team), "typing": api.teams().active_turns(team_id), "pinned": pinned}
+            import team_usage
+            view = api.view(team)
+            view["quality_usage"] = team_usage.team_usage(team_id)
+            return {"ok": True, "team": view, "typing": api.teams().active_turns(team_id), "pinned": pinned}
         return await api.io(_do)
 
     @app.patch("/teams/{team_id}")
@@ -826,7 +831,12 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             for m in msgs:
                 m["reaction"] = got.get(int(m["id"]))
                 m["agent_reactions"] = api.runner().agent_reactions_view(team, agents.get(int(m["id"])))
-            return {"ok": True, "task": task, "steps": api.teams().steps(task_id), "messages": msgs}
+            import team_usage
+            acceptance = api.runner().acceptance_view(team, task_id)
+            return {"ok": True, "task": task, "steps": api.teams().steps(task_id), "messages": msgs,
+                    "acceptance": acceptance,
+                    "completion_valid": acceptance.get("completion_valid", False) if acceptance else False,
+                    "usage": team_usage.task_usage(team_id, task_id)}
         return await api.io(_do)
 
     @app.post("/teams/{team_id}/tasks/{task_id}/cancel")
@@ -1276,6 +1286,83 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             return {"ok": True, "work_mode": mode}
         return await api.io(_do)
 
+    # Quality policy and default acceptance templates are owner settings, never agent directives.
+    def _quality_error(ex: ValueError) -> JSONResponse:
+        code = getattr(ex, "code", "invalid_quality_setting")
+        conflict = code in ("version_conflict", "stale_version")
+        return _err(409 if conflict else 400, "Thiết lập chất lượng chưa hợp lệ",
+                    "The quality setting is invalid", quality_code=code, detail=str(ex))
+
+    @app.get("/teams/{team_id}/quality-policy")
+    async def teams_quality_policy_get(team_id: str, brain: str = "brain"):
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            return {"ok": True, "policy": api.runner().quality.policy(team_id)}
+        return await api.io(_do)
+
+    @app.put("/teams/{team_id}/quality-policy")
+    async def teams_quality_policy_put(team_id: str, request: Request, brain: str = "brain"):
+        body = await _body(request)
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            try:
+                policy = api.runner().quality.set_policy(team_id, body)
+            except ValueError as ex:
+                return _quality_error(ex)
+            api.runner()._state(team_id)
+            return {"ok": True, "policy": policy}
+        return await api.io(_do)
+
+    @app.get("/teams/{team_id}/acceptance-template")
+    async def teams_acceptance_template_get(team_id: str, brain: str = "brain"):
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            return {"ok": True, "template": api.runner().quality.template(team_id)}
+        return await api.io(_do)
+
+    @app.put("/teams/{team_id}/acceptance-template")
+    async def teams_acceptance_template_put(team_id: str, request: Request, brain: str = "brain"):
+        body = await _body(request)
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            try:
+                template = api.runner().quality.set_template(team_id, body)
+            except ValueError as ex:
+                return _quality_error(ex)
+            api.runner()._state(team_id)
+            return {"ok": True, "template": template}
+        return await api.io(_do)
+
+    @app.get("/teams/{team_id}/usage")
+    async def teams_usage_get(team_id: str, brain: str = "brain"):
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            import team_usage
+            return {"ok": True, "usage": team_usage.team_usage(team_id)}
+        return await api.io(_do)
+
+    @app.get("/teams/{team_id}/tasks/{task_id}/usage")
+    async def teams_task_usage_get(team_id: str, task_id: str, brain: str = "brain"):
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            if not _own_task(team_id, task_id):
+                return _err(404, "Không có việc này trong nhóm", "No such job in this team")
+            import team_usage
+            return {"ok": True, "usage": team_usage.task_usage(team_id, task_id)}
+        return await api.io(_do)
+
     # ───────────── 0.209.0: product acceptance ─────────────
 
     @app.get("/teams/{team_id}/tasks/{task_id}/acceptance")
@@ -1329,7 +1416,11 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                     return None
             out = api.runner().decide_acceptance(team_id, task_id, str(body.get("decision") or "").lower(),
                                                  note=str(body.get("note") or "")[:2000],
-                                                 revision=_int(body.get("revision")), round_=_int(body.get("round")))
+                                                 revision=_int(body.get("revision")), round_=_int(body.get("round")),
+                                                 contract_version=_int(body.get("contract_version")),
+                                                 output_manifest_hash=(str(body["output_manifest_hash"])
+                                                     if body.get("output_manifest_hash") is not None else None),
+                                                 decision_key=str(body.get("decision_key") or "")[:200])
             if not out.get("ok"):
                 msgs = {"not_found": ("Việc này chưa có tiêu chí nghiệm thu", "This job has no acceptance criteria"),
                         "not_waiting": ("Việc không ở bước chờ nghiệm thu", "The job is not waiting for acceptance"),

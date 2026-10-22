@@ -4,11 +4,13 @@
 
 Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay trong app tại **Cài đặt → Cập nhật**.
 
-Định dạng: mỗi phiên bản là một khối `## [0.283.0] - 2026-10-22
-### Cải thiện
-- Giữ chỗ cho cải thiện Team: nghiệm thu mặc định và theo dõi mức dùng, ưu tiên chất lượng kết quả.
+Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
+## [0.285.0] - 2026-10-22
+### Cải thiện
+- **Nghiệm thu đúng sản phẩm Team đã làm.** Nhóm bật tính năng được gắn tiêu chí mặc định; xác nhận đi cùng kết quả đã lưu và phiên bản đang xem.
+- **Theo dõi mức dùng, giữ chất lượng.** Phân biệt số yêu cầu và chi phí biết rõ, ước tính hoặc quy đổi từ thuê bao. Mức tham khảo không dừng việc hay đổi model.
+- **Chuẩn bị so sánh nghiệp vụ công bằng.** Bộ pilot chạy thử khô với hai nhánh tách biệt; kết quả nghiệp vụ thật vẫn cần dữ liệu thật và chủ chấm.
 
 ## [0.284.0] - 2026-10-22
 ### Sửa lỗi

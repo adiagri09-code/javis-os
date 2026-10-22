@@ -52,6 +52,13 @@ class Fake:
         self.calls = []
         self.live = 0
         self.peak = 0
+        self.parallel_agents = set()
+        self.parallel_started = set()
+        self.parallel_ready = None
+
+    def expect_parallel(self, *agents):
+        self.parallel_agents = set(agents)
+        self.parallel_ready = asyncio.Event()
 
     def say(self, agent, role, *answers):
         self.script.setdefault((agent, role), []).extend(answers)
@@ -62,7 +69,14 @@ class Fake:
             self.live += 1
             self.peak = max(self.peak, self.live)
             try:
-                await asyncio.sleep(0.02)
+                if role == "work" and agent_key in self.parallel_agents:
+                    self.parallel_started.add(agent_key)
+                    if self.parallel_started == self.parallel_agents:
+                        self.parallel_ready.set()
+                    # A timeout reports broken concurrency without hanging the suite.
+                    await asyncio.wait_for(self.parallel_ready.wait(), timeout=5)
+                else:
+                    await asyncio.sleep(0)
                 queue = self.script.get((agent_key, role)) or []
                 ans = queue.pop(0) if queue else f"{agent_key} {role} xong"
                 if callable(ans):
@@ -161,6 +175,7 @@ check("report: the plan prompt explains wait and one block per step",
 # 3. `wait` on one assign
 # ================================================================
 ss, ts, tm, fake, r, T = world("wait", leader="ag_lan")
+fake.expect_parallel("ag_minh", "ag_hoa")
 fake.say("ag_lan", "plan", "Chia." + directive(op="assign", agent="ag_minh", brief="Viết nội dung")
          + directive(op="assign", agent="ag_hoa", brief="Làm ảnh")
          + directive(op="assign", agent="ag_lan", brief="Duyệt nội dung và ảnh", wait=True))

@@ -117,7 +117,75 @@ def _connect() -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fd_path ON file_daily(path)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fh_hour ON file_hourly(hour)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fh_path ON file_hourly(path)")
+    conn.execute("CREATE TABLE IF NOT EXISTS usage_observations("
+                 "event_key TEXT PRIMARY KEY, team_id TEXT, task_id TEXT, payload TEXT)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_team ON usage_observations(team_id,task_id)")
+    conn.execute("CREATE TABLE IF NOT EXISTS usage_cli_requests("
+                 "request_key TEXT PRIMARY KEY, session_id TEXT, payload TEXT)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_cli_session ON usage_cli_requests(session_id)")
+    conn.execute("CREATE TABLE IF NOT EXISTS usage_daily_events(event_key TEXT PRIMARY KEY, payload TEXT)")
     return conn
+
+
+def _project_observation(conn, event) -> None:
+    """The event file owns bills; this rebuildable projection only supplies execution attribution."""
+    ex = event.get("execution") or {}
+    if not ex.get("team_id") or not event.get("event_id"):
+        return
+    key = up.observation_key(event)
+    conn.execute("INSERT INTO usage_observations(event_key,team_id,task_id,payload) VALUES(?,?,?,?) "
+                 "ON CONFLICT(event_key) DO UPDATE SET payload=excluded.payload",
+                 (key, ex["team_id"], ex.get("task_id"), json.dumps(event)))
+
+
+def _ingest_team_events(conn) -> int:
+    """Independent cursor backfills execution metadata without perturbing the legacy daily projection."""
+    if not _EVENTS_PATH.exists():
+        return 0
+    marker = "__execution_events_v1__:" + str(_EVENTS_PATH)
+    row = conn.execute("SELECT offset FROM files_seen WHERE path=?", (marker,)).fetchone()
+    offset = row[0] if row else 0
+    if _EVENTS_PATH.stat().st_size < offset:
+        offset = 0
+    count = 0
+    with open(_EVENTS_PATH, "rb") as fh:
+        fh.seek(offset)
+        for raw in fh:
+            if not raw.endswith(b"\n"):
+                break
+            offset += len(raw)
+            try:
+                event = json.loads(raw)
+            except (ValueError, UnicodeError):
+                continue
+            if isinstance(event, dict):
+                _project_observation(conn, event)
+                count += 1
+    _mark(conn, marker, 0, 0, offset)
+    return count
+
+
+def execution_events(team_id, task_id=None):
+    """Read the existing usage projection; no engine or Team execution ledger is a billing source."""
+    conn = _connect()
+    try:
+        _ingest_team_events(conn)
+        conn.commit()
+        where, args = "team_id=?", [team_id]
+        if task_id is not None:
+            where += " AND task_id=?"
+            args.append(task_id)
+        events = [json.loads(r[0]) for r in conn.execute(
+            "SELECT payload FROM usage_observations WHERE " + where, args)]
+        sessions = {e.get("execution", {}).get("cli_session_id") for e in events
+                    if e.get("execution", {}).get("cli_session_new")}
+        details = []
+        for sid in sessions - {None, ""}:
+            details.extend(json.loads(r[0]) for r in conn.execute(
+                "SELECT payload FROM usage_cli_requests WHERE session_id=?", (sid,)))
+        return events, details
+    finally:
+        conn.close()
 
 
 # First words of the prompt compaction.py sends when it moves a long chat onto a fresh Claude
@@ -185,6 +253,8 @@ def _mark(conn, path, size, mtime, offset=0) -> None:
 def _clear_file(conn, path) -> None:
     conn.execute("DELETE FROM file_daily WHERE path=?", (path,))
     conn.execute("DELETE FROM file_hourly WHERE path=?", (path,))
+    if path == str(_EVENTS_PATH):
+        conn.execute("DELETE FROM usage_daily_events")
 
 
 def _gio(ev) -> str:
@@ -205,6 +275,11 @@ def _insert_events(conn, path, events) -> None:
     groups = {}
     theo_gio = {}
     for ev in events:
+        if ev.get("provider") == "claude" and ev.get("request_id") and ev.get("session_id"):
+            key = "claude:" + ev["session_id"] + ":" + ev["request_id"]
+            conn.execute("INSERT INTO usage_cli_requests(request_key,session_id,payload) VALUES(?,?,?) "
+                         "ON CONFLICT(request_key) DO UPDATE SET payload=excluded.payload",
+                         (key, ev["session_id"], json.dumps(ev)))
         k = (ev.get("day") or "", ev["provider"], ev["source"], ev["activity"], ev["model"], ev["project"])
         g = groups.setdefault(k, [0, 0, 0, 0, 0])
         g[0] += ev["input"]
@@ -384,6 +459,22 @@ def _ingest_events(conn) -> int:
         # "so luot" va "cua so truot" cua nhung nhanh do.
         chung = {"day": day, "ts": int(e.get("ts") or 0), "model": model,
                  "input": tin, "output": tout, "cache_read": 0, "cache_create": 0, "turns": 1}
+        if e.get("execution") and e.get("event_id"):
+            if e.get("event_kind") in ("execution", "cli_detail"):
+                continue
+            event_key = up.observation_key(e)
+            prior = conn.execute("SELECT payload FROM usage_daily_events WHERE event_key=?", (event_key,)).fetchone()
+            if prior:
+                old = json.loads(prior[0])
+                if (old.get("in"), old.get("out"), old.get("model"), old.get("provider")) == (tin, tout, model, prov):
+                    continue
+                # All updates of one request retain their original dimensions/timestamp.
+                chung["day"], chung["ts"] = old.get("day") or day, int(old.get("ts") or 0)
+                chung["input"] -= int(old.get("in") or 0)
+                chung["output"] -= int(old.get("out") or 0)
+                chung["turns"] = 0
+            conn.execute("INSERT INTO usage_daily_events(event_key,payload) VALUES(?,?) "
+                         "ON CONFLICT(event_key) DO UPDATE SET payload=excluded.payload", (event_key, json.dumps(e)))
         if prov in _API_PROVIDERS:
             events.append({**chung, "provider": "api", "source": "javis", "activity": "chat",
                            "project": "(api)"})
@@ -457,6 +548,7 @@ def _migrate_events_once(conn) -> None:
         return
     ep = str(_EVENTS_PATH)
     conn.execute("DELETE FROM file_daily WHERE path=?", (ep,))
+    conn.execute("DELETE FROM usage_daily_events")
     conn.execute("DELETE FROM files_seen WHERE path=?", (ep,))
     conn.execute("INSERT INTO files_seen(path,size,mtime,offset) VALUES(?,0,0,1) "
                  "ON CONFLICT(path) DO NOTHING", (_EVENTS_MIGRATE_MARK,))
@@ -469,7 +561,7 @@ def _migrate_events_once(conn) -> None:
 # dung lai het. Ton mot lan (vai giay toi vai chuc giay tuy so file), sau do lai tang dan.
 # v4 (0.107.0): rotated chat threads were counted as background. Rescan once so the history the
 # disk still holds is reclassified (see _chat_sessions and CHAT_RESUME_MARKER).
-_SCHEMA_MARK = "__schema_v4_chat_threads__"
+_SCHEMA_MARK = "__schema_v5_request_identity__"
 
 
 def _migrate_schema_once(conn) -> bool:
@@ -486,6 +578,7 @@ def _migrate_schema_once(conn) -> bool:
     ev = str(_EVENTS_PATH)
     conn.execute("DELETE FROM file_daily WHERE path=?", (ev,))
     conn.execute("DELETE FROM file_hourly WHERE path=?", (ev,))
+    conn.execute("DELETE FROM usage_daily_events")
     conn.execute("DELETE FROM files_seen")
     conn.execute("INSERT INTO files_seen(path,size,mtime,offset) VALUES(?,0,0,1)", (_SCHEMA_MARK,))
     # Xoa sach files_seen cung xoa luon dau migrate v2 o tren; ghi lai ngay de lan refresh sau

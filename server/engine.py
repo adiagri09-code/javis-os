@@ -18,7 +18,9 @@ import re
 import sys
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
+from contextlib import asynccontextmanager
 
 import httpx
 
@@ -27,6 +29,59 @@ import limit_learner
 import localefmt
 import vision_input
 import steer_inbox   # 0.206.0: messages the owner sends while a turn runs
+
+
+TEAM_REQUEST_OBSERVER = contextvars.ContextVar("team_request_observer", default=None)
+
+
+def _observe_team_request(event):
+    """Optional host telemetry seam. Observer failures never change provider execution."""
+    observer = TEAM_REQUEST_OBSERVER.get()
+    if observer is not None:
+        try:
+            observer(event)
+        except Exception:
+            try:
+                import usage_store
+                usage_store.note_telemetry_error()
+            except Exception:
+                pass
+
+
+def _request_usage(data, event_id):
+    usage = data.get("usage") or {}
+    anthropic = "input_tokens" in usage and ("cache_read_input_tokens" in usage or "content" in data)
+    tin = usage.get("input_tokens") if "input_tokens" in usage else usage.get("prompt_tokens")
+    if anthropic and tin is not None:
+        tin += (usage.get("cache_read_input_tokens") or 0) + (usage.get("cache_creation_input_tokens") or 0)
+    tout = usage.get("output_tokens") if "output_tokens" in usage else usage.get("completion_tokens")
+    return {"event_id": event_id, "request_id": data.get("id"), "input": tin, "output": tout,
+            "cost": usage.get("cost"), "cache_read": usage.get("cache_read_input_tokens"),
+            "cache_create": usage.get("cache_creation_input_tokens")}
+
+
+async def _observed_post(send):
+    """Record every actual HTTP attempt, including retries and interrupted requests with unknown usage."""
+    if TEAM_REQUEST_OBSERVER.get() is None:
+        return await send()
+    event_id = uuid.uuid4().hex
+    _observe_team_request({"event_id": event_id, "input": None, "output": None})
+    response = await send()
+    try:
+        data = response.json()
+        if isinstance(data, dict):
+            _observe_team_request(_request_usage(data, event_id))
+    except Exception:
+        pass
+    return response
+
+
+@asynccontextmanager
+async def _observed_stream(client, *args, **kwargs):
+    event_id = uuid.uuid4().hex
+    _observe_team_request({"event_id": event_id, "input": None, "output": None})
+    async with client.stream(*args, **kwargs) as response:
+        yield response, event_id
 
 
 def _c(vi: str, en: str) -> str:
@@ -785,7 +840,7 @@ async def _openai_compat_stream(url, label, api_key, model, messages, reasoning,
     try:
         timeout = httpx.Timeout(120.0, connect=15.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream("POST", url, headers=headers, json=payload) as r:
+            async with _observed_stream(client, "POST", url, headers=headers, json=payload) as (r, usage_event_id):
                 if r.status_code != 200:
                     body = await r.aread()
                     body_text = body.decode("utf-8", "replace")
@@ -820,6 +875,7 @@ async def _openai_compat_stream(url, label, api_key, model, messages, reasoning,
                         continue
                     if obj.get("usage"):
                         usage = obj["usage"]
+                        _observe_team_request(_request_usage(obj, usage_event_id))
                     delta = (obj.get("choices") or [{}])[0].get("delta") or {}
                     if delta.get("reasoning") or delta.get("reasoning_content"):
                         thought = True      # thinking text is never shown, only remembered for the error below
@@ -1013,7 +1069,7 @@ async def _anthropic_stream_once(api_key, model, messages, reasoning="off", fast
     try:
         timeout = httpx.Timeout(120.0, connect=15.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream("POST", url, headers=headers, json=payload) as r:
+            async with _observed_stream(client, "POST", url, headers=headers, json=payload) as (r, usage_event_id):
                 if r.status_code != 200:
                     body = await r.aread()
                     body_text = body.decode("utf-8", "replace")
@@ -1040,6 +1096,7 @@ async def _anthropic_stream_once(api_key, model, messages, reasoning="off", fast
                 got = False
                 stop_reason = None
                 usage_in = usage_out = 0
+                request_usage = {}
                 async for line in r.aiter_lines():
                     line = (line or "").strip()
                     if not line.startswith("data:"):
@@ -1054,6 +1111,9 @@ async def _anthropic_stream_once(api_key, model, messages, reasoning="off", fast
                     t = obj.get("type")
                     if t == "message_start":
                         u = (obj.get("message") or {}).get("usage") or {}
+                        request_usage = dict(u)
+                        request_usage["output_tokens"] = None
+                        _observe_team_request(_request_usage({"usage": request_usage, "content": []}, usage_event_id))
                         usage_in = ((u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0)
                                     + (u.get("cache_creation_input_tokens") or 0))
                     elif t == "content_block_delta":
@@ -1067,6 +1127,9 @@ async def _anthropic_stream_once(api_key, model, messages, reasoning="off", fast
                             stop_reason = sr
                         if (obj.get("usage") or {}).get("output_tokens"):
                             usage_out = obj["usage"]["output_tokens"]
+                        if "output_tokens" in (obj.get("usage") or {}):
+                            request_usage["output_tokens"] = obj["usage"]["output_tokens"]
+                            _observe_team_request(_request_usage({"usage": request_usage, "content": []}, usage_event_id))
                     elif t == "error":
                         yield {"type": "error", "content": f"{label}: {(obj.get('error') or {}).get('message', _c('lỗi', 'error'))}"}
                         return
@@ -1233,7 +1296,7 @@ async def _openrouter_stream_once(api_key, model, messages, reasoning="off", fas
         try:
             timeout = httpx.Timeout(120.0, connect=15.0)
             async with httpx.AsyncClient(timeout=timeout) as client:
-                async with client.stream("POST", OPENROUTER_URL, headers=headers, json=payload) as r:
+                async with _observed_stream(client, "POST", OPENROUTER_URL, headers=headers, json=payload) as (r, usage_event_id):
                     if r.status_code != 200:
                         body = await r.aread()
                         body_text = body.decode("utf-8", "replace")
@@ -1276,6 +1339,7 @@ async def _openrouter_stream_once(api_key, model, messages, reasoning="off", fas
                             yield {"type": "meta", "model": obj["model"]}   # model THẬT OpenRouter tính tiền
                         if obj.get("usage"):
                             usage = obj["usage"]
+                            _observe_team_request(_request_usage(obj, usage_event_id))
                         ch = (obj.get("choices") or [{}])[0]
                         if ch.get("finish_reason"):
                             finish = ch["finish_reason"]
@@ -1389,7 +1453,7 @@ async def _openai_responses_stream_once(access_token, account_id, model, message
     try:
         timeout = httpx.Timeout(180.0, connect=15.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream("POST", CODEX_RESPONSES_URL, headers=headers, json=payload) as r:
+            async with _observed_stream(client, "POST", CODEX_RESPONSES_URL, headers=headers, json=payload) as (r, usage_event_id):
                 if r.status_code != 200:
                     body = await r.aread()
                     body_text = body.decode("utf-8", "replace")
@@ -1434,6 +1498,7 @@ async def _openai_responses_stream_once(access_token, account_id, model, message
                             yield {"type": "text", "content": d}
                     elif et == "response.completed":
                         usage = ((obj.get("response") or {}).get("usage")) or usage
+                        _observe_team_request(_request_usage(obj.get("response") or {}, usage_event_id))
                     elif et in ("response.failed", "error", "response.error"):
                         err = (obj.get("response") or {}).get("error") or obj.get("error") or {}
                         msg = err.get("message") if isinstance(err, dict) else str(err)
@@ -1924,12 +1989,12 @@ async def _cc_tool_loop(url, headers, model, messages, mcp_tools, mcp_route, rea
         payload.update(reasoning_extra or {})
         async def _gui(payload=payload):
             async with httpx.AsyncClient(timeout=httpx.Timeout(180, connect=15)) as client:
-                r = await client.post(url, headers=headers, json=payload)
+                r = await _observed_post(lambda: client.post(url, headers=headers, json=payload))
                 # Một số endpoint OpenAI-compatible chỉ nhận "required", không nhận named choice.
                 if (r.status_code in (400, 422) and requirement_pending
                         and requirement not in (None, "required")):
                     payload["tool_choice"] = "required"
-                    r = await client.post(url, headers=headers, json=payload)
+                    r = await _observed_post(lambda: client.post(url, headers=headers, json=payload))
             return r
         try:
             r = await _gui_vong(_gui, label)
@@ -2313,7 +2378,7 @@ async def responses_with_mcp(access_token, account_id, model, messages, reasonin
             streamed_items = {}
             completed = False
             try:
-                async with client.stream("POST", CODEX_RESPONSES_URL, headers=headers, json=payload) as r:
+                async with _observed_stream(client, "POST", CODEX_RESPONSES_URL, headers=headers, json=payload) as (r, usage_event_id):
                     if r.status_code != 200:
                         body = await r.aread()
                         body_text = body.decode("utf-8", "replace")
@@ -2363,6 +2428,7 @@ async def responses_with_mcp(access_token, account_id, model, messages, reasonin
                             _resp = obj.get("response") or {}
                             output = (_resp.get("output")) or []
                             _u = _resp.get("usage") or {}
+                            _observe_team_request(_request_usage(_resp, usage_event_id))
                             usage_in += _u.get("input_tokens", 0) or 0
                             usage_out += _u.get("output_tokens", 0) or 0
                         elif et in ("response.failed", "error", "response.error"):
@@ -2494,7 +2560,8 @@ async def anthropic_chat_with_mcp(api_key, model, messages, reasoning, mcp_tools
             if sys_txt:
                 payload["system"] = [{"type": "text", "text": sys_txt, "cache_control": {"type": "ephemeral"}}]
             try:
-                r = await _gui_vong(lambda: client.post(url, headers={**headers, **fast_h}, json=payload),
+                r = await _gui_vong(lambda: _observed_post(
+                    lambda: client.post(url, headers={**headers, **fast_h}, json=payload)),
                                     label)
             except Exception as e:
                 yield ev_loi_exc(_c(f"{label} lỗi", f"{label} error"), e)

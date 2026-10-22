@@ -19,6 +19,8 @@ import localefmt   # múi giờ theo cấu hình, thay UTC+7 nhúng cứng
 import json
 import os
 import threading
+import uuid
+import math
 from datetime import datetime, timezone, timedelta
 
 import quota_scheduler          # sổ cái TPM dùng chung (không phụ thuộc ngược, xem module đó)
@@ -29,6 +31,27 @@ _PATH = STATE_DIR / "usage.json"
 _EVENTS_PATH = STATE_DIR / "usage-events.jsonl"   # append-only, forward-log cho dashboard token
 _LOCK = threading.Lock()
 _KEEP_DAYS = 30
+_TELEMETRY_ERRORS = {}
+
+
+def note_telemetry_error(execution=None) -> None:
+    """Keep an honest process-local coverage signal even if the event file cannot be written."""
+    try:
+        import turn_context
+        ex = execution or (turn_context.current() or {}).get("execution") or {}
+        if ex.get("team_id"):
+            key = (ex["team_id"], ex.get("task_id"), ex.get("execution_id") or ex.get("turn_id"))
+            with _LOCK:
+                _TELEMETRY_ERRORS[key] = _TELEMETRY_ERRORS.get(key, 0) + 1
+    except Exception:
+        pass
+
+
+def telemetry_errors(team_id, task_id=None, execution_id=None) -> int:
+    with _LOCK:
+        return sum(n for (team, task, execution), n in _TELEMETRY_ERRORS.items()
+                   if team == team_id and (task_id is None or task == task_id)
+                   and (execution_id is None or execution == execution_id))
 
 
 def _today() -> str:
@@ -66,7 +89,7 @@ def _cost_for(provider: str, model: str, tin: int, tout: int, cost: float):
         return None
 
 
-def _append_event(provider: str, model: str, tin: int, tout: int, cost) -> None:
+def _append_event(provider: str, model: str, tin: int, tout: int, cost, **metadata) -> None:
     """Ghi them 1 dong vao usage-events.jsonl (append-only) cho indexer dashboard token doc.
     Best-effort: loi thi bo qua, KHONG duoc lam hong luong chat. Nhanh API (openrouter/openai/
     anthropic) khong co log tho nen day la nguon DUY NHAT cho chung; claude/codex indexer lay
@@ -77,12 +100,12 @@ def _append_event(provider: str, model: str, tin: int, tout: int, cost) -> None:
                            "provider": provider or "?", "model": model or "?",
                            "in": int(tin or 0), "out": int(tout or 0),
                            # null = per-token API model missing from usage_pricing.json
-                           "cost": None if cost is None else round(float(cost), 8)},
+                           "cost": None if cost is None else round(float(cost), 8), **metadata},
                           ensure_ascii=False)
         with open(_EVENTS_PATH, "a", encoding="utf-8") as fh:
             fh.write(line + "\n")
     except Exception:
-        pass
+        note_telemetry_error(metadata.get("execution"))
 
 
 def _load() -> dict:
@@ -107,33 +130,101 @@ def _save(d: dict) -> None:
         pass
 
 
-def record(provider: str, model: str, tin=0, tout=0, cost=0.0) -> None:
+def record(provider: str, model: str, tin=0, tout=0, cost=None, *, execution=None,
+           event_id=None, request_id=None, source_id=None, event_kind="request", status=None,
+           billing_mode=None, price_version=None, cache_read=0, cache_create=0,
+           expected_requests=None, telemetry_errors=0) -> None:
     """Cộng dồn 1 lượt vào ngày hôm nay + tổng. Bỏ qua nếu không có token nào (lượt lỗi)."""
-    tin, tout = int(tin or 0), int(tout or 0)
-    cost = float(cost or 0.0)
-    if tin <= 0 and tout <= 0 and cost <= 0:
+    import turn_context
+    ex = turn_context.execution_metadata(execution or (turn_context.current() or {}).get("execution"))
+    input_known = tin is not None and event_kind != "execution"
+    output_known = tout is not None and event_kind != "execution"
+    tokens_known = input_known and output_known
+    reported = None if cost is None else float(cost)
+    if reported is not None and (not math.isfinite(reported) or reported < 0):
+        reported = None
+    tin, tout = max(0, int(tin or 0)), max(0, int(tout or 0))
+    cost = float(reported or 0.0)
+    if tin <= 0 and tout <= 0 and cost <= 0 and not ex:
         return
     cost_ev = _cost_for(provider, model, tin, tout, cost)
     cost = float(cost_ev or 0.0)
+    metadata = {}
+    if ex:
+        estimate = None
+        if tokens_known:
+            prices = _prices()
+            estimate = usage_parsers.cost_or_none(model, tin, tout, prices)
+            if estimate is not None and (cache_read or cache_create):
+                estimate = usage_parsers.estimate_cost({"model": model,
+                    "input": max(0, tin - int(cache_read or 0) - int(cache_create or 0)), "output": tout,
+                    "cache_read": cache_read or 0, "cache_create": cache_create or 0}, prices)
+        mode = billing_mode or ("api" if provider in usage_parsers.PER_TOKEN_PROVIDERS else
+                                "local" if provider == "ollama-local" else "subscription")
+        if mode == "api":
+            amount = reported if reported is not None else estimate
+            provenance = "provider_reported" if reported is not None else "estimated" if amount is not None else "unknown"
+        elif mode == "local":
+            amount, provenance = 0.0, "local"
+        else:
+            amount = reported if reported is not None else estimate
+            provenance = "subscription_equivalent" if amount is not None else "subscription"
+        metadata = {"schema": 1, "event_id": str(event_id or request_id or uuid.uuid4().hex),
+                    "request_id": str(request_id) if request_id else None,
+                    "source_id": str(source_id or provider), "event_kind": event_kind, "status": status,
+                    "execution": ex, "tokens_known": tokens_known,
+                    "in": tin if input_known else None, "out": tout if output_known else None,
+                    "cache_read": cache_read, "cache_create": cache_create,
+                    "expected_requests": expected_requests, "telemetry_errors": int(telemetry_errors or 0),
+                    "money": {"currency": "USD", "amount": amount, "provenance": provenance,
+                              "billing_mode": mode,
+                              "price_version": price_version or ("usage_pricing.json:" + str(_PRICE_CACHE["mtime"]))
+                              if provenance == "estimated" or (provenance == "subscription_equivalent" and reported is None)
+                              else None}}
     key = f"{provider or '?'}|{model or '?'}"
+    if ex and (not tokens_known or event_kind == "cli_detail"):
+        try:
+            _append_event(provider, model, tin, tout, cost_ev, **metadata)
+        except Exception:
+            note_telemetry_error(ex)
+        return
     with _LOCK:
         d = _load()
         day = _today()
+        delta_in, delta_out, delta_cost, delta_turns = tin, tout, cost, 1
+        if ex:
+            # These are replaceable projection snapshots, not another source of bills. Keep
+            # the old Telegram aggregate idempotent under the same replay as the index.
+            snapshots = d.setdefault("event_snapshots", {})
+            snapshot_key = usage_parsers.observation_key({"provider": provider, **metadata})
+            prior = snapshots.get(snapshot_key) or {}
+            if prior:
+                day = prior["day"]
+                delta_in -= prior["in"]
+                delta_out -= prior["out"]
+                delta_cost -= prior["cost"]
+                delta_turns = 0
+            snapshots[snapshot_key] = {"day": day, "in": tin, "out": tout, "cost": cost}
+            cutoff = (localefmt.now() - timedelta(days=_KEEP_DAYS)).strftime("%Y-%m-%d")
+            d["event_snapshots"] = {k: v for k, v in snapshots.items() if v["day"] >= cutoff}
         for bucket in (d["days"].setdefault(day, {}), d["total"]):
             e = bucket.setdefault(key, {"in": 0, "out": 0, "turns": 0, "cost": 0.0})
-            e["in"] += tin
-            e["out"] += tout
-            e["turns"] += 1
-            e["cost"] += cost
+            e["in"] += delta_in
+            e["out"] += delta_out
+            e["turns"] += delta_turns
+            e["cost"] += delta_cost
         for old in sorted(d["days"])[:-_KEEP_DAYS]:   # dọn ngày cũ
             d["days"].pop(old, None)
         _save(d)
-    _append_event(provider, model, tin, tout, cost_ev)   # forward-log rieng (khong prune) cho dashboard token
+    try:
+        _append_event(provider, model, tin, tout, cost_ev, **metadata)
+    except Exception:
+        note_telemetry_error(ex)
     # Sổ cái TPM dùng chung. Đây là điểm móc PHỔ QUÁT: mọi đường gọi model (chat, loop,
     # task nền, nhắc hẹn, Telegram, CLI, Codex) đều đi qua record(), trong khi admit_quota
     # chỉ nhìn thấy bốn đường canary. Thiếu móc này thì hạn mức của TÀI KHOẢN bị đốt vô hình
     # và canary tưởng còn nhiều token hơn thực tế.
-    quota_scheduler.observe(provider, model, tin + tout)
+    quota_scheduler.observe(provider, model, max(0, delta_in + delta_out))
 
 
 def _rollup(bucket: dict) -> dict:

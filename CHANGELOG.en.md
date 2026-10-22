@@ -6,11 +6,13 @@ Javis OS release history, newest first. You can also read it inside the app unde
 
 English entries start at 0.66.0. Every earlier release is described in the Vietnamese [CHANGELOG.md](CHANGELOG.md), which remains the maintainer's original; the in-app Updates page shows those older entries in Vietnamese.
 
-Format: each release is a `## [0.283.0] - 2026-10-22
-### Improved
-- Reserved for Team improvements: default acceptance and usage visibility, with result quality first.
+Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
-## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
+## [0.285.0] - 2026-10-22
+### Improved
+- **Review the actual Team result.** Opt-in teams get default acceptance criteria; confirmation binds to the saved result and its version.
+- **See usage without sacrificing quality.** Request counts and known, estimated or subscription-equivalent costs are separated. A reference amount never stops work or changes its model.
+- **Prepare a fair business comparison.** The paired pilot supports isolated dry runs; real business results still require real inputs and owner grading.
 
 ## [0.284.0] - 2026-10-22
 ### Fixed

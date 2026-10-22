@@ -807,6 +807,7 @@
       else if (k === "contains" && parts[0]) out.push({ kind: "file_contains", path: parts[0], min_chars: Number(parts[1]) || 0, must_contain: list(parts[2]) });
       else if (k === "json" && parts[0]) out.push({ kind: "json_keys", path: parts[0], keys: list(parts[1]) });
       else if (k === "cmd" && parts[0]) out.push({ kind: "command_ok", command: l.slice(i + 1).trim() });
+      else if (k === "confirm-message") out.push({ kind: "owner_confirm", target: "message" });
       else if (k === "confirm") out.push(parts[0] ? { kind: "owner_confirm", path: parts[0] } : { kind: "owner_confirm" });
       else bad.push(l);
     });
@@ -842,11 +843,113 @@
       ic("check") + "<b>" + esc(tw("teams.acc.title")) + "</b></div>" + '<ul class="tm-ap-calls">' + rows + "</ul>" +
       ((a.stale || []).length ? '<div class="tm-note-line">' + esc(tw("teams.acc.stale")) + "</div>" : "") +
       (waiting ? '<div class="tm-actions"><button type="button" class="ws-btn tm-primary" data-acc-decide="accept" data-acc="' +
-        esc(a.task_id) + '" data-acc-rev="' + esc(a.revision) + '" data-acc-round="' + esc(a.rounds) + '">' + esc(tw("teams.acc.accept")) +
+        esc(a.task_id) + '" data-acc-rev="' + esc(a.revision) + '" data-acc-round="' + esc(a.rounds) +
+        '" data-acc-contract="' + esc(a.contract_version || "") + '" data-acc-manifest="' + esc(a.output_manifest_hash || "") + '">' + esc(tw("teams.acc.accept")) +
         '</button><button type="button" class="ws-btn" data-acc-decide="reject" data-acc="' + esc(a.task_id) + '" data-acc-rev="' +
-        esc(a.revision) + '" data-acc-round="' + esc(a.rounds) + '">' + esc(tw("teams.acc.reject")) + "</button></div>" :
+        esc(a.revision) + '" data-acc-round="' + esc(a.rounds) + '" data-acc-contract="' + esc(a.contract_version || "") +
+        '" data-acc-manifest="' + esc(a.output_manifest_hash || "") + '">' + esc(tw("teams.acc.reject")) + "</button></div>" :
         '<div class="tm-ap-state">' + esc(tw(a.status === "accepted" ? "teams.acc.st.accepted" : "teams.acc.st.closed")) + "</div>") +
       "</div>";
+  }
+
+  function acceptanceDecisionPayload(dataset, decision, note) {
+    var body = { decision: decision, note: note || "", revision: Number(dataset.accRev) || null,
+      round: Number(dataset.accRound) || null, contract_version: Number(dataset.accContract) || null,
+      output_manifest_hash: dataset.accManifest || "" };
+    var signature = JSON.stringify(body);
+    if (!dataset.accDecisionKey || dataset.accDecisionBody !== signature) {
+      dataset.accDecisionKey = newClientId();
+      dataset.accDecisionBody = signature;
+    }
+    body.decision_key = dataset.accDecisionKey;
+    return body;
+  }
+
+  function qualityPolicyPayload(input) {
+    var mode = input.limit_migration || "";
+    var value = input.reference_usd;
+    var empty = value === "" || value === null || value === undefined;
+    var amount = empty ? null : Number(value);
+    if ((input.enabled && mode !== "observe" && mode !== "retain") ||
+        typeof value === "boolean" || (!empty && (!Number.isFinite(amount) || amount < 0))) return { ok: false };
+    var body = { enabled: !!input.enabled, reference_usd: amount };
+    if (mode) body.limit_migration = mode;
+    return { ok: true, body: body };
+  }
+
+  function qualityTemplatePayload(template, version, criteria) {
+    template = template || {};
+    return { expected_version: Number(version), criteria: criteria,
+      expected_outputs: template.expected_outputs || [], source_refs: template.source_refs || [],
+      fix_rounds: template.fix_rounds === undefined ? 2 : template.fix_rounds };
+  }
+
+  function qualityPolicyHtml(team) {
+    var p = team.quality_policy || {};
+    var template = team.acceptance_template;
+    var lines = template ? (template.criteria || []).map(function (c) {
+      if (c.kind === "owner_confirm") return c.target === "message" ? "confirm-message:" : "confirm: " + (c.path || "");
+      if (c.kind === "file_exists") return "file: " + c.path;
+      if (c.kind === "file_contains") return "contains: " + c.path + " | " + (c.min_chars || 0) + " | " + (c.must_contain || []).join(", ");
+      if (c.kind === "json_keys") return "json: " + c.path + " | " + (c.keys || []).join(", ");
+      if (c.kind === "command_ok") return "cmd: " + c.command;
+      return "";
+    }).join("\n") : "confirm-message:";
+    return '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.quality.title")) + infoBtn() + "</div>" +
+      infoBody(esc(tw("teams.quality.explain"))) +
+      '<form class="tm-form tm-quality-form" onsubmit="return false"><label class="tm-radio"><input type="checkbox" class="tm-quality-enabled"' +
+      (p.enabled ? " checked" : "") + "><span>" + esc(tw("teams.quality.enable")) + "</span></label>" +
+      '<label class="tm-field"><span>' + esc(tw("teams.quality.limit_choice")) + '</span><select class="tm-quality-migration">' +
+      [["", "teams.quality.choose"], ["observe", "teams.quality.observe"], ["retain", "teams.quality.retain"]].map(function (r) {
+        var selected = p.limit_migration_selected ? p.limit_migration : "";
+        return '<option value="' + r[0] + '"' + (selected === r[0] ? " selected" : "") + ">" + esc(tw(r[1])) + "</option>";
+      }).join("") + "</select></label>" +
+      '<label class="tm-field"><span>' + esc(tw("teams.quality.reference")) + '</span><input class="tm-quality-reference" type="number" min="0" step="any" value="' +
+      esc(p.reference_usd == null ? "" : p.reference_usd) + '"></label><button type="button" class="ws-btn tm-quality-save">' +
+      esc(tw("teams.save")) + "</button></form>" +
+      '<details><summary>' + esc(tw("teams.quality.template")) + '</summary><form class="tm-form tm-template-form" data-template-version="' +
+      esc(template ? template.version : 0) + '" onsubmit="return false"><label class="tm-field"><span>' +
+      esc(tw("teams.quality.criteria")) + infoBtn() + "</span>" + infoBody(esc(tw("teams.acc.help"))) +
+      '<textarea class="tm-template-criteria" rows="5">' + esc(lines) + '</textarea></label><button type="button" class="ws-btn tm-template-save">' +
+      esc(tw("teams.save")) + "</button></form></details></section>";
+  }
+
+  function qualityUsageHtml(u, reference) {
+    if (!u) return "";
+    var money = u.money || {}, coverage = u.coverage || {};
+    var known = function (v) { return v !== null && v !== undefined && Number.isFinite(Number(v)); };
+    var val = function (v) { return known(v) ? esc(v) : esc(tw("teams.quality.unknown")); };
+    var rows = [["teams.quality.reported", money.reported_usd], ["teams.quality.estimated", money.estimated_usd],
+      ["teams.quality.subscription", money.subscription_equivalent_usd]];
+    var h = '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.quality.usage")) + infoBtn() + "</div>" +
+      infoBody(esc(tw("teams.quality.usage_explain"))) +
+      "<div>" + esc(tw("teams.quality.attempts")) + ": " + val(u.attempts) + " · " + esc(tw("teams.quality.requests")) + ": " + val(u.requests) + "</div>" +
+      "<div>" + esc(tw("teams.quality.tokens")) + ": " + val(u.tokens_in) + " / " + val(u.tokens_out) + "</div>";
+    rows.forEach(function (r) { h += "<div>" + esc(tw(r[0])) + ": " + (known(r[1]) ? esc(Number(r[1]).toFixed(4)) + " USD" : val(null)) + "</div>"; });
+    if (coverage.status !== "observed") h += '<div class="tm-note-line">' + esc(tw("teams.quality.partial")) + "</div>";
+    var measured = (known(money.reported_usd) ? Number(money.reported_usd) : 0) +
+      (known(money.estimated_usd) ? Number(money.estimated_usd) : 0);
+    if (known(reference) && measured > Number(reference)) h += '<div class="tm-note-line">' + esc(tw("teams.quality.above_reference")) + "</div>";
+    var roles = u.roles || {};
+    if (Object.keys(roles).length) h += '<details><summary>' + esc(tw("teams.quality.roles")) + "</summary>" +
+      Object.keys(roles).map(function (role) {
+        var r = roles[role];
+        return "<div>" + esc(tw(TURN_ROLE_KEY[role] || "teams.quality.shared")) + ": " + val(r.attempts) + " · " +
+          val(r.tokens_in) + " / " + val(r.tokens_out) + "</div>";
+      }).join("") + "</details>";
+    return h + "</section>";
+  }
+
+  function taskQualityHtml(detail) {
+    if (!detail) return "";
+    var acceptance = detail.acceptance || {};
+    var stale = (acceptance.status === "passed" || acceptance.status === "accepted") && acceptance.completion_valid === false;
+    var unverified = detail.task && detail.task.status === "done" &&
+      (!detail.acceptance || acceptance.verification === "legacy_unverified");
+    return '<details class="tm-task-quality"><summary>' + esc(tw("teams.quality.task_usage")) + "</summary>" +
+      (unverified ? '<div class="tm-note-line">' + esc(tw("teams.quality.unverified")) + "</div>" : "") +
+      (stale ? '<div class="tm-note-line">' + esc(tw("teams.quality.stale")) + "</div>" : "") +
+      qualityUsageHtml(detail.usage) + "</details>";
   }
 
   // Dải việc ở đầu khung chat: việc đang làm (một dòng) và việc đang chờ chủ (thẻ có nút giải quyết).
@@ -1299,6 +1402,9 @@
         "</select></label>";
     }).join("");
     return '<form class="tm-form tm-caps-form" onsubmit="return false"><div class="tm-qhead">' + esc(tw("teams.caps")) + "</div>" +
+      (team.quality_policy && team.quality_policy.enabled && team.quality_policy.limit_migration === "observe" ?
+        '<div class="tm-qhead">' + esc(tw("teams.quality.observe")) + infoBtn() + '</div>' +
+        infoBody(esc(tw("teams.quality.caps_explain"))) : "") +
       // Trưởng nhóm đang được tự quyết: số trong hộp quyền đè số ở đây; nói rõ thay vì để "Đã lưu" mà không đổi gì.
       (team.authority && team.authority.authority ? '<div class="tm-note-line">' + esc(tw("teams.caps_full_note")) + "</div>" : "") +
       capRows + '<button type="button" class="ws-btn tm-caps-save">' + esc(tw("teams.save")) + "</button></form>";
@@ -1674,7 +1780,8 @@
       esc(tw("teams.head_people", { n: nAct })) + "</div>" +
       membersHtml(team, agents, ui.openMember) + "</section>" +
       '<section class="tm-sec">' + levelsHtml(team) + usageHtml(team) + "</section>" +
-      workModeHtml(team) + mandateHtml(team, ui.mandateEdit) +
+      workModeHtml(team) + qualityPolicyHtml(team) + qualityUsageHtml(team.quality_usage, (team.quality_policy || {}).reference_usd) +
+      mandateHtml(team, ui.mandateEdit) +
       '<section class="tm-sec"><div class="tm-qhead">' + esc(tw("teams.tab_team")) + "</div>" +
       '<label class="tm-rs tm-pin-row"><input type="checkbox" class="tm-pin-toggle"' + (team.pinned_at ? " checked" : "") +
       "><span>" + esc(tw("teams.pin_top")) + "</span></label>" + settingsFormHtml(team) + "</section>" +
@@ -1905,7 +2012,8 @@
     if (!bar) return;
     bar.hidden = !S.filterTask || !S.team;
     bar.innerHTML = bar.hidden ? "" : "<span>" + esc(tw("teams.filter_on", { title: S.taskTitles[S.filterTask] || S.filterTask })) +
-      '</span><button type="button" class="ws-btn tm-filter-clear">' + esc(tw("teams.filter_clear")) + "</button>";
+      '</span><button type="button" class="ws-btn tm-filter-clear">' + esc(tw("teams.filter_clear")) + "</button>" +
+      (S.taskDetail && S.taskDetail.task && S.taskDetail.task.id === S.filterTask ? taskQualityHtml(S.taskDetail) : "");
   }
 
   function runSearch() {
@@ -2767,13 +2875,15 @@
     var url = S.filterTask ? teamUrl("/tasks/" + q(S.filterTask)) : teamUrl("/messages");
     if (older && S.msgs.length && !S.filterTask) url += "?before_ts=" + q(S.msgs[0].ts) + "&before_id=" + q(S.msgs[0].id);
     var forTeam = S.activeId;
+    var forTask = S.filterTask;
     return call("GET", url).then(function (r) {
-      if (S.activeId !== forTeam) return;
+      if (S.activeId !== forTeam || S.filterTask !== forTask) return;
       if (r.code !== 200) return fail(r);
       var got = r.j.messages || [];
       // Lọc theo một việc đã xong (mở từ tab Công việc): việc không còn trong hàng đợi, học tên từ chính bản ghi việc để
       // thanh lọc và nhãn tin hiện tên việc thay vì mã (0.142.0).
       if (S.filterTask && r.j.task && r.j.task.id) {
+        S.taskDetail = r.j;
         S.taskTitles[r.j.task.id] = r.j.task.title || S.taskTitles[r.j.task.id] || "";
         got.forEach(function (m) { if (m.task_id === r.j.task.id && !m.task_title) m.task_title = r.j.task.title || ""; });
         drawFilterbar();
@@ -4029,10 +4139,35 @@
       t.disabled = true;
       // The card's own revision and round: a click on an older card is refused by the server (never accepts a newer
       // product the owner did not see).
-      return call("POST", teamUrl("/tasks/" + q(d.acc) + "/acceptance/decide"), { decision: d.accDecide, note: anote,
-        revision: d.accRev ? Number(d.accRev) : null, round: d.accRound ? Number(d.accRound) : null }).then(function (r) {
+      return call("POST", teamUrl("/tasks/" + q(d.acc) + "/acceptance/decide"),
+        acceptanceDecisionPayload(d, d.accDecide, anote)).then(function (r) {
         if (r.code !== 200) { t.disabled = false; fail(r); }
         loadMsgs(false); loadQueue();
+      }).catch(function () { t.disabled = false; setNote(tw("teams.err_network")); });
+    }
+    if (t.classList.contains("tm-quality-save")) {
+      var qform = t.closest(".tm-quality-form");
+      var qp = qualityPolicyPayload({ enabled: qform.querySelector(".tm-quality-enabled").checked,
+        limit_migration: qform.querySelector(".tm-quality-migration").value,
+        reference_usd: qform.querySelector(".tm-quality-reference").value });
+      if (!qp.ok) return setNote(tw("teams.quality.invalid"));
+      t.disabled = true;
+      return call("PUT", teamUrl("/quality-policy"), qp.body).then(function (r) {
+        if (r.code !== 200) { t.disabled = false; return fail(r); }
+        setNote(tw("teams.saved"));
+        loadTeam();
+      }).catch(function () { t.disabled = false; setNote(tw("teams.err_network")); });
+    }
+    if (t.classList.contains("tm-template-save")) {
+      var tform = t.closest(".tm-template-form");
+      var parsed = parseCriteria(tform.querySelector(".tm-template-criteria").value);
+      if (parsed.bad.length || !parsed.criteria.length) return setNote(tw("teams.acc.bad"));
+      t.disabled = true;
+      return call("PUT", teamUrl("/acceptance-template"), qualityTemplatePayload(S.team.acceptance_template,
+        tform.dataset.templateVersion, parsed.criteria)).then(function (r) {
+        if (r.code !== 200) { t.disabled = false; return fail(r); }
+        setNote(tw("teams.saved"));
+        loadTeam();
       }).catch(function () { t.disabled = false; setNote(tw("teams.err_network")); });
     }
     if (t.classList.contains("tm-md-save")) {
@@ -4614,7 +4749,10 @@
   var api = { render: render, leave: leave, open: open, teamListHtml: teamListHtml, messageHtml: messageHtml, queueHtml: queueHtml,
     jobStripHtml: jobStripHtml, blockedAction: blockedAction, approvalCardHtml: approvalCardHtml, workModeHtml: workModeHtml,
     mandateHtml: mandateHtml, opportunityCardHtml: opportunityCardHtml, readMandateForm: readMandateForm,
-    parseCriteria: parseCriteria, acceptanceCardHtml: acceptanceCardHtml,
+    parseCriteria: parseCriteria, acceptanceCardHtml: acceptanceCardHtml, acceptanceDecisionPayload: acceptanceDecisionPayload,
+    qualityPolicyHtml: qualityPolicyHtml, qualityPolicyPayload: qualityPolicyPayload, qualityTemplatePayload: qualityTemplatePayload,
+    qualityUsageHtml: qualityUsageHtml,
+    taskQualityHtml: taskQualityHtml,
     jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
     mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, mentionScan: mentionScan, removeMention: removeMention,
     callsHtml: callsHtml, foldName: foldName, emailBefore: emailBefore, composerHint: composerHint, newClientId: newClientId,

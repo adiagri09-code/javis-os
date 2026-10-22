@@ -43,6 +43,9 @@ _TEAM_COLUMNS = (
     ("assignee_key", "TEXT NOT NULL DEFAULT ''"),
     ("coordinator_key", "TEXT NOT NULL DEFAULT ''"),
     ("source_ref", "TEXT NOT NULL DEFAULT ''"),
+    ('acceptance_ready', 'INTEGER NOT NULL DEFAULT 0'),
+    ('acceptance_revision', 'INTEGER NOT NULL DEFAULT 0'),
+    ('acceptance_contract_version', 'INTEGER NOT NULL DEFAULT 0'),
 )
 _TEAM_ORDER = "(team_prio IS NULL), team_prio, team_seq"
 
@@ -107,6 +110,9 @@ class TaskStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         # 0.140.0: kho có từ trước thì chụp một bản trước khi thêm cột làn `team` (khôi phục khi hạ phiên bản).
         team_migration.snapshot_once(self.path, "tasks", "lane")
+        team_migration.snapshot_once(self.path, 'tasks', 'acceptance_ready', suffix='.pre-0.283.0')
+        self.quality_prepare = None
+        self.quality_prepare_task = None
         self._lock = threading.RLock()
         self._db = sqlite3.connect(str(self.path), check_same_thread=False)
         self._db.row_factory = sqlite3.Row
@@ -235,6 +241,10 @@ class TaskStore:
                     team_id TEXT PRIMARY KEY,
                     version INTEGER NOT NULL DEFAULT 0
                 );
+                CREATE TABLE IF NOT EXISTS team_quality_required(team_id TEXT PRIMARY KEY, enabled INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS team_acceptance_applied(
+                    task_id TEXT NOT NULL, decision_key TEXT NOT NULL, revision INTEGER NOT NULL,
+                    PRIMARY KEY(task_id,decision_key));
                 """
             )
             self._db.commit()
@@ -1248,6 +1258,17 @@ class TaskStore:
         ).fetchone()
 
     def enqueue_team(
+        self, brain_root: str, team_id: str, title: str, intent: str, source_ref: str,
+        assignee_key: str = '', coordinator_key: str = '', chat_id: str = '', created_by: str = 'owner',
+        blocked_kind: str = '', blocked_reason: str = '',
+    ) -> tuple[str, bool]:
+        result = self._enqueue_team_record(brain_root, team_id, title, intent, source_ref, assignee_key,
+            coordinator_key, chat_id, created_by, blocked_kind, blocked_reason)
+        if self.quality_prepare_task:
+            self.quality_prepare_task(result[0])
+        return result
+
+    def _enqueue_team_record(
         self,
         brain_root: str,
         team_id: str,
@@ -1384,6 +1405,18 @@ class TaskStore:
                 self._db.rollback()
                 raise
 
+    def set_quality_required(self, team_id, enabled):
+        with self._lock:
+            self._db.execute('INSERT INTO team_quality_required VALUES(?,?) ON CONFLICT(team_id) DO UPDATE SET enabled=excluded.enabled',
+                             (team_id, int(enabled)))
+            self._db.commit()
+
+    def set_acceptance_ready(self, task_id, revision, contract_version):
+        with self._lock:
+            self._db.execute('UPDATE tasks SET acceptance_ready=1, acceptance_revision=?, acceptance_contract_version=? '
+                             'WHERE id=? AND team_rev=?', (revision, contract_version, task_id, revision))
+            self._db.commit()
+
     def claim_team_next(
         self, team_id: str, worker_id: str, lease_s: int = 90, max_running: int = 1,
     ) -> Optional[dict]:
@@ -1392,6 +1425,9 @@ class TaskStore:
         Kiểm chỗ chạy, chọn việc, đặt `team_running`, ghi `task_runs` và tăng version trong MỘT
         giao dịch `BEGIN IMMEDIATE`: không bao giờ có hai việc cùng chạy trong một nhóm."""
         team_id = str(team_id)
+        # Cross-store preparation deliberately precedes the claim transaction. A crash leaves the task unready.
+        if self.quality_prepare:
+            self.quality_prepare(team_id)
         ts = now()
         run_id = "run_" + uuid.uuid4().hex[:14]
         with self._lock:
@@ -1413,6 +1449,11 @@ class TaskStore:
                     self._db.rollback()
                     return None
                 tid = str(row["id"])
+                required = self._db.execute('SELECT enabled FROM team_quality_required WHERE team_id=?', (team_id,)).fetchone()
+                if (required and required[0]) or row['acceptance_contract_version']:
+                    if not row['acceptance_ready'] or row['acceptance_revision'] != row['team_rev']:
+                        self._db.rollback()
+                        return None
                 self._db.execute(
                     """UPDATE tasks SET status='team_running', attempts=attempts+1, claimed_by=?,
                        claim_expires_at=?, last_heartbeat_at=?, current_run_id=?, block_kind='',
@@ -1446,7 +1487,7 @@ class TaskStore:
     def _team_move(
         self, task_id: str, allowed_from: tuple, status: str, event_type: str, message: str = "",
         *, block_kind: str = "", block_reason: str = "", result: Optional[str] = None,
-        run_status: str = "", expected_rev: Optional[int] = None,
+        run_status: str = "", expected_rev: Optional[int] = None, acceptance_decision: Optional[str] = None,
     ) -> Optional[str]:
         """Chuyển trạng thái một việc nhóm. Trả trạng thái TRƯỚC khi chuyển, None nếu không áp. `expected_rev`: chỉ áp
         khi `team_rev` vẫn là bản đó (CAS cùng giao dịch, review T1 R7)."""
@@ -1454,6 +1495,10 @@ class TaskStore:
         with self._lock:
             self._tx()
             try:
+                if acceptance_decision and self._db.execute('SELECT 1 FROM team_acceptance_applied WHERE task_id=? AND decision_key=?',
+                        (task_id, acceptance_decision)).fetchone():
+                    self._db.rollback()
+                    return 'applied'
                 row = self._team_row(task_id)
                 if not row or row["status"] not in allowed_from or (
                         expected_rev is not None and int(row["team_rev"] or 1) != int(expected_rev)):
@@ -1475,6 +1520,9 @@ class TaskStore:
                         (run_status, ts, ts, (block_reason or "")[:4000], run_id),
                     )
                 self._event(task_id, event_type, message or block_reason or status, run_id)
+                if acceptance_decision:
+                    self._db.execute('INSERT INTO team_acceptance_applied VALUES(?,?,?)',
+                                     (task_id, acceptance_decision, int(row['team_rev'])))
                 self._bump_queue(str(row["team_id"]))
                 self._db.commit()
                 return prev
@@ -1487,14 +1535,21 @@ class TaskStore:
         return self._team_move(task_id, ("team_running", "team_queued"), "team_blocked", "team_blocked",
                                block_kind=str(kind or "failed"), block_reason=reason, run_status="blocked")
 
-    def team_reblock(self, task_id: str, kind: str, reason: str = "") -> Optional[str]:
+    def team_reblock(self, task_id: str, kind: str, reason: str = "", *, decision_key=None, expected_rev=None) -> Optional[str]:
         """A blocked job stays blocked for another reason (0.207.0: the owner rejected or revoked an approval, the request
         expired). Same place in the queue; the new kind decides which buttons the owner gets."""
         return self._team_move(task_id, ("team_blocked",), "team_blocked", "team_reblocked",
-                               block_kind=str(kind or "failed"), block_reason=reason)
+                               block_kind=str(kind or "failed"), block_reason=reason,
+                               acceptance_decision=decision_key, expected_rev=expected_rev)
 
-    def team_unblock(self, task_id: str) -> Optional[str]:
-        return self._team_move(task_id, ("team_blocked",), "team_queued", "team_unblocked")
+    def team_unblock(self, task_id: str, *, decision_key=None, expected_rev=None) -> Optional[str]:
+        return self._team_move(task_id, ("team_blocked",), "team_queued", "team_unblocked",
+                               acceptance_decision=decision_key, expected_rev=expected_rev)
+
+    def acceptance_decision_applied(self, task_id, decision_key):
+        with self._lock:
+            return self._db.execute('SELECT 1 FROM team_acceptance_applied WHERE task_id=? AND decision_key=?',
+                                    (task_id, decision_key)).fetchone() is not None
 
     def team_requeue(self, task_id: str, reason: str = "") -> Optional[str]:
         """Việc đang chạy về hàng chờ, giữ chỗ cũ (restart trước mốc gọi engine)."""
@@ -1507,10 +1562,10 @@ class TaskStore:
         return self._team_move(task_id, ("team_running",), "done", "team_done", "done",
                                result=result, run_status="completed", expected_rev=expected_rev)
 
-    def team_finish_reviewed(self, task_id: str, result: str = "", expected_rev: Optional[int] = None) -> Optional[str]:
+    def team_finish_reviewed(self, task_id: str, result: str = "", expected_rev: Optional[int] = None, *, decision_key=None) -> Optional[str]:
         """0.209.0: the owner confirmed the product of a job that waited for acceptance (blocked) -> done, same CAS."""
         return self._team_move(task_id, ("team_blocked",), "done", "team_done", "done (owner accepted)",
-                               result=result, run_status="completed", expected_rev=expected_rev)
+                               result=result, run_status="completed", expected_rev=expected_rev, acceptance_decision=decision_key)
 
     def team_cancel(self, task_id: str, reason: str = "owner cancel") -> Optional[str]:
         return self._team_move(task_id, TEAM_OPEN_STATUS, "cancelled", "team_cancelled", reason,

@@ -24650,7 +24650,7 @@ def _team_gate_support(provider):
                                       api_providers=tuple(aux_engine.API_PROVIDERS))
 
 
-def _team_record_usage(provider: str, model: str, outcome) -> None:
+def _team_record_usage(provider: str, model: str, outcome, *, execution=None, status=None, expected_requests=None) -> None:
     """Count one team member turn in the usage ledger, like a chat turn (Settings > Usage, usage-events.jsonl).
 
     Team turns used to write nothing there, so a team run on Claude Code or Codex was invisible on the Usage page.
@@ -24659,12 +24659,19 @@ def _team_record_usage(provider: str, model: str, outcome) -> None:
     try:
         prov = str(provider or "")
         if prov in aux_engine.API_PROVIDERS:
+            if execution:
+                usage_store.record(prov, model or "?", None, None, execution=execution,
+                                   event_kind="execution", status=status, expected_requests=expected_requests,
+                                   telemetry_errors=usage_store.telemetry_errors(execution["team_id"],
+                                       execution.get("task_id"), execution.get("execution_id")))
             return
-        tin, tout = int(outcome.tokens_in or 0), int(outcome.tokens_out or 0)
-        if tin <= 0 and tout <= 0:
+        tin, tout = outcome.tokens_in, outcome.tokens_out
+        if not execution and not (tin or tout):
             return
-        usage_store.record(prov, model or "?", tin, tout, float(getattr(outcome, "cost_usd", None) or 0))
+        usage_store.record(prov, model or "?", tin, tout, getattr(outcome, "cost_usd", None),
+                           execution=execution, event_kind="cli_fallback", status=status)
     except Exception as e:  # noqa: BLE001
+        usage_store.note_telemetry_error(execution)
         print(f"[team usage] {type(e).__name__}: {e}", file=sys.stderr)
 
 
@@ -24760,7 +24767,7 @@ def _team_engine_for(team, agent_key, role):
             raise team_runner.EngineUnavailable(f"engine {spec['provider']} chưa sẵn sàng (kiểm tra trang Models)")
         return eng
 
-    async def run(req):
+    async def execute(req):
         # Tag riêng cho TỪNG lượt (0.142.0): lượt bị huỷ hay quá trần thời gian (team_runner.TURN_TIMEOUT_S) thì giết đúng
         # tiến trình engine của lượt này TRƯỚC khi khoá bận được nhả, để Thử lại không chạy song song với một tiến trình
         # cũ còn sống (review 0.142.0, #2).
@@ -24778,11 +24785,17 @@ def _team_engine_for(team, agent_key, role):
         else:
             await req["engine_started"]()
         outcome = team_runner.ToolTurnOutcome() if tools_on else team_runner.TextOnlyOutcome()
+        execution = dict((turn_context.current() or {}).get("execution") or {})
+        session_before = getattr(eng, "session_id", None)
         stream = eng.query(prompt)
+        usage_status = "error"
         try:
             async for ev in stream:
                 outcome.note(ev)
+            res = outcome.result()
+            usage_status = "completed"
         except asyncio.CancelledError:
+            usage_status = "cancelled"
             try:
                 await asyncio.to_thread(claude_cli.cancel_all, tag)
             finally:
@@ -24791,9 +24804,13 @@ def _team_engine_for(team, agent_key, role):
                 except BaseException:  # noqa: BLE001 - generator đang bị huỷ
                     pass
             raise
-        # Before result(): a turn that burned tokens and then failed still cost them.
-        _team_record_usage(used["provider"], getattr(eng, "model", None) or used.get("model") or "", outcome)
-        res = outcome.result()
+        finally:
+            execution["cli_session_id"] = getattr(eng, "session_id", None)
+            execution["cli_session_new"] = not session_before
+            # Usage survives failure and cancellation; telemetry can never determine execution policy.
+            _team_record_usage(used["provider"], getattr(eng, "model", None) or used.get("model") or "", outcome,
+                               execution=execution, status=usage_status,
+                               expected_requests=getattr(eng, "usage_request_count", None))
         slug = info.get("slug") or ""
         # JAVIS_RULE trong lượt nhóm không có chủ nói trực tiếp với agent: hạ thành bài học (như bước workflow).
         rules, text = agent_rules.extract_rules(res["text"])
@@ -24820,6 +24837,20 @@ def _team_engine_for(team, agent_key, role):
         return {"text": clean, "tokens_in": res["tokens_in"], "tokens_out": res["tokens_out"],
                 "cost_usd": res.get("cost_usd"),
                 "lessons": lessons, "commit": commit, "engine_note": used.get("note") or ""}
+
+    async def run(req):
+        # Bind before asyncio.to_thread: constructors and CLI correlation inherit the host execution.
+        import uuid
+        ambient = turn_context.current() or turn_context.make("team", chat_id=req.get("team_id"))
+        ambient["execution"] = turn_context.execution_metadata({
+            "team_id": req.get("team_id"), "task_id": req.get("task_id"), "step_id": req.get("step_id"),
+            "turn_id": req.get("turn_id"), "attempt": req.get("attempt"), "job_revision": req.get("job_revision"),
+            "role": role, "purpose": req.get("purpose") or role, "execution_id": uuid.uuid4().hex})
+        token = turn_context.bind(ambient)
+        try:
+            return await execute(req)
+        finally:
+            turn_context.reset(token)
 
     run.marks_engine = True
     return spec["provider"], spec["model"], run
@@ -26114,7 +26145,14 @@ def _pulse_persona(key):
 def _pulse_engine_for(key, ctx, purpose):
     """Engine CHỈ CHỮ cho lượt quét: cùng hợp đồng với lượt nhóm (`_team_engine_for`: thư mục trống, không công cụ, model
     riêng của trợ lý hay model chính). Test thay hàm này để chứng minh không có engine thật nào được dựng."""
-    return _team_engine_for({"brain_id": _pulse_brain_of(key), "team_id": str(ctx).replace(":", "-")}, key, "work")
+    team_id = str(ctx).split(":", 1)[1] if str(ctx).startswith("team:") else str(ctx)
+    provider, model, execute = _team_engine_for({"brain_id": _pulse_brain_of(key), "team_id": team_id}, key, purpose)
+
+    async def run(req):
+        return await execute({**req, "team_id": team_id, "task_id": None, "purpose": purpose})
+
+    run.marks_engine = True
+    return provider, model, run
 
 
 def _pulse_can_enqueue(key, ctx):

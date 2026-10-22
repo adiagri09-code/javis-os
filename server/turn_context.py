@@ -93,7 +93,7 @@ _LOCK = threading.Lock()  # CLI engines build argv from worker threads too
 
 
 def make(kenh, sender_id="", chat_type="", chat_id="", la_chu=False, *, session_id="", message_id=0,
-         agent=None, authority_seq=None, provider="", team_gate="", job="") -> dict:
+         agent=None, authority_seq=None, provider="", team_gate="", job="", execution=None) -> dict:
     """`authority_seq` (Resonance A4): ảnh chụp thứ tự quyền do HOST đọc trước khi engine chạy; None khi lượt không
     thuộc trợ lý nào. `provider`: engine của lượt, để hồ sơ bản nộp ghi đúng khả năng engine.
     `team_gate` (0.207.0): id cổng công cụ của một bước việc nhóm (team_gate.py), "" ngoài bước đó."""
@@ -110,6 +110,7 @@ def make(kenh, sender_id="", chat_type="", chat_id="", la_chu=False, *, session_
         "provider": str(provider or "").strip(),
         "team_gate": str(team_gate or "").strip(),
         "job": str(job or "").strip(),
+        "execution": execution_metadata(execution),
     }
 
 
@@ -133,7 +134,20 @@ def _copy(turn: dict) -> dict:
     out = dict(turn)
     if isinstance(out.get("agent"), dict):
         out["agent"] = dict(out["agent"])
+    if isinstance(out.get("execution"), dict):
+        out["execution"] = dict(out["execution"])
     return out
+
+
+EXECUTION_FIELDS = ("team_id", "task_id", "step_id", "turn_id", "execution_id", "attempt", "role",
+                    "purpose", "job_revision", "cli_session_id", "cli_session_new")
+
+
+def execution_metadata(value) -> Optional[dict]:
+    """Allow only host identifiers, never prompts or credentials, into usage telemetry."""
+    if not isinstance(value, dict) or not value.get("team_id"):
+        return None
+    return {key: value.get(key) for key in EXECUTION_FIELDS if key in value}
 
 
 def from_meta(kenh, meta, la_chu: bool) -> dict:

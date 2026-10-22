@@ -223,8 +223,13 @@ class TeamStore:
         team_migration.snapshot_once(self.path, "team_reactions", "axis", suffix=T2_SNAPSHOT_SUFFIX)
         # 0.207.0: one copy before the approval gate's column, so a downgrade can restore the store as it was.
         team_migration.snapshot_once(self.path, "teams", "work_mode", suffix=GATE_SNAPSHOT_SUFFIX)
+        team_migration.snapshot_before_table(self.path, 'teams', 'team_cap_settings', '.pre-0.283.0')
         with closing(self._conn()) as c:
             c.executescript(_SCHEMA)
+            c.execute('CREATE TABLE IF NOT EXISTS team_cap_settings(team_id TEXT NOT NULL, cap TEXT NOT NULL, '
+                      'set_at REAL NOT NULL, event_id INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(team_id,cap))')
+            if 'event_id' not in {r[1] for r in c.execute('PRAGMA table_info(team_cap_settings)')}:
+                c.execute('ALTER TABLE team_cap_settings ADD COLUMN event_id INTEGER NOT NULL DEFAULT 0')
             for table, col, decl in _T2_REACTION_COLS:
                 if col not in {r[1] for r in c.execute(f"PRAGMA table_info({table})").fetchall()}:
                     c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
@@ -530,7 +535,18 @@ class TeamStore:
             after = dict(before, **clean)
             c.execute("UPDATE teams SET caps_json=?, updated_at=? WHERE team_id=?", (_j(after), time.time(), team_id))
             self._event(c, team_id, "caps_set", by, before, after)
+            event_id = c.execute('SELECT MAX(id) FROM team_events WHERE team_id=?', (team_id,)).fetchone()[0]
+            if by == 'owner':
+                for key in clean:
+                    c.execute('INSERT INTO team_cap_settings(team_id,cap,set_at,event_id) VALUES(?,?,?,?) '
+                              'ON CONFLICT(team_id,cap) DO UPDATE SET set_at=excluded.set_at,event_id=excluded.event_id',
+                              (team_id, key, time.time(), event_id))
         return self.get(team_id)
+
+    def owner_caps_after(self, team_id, event_id):
+        with closing(self._conn()) as c:
+            return {r['cap'] for r in c.execute('SELECT cap FROM team_cap_settings WHERE team_id=? AND event_id>?',
+                                                (team_id, int(event_id)))}
 
     def log_event(self, team_id: str, kind: str, by: str, before: Any = None, after: Any = None) -> None:
         with self._Tx(self) as c:

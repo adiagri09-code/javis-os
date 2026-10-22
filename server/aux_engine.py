@@ -430,16 +430,33 @@ class _ApiAuxEngine:
 
         # Đường API sinh "text" theo mảnh; việc nền chỉ đọc "final" nên gom lại rồi phát MỘT lần.
         buf = []
-        async for ev in stream:
-            t = ev.get("type")
-            if t == "text":
-                buf.append(ev.get("content") or "")
-            elif t in ("tool_call", "error", "usage"):
-                if t == "usage":
-                    self._ghi_muc_dung(ev)
-                yield ev
-                if t == "error":
-                    return
+        import turn_context
+        observed_requests = [False]
+        request_ids = set()
+        self.usage_request_count = 0
+
+        def observe_request(event):
+            observed_requests[0] = True
+            request_ids.add(event.get("event_id"))
+            self.usage_request_count = len(request_ids)
+            self._ghi_muc_dung(event)
+
+        observer = observe_request if (turn_context.current() or {}).get("execution") else None
+        observer_token = eng.TEAM_REQUEST_OBSERVER.set(observer)
+        try:
+            async for ev in stream:
+                t = ev.get("type")
+                if t == "text":
+                    buf.append(ev.get("content") or "")
+                elif t in ("tool_call", "error", "usage"):
+                    if t == "usage" and not observed_requests[0]:
+                        self.usage_request_count += 1
+                        self._ghi_muc_dung(ev)
+                    yield ev
+                    if t == "error":
+                        return
+        finally:
+            eng.TEAM_REQUEST_OBSERVER.reset(observer_token)
         yield {"type": "final", "content": "".join(buf)}
 
     def _ghi_muc_dung(self, ev: dict) -> None:
@@ -457,8 +474,14 @@ class _ApiAuxEngine:
         try:
             import usage_store
             usage_store.record(self.provider, self.model,
-                               ev.get("input", 0), ev.get("output", 0), ev.get("cost", 0) or 0)
+                               ev.get("input"), ev.get("output"), ev.get("cost"),
+                               request_id=ev.get("request_id"), event_id=ev.get("event_id"),
+                               cache_read=ev.get("cache_read"), cache_create=ev.get("cache_create"))
         except Exception as e:  # noqa: BLE001
+            try:
+                usage_store.note_telemetry_error()
+            except Exception:
+                pass
             print(f"[aux usage] {type(e).__name__}: {e}", file=sys.stderr)
 
 

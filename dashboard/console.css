@@ -3807,3 +3807,11 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
 .tm-md .tm-sub, .tm-ap .tm-sub, .tm-acc-form .tm-sub, .tm-md .tm-qhead, .tm-wm .tm-qhead {
   font-size: 16px; white-space: normal; overflow: visible; text-overflow: clip; }
 .tm-ap code, .tm-md code { font-size: 16px; }
+
+/* Quality settings and optional usage detail stay readable on narrow screens. */
+.tm-quality-form input, .tm-quality-form select, .tm-template-form textarea,
+.tm-quality-form .ws-btn, .tm-template-form .ws-btn { font-size: 16px; min-height: 40px; }
+.tm-quality-form select, .tm-template-form textarea { width: 100%; min-width: 0; }
+.tm-task-quality { flex-basis: 100%; min-width: 0; width: 100%; }
+.tm-filterbar:has(.tm-task-quality) { flex-wrap: wrap; }
+.tm-task-quality .tm-sec { overflow-wrap: anywhere; }
