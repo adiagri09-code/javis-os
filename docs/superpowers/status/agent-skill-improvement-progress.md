@@ -321,3 +321,10 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   concrete version/permission source provider and owner API remain. Do not mark Task5 or
   M1 done from these component tests. Full protected source retention and actual rendered
   baseline are distinct records; qualified inputs must remain selected-case fixtures.
+- Shared pure production rendering is now extracted without changing production caps or
+  block order. Trial-only full-protected mode retains exact profile, memory and project
+  instruction bytes. A frozen pre-extraction oracle checks the actual production builder.
+  Independent review found a removed compatibility matcher used by the existing prefix
+  suite; its original failure was reproduced and the shared alias restored. Parent's fresh
+  prompt/memory/language regression passed15/15 scripts in24s. This is a rendering component,
+  not the complete read-only collector or an enabled trial endpoint.
