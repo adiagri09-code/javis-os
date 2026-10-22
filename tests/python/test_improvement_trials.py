@@ -454,6 +454,36 @@ class TrialStoreTests(unittest.TestCase):
                                   lease_token=token, reason="cancelled")
         self.assertEqual(result, cancelled)
 
+    def test_rejected_unclaimed_reservation_refunds_after_policy_revocation(self):
+        trial = self.reserve()
+        self.assets.set_policy(self.owner, "off", expected_version=0, event_key="revoke-before-host-claim")
+        result = self.trials.reject_unclaimed(self.owner, trial["trial_id"], expected_generation=1, reason="authority_changed")
+        self.assertEqual(result["status"], "not_run")
+        self.assertEqual(result["attempts"][0]["failure_reason"], "authority_changed")
+        self.assertEqual(self.ledger.get(trial["attempts"][0]["call_id"])["status"], "refunded")
+        self.assertEqual(self.trials.reject_unclaimed(self.owner, trial["trial_id"], expected_generation=1,
+                                                      reason="authority_changed"), result)
+
+    def test_unclaimed_rejection_cannot_close_another_hosts_claim(self):
+        trial = self.reserve()
+        self.trials.claim(self.owner, trial["trial_id"], expected_generation=1)
+        current = self.trials.get(self.owner, trial["trial_id"])
+        for generation in (1, current["generation"]):
+            with self.subTest(generation=generation), self.assertRaises(IM.ConflictError):
+                self.trials.reject_unclaimed(self.owner, trial["trial_id"], expected_generation=generation, reason="authority_changed")
+        self.assertEqual(self.trials.get(self.owner, trial["trial_id"]), current)
+        self.assertEqual(self.ledger.get(trial["attempts"][0]["call_id"])["status"], "reserved")
+
+    def test_unclaimed_rejection_rolls_back_refund_if_reason_event_fails(self):
+        trial = self.reserve()
+        with self.rs._conn() as connection:
+            connection.execute("CREATE TRIGGER reject_failure BEFORE INSERT ON improvement_events "
+                "WHEN NEW.operation='trial_reject' BEGIN SELECT RAISE(ABORT,'injected'); END")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.trials.reject_unclaimed(self.owner, trial["trial_id"], expected_generation=1, reason="authority_changed")
+        self.assertEqual(self.trials.get(self.owner, trial["trial_id"])["status"], "reserved")
+        self.assertEqual(self.ledger.get(trial["attempts"][0]["call_id"])["status"], "reserved")
+
 
 if __name__ == "__main__":
     unittest.main()

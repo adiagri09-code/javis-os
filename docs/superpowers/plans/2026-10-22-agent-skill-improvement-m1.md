@@ -279,22 +279,24 @@ Tests: S02–S04 (crash at reserve/materialize/ready/engine/evaluate, restart re
 steal, late result, cancel), deterministic fake reruns, baseline/candidate isolation,
 contract mutation/owner stale decision, injection treated as data, unknown evaluator.
 
-- [ ] Add crash-before/after-engine, stale-generation, cancellation and directive-output
+- [x] Add crash-before/after-engine, stale-generation, cancellation and directive-output
   tests; assert refund only before engine_started, no new lesson/task/live file afterward.
-- [ ] Run trial/evaluation scripts; observe behavioral RED.
-- [ ] Implement durable transitions/journal, scoped host evaluation and clean output sink.
-- [ ] Require lifecycle/owner/learning/ledger/checker regressions GREEN.
-- [ ] Commit the complete fake-runner path and recovery behavior.
+- [x] Run trial/evaluation scripts; observe behavioral RED.
+- [x] Implement durable transitions/journal, scoped host evaluation and clean output sink.
+- [x] Require lifecycle/owner/learning/ledger/checker regressions GREEN.
+- [x] Commit the complete fake-runner path and recovery behavior.
 
-In-progress component checkpoint: schema3 reservation/materialization/lease/engine marker/
-cancel/recover and data-only evaluator are implemented. The concrete internal request and
-typed owner-decision boundary are in docs/dev/agent-skill-trial-contract-v1.md. This is not
-the complete fake runner: Runner start/usage/evaluator integration remains required before
-these boxes can close. Heartbeat, encrypted immutable trace/products/results, terminal
-owner history, historical reevaluation and host abort are implemented as components.
+Task4 engineering component complete: schema3 reservation/materialization/lease/engine
+marker/cancel/recover, immutable evidence, host evaluator and complete synthetic Runner
+integration pass. Runner21 and storage32 checks include repeated cancellation and revoked
+authority before claim. Independent review reproduced both defects, then independently
+verified their fixes. Expanded adapter/worker/storage/evaluator/usage/ledger regression
+passed13/13 files in90s; metadata API/assets/Windows-console passed3/3 in5s. Full M1 still
+needs Task5's trusted context/grant service and owner API, then Task6's real selected-engine
+feasibility, whole-branch review and integration. No actual model query was run here.
 
 Task4 interface refinement: named host methods replace the draft unrestricted transition
-dictionary. `TrialRunner(trials,context_loader,live_guard,adapter_factory,recorder_factory,
+dictionary. `TrialRunner(trials, *, context_loader,live_guard,adapter_factory,recorder_factory,
 checker_registry)` binds trusted dependencies; JSON cannot choose callables or assert full
 context. Additional files: improvement_trial_evidence.py, improvement_trial_products.py,
 improvement_trial_checks.py, improvement_trial_decisions.py, improvement_trial_results.py,
@@ -316,6 +318,36 @@ Routes retain auth/CSRF and off-event-loop storage, source and worker operations
 alongside service implementations before route work, not guessed from unrestricted
 client dictionaries. Routes never expose evaluator_case or private qualification results
 to an improver. Owner metadata is independently authorized from solver materialization.
+
+Host dependency audit refinement (before exposing a trial run):
+
+- Persist an encrypted experiment-context binding in the same improvement database. Bind
+  authenticated brain/experiment, explicit production surface, frozen complete context,
+  strict source manifest, exact selected engine pin and narrow revocable source grant.
+  Existing request hashes cannot identify the agent/session/project surface by themselves.
+- Context loading is a host operation. HTTP clients choose authorized references, not
+  context bytes/coverage, provider fallback or a naked grant/scope hash. Capture all required
+  protected owner/shared context and dependencies; missing/ambiguous inputs stay incomplete.
+  Mutable target bytes remain in the effective bundle and must not be duplicated as baseline.
+- Do not reuse live build_system_prompt or agent-turn assembly as a periodic guard: these
+  paths seed/heal/sync memory, read volatile lessons/session state and embed clock/usage.
+  Capture through strict read-only sources, freeze volatile rendering once and re-observe
+  semantic source identity/content. Never run those side effects just to poll a trial.
+- Strictly project persisted nonsecret selection fields without settings decryption,
+  corrupt-file backup writes or provider/quota fallback. Revalidate the verified adapter
+  pin; unsupported model/reasoning/provider remains unsupported. No credential enters a
+  context record or workspace. capture_source/check_ancestry and read-only memory-path
+  resolution are reusable, while permissive read/parse/truncation helpers need wrappers.
+- A host grant explicitly covers exact source identities/snapshot versions, fixture reads,
+  selected surface and owner scope. Existing goal/deliverable grants are not interchangeable;
+  never create a fake goal to obtain improvement authority. Revocation must block the next
+  marker/heartbeat/finalization while preserving historical evidence and counted usage.
+- Keep strong task ownership keyed by brain/trial after durable reservation. Cancellation
+  persists first, then cancels its worker task; status never starts a model or migrates a
+  cold database. Restart only recovers leases, never silently resumes an uncertain query.
+
+This adds improvement_trial_host.py and its focused source/config/revocation tests to
+Task5's planned files. Final closed route fields must follow that real host service.
 
 Tests: full owner API/auth/CSRF/cross-brain/disabled policy/unsupported/stale/cancel/retry;
 isolate all runtime roots and avoid main startup background tasks.

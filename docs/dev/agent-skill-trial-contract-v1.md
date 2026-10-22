@@ -109,7 +109,7 @@ This boundary does not advertise a complete TrialRunner or an owner execution en
 
 Schema3 also stores immutable encrypted packet chunks, artifacts, installation receipts,
 owner decisions and result manifests beside the same trial/call references. Raw packet
-chunks are bounded to1MiB, with a complete packet limit of8MiB and verified reconstruction.
+chunks are bounded to 1 MiB, with a complete packet limit of 8 MiB and verified reconstruction.
 Normal packets require a live matching host lease, contiguous sequence and exact workspace
 identity. Exact replay is read-only. The normal trace freezes at worker completion or
 evaluation; a later error cannot silently change the facts being graded. Explicit late
@@ -148,3 +148,31 @@ remain readable within the same owner/brain/trial/attempt scope.
 The worker does not receive lease tokens, evaluator answers, checker callables, live-guard
 callbacks or owner-history capabilities. These services remain internal until the full
 runner and authorized owner API pass their own checks.
+
+## M1 runner component
+
+`TrialRunner(trials, *, context_loader, live_guard, adapter_factory, recorder_factory,
+checker_registry)` accepts synchronous trusted host dependencies. The context loader and
+guard receive `(principal, request)`; the runner binds a zero-argument guard for finalization.
+`run(principal, trial_id)` owns one already-reserved attempt and returns current metadata
+plus its result, when present. Calling it again cannot create a new query or steal a lease.
+
+The start callback persists the real trial/call marker and constructs NativeUsageRecorder
+before acknowledging the worker. Its canonical execution identity is
+`improvement_trial:<trial_id>`; attempt is a separate field. Validated raw packets persist
+before telemetry observation. A raw-trace write failure still records known usage, closes
+the attempt as uncertain and never retries a query. Process/generator cleanup finishes
+before product staging and host evaluation.
+
+The runner renews its 60-second lease every 20 seconds and rechecks host authority. Cancellation
+drains owned state/telemetry operations through repeated cancellation requests. Evaluation
+commit authority is revoked before waiting for its host thread; no abandoned thread may
+publish after the runner has returned. A preclaim authority failure refunds only a still
+unclaimed reservation through exact generation/no-lease/no-engine checks. A concurrent
+claim is preserved. Unsupported configuration never releases the query acknowledgement.
+
+Trusted synchronous host checkers must terminate. Python threads cannot safely kill an
+arbitrary callable; the runner invalidates its finalization capability and waits for owned
+work. Candidate code and command checkers remain unsupported here and need a separately
+verified process/container checker. This component does not enable production trial API
+capabilities or establish selected-engine/business feasibility by synthetic tests.

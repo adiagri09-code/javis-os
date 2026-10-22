@@ -13,6 +13,8 @@ import improvement_cases as IC
 import improvement_store as IM
 
 TERMINAL = frozenset({"completed", "failed", "unknown", "interrupted", "cancelled", "not_run"})
+FAILURE_REASONS = frozenset({"unsupported_configuration", "authority_changed", "worker_failed", "evidence_failed",
+                             "telemetry_failed", "evaluation_failed", "timeout", "cancelled", "runner_failed"})
 
 
 def _request(value):
@@ -360,9 +362,7 @@ class TrialStore:
     def abort(self, principal, identifier, *, expected_generation, lease_token, reason):
         """Close only the owned host attempt, including expired leases, without a retry."""
         brain = IM._brain(principal)
-        allowed = {"unsupported_configuration", "authority_changed", "worker_failed", "evidence_failed",
-                   "telemetry_failed", "evaluation_failed", "timeout", "cancelled", "runner_failed"}
-        if not isinstance(reason, str) or reason not in allowed:
+        if not isinstance(reason, str) or reason not in FAILURE_REASONS:
             raise ValueError("invalid_trial_failure_reason")
         if not isinstance(lease_token, str) or not 1 <= len(lease_token) <= 256:
             raise IM.ConflictError("trial_abort_writer_unbound")
@@ -383,6 +383,28 @@ class TrialStore:
             payload = {"trial_id": identifier, "attempt": row["attempt"], "reason": reason}
             self.assets._event(connection, principal, "trial-abort:" + identifier + ":" + str(row["attempt"]),
                                "trial_abort", payload, result)
+            return result
+
+    def reject_unclaimed(self, principal, identifier, *, expected_generation, reason):
+        """Refund a stale reservation only if no host has acquired its lease."""
+        brain = IM._brain(principal)
+        if not isinstance(reason, str) or reason not in FAILURE_REASONS:
+            raise ValueError("invalid_trial_failure_reason")
+        with self.store._Tx(self.store) as connection:
+            row = self._row(connection, brain, identifier)
+            if row["status"] in TERMINAL:
+                return self._public(connection, row)
+            attempt = connection.execute("SELECT * FROM improvement_trial_attempts WHERE trial_id=? AND attempt=?",
+                                         (identifier, row["attempt"])).fetchone()
+            if (type(expected_generation) is not int or row["generation"] != expected_generation
+                    or row["status"] != "reserved" or attempt["status"] != "reserved"
+                    or attempt["lease_token"] is not None or attempt["writer_hash"] is not None
+                    or attempt["engine_at"] is not None):
+                raise IM.ConflictError("trial_reservation_owned")
+            result = self._stop(connection, row, "not_run", time.time(), reason)
+            payload = {"trial_id": identifier, "attempt": row["attempt"], "reason": reason}
+            self.assets._event(connection, principal, "trial-reject:" + identifier + ":" + str(row["attempt"]),
+                               "trial_reject", payload, result)
             return result
 
     def cancel(self, principal, identifier, *, expected_generation, event_key):

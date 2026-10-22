@@ -14,15 +14,16 @@
 - Current engineering branch: `codex/agent-skill-improvement-m1`; 0.288.0 reservation
   `884bfbca`, dependent draft https://github.com/blogminhquy/javis-os/pull/795 (attached).
   M0 merged as `0990331574e617fa1a79cd69fcd7b87d465448c5` after final-head CI passed;
-  publication run39797072172 succeeded. M1 is now rebased onto published M0; current feature
-  checkpointac27a182 before this progress update. PR795 remains draft pending the full M1 scope.
+  publication run39797072172 succeeded. M1 is rebased onto published M0; foundation/evidence
+  checkpoint299f44d4 is pushed, followed by the tested runner integration. PR795 remains draft
+  pending the full M1 scope and fresh final-main/version/CI checks.
 
 ## Milestones
 
 | Milestone | Engineering | Business evidence | Rollout |
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
-| M1 | Tasks1–2 complete as engineering components; shared ledger/usage, durable runner/evaluation/API pending | No real-engine smoke yet | Not enabled; base M0 integrated and published |
+| M1 | Tasks1–4 complete as engineering components; trusted context/grant service, owner API and final integration pending | Synthetic lifecycle/recorder checks only; no real-engine smoke yet | Not enabled; base M0 integrated and published |
 | M2 | Pending | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
@@ -61,7 +62,10 @@
 
 ## Next action
 
-Implement M1 shared ledger/usage, then durable lifecycle/evaluation and owner service.
+Implement M1 Task5's trusted experiment context/source grant and owner service, then Task6
+selected-engine smoke and complete verification. Do not reuse live prompt builders or
+fallback engine selection as a heartbeat guard. Tasks1–4 are tested components; full M1
+remains open and the owner run capability stays false.
 PR795 stays draft on published main09903315; full M0–M8 Goal remains active.
 Full M0–M8 Goal remains active; no business or live rollout gate is closed by a code merge.
 
@@ -282,3 +286,19 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   storage/evaluator/owner/usage/ledger regression passed9/9 files in65s. These are synthetic
   component tests, with no real engine or business acceptance. Complete Runner integration,
   trusted context/source-grant service, owner API and selected-engine smoke remain required.
+- Task4 Runner component is complete with21 synthetic lifecycle/integration checks, including
+  a real NativeUsageRecorder boundary and32 storage checks. Parent caught an invalid execution
+  ID that fake recorders admitted; the real-recorder test reproduced it and now passes.
+  Raw packets persist before usage, the start marker/recorder precede worker ACK, process
+  cleanup precedes evaluation, and reruns cannot create another query.
+- Independent review reproduced repeated cancellation abandoning a start thread, plus
+  preclaim policy revocation retaining a reservation. Cancellation now drains all owned
+  state/telemetry operations and evaluator commit authority through repeated requests.
+  An invalid unclaimed reservation refunds via strict generation/no-lease/no-engine CAS;
+  a concurrent claimant is preserved. Both original reproductions and Runner21 passed
+  independently after fixes. Trusted synchronous checkers must terminate; their threads
+  cannot be forcibly killed, so the runner revokes commit authority and waits for them.
+- Final Task4 regression passed13/13 files in90s (adapter/worker/sandbox/trial/evaluation/
+  owner/usage/ledger), plus unchanged metadata API/assets/Windows-console3/3 in5s. Compilation
+  and whitespace checks passed. No native/model query, business acceptance, API enablement
+  or production rollout occurred. Continue Task5; the M0–M8 Goal remains active.
