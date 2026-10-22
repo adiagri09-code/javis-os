@@ -428,3 +428,23 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   this draft; reservation was advanced to0.291.0 in ef617bf9 and PR795 retitled. Rebase/main
   reconciliation waits for current owned source changes to be frozen/committed; do not
   rebase over active agent edits. No integration or final CI claim yet.
+
+- Concrete Dashboard capture now passes30 component checks and independent originals.
+  Native user/ancestor contributors outside the closed profile reject capture by presence;
+  actual loaded renderer/helper identity changes also reject without executing builders.
+  Private fixture bodies embedded in longer protected text are rejected both before
+  snapshot publication and by both Host guards, including manually inserted qualification
+  snapshots. Independent reproductions confirmed no blob/event publication, answer read,
+  qualification consumption or model call on rejection. These fixes do not attest native
+  internal asset use or remove the selected-engine aggregate unknown verdict.
+- Concrete owner-service composition retains initialized ordinary SessionStore/WorkflowRunStore
+  native connections and locks. Independent review found stale singleton ownership could
+  survive replacement; parent behavioral regressions reproduced it, then pre/post source
+  lifetime checks fixed it. Parent and independent service11 checks passed; actual ordinary
+  replacement foreign-owner session now rejects. Construction does not capture, warm stores,
+  authenticate or query. Routes, reservation associations and lifespan wiring remain pending.
+- Stored context metadata/revocation is being extracted into dependency-free HostContextRecords
+  so cold status and explicit revocation do not need source/engine composition. The moved
+  helpers are AST-identical; independent records5/Host24/snapshot25 checks pass. Existing
+  SQLite SHM reader coordination is permitted, with no logical DB/WAL/blob changes. This
+  is a component checkpoint, not API enablement or completed M1/business acceptance.
