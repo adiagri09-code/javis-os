@@ -119,13 +119,14 @@ def read_existing(path: Path, blobs: RevisionBlobs):
 def ensure(store) -> None:
     if has_schema(store):
         return
-    store._backup_before("improvement_schema", ".pre-improvement-m0.bak")
     with store._Tx(store) as connection:
         if connection.execute("SELECT name FROM sqlite_master WHERE name='improvement_schema'").fetchone():
             version = connection.execute("SELECT version FROM improvement_schema WHERE id=1").fetchone()
             if not version or version["version"] != SCHEMA_VERSION:
                 raise SchemaError("unsupported_improvement_schema")
             return
+        # Serialize the backup with first migration; concurrent writers share its temporary path.
+        store._backup_before("improvement_schema", ".pre-improvement-m0.bak")
         for statement in _SCHEMA:
             connection.execute(statement)
         for table in ("improvement_revisions", "improvement_bundles", "improvement_bundle_assets", "improvement_events"):

@@ -7,6 +7,7 @@ import os
 import sqlite3
 import tempfile
 import threading
+import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -189,6 +190,30 @@ class ImprovementStoreTests(unittest.TestCase):
             c.execute("UPDATE improvement_schema SET version=999 WHERE id=1")
         with self.assertRaises(IM.SchemaError):
             IM.ensure(self.rs)
+
+    def test_concurrent_first_migration_serializes_its_backup(self):
+        barrier = threading.Barrier(2)
+        backups = []
+        original = self.rs._backup_before
+
+        def backup(*args):
+            backups.append(args)
+            time.sleep(0.1)
+            return original(*args)
+
+        def migrate(index):
+            barrier.wait()
+            try:
+                IM.ensure(self.rs)
+                return None
+            except Exception as error:
+                return type(error).__name__
+
+        with patch.object(self.rs, "_backup_before", side_effect=backup), ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(migrate, (1, 2)))
+        self.assertEqual(results, [None, None])
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(self.store.targets(self.owner), [])
 
     def test_invalid_source_digest_fails_before_writing_metadata(self):
         source, raw = self.source()

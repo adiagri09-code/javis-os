@@ -99,3 +99,10 @@ continue its implementation on the integrated baseline. Full M0–M8 Goal remain
   New final-head CI is required before integration; no red run was merged.
 - Fresh-process restart probe passed: two independent processes preserved the encrypted
   bytes, revision identity and one idempotent event. No model call or live action occurred.
+- M1's migration work exposed a first-writer backup race shared with M0: both writers
+  could enter the backup helper and contend on its temporary file. Reproduced on the M0
+  branch with two first migrations (two backup calls instead of one). Backported the small
+  fix so backup happens after the transactional schema recheck under BEGIN IMMEDIATE.
+  M0 regression passed **3/3 files, 40 tests, 19 seconds** (21 store + 10 assets + 9 API).
+  This fix is isolated in the temporary `agent-skill-improvement-m0-race` managed worktree;
+  the original implementation worktree is now used by the engineering-only M1 branch.
