@@ -23,7 +23,7 @@
 | Milestone | Engineering | Business evidence | Rollout |
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
-| M1 | Tasks1–4 complete as engineering components; trusted context/grant service, owner API and final integration pending | Synthetic lifecycle/recorder checks only; no real-engine smoke yet | Not enabled; base M0 integrated and published |
+| M1 | Tasks1–4 complete; Task5 encrypted bindings, strict file/selection and fixture inventory components tested; full production collector/provider/API and final integration pending | Synthetic lifecycle/context/recorder checks only; no real-engine smoke yet | Not enabled; base M0 integrated and published |
 | M2 | Pending | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
@@ -302,3 +302,22 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   owner/usage/ledger), plus unchanged metadata API/assets/Windows-console3/3 in5s. Compilation
   and whitespace checks passed. No native/model query, business acceptance, API enablement
   or production rollout occurred. Continue Task5; the M0–M8 Goal remains active.
+- Task5 components now bind encrypted complete host context, exact selected configuration,
+  target generations, a narrow private fixture inventory and a revocable grant. Concurrent
+  creation shares one binding; old events cannot reactivate it. Source/target/config drift,
+  retired targets, missing encrypted chunks and policy/permission revocation fail closed.
+  Inventory/grant creation precedes snapshot IDs, then every selected snapshot proves exact
+  authorized membership and raw/fixture integrity. Qualification authorization reads no
+  answers and changes no exposure/consumption state.
+- Source capture22, nonsecret selection20, host binding19 and source membership17 checks
+  cover real scratch filesystem/SQLite/encrypted-storage paths and synthetic host authority.
+  Expanded component/lifecycle/usage regression passed10/10 files in74s; source17 passed
+  separately after the final credential-metadata rejection. Independent primitive and
+  fixture-integration reviews found no additional Important findings. No actual model,
+  private production source read or trial endpoint was enabled.
+- Complete production context needs more than a fixed file plan: ordinary dashboard uses
+  SQL attachments/workflow state, directory membership/layout, plugin visibility and locale/
+  channel inputs. Shared pure block extraction is in progress; a strict typed collector,
+  concrete version/permission source provider and owner API remain. Do not mark Task5 or
+  M1 done from these component tests. Full protected source retention and actual rendered
+  baseline are distinct records; qualified inputs must remain selected-case fixtures.

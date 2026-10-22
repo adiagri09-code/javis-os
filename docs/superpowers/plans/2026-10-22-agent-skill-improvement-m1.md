@@ -346,8 +346,27 @@ Host dependency audit refinement (before exposing a trial run):
   persists first, then cancels its worker task; status never starts a model or migrates a
   cold database. Restart only recovers leases, never silently resumes an uncertain query.
 
-This adds improvement_trial_host.py and its focused source/config/revocation tests to
-Task5's planned files. Final closed route fields must follow that real host service.
+This adds improvement_trial_host.py, improvement_trial_context.py,
+improvement_trial_selection.py, improvement_trial_sources.py and their focused tests to
+Task5's planned files. Final closed route fields must follow the real host service.
+
+Implemented component refinement: the host binding now includes a separate private fixture
+inventory, not only context/targets. Inventory excludes snapshot/grant IDs to avoid circular
+hashes; snapshots created afterward must match exact metadata/content membership. Qualified
+source authorization does not expose content or consume a holdout. Permission freshness is
+host-observed with explicit snapshot_version/require_current_version policy; a provider and
+retention/tombstone projector remain required. Generic observers/file plans are components,
+not sufficient evidence of a production permission or complete baseline collector.
+
+Production completeness audit found ordinary dashboard also depends on SQL project/session
+assets, latest workflow state, skill priority/layout/disabled-state inventories, plugin
+visibility, locale/channel and coding/Core selections. Extract concrete pure templates into
+main_prompt_rendering.py shared by production and trials, preserving current production
+behavior/caps and explicitly preserving full protected content in trials. Then collect
+strict semantic inputs and regenerate inventories/SQL projections on guards; freeze volatile
+clock/usage rendering only. Reject unsupported dynamic surfaces explicitly, without naming
+an easier kernel+memory subset a complete main surface. No live prompt builder, migration,
+memory healing, plugin loading/visibility callback or mirror sync may run merely to poll.
 
 Tests: full owner API/auth/CSRF/cross-brain/disabled policy/unsupported/stale/cancel/retry;
 isolate all runtime roots and avoid main startup background tasks.

@@ -176,3 +176,51 @@ arbitrary callable; the runner invalidates its finalization capability and waits
 work. Candidate code and command checkers remain unsupported here and need a separately
 verified process/container checker. This component does not enable production trial API
 capabilities or establish selected-engine/business feasibility by synthetic tests.
+
+## M1 host context and fixture authority components
+
+`HostContextStore` accepts trusted synchronous context, selected-engine, target and fixture
+observers. `create(owner, experiment_id, surface, target_ids, source_refs=..., event_key=...)`
+records an encrypted immutable binding and an independently revocable grant in the same
+database. HTTP clients may eventually select authorized references; they cannot supply
+context bytes, completeness, runtime pins, source hashes or permission versions as authority.
+Logical creation is idempotent across event keys; replay cannot reactivate a revoked grant.
+
+The source-file primitive preserves full UTF-8/CRLF bytes, stable identity, explicit optional
+absence and declared-plan coverage. It rejects credential-bearing sources, linked/reparse
+paths, aliases and replacement/read races. It cannot prove that a fixed file plan covers
+an actual production surface. The production collector must also regenerate directory
+membership and typed SQL/config/registry projections; an added skill or attachment must
+invalidate the semantic manifest even when the old files have not changed.
+
+Selection capture reads only persisted nonsecret main/explicit-legacy fields, without
+decryption, backup writes or fallback. It builds the existing adapter's exact11-field pin
+from an allowlisted binary hash, installed SDK and profile hash, without executing native
+version/auth commands. Runtime/auth verification remains the adapter's separate boundary.
+Unsupported provider/auth/fast/reasoning/configuration is never mapped to another selection.
+
+Fixture inventory is host-private and separate from the common baseline. Each canonical
+entry pins source reference/version/identity, raw and fixture hashes, timezone/period/cutoff,
+schema/redaction/sufficiency, permission ID/version and a freshness policy. Snapshot IDs,
+snapshot manifest hashes and grant hashes are excluded from the inventory identity. Create
+the inventory/grant first, snapshots carrying that grant second, and case-set membership
+afterward. This avoids a circular hash and does not expose or consume qualification data.
+
+At the bound runner boundary, every selected case snapshot must match exactly one authorized
+inventory entry, its case-set/snapshot hashes and grant, with both encrypted raw/fixture
+blobs intact. A matching grant hash alone cannot authorize an unrelated source. Context and
+fixture-source hash overlap is rejected as a basic shared-input leakage guard; production
+semantic role classification and later experiment contamination checks remain required.
+
+`snapshot_version` permits only the specifically authorized frozen version while permission
+remains valid; `require_current_version` additionally requires current-origin compatibility.
+The trusted source observer must enforce the selected policy and retention/tombstone rules,
+return the frozen inventory or fail, and never fetch a newer version silently. The current
+components validate observer evidence; production source-provider permission enforcement is
+still required before any owner execution API is enabled. Grant revocation and fresh source/
+config/target checks occur around I/O; metadata/old context remain historical evidence.
+
+These components do not declare an ordinary dashboard collector complete. Its shared pure
+renderer, complete typed dependency collector, source-provider integration and owner API
+remain unfinished. No source inventory or qualification content is inserted into the
+common owner baseline merely to satisfy a completeness flag.
