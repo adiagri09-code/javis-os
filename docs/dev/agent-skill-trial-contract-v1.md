@@ -308,3 +308,20 @@ single-query worker temporarily adds the shared no-window flags to SDK descendan
 and restores its transport afterward. This does not patch the shared chat process or the
 installed SDK. Qualification proves the recorded dummy-provider boundaries, not real model,
 account, reasoning fidelity, business quality, or an OS filesystem/network sandbox.
+
+### Prewarmed plugin capability inputs
+
+`PluginCapabilityProjection` observes the actual imported plugin/pack modules and the
+already loaded cache under its native lock. It checks source precedence, membership,
+enabled/environment state, locale, source hashes and loaded callable identity, then
+re-observes them. It never loads plugins or calls visibility/registration/settings hooks.
+The supported profile is the ordinary owner web turn with no agent. The audited bundled
+Goal visibility branch is projected for that exact future turn; an outside-turn menu can
+show different tools when another agent is enabled. A real SQLite/actual-main regression
+covers this distinction without constructing GoalStore during capture.
+
+This projection represents displayed plugin capabilities. It does not authorize tools or
+claim to capture actual hook, HTTP or webhook registration maps. Packs, unknown dynamic
+visibility, closures/external handlers, cached errors or inconsistent loaded code remain
+explicitly unsupported. A complete Dashboard composer must include or reject its other
+prompt contributors separately; this component does not establish full prompt coverage.

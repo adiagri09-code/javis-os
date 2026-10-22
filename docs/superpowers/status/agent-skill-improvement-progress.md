@@ -379,3 +379,15 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   qualification/profile/worker/selection/console5/5 scripts in17s. Raw qualification evidence
   is in docs/dev/agent-skill-runtime-2.1.308-qualification.json. No real account auth/model
   query occurred; actual reasoning and asset-use coverage remain unknown.
+- The prewarmed plugin capability projector now passes focused verification and independent
+  review. It observes actual cache/source/locale inputs without loading plugins or calling
+  visibility hooks. A real scratch SQLite/actual-main regression confirms the future
+  owner/web/no-agent Goal branch even with another enabled agent. Its claim covers displayed
+  capabilities; hook/HTTP/webhook execution authority and a complete Dashboard remain outside
+  this component. Unsupported dynamic states fail closed. Parent's fresh smoke/plugin/
+  Runner/task regression passed4/4 scripts in57s; full API and integration remain unfinished.
+- A controlled selected-engine attempt verified the exact native runtime and configured
+  account profile, then failed before reservation/query on an overlong Windows encrypted
+  blob path. Ledger and engine marker stayed empty; this is not model feasibility evidence.
+  The private output is retained. An early explicit output-path gate and a fresh shallow
+  test root are being prepared; no provider/model/reasoning fallback is allowed.
