@@ -101,6 +101,13 @@ check("go dau muc chi xet o doan thuong, khong o li/code/trich dan",
       /el\.closest\("li,pre,code,blockquote"\)/.test(H));
 check("danh sach so go tu so khac 1 giu dung so bat dau", /setAttribute\("start"/.test(H));
 check("THUT dung 4 cach", /var THUT = " {4}";/.test(SRC));
+// Render pane, Tab outside a list: nothing is inserted (non-breaking spaces would end up in the
+// saved markdown), but the key is still swallowed so focus stays in the editor.
+const tabHandler = H.slice(H.indexOf('e.key !== "Tab"'), H.indexOf("}, true);", H.indexOf('e.key !== "Tab"')));
+check("CANARY: Tab outside a list inserts no non-breaking spaces",
+      tabHandler.length > 0 && !/\u00a0|\\u00a0|&nbsp;/i.test(tabHandler) && !/insertText/.test(tabHandler.slice(tabHandler.indexOf("if (e.shiftKey) return;"))));
+check("Tab outside a list still keeps focus in the editor",
+      /if \(e\.shiftKey\) return;[\s\S]*e\.preventDefault\(\);\s*$/.test(tabHandler));
 check("KHONG dung ky tu em dash", !SRC.includes("—"));
 
 console.log(fails.length ? "\nFAIL: " + fails.length : "\nTat ca deu xanh");

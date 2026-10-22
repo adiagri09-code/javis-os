@@ -697,10 +697,9 @@
         return;
       }
       if (e.shiftKey) return;
-      // Ngoai danh sach: chen 4 dau cach cung (nbsp). Dau cach thuong o dau doan bi
-      // markdown nuot mat khi luu.
+      // Outside a list Tab does nothing: non-breaking spaces would be saved into the markdown
+      // as invisible characters. preventDefault keeps focus in the editor.
       e.preventDefault();
-      try { document.execCommand("insertText", false, "    "); } catch (x) {}
     }, true);
 
     // Go "- " / "* " / "1. " o dau mot doan trong ban render -> thanh danh sach that. Khong co
