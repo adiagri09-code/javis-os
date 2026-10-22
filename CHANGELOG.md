@@ -6,10 +6,44 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.274.0] - 2026-10-22
+## [0.275.0] - 2026-10-22
 ### Cải thiện
 - **Chạy bộ test không còn làm đầy ổ C.** Trước đây mỗi lượt chạy để lại hơn 1000 thư mục rác trong thư mục Temp của Windows, dồn lại có lúc tới 50.000 thư mục, khoảng 30 GB. Giờ mỗi file test dùng một thư mục tạm riêng và tự xoá khi chạy xong.
 - **Lần chạy bị dừng ngang cũng không để lại rác lâu.** Thư mục của lượt bị tắt giữa chừng được dọn ở lần chạy test kế tiếp.
+
+## [0.274.0] - 2026-10-22
+### Thêm mới
+- **Webhook thành cửa nhận sự kiện bền.** Mỗi sự kiện được ghi vào đĩa trước khi Javis trả lời "đã nhận" (202). Máy tắt, cập nhật hay sập giữa chừng thì lúc mở lại Javis chạy tiếp, không mất đơn.
+- **Lọc và chống trùng chặt chẽ.** Lọc đúng kiểu dữ liệu (số 1 khác chữ "1"), kiểm được từng món trong đơn, và khoá chống trùng ghép từ nhiều trường (cửa hàng, mã đơn, trạng thái) có thời hạn. Sự kiện không khớp được ghi kèm lý do và không tốn lượt AI.
+- **Gửi tiếp không cần AI:** sang một địa chỉ HTTP (giữ nguyên nội dung gốc), một Google Apps Script (phải có biên nhận mới tính là xong) hoặc một plugin như POSCake Zalo. Mỗi nơi chạy riêng, có thể đặt nơi nào chạy sau nơi nào; bấm Chạy lại chỉ gửi lại nơi bị lỗi.
+- **Tự thử lại** sau 1, 5 rồi 30 phút, tối đa 24 giờ. Việc có thể đã làm mà không rõ kết quả thì Javis giữ lại hỏi bạn, không tự gửi lại.
+- **Trang webhook có ba phần: Cấu hình, Sự kiện, Tình trạng.** Hai công tắc riêng: Tắt nhận (từ chối sự kiện mới) và Tạm dừng xử lý (vẫn nhận và lưu, chỉ chưa chạy).
+- **Gửi thử thật có xem trước:** dán nội dung mẫu, xem từng hành động sẽ làm gì, rồi mới gửi. Sự kiện thử có chỗ chống trùng riêng.
+- **Diễn biến của từng sự kiện:** nhận, xác thực, lọc, gửi đi, từng lần thử, biên nhận, kết quả và thông báo. Tìm được theo mã đơn và theo khoảng ngày.
+- **Chạy lại với cấu hình hiện tại** có xem trước, và nói rõ hành động nào đã thành công hoặc chưa rõ sẽ có thể chạy thêm một lần. Webhook bị sửa sau lúc xem trước thì phải xem trước lại.
+- **Chạy lại mọi sự kiện bị chặn:** sửa xong ở bên ngoài (bật lại plugin, đổi khoá ở nơi nhận) thì một nút chạy lại hết, không phải bấm từng sự kiện.
+- **Sự kiện lỗi được giữ nguyên nội dung** tới khi bạn chạy lại hoặc bấm **Xoá**, nên Chạy lại luôn gửi đúng dữ liệu đã nhận.
+- **Kiểm chữ ký Stripe, GitHub, Shopify, Systeme.io** theo đúng cách của từng nơi, có thời gian chồng khi đổi khoá. Những nơi này không cần gửi kèm khoá Javis: chữ ký của họ là đủ. Systeme.io chưa thử với tài khoản thật nên được ghi là chưa kiểm chứng. POSCake chưa có kiểm chữ ký vì chưa có tài liệu chính thức.
+- **Công cụ quay về bản cũ** (`server/webhook_rollback.py`): sao lưu kho, xuất các sự kiện còn dở để đối soát, viết lại danh sách webhook cho bản cũ.
+### Bảo mật
+- Khoá API và khoá ký được mã hoá trên đĩa, không hiện trên giao diện, không nằm trong lịch sử cấu hình. Hãy sao lưu `webhook_keys.json` cùng `webhook_secrets.json`.
+- Nội dung sự kiện mặc định được che: chỉ hiện mã, trạng thái, thời gian, số tiền, số lượng và tên sản phẩm, mọi giá trị khác bị che. Xem hoặc xuất bản gốc đều được ghi vào nhật ký kiểm tra.
+- Webhook mới chỉ nhận khoá trong header, không nhận `?token=` trên đường dẫn (webhook cũ vẫn dùng được). Một địa chỉ gửi sai khoá nhiều lần bị tạm chặn.
+- Gửi đi luôn nối vào đúng địa chỉ đã kiểm, nên một tên miền không đổi được sang địa chỉ nội bộ giữa chừng.
+### Cải thiện
+- Giới hạn mới cho mỗi webhook: 300 sự kiện mỗi phút, 10.000 sự kiện chờ. Lượt AI (30 mỗi giờ) chỉ áp cho phần AI, không chặn phần gửi bằng code; hết lượt AI thì đơn vẫn được giữ.
+- Thông báo: mọi lần, chỉ khi lỗi (lỗi lặp gộp làm một), tóm tắt mỗi ngày theo múi giờ bạn chọn, hoặc tắt. Tắt vẫn giữ cảnh báo hệ thống như sắp đầy đĩa.
+- Lần đầu chạy bản này, danh sách webhook chuyển vào kho mới (có bản sao lưu) và webhook cũ chạy như trước.
+- Tên miền tạm thời không phân giải được thì Javis thử lại sau, không báo lỗi hẳn.
+- Javis khởi động nhanh hơn một chút: phần webhook, thư viện mã hoá của thông báo đẩy và uvicorn chỉ nạp khi cần.
+### Sửa lỗi
+- Apps Script đã chạy nhưng trả về trang không đọc được thì sự kiện thành "chưa rõ" chứ không phải "lỗi", nên bấm Chạy lại không ghi thêm một dòng trùng.
+- Lưu cấu hình từ một tab cũ, hay hai tab lưu cùng lúc, không làm khoá bí mật quay về bản cũ.
+- Xoá một webhook thì các sự kiện còn chờ của nó được huỷ và tự dọn theo hạn lưu, không giữ dữ liệu khách mãi.
+- Bộ lọc trên danh sách (`[*]`) giờ coi "không rõ" là không rõ: một điều kiện `not(any ...)` trên đơn có món thiếu trường có thể bị bỏ qua ở chỗ trước đây chạy. Xem lại bộ lọc kiểu này bằng Thử quy tắc.
+- Sự kiện bị cách ly (quy tắc không đọc được) giờ được báo cho bạn, gộp làm một tin, và giữ nguyên nội dung trong 30 ngày. Chạy lại một đơn đã chạy ở sự kiện khác bị từ chối, không gửi hai lần. Lỗi lặp lại được gộp theo loại lỗi, không báo mỗi đơn một tin.
+- Lúc nhiều sự kiện cùng gọi một plugin, sự kiện phải chờ lượt không còn bị tính oan một lần thử khi chưa gửi gì.
+- **Bị từ chối vì quá tải (429) thì lần gửi lại vẫn chạy.** Trước đây mã chống trùng bị giữ lại, nên lần gửi lại bị báo trùng và đơn không bao giờ chạy.
 
 ## [0.272.0] - 2026-10-22
 ### Thêm mới

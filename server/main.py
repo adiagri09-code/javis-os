@@ -11732,7 +11732,7 @@ tasks_feature.deps.learn_hook = learn_feature.enqueue_job
 # mode notify = nhắn lại · mode task = chạy engine (đọc MCP, ghi nháp) rồi báo. KHÔNG tiền/đơn.
 # ============================================================
 import reminders as reminders_mod
-import webhook_triggers
+import webhook_lazy  # the webhook routes; the platform itself loads at startup (keeps `import main` light)
 import incident_desk as incident_desk_mod
 import sentinel
 import change_receipt
@@ -11872,15 +11872,28 @@ async def _webhook_run_workflow(brain, slug, prompt, level):
     return result, error, needs_input
 
 
+async def _webhook_call_tool(brain, level, name, args):
+    """M4: a webhook `tool` action through the hub dispatcher, at the webhook's level: the same permission guard,
+    connection limits, rate limit and audit as any background run. No model is involved."""
+    if brain and brain != "brain" and not os.path.isdir(brain):
+        # The hook's brain folder is gone: never fall back to the default brain's tools and files.
+        return "ERROR: the webhook's brain folder no longer exists"
+    _, route = await mcp_hub.discover_all(level, vault_root=str(_brain_root(brain)), include_plugins=True)
+    if name not in route and mcp_hub._LAZY_RUN in route:
+        # Lazy menu on: the tool is behind javis_run_tool, which calls the same guarded route.
+        return str(await mcp_client.call_route(route, mcp_hub._LAZY_RUN, {"name": name, "args": args or {}}))
+    return str(await mcp_client.call_route(route, name, args or {}))
+
+
 async def _webhook_send(chat_id, text, viec=None, web="", brain="", dedup=""):
     return await _notify_owner(chat_id, text, kind="report", source="webhook",
                                viec=viec, web=web, brain=brain, dedup=dedup)
 
 
-webhook_feature = webhook_triggers.register(app, webhook_triggers.WebhookDeps(
+webhook_feature = webhook_lazy.register(app, dict(
     state_dir=lambda: cfgmod.STATE_DIR,
     run_task=lambda brain, text, level: reminders_feature._run_task(
-        brain, text, level, intro=webhook_triggers.TASK_INTRO),
+        brain, text, level, intro=__import__("webhook_triggers").TASK_INTRO),
     run_workflow=_webhook_run_workflow,
     send=_webhook_send,
     base_url=lambda request: web_security.external_base(
@@ -11888,6 +11901,12 @@ webhook_feature = webhook_triggers.register(app, webhook_triggers.WebhookDeps(
         request.headers.get("x-forwarded-proto", ""), request.headers.get("x-forwarded-host", "")),
     workflow_exists=lambda brain, slug: (_workflows_dir(brain) / f"{slug}.md").is_file(),
     atomic_write_text=_atomic_write_text,
+    # M3: a webhook action can name a plugin's webhook handler; only plugins visible to that hook's brain are found.
+    # A brain folder that is gone gives None (bundled, pack and global plugins only), never the default brain's plugins.
+    plugin_handler=lambda brain, slug, name: plugins_host.find_webhook_handler(
+        (str(_brain_root(brain)) if (not brain or brain == "brain" or os.path.isdir(brain)) else None), slug, name),
+    call_tool=_webhook_call_tool,
+    brain_exists=lambda brain: (not brain or brain == "brain" or os.path.isdir(brain)),
 ))
 
 

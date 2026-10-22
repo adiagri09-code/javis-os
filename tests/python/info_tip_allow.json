@@ -1,4 +1,5 @@
 {
+ "wh.retry_confirm": "confirm: asked before re-running an event that may already have acted",
  "settings.vc_mic_silent": "status: the mic test verdict, shown only after the person pressed Test mic",
  "app.login_cookie_lost": "error: login failure reason",
  "app.disable_auth_confirm": "confirm: confirm() before turning off login (says 2FA is kept)",
@@ -79,5 +80,8 @@
  "usage.tk.chinh_tay": "status: why the number cannot be measured",
  "wh.secret_body": "status: shown once after creating or rotating a token",
  "wz.prov_claude": "content: wizard provider card description used to pick",
- "wz.prov_or": "content: wizard provider card description used to pick"
+ "wz.prov_or": "content: wizard provider card description used to pick",
+ "wh.turn_off_confirm": "confirm: asked before Stop receiving, points to Pause processing instead",
+ "wh.ev_delete_confirm": "confirm: asked before deleting one event and its payload",
+ "wh.close_failed_confirm": "confirm: asked before closing every failed event of a hook without resending"
 }
