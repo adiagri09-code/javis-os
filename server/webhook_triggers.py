@@ -139,7 +139,7 @@ class WebhookDeps:
 
 
 def payload_text(body: bytes, content_type: str, compact: bool = False) -> str:
-    """The event as readable text: JSON pretty-printed (`compact`: on one line, for a prompt, about a fifth shorter), a
+    """The event as readable text: JSON pretty-printed (`compact`: on one line, for a prompt, about a seventh shorter), a
     form as key: value lines, anything else decoded as text. Never raises."""
     text = body.decode("utf-8", "replace")
     ct = (content_type or "").lower()
@@ -148,7 +148,7 @@ def payload_text(body: bytes, content_type: str, compact: bool = False) -> str:
     try:
         if "json" in ct or text.lstrip()[:1] in ("{", "["):
             doc = json.loads(text)
-            return json.dumps(doc, ensure_ascii=False, separators=(",", ":")) if compact else \
+            return json.dumps(doc, ensure_ascii=False, separators=(", ", ": ")) if compact else \
                 json.dumps(doc, ensure_ascii=False, indent=2)
     except Exception:
         pass

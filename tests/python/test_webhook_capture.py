@@ -135,7 +135,7 @@ async def prompt_sees_whole_order():
     f._store = None
     p1 = next((x for x in seen if '"event_type"' in x), "")
     check("prompt: a four-item POSCake order reaches the AI whole (order id, total, every item, no cut)",
-          '"id":739' in p1 and '"total_price"' in p1 and p1.count('"variation_info"') == 4 and "đã cắt" not in p1,
+          '"id": 739' in p1 and '"total_price"' in p1 and p1.count('"variation_info"') == 4 and "đã cắt" not in p1,
           len(p1))
     import webhook_rules as wr
     one = wr.validate({"dedup": {"business_paths": ["shop_id", "id", "status"], "ttl_s": 604800, "missing": "accept"},

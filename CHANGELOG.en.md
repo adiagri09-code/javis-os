@@ -10,7 +10,7 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.289.0] - 2026-10-22
 ### Fixed
-- **Webhooks: the AI now reads the whole event.** It used to get only the first 8,000 characters, so even a one-item POSCake order lost its order id and total, and a prompt that decides by the order's status could guess wrong. The AI now gets up to 40,000 characters in compact form; anything longer is cut and the AI is told so.
+- **Webhooks: the AI now reads the whole event.** It used to get only the first 8,000 characters, so even a one-item POSCake order lost its order id and total, and a prompt that decides by the order's status could guess wrong. The AI now gets up to 40,000 characters, written on one line; anything longer is cut and the AI is told so.
 - The event detail page shows up to 64,000 characters instead of 8,000.
 ### Improved
 - The webhook guide uses POSCake's real field names and adds a one-webhook-for-every-source setup where the prompt decides what to do.
