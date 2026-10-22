@@ -5487,7 +5487,7 @@
   "improve.angle": "Hướng cải tiến",
   "improve.stage": "Lưu đề xuất để duyệt",
   "improve.declare_region": "Cấp quyền sửa vùng byte đã chọn",
-  "improve.region_authorized": "Đã cấp quyền sửa vùng; chưa đánh giá ngữ nghĩa.",
+  "improve.region_authorized": "Yêu cầu cấp quyền vùng đã được ghi nhận.",
   "improve.prepared_context": "Ngữ cảnh kiểm đã chuẩn bị",
   "improve.no_contexts": "Chưa có ngữ cảnh được cấp quyền. Chuẩn bị ngữ cảnh kiểm trước khi tạo đề xuất.",
   "improve.more_contexts": "Tải thêm ngữ cảnh",
@@ -5502,5 +5502,6 @@
   "improve.artifact_review_only": "Chỉ xem kết quả; chưa ghi quyết định chấp nhận.",
   "improve.trial_id": "Mã lượt kiểm đã lưu",
   "improve.attempt": "Lần chạy",
-  "improve.review_artifact": "Xem kết quả chính xác"
+  "improve.review_artifact": "Xem kết quả chính xác",
+  "improve.staged_refresh_required": "Đề xuất đã được lưu. Mở lại để xem danh sách mới."
 }

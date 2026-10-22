@@ -49,6 +49,14 @@
   unchanged strict token/node/duplicate-key checks. Five focused scripts pass25s;
   independent review passes2 scripts,12 parser-parity inputs and8 unsafe-input
   rejections with no Important findings. A fresh fixed-head CI is required.
+- Final UI operation review reproduced and fixed successful-capture event reuse,
+  duplicate pagination after reload, and Stage retry after a known successful
+  write whose metadata refresh failed. Unknown transport retries keep the event;
+  acknowledged actions retire it. Complete source period/timezone/cutoff/schema
+  metadata is now inert alongside artifact fixtures. Peer independently reproduced
+  all four old failures and verified the correction without Important findings.
+  The updated complete JavaScript suite passes266/266 in43s; vi/en mobile browser
+  checks pass. Final-head Linux CI still gates integration.
 - Owner delegated pilot choice. An objective Python bug-fix/test pilot is selected
   for reproducibility alongside the spec's required business pilots. This choice
   does not supply an accepted business dataset or owner acceptance evidence.

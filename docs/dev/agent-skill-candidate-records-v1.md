@@ -140,6 +140,12 @@ SHA-256/size before enabling exact-diff authorization, maps LF-normalized textar
 UTF-16 selection back to original UTF-8/CRLF byte offsets, and drops stale brain
 or context responses. A historical decision is followed by a fresh metadata read.
 An edit grant still says nothing about semantic quality or runtime eligibility.
+Unknown transport retries keep their event key; a received successful result
+retires that key so the next explicit capture can observe a new baseline. A
+confirmed proposal save stays disabled if only the subsequent list refresh fails.
+Region declaration acknowledges the recorded request; current edit authority is
+checked again when staging. Artifact fixture views include exact source period,
+timezone, cutoff and schema as inert metadata.
 The secondary artifact entry requires an existing stored trial ID and attempt;
 viewing it records no acceptance decision. No context is silently prepared and
 no trial starts from this panel.

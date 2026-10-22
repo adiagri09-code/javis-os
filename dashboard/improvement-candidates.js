@@ -52,7 +52,12 @@
     return s.events.get(fingerprint); // Preserve the exact event through an uncertain transport retry.
   }
   async function write(s, path, payload, operation) {
-    return request(s, path, {...payload, event_key:event(s, operation, payload)});
+    const fingerprint = operation + JSON.stringify(payload), key = event(s, operation, payload);
+    const value = await request(s, path, {...payload, event_key:key});
+    // An acknowledged operation is complete; the next explicit click is a new
+    // intent. Unknown transport outcomes retain their key for an exact retry.
+    if (s.events.get(fingerprint) === key) s.events.delete(fingerprint);
+    return value;
   }
   async function exact(value) {
     if (!value || typeof value.text !== "string" || !/^[a-f0-9]{64}$/.test(value.hash)) throw Error("exact_text_required");
@@ -182,10 +187,17 @@
       const stage = button(tr("stage"), "stage", async () => {
         if (!alive(s, version) || stage.disabled) return;
         stage.disabled = true;
+        let committed = false;
         try {
           const data = await write(s, "/improvement-candidates", payload(), "stage");
+          committed = true;
           await rows(s); s.form.replaceChildren(); await review(s, data.candidate.candidate_id);
-        } catch (error) { failure(s, error); if (alive(s, version)) stage.disabled = false; }
+        } catch (error) {
+          if (alive(s, version)) {
+            if (committed) s.status.textContent = tr("staged_refresh_required");
+            else { failure(s, error); stage.disabled = false; }
+          }
+        }
       });
       stage.disabled = s.rows.length >= 2; s.form.append(stage);
       s.form.append(button(tr("declare_region"), "declare-region", async () => {
@@ -200,6 +212,7 @@
     } catch (error) { if (alive(s, version)) failure(s, error); }
   }
   async function load(s) {
+    if (s.more) { s.more.remove(); s.more = null; }
     try {
       const data = (await request(s, "/improvement-candidate-contexts?slug=" + encodeURIComponent(s.slug))).contexts;
       s.contexts = data.items; s.choose.replaceChildren();
@@ -225,7 +238,7 @@
             for (const row of next.items) { const option = node("option", (row.objectives.map(x=>x.objective).join(" · ") || tr("prepared_context")) + " · " + new Date(row.created_at * 1000).toLocaleDateString()); option.value = String(s.contexts.length); s.contexts.push(row); s.choose.append(option); }
             more.disabled = !data.next_cursor;
           } catch (error) { failure(s, error); }
-        }); s.panel.append(more);
+        }); s.more = more; s.panel.append(more);
       }
     } catch (error) { failure(s, error); }
   }
@@ -285,7 +298,12 @@
       if (!alive(s)) return;
       s.panel.append(node("h3", tr("task")), node("pre", value.task), node("h3", tr("contract")), node("pre", JSON.stringify(value.contract, null, 2)));
       content(s, s.panel, tr("artifact"), value.artifact, bytes, "artifact");
-      for (let i = 0; i < fixtures.length; i++) { const [entry, raw] = fixtures[i]; s.panel.append(node("p", `${entry.source_ref} · ${entry.source_version}`)); content(s, s.panel, tr("fixture"), {text:entry.text,hash:entry.fixture_hash,byte_size:entry.byte_size}, raw, "fixture-" + i); }
+      for (let i = 0; i < fixtures.length; i++) {
+        const [entry, raw] = fixtures[i];
+        const metadata = Object.fromEntries(["source_ref", "source_version", "timezone", "data_period", "cutoff", "schema"].map(key=>[key, entry[key]]));
+        s.panel.append(node("pre", JSON.stringify(metadata, null, 2), "fixture-" + i + "-metadata"));
+        content(s, s.panel, tr("fixture"), {text:entry.text,hash:entry.fixture_hash,byte_size:entry.byte_size}, raw, "fixture-" + i);
+      }
       s.status.textContent = tr("artifact_review_only");
     } catch (error) { failure(s, error); }
   }

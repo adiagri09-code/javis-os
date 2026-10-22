@@ -24,7 +24,7 @@ const candidate = { candidate_id: "candidate-one", experiment_id: "experiment-on
 async function fixture(lang = "en") {
   const dict = JSON.parse(fs.readFileSync(new URL(`../../dashboard/i18n/${lang}.json`, import.meta.url)));
   const body = new Element("body"), head = new Element("head"), calls = [], intervals = [];
-  let brain = "brain-one", rows = [candidate], deferred = null, corrupt = false, failStage = false;
+  let brain = "brain-one", rows = [candidate], deferred = null, corrupt = false, failStage = false, pages = false, failAfterStage = false, failRows = false;
   const ctx = { document: { body, head, createElement: tag => new Element(tag), getElementById: () => null, addEventListener() {} },
     window: { currentBrainPath: () => brain }, TextEncoder, TextDecoder, crypto: webcrypto, URL, URLSearchParams, Blob,
     setInterval: fn => { intervals.push(fn); return intervals.length; }, clearInterval() {}, setTimeout, clearTimeout, AbortController,
@@ -33,23 +33,24 @@ async function fixture(lang = "en") {
       calls.push({url: String(url), ...options});
       let value;
       const path = String(url).split("?")[0];
-      if (path === "/improvement-candidate-contexts") value = {contexts:{items:[{experiment_id:"experiment-one",target_id:"target-one",grant_status:"active",base_generation:1,current_generation:1,created_at:1,objectives:[{objective:"Review rows"}]}],next_cursor:null}};
-      else if (path === "/improvement-candidates" && !options.method) value = {candidates: rows};
+      if (path === "/improvement-candidate-contexts") value = {contexts:{items:[{experiment_id:"experiment-one",target_id:"target-one",grant_status:"active",base_generation:1,current_generation:1,created_at:1,objectives:[{objective:"Review rows"}]}],next_cursor:pages?"cursor-two":null}};
+      else if (path === "/improvement-targets/capture") value = {capture:{target_id:"target-one",revision_id:"revision-one",generation:1}};
+      else if (path === "/improvement-candidates" && !options.method) { if(failRows){failRows=false;throw Error("Metadata unavailable after acknowledged write");} value = {candidates: rows}; }
       else if (path.endsWith("/candidate-one/review")) {
         if (deferred) await deferred;
         value = {review:{candidate_id:candidate.candidate_id,before:exact(raw),after:exact(raw + "\nnew"),metadata:candidate, semantic_status:"unreviewed",hypothesis:"Exact instruction",failure_signature:"Missing row",expected_behavior:"All rows",possible_regressions:["Duplicate"]}};
         if (corrupt) value.review.after.hash = "0".repeat(64);
       } else if (path.includes("/improvement-candidate-baselines/")) value = {review:{target_id:"target-one",base_revision_id:"revision-one",base_generation:1,baseline:exact(raw),editable_start:Buffer.byteLength('\ufefftitle\r\n')}};
-      else if (path.endsWith("/artifact-review")) value = {review:{artifact:exact(raw),task:"Exact task",contract:{objective:"Count rows"},fixtures:[{source_ref:"sources/rows.csv",source_version:"v1",text:raw,fixture_hash:hash(raw),byte_size:Buffer.byteLength(raw)}]}};
+      else if (path.endsWith("/artifact-review")) value = {review:{artifact:exact(raw),task:"Exact task",contract:{objective:"Count rows"},fixtures:[{source_ref:"sources/rows.csv",source_version:"v1",timezone:"Asia/Saigon",data_period:"2026-10",cutoff:"2026-10-23",schema:{id:"rows-v1"},text:raw,fixture_hash:hash(raw),byte_size:Buffer.byteLength(raw)}]}};
       else if (path.endsWith("/authorize")) { rows = [{...candidate,edit_authority:{authority_id:"authority-one",generation:2,status:"revoked"}}]; value = {authority:{status:"active",generation:1}}; }
-      else if (path === "/improvement-candidates") { if (failStage) {failStage=false;throw Error("Unknown transport outcome");} value = {candidate}; }
+      else if (path === "/improvement-candidates") { if (failStage) {failStage=false;throw Error("Unknown transport outcome");} if(failAfterStage) failRows=true; value = {candidate}; }
       else throw Error(`Unexpected request ${path}`);
       return {ok:true,status:200,json:async()=>({ok:true,...value})};
     } };
   vm.createContext(ctx); vm.runInContext(source, ctx);
   await ctx.window.JavisImprovementCandidates.open({brain:"brain-one",slug:"test-skill"});
   const find = action => { const nodes = body.querySelectorAll(`[data-action="${action}"]`); assert.ok(nodes.length, `Missing action ${action}`); return nodes.at(-1); };
-  return {ctx,body,calls,find,intervals,setBrain:b=>{brain=b;},setRows:r=>{rows=r;},defer:p=>{deferred=p;},corrupt:()=>{corrupt=true;},failStage:()=>{failStage=true;}};
+  return {ctx,body,calls,find,intervals,setBrain:b=>{brain=b;},setRows:r=>{rows=r;},defer:p=>{deferred=p;},corrupt:()=>{corrupt=true;},failStage:()=>{failStage=true;},pages:()=>{pages=true;},failAfterStage:()=>{failAfterStage=true;}};
 }
 for (const lang of ["vi","en"]) {
   const f = await fixture(lang);
@@ -59,6 +60,24 @@ for (const lang of ["vi","en"]) {
   assert.ok(f.find("after-facts").textContent.includes(hash(raw + "\nnew")));
   await f.find("authorize").onclick();
   assert.equal(f.find("authorize").disabled, true, "Historical approval must refresh revoked current metadata");
+  f.ctx.window.JavisImprovementCandidates.close();
+}
+{
+  const f=await fixture(); f.pages();
+  await f.ctx.window.JavisImprovementCandidates.open({brain:"brain-one",slug:"test-skill"});
+  await f.find("capture").onclick(); await f.find("capture").onclick();
+  const captures=f.calls.filter(x=>x.url.startsWith("/improvement-targets/capture"));
+  assert.equal(captures.length,2);
+  assert.notEqual(JSON.parse(captures[0].body).event_key,JSON.parse(captures[1].body).event_key,"A completed capture must not replay forever for a new explicit intent");
+  assert.equal(f.body.querySelectorAll('[data-action="more-contexts"]').length,1,"Reload replaces prior pagination control");
+  f.ctx.window.JavisImprovementCandidates.close();
+}
+{
+  const f=await fixture(); await f.find("load-baseline").onclick(); f.failAfterStage();
+  f.find("replacement").value="Retain all rows"; f.find("hypothesis").value="Check rows";
+  f.find("failure_signature").value="Missing row"; f.find("expected_behavior").value="All rows"; f.find("possible_regressions").value="Double count";
+  await f.find("stage").onclick();
+  assert.equal(f.find("stage").disabled,true,"Acknowledged staging must stay disabled when only metadata refresh fails");
   f.ctx.window.JavisImprovementCandidates.close();
 }
 {
@@ -81,6 +100,8 @@ for (const lang of ["vi","en"]) {
   await f.ctx.window.JavisImprovementCandidates.openArtifact({brain:"brain-one",trialId:"trial-one",attempt:1});
   assert.equal(f.find("artifact-text").textContent, raw);
   assert.equal(f.find("fixture-0-text").textContent, raw);
+  assert.ok(f.find("fixture-0-metadata").textContent.includes("Asia/Saigon"));
+  assert.ok(f.find("fixture-0-metadata").textContent.includes("2026-10-23"));
   f.ctx.window.JavisImprovementCandidates.close();
 }
 {

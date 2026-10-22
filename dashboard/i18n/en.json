@@ -5487,7 +5487,7 @@
   "improve.angle": "Improvement angle",
   "improve.stage": "Stage proposal for review",
   "improve.declare_region": "Authorize selected byte region",
-  "improve.region_authorized": "Region edit authorized; semantic review pending.",
+  "improve.region_authorized": "Region authorization request recorded.",
   "improve.prepared_context": "Prepared review context",
   "improve.no_contexts": "No authorized context. Prepare a review context before staging proposals.",
   "improve.more_contexts": "Load more contexts",
@@ -5502,5 +5502,6 @@
   "improve.artifact_review_only": "Review only; no acceptance decision recorded.",
   "improve.trial_id": "Stored trial ID",
   "improve.attempt": "Attempt",
-  "improve.review_artifact": "Review exact artifact"
+  "improve.review_artifact": "Review exact artifact",
+  "improve.staged_refresh_required": "Proposal saved. Reopen to load the current list."
 }
