@@ -188,6 +188,40 @@ check("CANARY: status toast sits above the full-screen editor and the file-edito
       zStatus > zModal && zStatus > zFull);
 check("status toast text is 16px", /\.ni-status \{[^}]*font-size: 16px/.test(CSS));
 
+// chen() runs after the upload finishes. If the note was closed or another one opened in the
+// meantime, its editor host is detached: the link must not land anywhere. Run the real function.
+function extractFn(src, head) {
+  const i = src.indexOf(head);
+  if (i < 0) return null;
+  let depth = 0, e = src.indexOf("{", i);
+  for (; e < src.length; e++) {
+    if (src[e] === "{") depth++;
+    else if (src[e] === "}") { depth--; if (!depth) break; }
+  }
+  return src.slice(i, e + 1);
+}
+const vm = require("node:vm");
+const insertSrc = extractFn(SRC, "function chen(ctx, path)");
+check("found the insert function", !!insertSrc);
+const insert = vm.runInNewContext("(" + insertSrc + ")", {
+  document: { execCommand: () => false }, Event: function () {}, window: { getSelection: () => null },
+  htmlAnh: () => '<img src="x">',
+});
+const fakeTa = (connected) => ({
+  isConnected: connected, value: "abc", selectionStart: 3, selectionEnd: 3,
+  focus() {}, setSelectionRange() {}, dispatchEvent() {},
+});
+const gone = fakeTa(false);
+check("CANARY: detached editor (note closed during upload) gets nothing and reports failure",
+      insert({ mode: () => "source", ta: gone, wys: null }, "images/a.webp") === false && gone.value === "abc");
+check("CANARY: detached render pane gets nothing either",
+      insert({ mode: () => "wys", ta: null, wys: { isConnected: false, focus() {}, contains: () => false, dispatchEvent() {} } },
+             "images/a.webp") === false);
+const live = fakeTa(true);
+check("a live source editor still gets the link",
+      insert({ mode: () => "source", ta: live, wys: null }, "images/a.webp") === true &&
+      live.value === "abc![[images/a.webp]]");
+
 check("index.html nạp note-images.js", /note-images\.js/.test(HTML));
 check("nạp SAU editor-cmds.js", HTML.indexOf("note-images.js") > HTML.indexOf("editor-cmds.js"));
 

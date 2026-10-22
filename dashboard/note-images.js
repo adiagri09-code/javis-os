@@ -248,6 +248,11 @@
     }
     function chen(ctx, path) {
       if (!ctx) return false;
+      // The upload takes a while: if that note was closed or another one opened meanwhile, the
+      // editor body was rebuilt and this host is detached. Bail out so the link never lands in
+      // another note (and no success is reported).
+      var host = ctx.mode() === "source" ? ctx.ta : ctx.wys;
+      if (!host || !host.isConnected) return false;
       if (ctx.mode() === "source") {
         var ta = ctx.ta;
         if (!ta) return false;
