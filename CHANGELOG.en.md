@@ -10,7 +10,10 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.278.0] - 2026-10-22
 ### Improved
-- **The Team chat inherits the main chat's improvements.**
+- **The Team chat now works like the main chat.** Copying a message, the code Copy button, Enter on a phone (a new line, not send), swipe to quote, quoting just the selected part and "Show more" on long messages all behave as in the main chat.
+- **Pictures you send in a team open in the in-app viewer;** a missing picture shows a notice instead of a broken icon.
+- **Your message appears at once,** and if the network drops you get Try again. A stuck upload now says what went wrong instead of spinning.
+- **Reading older messages, the chat no longer jumps down,** and a "New messages" button brings you back; new messages no longer clear your text selection. Buttons inside answer cards now send into the team.
 
 ## [0.276.0] - 2026-10-22
 ### Security
