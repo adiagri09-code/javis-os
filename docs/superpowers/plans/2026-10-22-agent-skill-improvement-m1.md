@@ -289,8 +289,19 @@ contract mutation/owner stale decision, injection treated as data, unknown evalu
 In-progress component checkpoint: schema3 reservation/materialization/lease/engine marker/
 cancel/recover and data-only evaluator are implemented. The concrete internal request and
 typed owner-decision boundary are in docs/dev/agent-skill-trial-contract-v1.md. This is not
-the complete fake runner: heartbeat, trace/result persistence, owner decision history and
-Runner start/usage/evaluator integration remain required before these boxes can close.
+the complete fake runner: Runner start/usage/evaluator integration remains required before
+these boxes can close. Heartbeat, encrypted immutable trace/products/results, terminal
+owner history, historical reevaluation and host abort are implemented as components.
+
+Task4 interface refinement: named host methods replace the draft unrestricted transition
+dictionary. `TrialRunner(trials,context_loader,live_guard,adapter_factory,recorder_factory,
+checker_registry)` binds trusted dependencies; JSON cannot choose callables or assert full
+context. Additional files: improvement_trial_evidence.py, improvement_trial_products.py,
+improvement_trial_checks.py, improvement_trial_decisions.py, improvement_trial_results.py,
+improvement_trial_runner.py and corresponding focused tests. Result finalization and owner
+reevaluation have different authority: only the former closes a live execution; the latter
+appends historical product evidence without any engine/ledger mutation. No exposed endpoint
+or real query is implied by these component seams.
 
 ## Task 5: explicit owner service/API and operating report
 

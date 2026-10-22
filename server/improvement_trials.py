@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import secrets
 import time
@@ -107,7 +108,7 @@ class TrialStore:
     @staticmethod
     def _public(connection, row):
         attempts = [dict(item) for item in connection.execute(
-            "SELECT attempt,status,call_id,engine_at,created_at,updated_at FROM improvement_trial_attempts "
+            "SELECT attempt,status,call_id,engine_at,failure_reason,created_at,updated_at FROM improvement_trial_attempts "
             "WHERE trial_id=? ORDER BY attempt", (row["id"],))]
         return {"trial_id": row["id"], "brain_id": row["brain_id"], "status": row["status"],
                 "generation": row["generation"], "attempt": row["attempt"],
@@ -170,8 +171,9 @@ class TrialStore:
                     or request["deadline_at"] <= now):
                 raise IM.ConflictError("trial_claim_stale")
             token = secrets.token_urlsafe(32)
-            connection.execute("UPDATE improvement_trial_attempts SET lease_token=?,lease_until=?,updated_at=? "
-                               "WHERE trial_id=? AND attempt=?", (token, min(now + lease_seconds, request["deadline_at"]), now,
+            connection.execute("UPDATE improvement_trial_attempts SET lease_token=?,lease_until=?,writer_hash=?,updated_at=? "
+                               "WHERE trial_id=? AND attempt=?", (token, min(now + lease_seconds, request["deadline_at"]),
+                                                                  hashlib.sha256(token.encode()).hexdigest(), now,
                                                                   identifier, row["attempt"]))
             connection.execute("UPDATE improvement_trials SET generation=generation+1,updated_at=? WHERE id=?", (now, identifier))
             return {**self._public(connection, self._row(connection, brain, identifier)), "lease_token": token}
@@ -186,6 +188,57 @@ class TrialStore:
                 or attempt["lease_until"] is None or attempt["lease_until"] <= now):
             raise IM.ConflictError("trial_lease_stale")
         return row, attempt
+
+    def heartbeat(self, principal, identifier, *, expected_generation, lease_token, now=None, lease_seconds=60):
+        if type(lease_seconds) not in (int, float) or not 1 <= lease_seconds <= 3600:
+            raise ValueError("invalid_trial_lease")
+        with self.store._Tx(self.store) as connection:
+            observed_at = time.time() if now is None else now
+            row, _ = self._leased(connection, principal, identifier, expected_generation, lease_token, observed_at)
+            request = json.loads(row["request_json"])
+            self._current(connection, row["brain_id"], request)
+            observed_at = time.time() if now is None else now
+            self._leased(connection, principal, identifier, expected_generation, lease_token, observed_at)
+            until = min(observed_at + lease_seconds, request["deadline_at"])
+            connection.execute("UPDATE improvement_trial_attempts SET lease_until=?,updated_at=? WHERE trial_id=? AND attempt=?",
+                               (until, observed_at, identifier, row["attempt"]))
+            return {"trial_id": identifier, "generation": row["generation"], "lease_until": until}
+
+    def append_observation(self, principal, identifier, packet, **options):
+        from improvement_trial_evidence import TrialEvidence
+        return TrialEvidence(self).append(principal, identifier, packet, **options)
+
+    def read_observation(self, principal, identifier, attempt, sequence):
+        from improvement_trial_evidence import TrialEvidence
+        return TrialEvidence(self).read(principal, identifier, attempt, sequence)
+
+    def stage_evaluation(self, principal, identifier, **options):
+        from improvement_trial_products import TrialProducts
+        return TrialProducts(self).stage(principal, identifier, **options)
+
+    def read_artifact(self, principal, identifier, attempt):
+        from improvement_trial_products import TrialProducts
+        return TrialProducts(self).artifact(principal, identifier, attempt)
+
+    def read_receipt(self, principal, identifier, attempt):
+        from improvement_trial_products import TrialProducts
+        return TrialProducts(self).receipt(principal, identifier, attempt)
+
+    def finish(self, principal, identifier, **options):
+        from improvement_trial_results import TrialResults
+        return TrialResults(self).finish(principal, identifier, **options)
+
+    def read_result(self, principal, identifier, attempt, **options):
+        from improvement_trial_results import TrialResults
+        return TrialResults(self).read(principal, identifier, attempt, **options)
+
+    def reevaluate(self, principal, identifier, attempt, **options):
+        from improvement_trial_results import TrialResults
+        return TrialResults(self).reevaluate(principal, identifier, attempt, **options)
+
+    def record_owner_decision(self, principal, identifier, attempt, criterion_id, verdict, **options):
+        from improvement_trial_decisions import OwnerDecisionStore
+        return OwnerDecisionStore(self).record(principal, identifier, attempt, criterion_id, verdict, **options)
 
     def _materialization(self, connection, row, baseline_context):
         request = json.loads(row["request_json"])
@@ -290,7 +343,7 @@ class TrialStore:
             connection.execute("UPDATE improvement_trials SET status='running',generation=generation+1,updated_at=? WHERE id=?", (marker_now, identifier))
             return self._public(connection, self._row(connection, row["brain_id"], identifier))
 
-    def _stop(self, connection, row, status, now):
+    def _stop(self, connection, row, status, now, reason=None):
         attempt = connection.execute("SELECT * FROM improvement_trial_attempts WHERE trial_id=? AND attempt=?",
                                      (row["id"], row["attempt"])).fetchone()
         call = connection.execute("SELECT * FROM agent_calls WHERE id=?", (attempt["call_id"],)).fetchone()
@@ -299,10 +352,38 @@ class TrialStore:
                 raise IM.ConflictError("trial_call_state_stale")
         else:
             self.ledger._settle_in(connection, call["id"], "interrupted", None, None, None, now)
-        connection.execute("UPDATE improvement_trial_attempts SET status=?,lease_token=NULL,lease_until=NULL,updated_at=? "
-                           "WHERE trial_id=? AND attempt=?", (status, now, row["id"], row["attempt"]))
+        connection.execute("UPDATE improvement_trial_attempts SET status=?,lease_token=NULL,lease_until=NULL,failure_reason=?,updated_at=? "
+                           "WHERE trial_id=? AND attempt=?", (status, reason, now, row["id"], row["attempt"]))
         connection.execute("UPDATE improvement_trials SET status=?,generation=generation+1,updated_at=? WHERE id=?", (status, now, row["id"]))
         return self._public(connection, self._row(connection, row["brain_id"], row["id"]))
+
+    def abort(self, principal, identifier, *, expected_generation, lease_token, reason):
+        """Close only the owned host attempt, including expired leases, without a retry."""
+        brain = IM._brain(principal)
+        allowed = {"unsupported_configuration", "authority_changed", "worker_failed", "evidence_failed",
+                   "telemetry_failed", "evaluation_failed", "timeout", "cancelled", "runner_failed"}
+        if not isinstance(reason, str) or reason not in allowed:
+            raise ValueError("invalid_trial_failure_reason")
+        if not isinstance(lease_token, str) or not 1 <= len(lease_token) <= 256:
+            raise IM.ConflictError("trial_abort_writer_unbound")
+        with self.store._Tx(self.store) as connection:
+            row = self._row(connection, brain, identifier)
+            attempt = connection.execute("SELECT * FROM improvement_trial_attempts WHERE trial_id=? AND attempt=?",
+                                         (identifier, row["attempt"])).fetchone()
+            writer = hashlib.sha256(lease_token.encode()).hexdigest()
+            if not attempt["writer_hash"] or not secrets.compare_digest(writer, attempt["writer_hash"]):
+                raise IM.ConflictError("trial_abort_writer_unbound")
+            if row["status"] in TERMINAL:
+                return self._public(connection, row)
+            if (type(expected_generation) is not int or row["generation"] != expected_generation
+                    or attempt["lease_token"] != lease_token):
+                raise IM.ConflictError("trial_abort_stale")
+            status = "not_run" if attempt["engine_at"] is None else "unknown"
+            result = self._stop(connection, row, status, time.time(), reason)
+            payload = {"trial_id": identifier, "attempt": row["attempt"], "reason": reason}
+            self.assets._event(connection, principal, "trial-abort:" + identifier + ":" + str(row["attempt"]),
+                               "trial_abort", payload, result)
+            return result
 
     def cancel(self, principal, identifier, *, expected_generation, event_key):
         brain = IM._brain(principal)

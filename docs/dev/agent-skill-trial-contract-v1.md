@@ -104,3 +104,47 @@ hashes. The runner must additionally enforce execution/installation invariants; 
 artifact evaluator cannot attest native isolation, permission or actual configuration.
 
 This boundary does not advertise a complete TrialRunner or an owner execution endpoint.
+
+## M1 evidence and host finalization
+
+Schema3 also stores immutable encrypted packet chunks, artifacts, installation receipts,
+owner decisions and result manifests beside the same trial/call references. Raw packet
+chunks are bounded to1MiB, with a complete packet limit of8MiB and verified reconstruction.
+Normal packets require a live matching host lease, contiguous sequence and exact workspace
+identity. Exact replay is read-only. The normal trace freezes at worker completion or
+evaluation; a later error cannot silently change the facts being graded. Explicit late
+evidence requires the retained writer capability and a terminal/older attempt; it cannot
+reopen the trial, change its generation or refund a counted call.
+
+`TrialStore.heartbeat` renews the current owned lease without changing its generation.
+`abort(...,expected_generation,lease_token,reason)` closes the owned attempt, including
+an expired lease: pre-marker is `not_run`/refunded, post-marker is `unknown`/counted. Reasons
+are bounded host codes in the attempt and existing immutable event history. An external
+cancellation remains authoritative. Closing authority grants no ability to start a query.
+
+`stage_evaluation` requires a complete non-late trace with one native terminal event. It
+preserves exact UTF-8 result bytes and receipt separately from verdicts. The declared
+contract output receives a complete host copy through exclusive publication; an owner
+edit is never replaced. Multiple different final artifacts/receipts are ambiguous.
+
+Internal `finish(...,expected_generation,lease_token,capability_hash,live_guard,
+checker_registry)` accepts trusted host dependencies, never a client/model report or
+verdict. The required guard returns the exact scope/grant/config/context/target pins.
+The host evaluates outside SQLite's write lock, then rechecks authority, lease, output and
+generation before atomically appending an encrypted result and settling the existing call.
+Pure execution-record checks bind the complete/public contract and installation evidence;
+their `record_checks_only` label does not prove live permission or business acceptance.
+Missing actual reasoning/asset use remains unknown. Execution `completed` does not imply
+product `pass`; malformed evidence can fail while unsupported evaluation remains unknown.
+
+Owner confirmation is append-only, terminal-only and binds case/criterion/output/contract.
+Only authenticated owner history creates typed evaluator decisions. Historical
+`reevaluate(...,attempt,expected_generation,event_key,checker_registry)` grades an immutable
+artifact copy and appends a new result pointing to its predecessor. It never queries a
+model, changes original execution/mandatory facts, settles another call or activates a
+bundle. A concurrent decision invalidates publication by generation. Prior result IDs
+remain readable within the same owner/brain/trial/attempt scope.
+
+The worker does not receive lease tokens, evaluator answers, checker callables, live-guard
+callbacks or owner-history capabilities. These services remain internal until the full
+runner and authorized owner API pass their own checks.

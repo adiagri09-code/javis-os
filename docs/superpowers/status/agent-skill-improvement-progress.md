@@ -266,3 +266,19 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   before its marker. Store suite15 passed after the fix. Final expanded improvement/native/
   ledger/Windows-console regression passed13/13 files in47s before this isolated clock fix;
   all native inference was a dummy localhost provider. No live/model/business evidence added.
+- Task4 evidence/finalization component now has live lease renewal, immutable encrypted raw
+  trace chunks, native artifact/receipt records and exact-byte output publication. Late
+  evidence can be retained after cancellation without reopening or refunding an attempt.
+  Host evaluation runs outside the write lock; result append, terminal state and existing
+  call settlement commit atomically after fresh authority/output/lease checks.
+- Terminal owner decisions bind the exact case/criterion/output/contract. Historical
+  reevaluation appends a new encrypted report and preserves original execution, mandatory
+  evidence, usage and ledger; old reports remain scoped and readable. Host abort records
+  bounded reasons, refunds only before the marker and may close an expired owned lease.
+- Independent review reproduced a trace mutation during unlocked evaluation. A behavioral
+  RED-to-GREEN fix freezes normal packets at worker completion/evaluation and pins the trace
+  head in reports. A second focused review of abort/reevaluation/history found no additional
+  Important defects. Fresh results11 and trials29 checks passed independently; expanded
+  storage/evaluator/owner/usage/ledger regression passed9/9 files in65s. These are synthetic
+  component tests, with no real engine or business acceptance. Complete Runner integration,
+  trusted context/source-grant service, owner API and selected-engine smoke remain required.

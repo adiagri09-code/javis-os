@@ -207,7 +207,8 @@ class TrialStoreTests(unittest.TestCase):
         self.assets.set_policy(self.owner, "off", expected_version=0, event_key="off-before-upgrade")
         with self.rs._conn() as connection:
             contract = connection.execute("SELECT id FROM improvement_contracts").fetchone()[0]
-            for table in ("improvement_trial_observations", "improvement_trial_attempts", "improvement_trials"):
+            for table in ("improvement_trial_results", "improvement_trial_owner_decisions", "improvement_trial_artifacts", "improvement_trial_receipts", "improvement_trial_observations",
+                          "improvement_trial_attempts", "improvement_trials"):
                 connection.execute("DROP TABLE " + table)
             connection.execute("UPDATE improvement_schema SET version=2")
         self.assertEqual(self.cases.get_contract(self.owner, contract)["contract"]["version"], 1)
@@ -252,6 +253,206 @@ class TrialStoreTests(unittest.TestCase):
             with self.assertRaises(IM.ConflictError):
                 self.trials.start_engine(self.owner, trial["trial_id"], expected_generation=trial["generation"], lease_token=token)
         self.assertIsNone(self.ledger.get(trial["attempts"][0]["call_id"])["engine_at"])
+
+    def test_heartbeat_extends_only_an_owned_live_lease_without_changing_generation(self):
+        trial, token = self.prepared()
+        with self.rs._conn() as connection:
+            expires = connection.execute("SELECT lease_until FROM improvement_trial_attempts").fetchone()[0]
+        beat = self.trials.heartbeat(self.owner, trial["trial_id"], expected_generation=trial["generation"],
+            lease_token=token, now=expires - 1, lease_seconds=10)
+        self.assertEqual(beat["generation"], trial["generation"])
+        self.assertGreater(beat["lease_until"], expires)
+        self.assertEqual(self.trials.recover(self.owner, now=expires + 1)["not_run"], 0)
+        with self.assertRaises(IM.ConflictError):
+            self.trials.heartbeat(self.owner, trial["trial_id"], expected_generation=trial["generation"],
+                lease_token=token, now=expires + 10)
+
+    def packet(self, trial, sequence=1, kind="worker_ready", **changes):
+        with self.rs._conn() as connection:
+            receipt = json.loads(connection.execute("SELECT workspace_json FROM improvement_trial_attempts "
+                "WHERE trial_id=? AND attempt=1", (trial["trial_id"],)).fetchone()[0])
+        payload = {"version": 1, "sequence": sequence, "type": kind, "trial_id": trial["trial_id"], "attempt": 1,
+                   "input_hash": receipt["input_hash"]}
+        if kind == "worker_ready":
+            payload["capability_hash"] = "d" * 64
+        elif kind in ("engine_event", "fixture_event"):
+            payload["event"] = {"type": "usage", "usage": None}
+        elif kind == "worker_complete":
+            payload.update(fixture_events=[], tool_denials=[])
+        return {**payload, **changes}
+
+    def test_trace_is_immutable_idempotent_encrypted_and_scoped(self):
+        trial, token = self.prepared()
+        packet = self.packet(trial)
+        arguments = {"expected_generation": trial["generation"], "lease_token": token}
+        first = self.trials.append_observation(self.owner, trial["trial_id"], packet, **arguments)
+        self.assertEqual(first, self.trials.append_observation(self.owner, trial["trial_id"], packet, **arguments))
+        self.assertEqual(self.trials.read_observation(self.owner, trial["trial_id"], 1, 1), packet)
+        with self.assertRaises(IM.ConflictError):
+            self.trials.append_observation(self.owner, trial["trial_id"], {**packet, "capability_hash": "e" * 64}, **arguments)
+        with self.assertRaises(PermissionError):
+            self.trials.read_observation(self.other, trial["trial_id"], 1, 1)
+        with self.rs._conn() as connection:
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute("DELETE FROM improvement_trial_observations")
+
+    def test_large_raw_packet_chunks_preserve_exact_bytes_and_missing_chunk_is_unknown(self):
+        trial, token = self.prepared()
+        packet = self.packet(trial, kind="engine_event", event={"type": "artifact", "content": "x" * (1024 * 1024) + "\r\n"})
+        self.trials.append_observation(self.owner, trial["trial_id"], packet,
+            expected_generation=trial["generation"], lease_token=token)
+        self.assertEqual(self.trials.read_observation(self.owner, trial["trial_id"], 1, 1), packet)
+        with self.rs._conn() as connection:
+            hashes = json.loads(connection.execute("SELECT blob_hashes_json FROM improvement_trial_observations").fetchone()[0])
+            self.assertGreater(len(hashes), 1)
+        self.assets.blobs._path(self.owner.brain_id, hashes[-1]).unlink()
+        with self.assertRaises(IM.AssetUnavailable):
+            self.trials.read_observation(self.owner, trial["trial_id"], 1, 1)
+
+    def test_late_trace_after_cancel_preserves_evidence_without_reopening_or_refunding(self):
+        trial, token = self.prepared()
+        self.trials.append_observation(self.owner, trial["trial_id"], self.packet(trial),
+            expected_generation=trial["generation"], lease_token=token)
+        running = self.trials.start_engine(self.owner, trial["trial_id"], expected_generation=trial["generation"], lease_token=token)
+        cancelled = self.trials.cancel(self.owner, trial["trial_id"], expected_generation=running["generation"], event_key="cancel-trace-trial")
+        packet = self.packet(trial, 2, "engine_event")
+        with self.assertRaises(IM.ConflictError):
+            self.trials.append_observation(self.owner, trial["trial_id"], packet,
+                expected_generation=running["generation"], lease_token=token)
+        result = self.trials.append_observation(self.owner, trial["trial_id"], packet, attempt=1, lease_token=token, late=True)
+        self.assertTrue(result["late"])
+        current = self.trials.get(self.owner, trial["trial_id"])
+        self.assertEqual((current["status"], current["generation"]), ("cancelled", cancelled["generation"]))
+        self.assertEqual(self.ledger.get(current["attempts"][0]["call_id"])["status"], "interrupted")
+
+    def test_concurrent_trace_replay_and_identity_rejection_do_not_create_extra_rows(self):
+        trial, token = self.prepared()
+        packet = self.packet(trial)
+        options = {"expected_generation": trial["generation"], "lease_token": token}
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: self.trials.append_observation(self.owner, trial["trial_id"], packet, **options), (1, 2)))
+        self.assertEqual(results[0], results[1])
+        for value, changes in ((self.packet(trial, 2, input_hash="f" * 64), {}),
+                               (self.packet(trial, 2), {"lease_token": "forged"}),
+                               (self.packet(trial, 3), {})):
+            with self.subTest(changes=changes), self.assertRaises(IM.ConflictError):
+                self.trials.append_observation(self.owner, trial["trial_id"], value, **{**options, **changes})
+        with self.rs._conn() as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM improvement_trial_observations").fetchone()[0], 1)
+
+    def test_policy_revocation_rejects_heartbeat_without_erasing_existing_trace(self):
+        trial, token = self.prepared()
+        self.trials.append_observation(self.owner, trial["trial_id"], self.packet(trial),
+            expected_generation=trial["generation"], lease_token=token)
+        self.assets.set_policy(self.owner, "off", expected_version=0, event_key="revoke-heartbeat-policy")
+        with self.assertRaises(PermissionError):
+            self.trials.heartbeat(self.owner, trial["trial_id"], expected_generation=trial["generation"], lease_token=token)
+        self.assertEqual(self.trials.read_observation(self.owner, trial["trial_id"], 1, 1)["type"], "worker_ready")
+
+    def product_trace(self, *, content='{"value":"synthetic"}\r\n', extra_artifact=None, complete=True):
+        trial, token = self.prepared()
+        self.trials.append_observation(self.owner, trial["trial_id"], self.packet(trial),
+            expected_generation=trial["generation"], lease_token=token)
+        trial = self.trials.start_engine(self.owner, trial["trial_id"], expected_generation=trial["generation"], lease_token=token)
+        receipt = {"version": 1, "trial_id": trial["trial_id"], "attempt": 1,
+                   "input_hash": self.packet(trial)["input_hash"]}
+        events = [{"type": "artifact", "content": content, "hash": fixtures.digest(content)},
+                  {"type": "installation_receipt", "receipt": receipt, "hash": IM._hash(receipt)},
+                  {"type": "terminal", "subtype": "success", "is_error": False, "artifact_status": "observed"}]
+        if extra_artifact is not None:
+            events.insert(1, {"type": "artifact", "content": extra_artifact, "hash": fixtures.digest(extra_artifact)})
+        packets = [self.packet(trial, 2, "engine_start_requested")]
+        packets.extend(self.packet(trial, index, "engine_event", event=event) for index, event in enumerate(events, 3))
+        if complete:
+            packets.append(self.packet(trial, len(packets) + 2, "worker_complete"))
+        for packet in packets:
+            self.trials.append_observation(self.owner, trial["trial_id"], packet,
+                expected_generation=trial["generation"], lease_token=token)
+        return trial, token, content.encode("utf-8"), receipt
+
+    def test_completed_trace_stages_exact_artifact_and_receipt_without_settling_the_call(self):
+        trial, token, raw, receipt = self.product_trace()
+        evaluating = self.trials.stage_evaluation(self.owner, trial["trial_id"], expected_generation=trial["generation"], lease_token=token)
+        self.assertEqual(evaluating["status"], "evaluating")
+        artifact = self.trials.read_artifact(self.owner, trial["trial_id"], 1)
+        self.assertEqual(artifact, raw)
+        self.assertEqual(self.trials.read_receipt(self.owner, trial["trial_id"], 1), receipt)
+        output = self.trials.workspace.root / trial["trial_id"] / "attempt-1" / "outputs" / "answer.json"
+        self.assertEqual(output.read_bytes(), raw)
+        self.assertEqual(self.ledger.get(trial["attempts"][0]["call_id"])["status"], "running")
+        with self.rs._conn() as connection:
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute("DELETE FROM improvement_trial_artifacts")
+        with self.assertRaises(PermissionError):
+            self.trials.read_artifact(self.other, trial["trial_id"], 1)
+
+    def test_ambiguous_or_incomplete_native_output_cannot_be_staged_as_a_completed_product(self):
+        trial, token, _, _ = self.product_trace(extra_artifact="different final output")
+        with self.assertRaises(IM.ConflictError):
+            self.trials.stage_evaluation(self.owner, trial["trial_id"], expected_generation=trial["generation"], lease_token=token)
+        with self.rs._conn() as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM improvement_trial_artifacts").fetchone()[0], 0)
+
+    def test_missing_worker_completion_keeps_the_product_unstaged(self):
+        trial, token, _, _ = self.product_trace(complete=False)
+        with self.assertRaises(IM.ConflictError):
+            self.trials.stage_evaluation(self.owner, trial["trial_id"], expected_generation=trial["generation"], lease_token=token)
+
+    def test_changed_output_is_not_overwritten_during_idempotent_evaluation_resume(self):
+        trial, token, _, _ = self.product_trace()
+        evaluating = self.trials.stage_evaluation(self.owner, trial["trial_id"], expected_generation=trial["generation"], lease_token=token)
+        output = self.trials.workspace.root / trial["trial_id"] / "attempt-1" / "outputs" / "answer.json"
+        output.write_bytes(b"Owner edit in scratch output")
+        with self.assertRaises(IM.ConflictError):
+            self.trials.stage_evaluation(self.owner, trial["trial_id"], expected_generation=evaluating["generation"], lease_token=token)
+        self.assertEqual(output.read_bytes(), b"Owner edit in scratch output")
+
+    def test_concurrent_owner_output_publication_wins_without_being_replaced(self):
+        import improvement_trial_products as products
+        trial, token, _, _ = self.product_trace()
+        output = self.trials.workspace.root / trial["trial_id"] / "attempt-1" / "outputs" / "answer.json"
+
+        def competing_writer(source, destination):
+            output.write_bytes(b"Concurrent owner output")
+            raise FileExistsError("owner won publication")
+
+        with patch.object(products.os, "link", side_effect=competing_writer), self.assertRaises(IM.ConflictError):
+            self.trials.stage_evaluation(self.owner, trial["trial_id"], expected_generation=trial["generation"], lease_token=token)
+        self.assertEqual(output.read_bytes(), b"Concurrent owner output")
+        with self.rs._conn() as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM improvement_trial_artifacts").fetchone()[0], 0)
+
+    def test_host_abort_before_marker_refunds_with_durable_bounded_reason(self):
+        trial, token = self.prepared()
+        result = self.trials.abort(self.owner, trial["trial_id"], expected_generation=trial["generation"],
+                                  lease_token=token, reason="unsupported_configuration")
+        self.assertEqual(result["status"], "not_run")
+        self.assertEqual(result["attempts"][0]["failure_reason"], "unsupported_configuration")
+        self.assertEqual(self.ledger.get(trial["attempts"][0]["call_id"])["status"], "refunded")
+
+    def test_expired_host_writer_can_close_a_started_call_but_cannot_refund(self):
+        trial, token = self.prepared()
+        running = self.trials.start_engine(self.owner, trial["trial_id"], expected_generation=trial["generation"], lease_token=token)
+        with self.rs._conn() as connection:
+            connection.execute("UPDATE improvement_trial_attempts SET lease_until=1 WHERE trial_id=?", (trial["trial_id"],))
+        with self.assertRaises(IM.ConflictError):
+            self.trials.abort(self.owner, trial["trial_id"], expected_generation=running["generation"],
+                              lease_token="forged", reason="worker_failed")
+        result = self.trials.abort(self.owner, trial["trial_id"], expected_generation=running["generation"],
+                                  lease_token=token, reason="worker_failed")
+        self.assertEqual(result["status"], "unknown")
+        self.assertEqual(self.ledger.get(trial["attempts"][0]["call_id"])["status"], "interrupted")
+        self.assertFalse(self.ledger.refund(trial["attempts"][0]["call_id"]))
+
+    def test_host_abort_does_not_rewrite_external_cancellation_or_accept_arbitrary_reason(self):
+        trial, token = self.prepared()
+        with self.assertRaises(ValueError):
+            self.trials.abort(self.owner, trial["trial_id"], expected_generation=trial["generation"],
+                              lease_token=token, reason="arbitrary raw secret or exception text")
+        cancelled = self.trials.cancel(self.owner, trial["trial_id"], expected_generation=trial["generation"], event_key="external-cancel-abort")
+        result = self.trials.abort(self.owner, trial["trial_id"], expected_generation=trial["generation"],
+                                  lease_token=token, reason="cancelled")
+        self.assertEqual(result, cancelled)
 
 
 if __name__ == "__main__":
