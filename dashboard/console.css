@@ -2779,9 +2779,7 @@ body.on-teams .cview-head { display: none; }
 .tm-hact .ic, .tm-hact svg { width: 15px; height: 15px; }
 .tm-hact:hover, .tm-hact:focus-visible { background: var(--surface-2); color: var(--text); }
 @media (hover: none) { .tm-hacts { display: none; } .tm-msg { -webkit-touch-callout: none; } }
-/* Swipe left to reply: a reply arrow shows on the right once the swipe is far enough. */
-.tm-msg.is-armed::after { content: ""; position: absolute; right: 6px; top: 50%; width: 22px; height: 22px; margin-top: -11px;
-  border-radius: 50%; background: var(--accent); opacity: .85; }
+/* Swipe left to reply: msg-swipe.js adds the main chat's quote mark (.msg-swipe-mark, style.css) on the right. */
 /* Long-press sheet under a message. */
 .tm-sheet { flex: 1 1 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 4px; padding: 8px;
   border: 1px solid var(--border); border-radius: 14px; background: var(--bg); box-shadow: 0 6px 20px rgba(0, 0, 0, .12); }
@@ -2840,6 +2838,19 @@ body.on-teams .cview-head { display: none; }
 /* Khung soạn một hàng: công tắc Giao việc, ô chữ tự cao, nút gửi tròn. */
 .tm-composer { border-top: 1px solid var(--border); padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); position: relative; background: var(--bg); }
 .tm-composer[hidden] { display: none; }
+/* Keyboard open on a phone (mobile-chat.js sets body.kb-open from visualViewport): the Home bar sits under the keyboard,
+   so the safe-area gap under the input is dropped, like the main composer. */
+body.kb-open .tm-composer { padding-bottom: 8px; }
+/* The owner's message on its way (shown at once, replaced by the server's copy): a little faded with "Sending...";
+   "Not sent" in red with Try again and Remove when the POST failed. */
+.tm-msg-pending .tm-bubble { opacity: .72; }
+.tm-msg-pending.is-failed .tm-bubble { opacity: 1; border-color: var(--red, #d64545); }
+.tm-pending-st { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 26px; margin-top: 2px;
+  color: var(--text3); font-size: 12px; }
+.tm-msg-pending.is-failed .tm-pending-st { color: var(--red, #d64545); }
+.tm-pending-st svg { width: 14px; height: 14px; }
+.tm-pending-st .ws-btn { white-space: nowrap; }
+@media (pointer: coarse) { .tm-pending-st { font-size: 16px; } }
 .tm-row { display: flex; align-items: flex-end; gap: 6px; }
 .tm-row[hidden] { display: none; }
 /* 0.176.0 composer, the same shape as the main chat: "+" (menu: Assign job, Mention, Search), the input, mic, send. */
@@ -3488,6 +3499,12 @@ body.col-resizing { cursor: col-resize; user-select: none; }
 .tm-file.is-img { flex-direction: column; align-items: stretch; padding: 4px; }
 .tm-file.is-img img { width: 160px; max-height: 120px; object-fit: cover; border-radius: 8px; }
 .tm-file.is-img span { font-size: 12.5px; color: var(--text2); padding: 2px 4px; }
+.tm-file.is-img { cursor: zoom-in; }
+/* A long owner message collapses to ten lines with "Show more" (chat-acts.js), like the main chat's .utext.clamped. */
+.tm-msg-owner .tm-text.utext.clamped { display: -webkit-box; -webkit-line-clamp: 10; -webkit-box-orient: vertical; overflow: hidden; }
+/* The picture could not load (jvImgGone put the "not available" box in its place, with the name): no second name. */
+.tm-file.is-img .chat-img-gone { margin: 0; max-width: 160px; white-space: normal; }
+.tm-file.is-img .chat-img-gone + span { display: none; }
 .tm-folder-pop { position: fixed; z-index: 80; }
 .tm-ava-btn { border: 0; padding: 0; background: none; border-radius: 50%; cursor: pointer; flex: none; display: inline-flex; }
 .tm-ava-btn:hover, .tm-ava-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

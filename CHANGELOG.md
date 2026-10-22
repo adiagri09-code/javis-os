@@ -6,10 +6,17 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.277.0] - 2026-10-22
+## [0.279.0] - 2026-10-22
 ### Cải thiện
 - **Chạy bộ test không còn làm đầy ổ C.** Trước đây mỗi lượt chạy để lại hơn 1000 thư mục rác trong thư mục Temp của Windows, dồn lại có lúc tới 50.000 thư mục, khoảng 30 GB. Giờ mỗi file test dùng một thư mục tạm riêng và tự xoá khi chạy xong.
 - **Lần chạy bị dừng ngang cũng không để lại rác lâu.** Thư mục của lượt bị tắt giữa chừng được dọn ở lần chạy test kế tiếp.
+
+## [0.278.0] - 2026-10-22
+### Cải thiện
+- **Khung chat Nhóm dùng được như khung Trò chuyện.** Sao chép tin, nút Copy của khối mã, Enter trên điện thoại (xuống dòng thay vì gửi), vuốt để trích dẫn, trích đúng đoạn đang bôi và "Xem thêm" cho tin dài đều chạy giống khung chat chính.
+- **Ảnh bạn gửi trong Nhóm bấm vào là phóng to ngay trong app;** ảnh hỏng hiện khung báo thay vì ô vỡ.
+- **Tin bạn gửi hiện ngay,** rớt mạng thì có nút Thử lại. File tải lên bị kẹt sẽ báo lỗi chứ không quay mãi.
+- **Đọc tin cũ không bị giật xuống cuối,** có nút "Tin mới" để quay về; tin mới tới không xoá đoạn chữ bạn đang bôi đen. Nút trong thẻ trả lời giờ gửi vào đúng Nhóm.
 
 ## [0.276.0] - 2026-10-22
 ### Bảo mật

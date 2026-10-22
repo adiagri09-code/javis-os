@@ -868,20 +868,28 @@
     else if (act === "download" && curArt) downloadArt(curArt);
   }
   function copyText(text, btn) {
-    var run = (navigator.clipboard && window.isSecureContext)
-      ? navigator.clipboard.writeText(text) : Promise.reject();
-    run.catch(function () {
-      var ta = document.createElement("textarea");
-      ta.value = text; ta.style.cssText = "position:fixed;opacity:0";
-      document.body.appendChild(ta); ta.select();
-      try { document.execCommand("copy"); } catch (e) {}
-      ta.remove();
-    }).then(function () {
+    copyPlain(text).then(function () {
       // Nho lai innerHTML chu KHONG phai textContent: tu 0.62.1 nut Copy la mot icon SVG, ma
       // textContent cua no la chuoi rong - tra lai bang textContent thi sau mot giay nut
       // trong khong, khong con gi de bam.
       if (btn) { var o = btn.innerHTML; btn.innerHTML = ic("check", { cls: "ic-ok" }); setTimeout(function () { btn.innerHTML = o; }, 1000); }
     });
+  }
+  // Copy plain text through the shared helper (chat-acts.js, clipboard API with a textarea fallback on plain HTTP).
+  // chat-acts.js loads after this file but before any click can happen; the inline copy is for pages without it.
+  function copyPlain(text) {
+    if (typeof window !== "undefined" && window.JavisActs && window.JavisActs.copy) return window.JavisActs.copy(text);
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.cssText = "position:fixed;opacity:0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    ta.remove();
+    return Promise.resolve(true);
+  }
+  function flashCodeCopied(btn, label) {
+    var old = btn.textContent;
+    btn.innerHTML = ic("check", { cls: "ic-ok" }) + " " + tw("app.copied");
+    setTimeout(function () { btn.textContent = label || old; }, 1200);
   }
   function extFor(art) {
     if (art.type === "html") return "html";
@@ -1437,6 +1445,17 @@
       // Dang SOAN trong editor (contenteditable/.ne-wys) hoac trong khung sua file -> khong mo gi ca,
       // de nguoi dung bam anh ma sua binh thuong (tranh bung editor long nhau).
       if (trongTrinhSua(e.target)) return;
+    });
+    // Copy button of a code block (codeBlockHtml). Delegated on the document so it works in every container that
+    // renders markdown: the main chat, the Team chat, the file viewer. Before this the only handler sat on the main
+    // chat's #chatArea, so the button was dead everywhere else.
+    document.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains("code-copy")) return;
+      var wrap = t.closest(".code-wrap");
+      var pre = wrap && wrap.querySelector("pre");
+      if (!pre) return;
+      copyPlain(pre.innerText).then(function () { flashCodeCopied(t, "\u29c9 Copy"); });
     });
     document.addEventListener("keydown", function (e) {
       if ((e.key === "Enter" || e.key === " ") && document.activeElement &&

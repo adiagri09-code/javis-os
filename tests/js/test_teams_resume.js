@@ -15,9 +15,11 @@ function check(name, cond) {
 check("every request gives up after a while (a hung fetch kept Send disabled forever)",
   /var CALL_MS = 30000;/.test(src) && /opt\.signal = ctl\.signal; timer = setTimeout\(function \(\) \{ ctl\.abort\(\); \}, CALL_MS\);/.test(src)
   && /function \(x\) \{ clearTimeout\(timer\); return x; \}, function \(e\) \{ clearTimeout\(timer\); throw e; \}/.test(src));
-check("a send that gave up re-enables the composer and keeps its client id for the retry",
-  /\.catch\(function \(\) \{\s*setNote\(tw\("teams\.err_network"\)\);\s*drawHint\(\);/.test(src)
-  && /if \(!S\.pending \|\| S\.pending\.text !== text\) S\.pending = \{ text: text, typed: typed, id: newClientId\(\) \};/.test(src));
+// Since the pending bubble (teams.js postEntry): the composer is free at once, and a send that gave up turns the
+// bubble "Not sent" with Try again, which posts the SAME body and client id (test_team_pending_send.js).
+check("a send that gave up leaves the composer usable and keeps its client id for the retry",
+  /\}\)\.catch\(function \(\) \{ failed\(tw\("teams\.err_network"\)\); \}\);/.test(src)
+  && /call\("POST", teamUrl\("\/messages"\), entry\.body\)/.test(src) && /if \(oe && oe\.state === "failed"\) \{ postEntry\(oe\);/.test(src));
 check("back after 20 s or more: the open team is read again (dead socket on iPhone), a short switch reloads nothing",
   /var AWAY_MS = 20000, hiddenAt = 0;/.test(src)
   && /if \(document\.visibilityState === "hidden"\) \{ hiddenAt = Date\.now\(\); return; \}/.test(src)

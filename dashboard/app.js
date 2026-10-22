@@ -2353,11 +2353,11 @@ function appendUserMessage(text, attachments, ts) {
   div.className = "msg msg-user";
   div.dataset.text = text || "";   // giữ nguyên văn để gửi lại / sửa lại đúng chữ gốc
   const attHtml = attachHtml(attachments);
-  // Tin dài (>10 dòng hoặc >900 ký tự) thu gọn lại, bấm "Xem thêm" để mở
-  const isLong = text && (text.split("\n").length > 10 || text.length > 900);
+  // Tin dài (>10 dòng hoặc >900 ký tự) thu gọn lại, bấm "Xem thêm" để mở (chat-acts.js, dùng chung với trang Nhóm)
+  const isLong = window.JavisActs.isLongText(text);
   const textHtml = text
     ? `<div class="utext${isLong ? " clamped" : ""}">${window.JavisQuote ? window.JavisQuote.utextHtml(text, escapeHtml) : escapeHtml(text)}</div>` +
-      (isLong ? `<button class="clamp-more" type="button">${window.t("app.show_more")}</button>` : "")
+      (isLong ? window.JavisActs.clampButtonHtml(false) : "")
     : "";
   div.innerHTML = `<div class="bubble">${textHtml}${attHtml}</div>` +
     actsHtml("user", ts === undefined ? Date.now() : ts, !!(text || "").trim());
@@ -2626,27 +2626,11 @@ try { updateStopBtn(); } catch (e) {}   // first paint: an empty box shows voice
 // Cuộn thông minh: chỉ tự cuộn khi user đang ở đáy; đang đọc lại phía trên thì
 // KHÔNG giật xuống - hiện nút "↓ Tin mới" (sticky trong khung chat) để nhảy xuống.
 // Nút được chèn lazy khi có tin đầu tiên → .transcript:empty::after vẫn hoạt động.
+// The logic (follow only at the end, the jump button and its "New messages" look, holding the follow while the mouse
+// is on a message) lives in chat-scroll.js, shared with the Team chat.
 // ============================================
-let stickBottom = true;
 const newMsgBtn = document.createElement("button");
 newMsgBtn.id = "newMsgBtn"; newMsgBtn.type = "button";
-newMsgBtn.addEventListener("click", () => scrollBottom(true));
-
-// Nút có HAI dạng, vì hai tình huống khác nhau:
-//   - Chỉ đang cuộn lên đọc lại  -> nút tròn nhỏ chỉ có mũi tên, đủ để nhảy xuống đáy.
-//   - Có tin MỚI tới lúc đang đọc -> nở ra thành "Tin mới" để báo là có cái đáng xuống xem.
-// Trước đây chỉ có dạng thứ hai, mà nó lại chỉ hiện khi scrollBottom() được gọi (tức là khi
-// có tin mới). Cuộn lên đọc lại một hội thoại dài rồi muốn quay xuống thì KHÔNG có nút nào,
-// phải tự kéo tay hết cả khung - đúng chỗ chủ repo kêu mất thời gian.
-const XUONG_ICON = (typeof ic === "function") ? ic("chevron-down") : "↓";
-function veNutXuong(coTinMoi) {
-  newMsgBtn.classList.toggle("has-new", !!coTinMoi);
-  newMsgBtn.innerHTML = coTinMoi ? XUONG_ICON + " " + window.t("app.new_msg") : XUONG_ICON;
-  newMsgBtn.title = coTinMoi ? window.t("app.new_msg_title") : window.t("app.scroll_bottom");
-  newMsgBtn.setAttribute("aria-label", newMsgBtn.title);
-}
-veNutXuong(false);
-window.addEventListener("javis:i18n", () => veNutXuong(newMsgBtn.classList.contains("has-new")));
 
 // _neoChenCu: lúc CHÈN NGƯỢC tin cũ (cuộn lên tải tiếp), mọi bong bóng dựng ra phải nằm
 // TRƯỚC tin cũ nhất đang hiện chứ không phải cuối khung. Đặt cái neo ở đây thay vì thêm
@@ -2657,78 +2641,21 @@ function chatAppend(el) {
   if (newMsgBtn.parentNode !== chatArea) chatArea.appendChild(newMsgBtn);
   chatArea.insertBefore(el, _neoChenCu || newMsgBtn);
 }
-// Ngưỡng 90px: coi như "đang ở đáy" nên vẫn tự cuộn theo tin mới, và không hiện nút.
-function ganDay() {
-  return chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < 90;
-}
-function capNhatNutXuong() {
-  if (!newMsgBtn.parentNode) return;             // chưa có tin nào thì chưa chèn nút
-  if (stickBottom) { newMsgBtn.classList.remove("show"); veNutXuong(false); return; }
-  newMsgBtn.classList.add("show");
-}
-chatArea.addEventListener("scroll", () => {
-  stickBottom = ganDay();
-  // Rời đáy là hiện nút NGAY, không chờ tin mới nào cả.
-  capNhatNutXuong();
+// Ngưỡng 90px: coi như "đang ở đáy" nên vẫn tự cuộn theo tin mới, và không hiện nút. Đang chèn ngược tin cũ
+// (_dangChenCu): appendUserMessage/appendJavisMessage vẫn gọi scrollBottom theo thói quen, mà cuộn xuống đáy lúc này
+// là quăng người đọc khỏi chỗ họ đang đứng, nên chat-scroll.js không cuộn khi suspended() đúng.
+const chatScroll = window.JavisChatScroll.attach(chatArea, {
+  button: newMsgBtn, msg: ".msg", hold: ".msg-acts:hover, .jr-chat:hover", near: 90,
+  suspended: () => _dangChenCu,
 });
-// 0.180.0 (owner: "bấm copy mà tin cứ chạy mất"): while Javis is writing, the chat keeps scrolling to the bottom,
-// so the message under the mouse slides away right as you reach its Copy button. On a computer with a mouse, the
-// follow-along now holds while the mouse is on a message's button row or reaction, or is moving over a message
-// (moved in the last 1.2 s). A mouse just resting on the text does not hold it. When the hold ends, it catches up.
-const HOLD_MOVE_MS = 1200;
-let _diChuotLuc = 0, _treoCuon = null;
-const coChuot = () => { try { return window.matchMedia("(hover: hover) and (pointer: fine)").matches; } catch (e) { return false; } };
-chatArea.addEventListener("mousemove", (e) => {
-  if (e.target.closest && e.target.closest(".msg")) _diChuotLuc = Date.now();
-});
-chatArea.addEventListener("mouseleave", () => { _diChuotLuc = 0; });
-function dangGiuCuon() {
-  if (!coChuot()) return false;
-  if (chatArea.querySelector(".msg-acts:hover, .jr-chat:hover")) return true;
-  return Date.now() - _diChuotLuc < HOLD_MOVE_MS && !!chatArea.querySelector(".msg:hover");
-}
-function choCuonTiep() {
-  if (_treoCuon) return;
-  _treoCuon = setTimeout(function lai() {
-    if (dangGiuCuon()) { _treoCuon = setTimeout(lai, 250); return; }
-    _treoCuon = null;
-    scrollBottom();
-  }, 250);
-}
-function scrollBottom(force) {
-  // Đang chèn ngược tin cũ: appendUserMessage/appendJavisMessage vẫn gọi vào đây theo thói
-  // quen, mà cuộn xuống đáy lúc này là quăng người đọc khỏi chỗ họ đang đứng.
-  if (_dangChenCu) return;
-  if (force) stickBottom = true;
-  if (stickBottom && !force && dangGiuCuon()) { choCuonTiep(); return; }
-  if (stickBottom) {
-    chatArea.scrollTop = chatArea.scrollHeight;
-    newMsgBtn.classList.remove("show");
-    veNutXuong(false);
-  } else if (newMsgBtn.parentNode) {
-    veNutXuong(true);                            // đang đọc phía trên mà có tin mới tới
-    newMsgBtn.classList.add("show");
-  }
-}
+function scrollBottom(force) { chatScroll.toBottom(force); }
 
 // ============================================
 // Copy code block / copy tin nhắn / xem thêm tin dài - event delegation
 // (bubble re-render liên tục khi stream nên KHÔNG gắn handler từng nút)
 // ============================================
-function copyFallback(s) {   // HTTP LAN/VPS chưa https, hoặc clipboard API bị chặn quyền
-  return new Promise((res) => {
-    const ta = document.createElement("textarea");
-    ta.value = s; ta.style.cssText = "position:fixed;opacity:0";
-    document.body.appendChild(ta); ta.select();
-    try { document.execCommand("copy"); } catch (e) {}
-    ta.remove(); res();
-  });
-}
-function copyText(s) {
-  if (navigator.clipboard && window.isSecureContext)
-    return navigator.clipboard.writeText(s).catch(() => copyFallback(s));
-  return copyFallback(s);
-}
+// Shared with the Team chat and the code block Copy button (chat-acts.js): clipboard API, textarea fallback on plain HTTP.
+function copyText(s) { return window.JavisActs.copy(s); }
 function flashCopied(btn, label) {
   const old = btn.textContent;
   btn.innerHTML = ic("check", { cls: "ic-ok" }) + " " + window.t("app.copied");
@@ -2744,13 +2671,7 @@ function runMsgAct(btn) {
   if (act === "quote") {
     // Bôi đen một đoạn TRONG tin này thì trích đúng đoạn đó; không thì trích cả tin. Tin Javis lấy
     // markdown gốc (dataset.md), không lấy chữ đã vẽ, để đoạn trích còn nguyên đậm, danh sách, link.
-    let chon = "";
-    try {
-      const sel = window.getSelection && window.getSelection();
-      if (sel && !sel.isCollapsed && sel.rangeCount && msgEl.contains(sel.getRangeAt(0).commonAncestorContainer)) {
-        chon = String(sel.toString() || "").trim();
-      }
-    } catch (e) {}
+    const chon = window.JavisActs.selectedIn(msgEl);
     const b = msgEl.querySelector(".bubble");
     const ca = msgEl.classList.contains("msg-javis")
       ? window.JavisVisibleMarkdown(msgEl.dataset.md || (b ? b.innerText : ""))
@@ -2795,14 +2716,8 @@ chatArea.addEventListener("click", (e) => {
   const t = e.target;
   const actBtn = t.closest && t.closest(".msg-act");
   if (actBtn) { runMsgAct(actBtn); return; }
-  if (t.classList.contains("code-copy")) {
-    const wrap = t.closest(".code-wrap");
-    const pre = wrap && wrap.querySelector("pre");
-    if (pre) copyText(pre.innerText).then(() => flashCopied(t, "⧉ Copy"));
-  } else if (t.classList.contains("clamp-more")) {
-    const u = t.closest(".bubble") && t.closest(".bubble").querySelector(".utext");
-    if (u) { u.classList.toggle("clamped"); t.textContent = u.classList.contains("clamped") ? window.t("app.show_more") : window.t("app.show_less"); }
-  }
+  // The code block Copy button (chat-render.js) and "Show more" on a long message (chat-acts.js) are handled on the
+  // document, so they work in every chat container.
 });
 // Điện thoại không có hover: chạm vào tin để bật/tắt hàng nút của đúng tin đó.
 chatArea.addEventListener("click", (e) => {
@@ -3759,58 +3674,12 @@ function clearAttachments() {
 //   1. Chip hiện PHẦN TRĂM đã gửi, và tách hẳn hai khúc: "đang gửi 45%" (việc của mạng) với
 //      "máy chủ đang lưu" (việc của máy chủ). Nhìn là biết kẹt ở đâu.
 //   2. Canh KẸT thay cho trần cứng 3 phút: file to trên mạng chậm vẫn đi hết miễn còn nhích;
-//      còn đứng im TAI_KET_MS không nhích byte nào thì cắt và TỰ THỬ LẠI (tối đa TAI_THU_LAI lần).
+//      còn đứng im JavisUpload.STALL_MS không nhích byte nào thì cắt và TỰ THỬ LẠI (tối đa TAI_THU_LAI lần).
 //   3. Hỏng hẳn thì chip có nút tải lại, bấm là gửi lại đúng file đó, không phải chọn lại.
-const TAI_KET_MS = 30000;        // đứng im bao lâu (không nhích byte nào) thì coi là kết nối chết
-const TAI_CHO_MAY_CHU_MS = 90000; // gửi xong 100% mà máy chủ im bao lâu thì thôi
-const TAI_THU_LAI = 2;           // số lần tự thử lại khi mạng đứt/đứng (ngoài lần đầu)
-
-// Một lượt POST /upload bằng XHR (fetch không cho biết tiến độ GỬI lên). Trả Promise
-// {status, text}; lỗi thì reject Error có `kind`: "stall" (mạng đứng giữa chừng), "server"
-// (gửi xong mà máy chủ không trả lời), "net" (đứt kết nối). `XHR` và `dongHo` truyền vào được
-// để test chạy không cần trình duyệt.
-function guiUpload(fd, onTien, opt) {
-  opt = opt || {};
-  const XHR = opt.XHR || XMLHttpRequest;
-  // PHẢI bọc bằng hàm mũi tên (0.64.51). Bản 0.64.43 viết `{ setInterval, clearInterval }` rồi
-  // gọi `dongHo.setInterval(...)`: trình duyệt thấy `this` là object này chứ không phải window
-  // và ném "TypeError: Illegal invocation" ngay trước khi gửi. Mọi file đính kèm đều hỏng, chip
-  // báo "lỗi mạng" (chủ repo báo 25/09). Node không kiểm `this` nên test cũ không bắt được.
-  const dongHo = opt.dongHo || {
-    now: () => Date.now(),
-    setInterval: (fn, ms) => setInterval(fn, ms),
-    clearInterval: (id) => clearInterval(id),
-  };
-  const ketMs = opt.ketMs || TAI_KET_MS, choMs = opt.choMs || TAI_CHO_MAY_CHU_MS;
-  return new Promise((resolve, reject) => {
-    const xhr = new XHR();
-    // Lỗi ném ngay trong lúc DỰNG yêu cầu (không phải lỗi mạng) phải nói đúng tên, không được
-    // rơi thành "lỗi mạng" rồi tự thử lại vô ích như vụ 25/09.
-    let moc = dongHo.now(), guiXong = false, xong = false, ly = null;
-    const ket = (loai) => { if (xong) return; ly = loai; try { xhr.abort(); } catch (e) {} };
-    const canh = dongHo.setInterval(() => {
-      const im = dongHo.now() - moc;
-      if (!guiXong && im > ketMs) ket("stall");
-      else if (guiXong && im > choMs) ket("server");
-    }, 2000);
-    const het = (fn, v) => { if (xong) return; xong = true; dongHo.clearInterval(canh); fn(v); };
-    const loi = (loai) => { const e = new Error(loai); e.kind = loai; return e; };
-    xhr.upload.onprogress = (e) => {
-      moc = dongHo.now();
-      if (onTien && e.lengthComputable) onTien(e.loaded, e.total);
-    };
-    xhr.upload.onload = () => { guiXong = true; moc = dongHo.now(); if (onTien) onTien(-1, -1); };
-    xhr.onload = () => het(resolve, { status: xhr.status, text: xhr.responseText });
-    xhr.onerror = () => het(reject, loi("net"));
-    xhr.onabort = () => het(reject, loi(ly || "net"));
-    try {
-      xhr.open("POST", "/upload");
-      xhr.send(fd);
-    } catch (e) {
-      het(reject, Object.assign(loi("client"), { chiTiet: (e && e.message) || String(e) }));
-    }
-  });
-}
+// The XHR with progress and the stall watch live in chat-upload.js (JavisUpload.send, shared with the Team chat); errors
+// carry `kind`: "stall" (network stopped mid way), "server" (sent but no answer), "net" (dropped), "client" (browser).
+const TAI_THU_LAI = window.JavisUpload.RETRIES;   // automatic retries after a stall or a dropped connection
+function guiUpload(fd, onTien, opt) { return window.JavisUpload.send(fd, onTien, opt); }
 
 async function uploadFile(file, att) {
   const isImg = file.type.startsWith("image/");
@@ -3877,7 +3746,7 @@ async function _taiLen(file, att) {
       if (kind === "client") {
         try { console.error("[upload] browser-side error:", e); } catch (_e) {}
         att.loi = true;
-        att.statusText = window.t("app.att_client_err", { msg: String((e && (e.chiTiet || e.message)) || e).slice(0, 80) });
+        att.statusText = window.t("app.att_client_err", { msg: String((e && (e.detail || e.message)) || e).slice(0, 80) });
         return;
       }
       // Mạng đứng/đứt thì tự thử lại (máy chủ có lưu dở cũng vô hại: mỗi lần là một tên
@@ -4021,20 +3890,11 @@ chatInput.addEventListener("input", () => {
     ? Math.round(window.innerHeight * 0.4) : 200;
   chatInput.style.height = Math.min(chatInput.scrollHeight, _cap) + "px";
 });
-// Bộ gõ tiếng Việt/IME có thể phát keydown Enter trước compositionend. Nếu gửi và xoá
-// textarea ở thời điểm đó, trình duyệt sẽ chốt phần chữ đang ghép vào ô vừa xoá, làm sót
-// lại ký tự hoặc từ cuối. Giữ cờ riêng cho các trình duyệt báo isComposing không ổn định.
-let chatInputComposing = false;
-chatInput.addEventListener("compositionstart", () => { chatInputComposing = true; });
-chatInput.addEventListener("compositionend", () => { chatInputComposing = false; });
+// Enter sends on a computer; an IME composition and a touch screen (Enter = new line) never send. The rules live in
+// chat-acts.js (JavisActs.enterSends) so the Team chat follows the same ones.
+const chatInputComposing = window.JavisActs.trackComposition(chatInput);
 chatInput.addEventListener("keydown", (e) => {
-  if (chatInputComposing || e.isComposing || e.keyCode === 229) return;
-  // Máy chạm (điện thoại/tablet): Enter là XUỐNG DÒNG như mọi app nhắn tin, gửi bằng nút
-  // Gửi. Bàn phím ảo không có Shift+Enter nên giữ lối desktop là user không cách nào viết
-  // tin nhiều dòng. Đo bằng pointer: coarse (con trỏ CHÍNH là ngón tay) chứ không đo bề
-  // rộng màn hình - laptop cảm ứng có chuột vẫn giữ Enter-gửi như cũ.
-  if (window.matchMedia("(pointer: coarse)").matches) return;
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  if (window.JavisActs.enterSends(e, chatInputComposing())) { e.preventDefault(); sendMessage(); }
 });
 sendBtn.addEventListener("click", () => sendMessage());
 
