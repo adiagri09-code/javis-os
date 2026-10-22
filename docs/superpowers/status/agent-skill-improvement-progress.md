@@ -13,8 +13,9 @@
 - Original checkout remains untouched by implementation; only the three relevant source documents were copied.
 - Current engineering branch: `codex/agent-skill-improvement-m1`, release0.291.0 reserved
   on https://github.com/blogminhquy/javis-os/pull/795 (attached, ready for review).
-  Rebased onto main046ea863/0.290.0; latest code checkpoint4c75c379 includes reviewed
-  lifetime/capacity fixes. Independent whole-M1 review has no open Important findings.
+  Rebased onto main046ea863/0.290.0; code checkpoints4c75c379 and0ea1e134 include reviewed
+  lifetime/capacity and POSIX semantic-identity fixes. Independent review has no open
+  Important findings after the reproduced CI corrections described below.
   Final-head CI, merge and publication remain pending. Earlier reservations/checkpoints
   below are historical; they do not supersede this current state.
 
@@ -535,3 +536,21 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   Final independent review reports no open Important findings; its fresh Runner/lifetime17
   checks passed2/2 in53s and all original reproductions pass. Final CI/integration remain
   pending; business and rollout gates stay open.
+
+- Linux CI39841676424 on earlier90610221 failed six scripts. The actual causes are now
+  corrected: both changelogs had a malformed0.291 heading after rebase; two legacy tests
+  still searched main.py for instructions moved into the shared renderer; and POSIX ctime
+  was incorrectly used as creation identity for semantic settings/coding and protected
+  ancestor directories. This made unrelated secret writes and SQLite journal creation
+  falsely invalidate context, also blocking service/end-to-end context creation.
+- Changelog correction8fa86ccf preserves older releases/parser/version; three related
+  suites pass. Renderer regression correction80fe04a6 checks actual rendered instructions,
+  dynamic brain paths and main wiring; valid native file-URI fixtures preserve Windows
+  drives. Three related suites pass, with independent review finding no weakened checks.
+- Dashboard correction0ea1e134 has portable behavioral RED-to-GREEN reproductions and
+  independent content/permission/inode/native-ACL checks. Full Dashboard34, Service11,
+  actual-main end-to-end1 and the portable original service reproduction pass. Only semantic
+  change-time identity is normalized; protected bytes, file identity, selected projections
+  and actual authority remain guarded. The native profile remains exactlyc3b4, matching its
+  qualification evidence; no redundant native/model query was run. Actual final-head Linux
+  CI remains required, and prior failed heads cannot satisfy integration.
