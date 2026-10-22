@@ -7,12 +7,16 @@ Runtime versions below come from the verified hash allowlist, not a CLI invocati
 from __future__ import annotations
 
 import hashlib
+import ast
 import importlib.metadata
 import json
 import math
 import os
+import re
+import shutil
 import stat
 import sys
+import types
 from pathlib import Path
 
 import improvement_claude as native
@@ -20,6 +24,138 @@ import improvement_claude as native
 MAX_SETTINGS_BYTES = 1024 * 1024
 MAX_BINARY_BYTES = 512 * 1024 * 1024
 _FIELDS = {"provider", "model", "reasoning", "auth_mode", "fast"}
+
+# Audited ordinary discovery semantics. Unknown source changes require another
+# parity review, rather than silently assigning the SDK a different executable.
+_DISCOVERY_CODE = {
+    "tim_binary": "3a106ae21c4cfa126d8c36e732dffe9045226239038bff13cdb70db2860b1c2b",
+    "_duong_dan_tim_binary": "4b54e92c6b5b078adcf123159c37341bf99d304eb8195dae82431b71622d3ba2",
+    "_thu_muc_bin_windows": "84ec5dc0a1c0ec7c977e6b80383f57497509b6cd5ef6547b7b5f1a0da618254c",
+    "_home_dir": "5c70cc1085f020104f4b72bc08a323bda413aa69bdd83ed32d8dd8caa6b97781",
+    "_state_dir": "e97b40c8983e0795acb59b2c8a1ef726ff4e44acb07c9c6699dbf442c2e2fbd8",
+    "_doc_bin_nho": "df04b8ed0929d15f74cbce87f7a9c803c071a1f7447d53f542874e1dbbb24979",
+    "_binary_da_nho": "0a70eeed3ebe4623019425b374f3ce20acec9d539f36c882dbd8d38e50b9dcbc",
+    "ClaudeSDK._options": "278718fd845cc87cd8c1c7a10285349fbb5fad1fbefea770f3be910f678c380a",
+}
+
+
+def _codes(code):
+    yield code
+    for value in code.co_consts:
+        if type(value) is types.CodeType:
+            yield from _codes(value)
+
+
+def _discovery_source(module, name, functions):
+    """Validate loaded callable identities and audited source without executing it."""
+    error = "trial_selection_discovery_changed"
+    path = Path(__file__).resolve().parent / (name + ".py")
+    if (type(module) is not types.ModuleType or sys.modules.get(name) is not module
+            or Path(module.__file__).resolve() != path):
+        raise ValueError(error)
+    raw, _ = _read_stable(path, 8 * MAX_SETTINGS_BYTES)
+    tree = ast.parse(raw)
+    compiled = None
+    for dotted in functions:
+        nodes, function = tree.body, module
+        for part in dotted.split("."):
+            function = getattr(function, part, None)
+            node = next((item for item in nodes if isinstance(item, (ast.ClassDef, ast.FunctionDef)) and item.name == part), None)
+            if node is None:
+                raise ValueError(error)
+            nodes = node.body
+        if (type(function) is not types.FunctionType or function.__globals__ is not module.__dict__
+                or function.__closure__ or function.__module__ != name
+                or Path(function.__code__.co_filename).resolve() != path
+                or hashlib.sha256(ast.dump(node, include_attributes=False).encode()).hexdigest() != _DISCOVERY_CODE[dotted]):
+            raise ValueError(error)
+        if compiled is None:
+            compiled = list(_codes(compile(raw, function.__code__.co_filename, "exec", dont_inherit=True)))
+        if function.__code__ not in compiled:
+            raise ValueError(error)
+    return tree
+
+
+def _discovery_guard(cli, sdk, state_root):
+    error = "trial_selection_discovery_changed"
+    tree = _discovery_source(cli, "claude_cli", [key for key in _DISCOVERY_CODE if "." not in key])
+    _discovery_source(sdk, "claude_sdk_engine", ["ClaudeSDK._options"])
+    for name, value in (("os", os), ("sys", sys), ("shutil", shutil), ("Path", Path), ("re", re), ("json", json)):
+        if getattr(cli, name, None) is not value:
+            raise ValueError(error)
+    if sdk.os is not os or sdk._SDK_OK is not True or sdk._sdk is not sys.modules.get("claude_agent_sdk"):
+        raise ValueError(error)
+    options = getattr(sdk._sdk, "ClaudeAgentOptions", None)
+    if "cli_path" not in getattr(options, "__dataclass_fields__", {}):
+        raise ValueError("trial_selection_sdk_cli_unavailable")
+    assignments = {target.id: node.value for node in tree.body if isinstance(node, ast.Assign)
+                   for target in node.targets if isinstance(target, ast.Name)}
+    for name in ("_THU_MUC_BIN_THEM", "_THU_MUC_BIN_WINDOWS", "_BIN_NHO_FILE"):
+        if getattr(cli, name, None) != ast.literal_eval(assignments[name]):
+            raise ValueError(error)
+    expression = assignments["_RX_BIEN_WIN"]
+    if (type(cli._RX_BIEN_WIN) is not type(re.compile(""))
+            or cli._RX_BIEN_WIN.pattern != ast.literal_eval(expression.args[0])
+            or cli._RX_BIEN_WIN.flags != re.compile(ast.literal_eval(expression.args[0])).flags):
+        raise ValueError(error)
+    configured = (os.getenv("JAVIS_STATE_DIR", "") or "").strip()
+    expected = Path(configured) if configured else Path(cli.__file__).resolve().parent
+    if not state_root.is_absolute() or expected != state_root:
+        raise ValueError("trial_selection_discovery_state_unavailable")
+
+
+def _remembered_cli(cli, state_root):
+    # The ordinary helper prefers its already-loaded cache, even if disk differs.
+    # Never call _doc_bin_nho: it warms mutable process state on a metadata read.
+    cache = cli._BIN_NHO
+    if type(cache) is not dict or set(cache) != {"data"}:
+        raise ValueError("trial_selection_discovery_changed")
+    data = cache["data"]
+    if data is None:
+        path = state_root / cli._BIN_NHO_FILE
+        if not path.exists():
+            return ""
+        raw, _ = _read_stable(path, MAX_SETTINGS_BYTES)
+        data = json.loads(raw.decode("utf-8"), object_pairs_hook=_pairs, parse_constant=_constant, parse_float=_finite)
+    if type(data) is not dict:
+        return ""
+    value = data.get("claude") or ""
+    if type(value) is not str:
+        raise ValueError("trial_selection_discovery_unavailable")
+    return value if value and os.path.isfile(value) else ""
+
+
+def _sdk_cli_path(cli, state_root):
+    override = (os.environ.get("JAVIS_CLAUDE_CLI") or "").strip()
+    selected = override or shutil.which("claude") or shutil.which("claude", path=cli._duong_dan_tim_binary())
+    selected = selected or _remembered_cli(cli, state_root)
+    if not selected or "_bundled" in selected.replace("\\", "/"):
+        raise ValueError("trial_selection_sdk_cli_unavailable")
+    path = Path(selected)
+    if not path.is_absolute() or ".." in path.parts:
+        raise ValueError("trial_selection_sdk_cli_unavailable")
+    _path_info(path)
+    return path
+
+
+def resolve_sdk_cli(claude_cli, claude_sdk_engine, state_root):
+    """Resolve the ordinary current SDK executable without cache writes or probes.
+
+    This returns the actual selected path, independent of the runtime allowlist.
+    Call create_pin separately; an unknown current binary must never select an old
+    qualified binary instead. Cold modules and SDK bundled fallback are unsupported.
+    """
+    try:
+        root = Path(state_root)
+        _discovery_guard(claude_cli, claude_sdk_engine, root)
+        first = _sdk_cli_path(claude_cli, root)
+        identity = _identity(_path_info(first))
+        _discovery_guard(claude_cli, claude_sdk_engine, root)
+        if _sdk_cli_path(claude_cli, root) != first or _identity(_path_info(first)) != identity:
+            raise ValueError("trial_selection_discovery_changed")
+        return first
+    except (OSError, TypeError, AttributeError, KeyError, IndexError, SyntaxError, StopIteration, UnicodeError, RecursionError):
+        raise ValueError("trial_selection_discovery_unavailable") from None
 
 
 def _identity(info):

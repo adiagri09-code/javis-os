@@ -2,12 +2,16 @@
 from _paths import ROOT, SERVER  # noqa: F401
 
 import copy
+import ast
+import contextlib
+import io
 import hashlib
 import importlib.util
 import json
 import os
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -306,6 +310,212 @@ class SelectionTests(unittest.TestCase):
             self.settings.write_text('{"model":,"synthetic":"never-output-this"}', encoding="utf-8")
             selection.read_selection(self.settings)
         self.assertNotIn("never-output-this", str(error.exception))
+
+
+class SDKResolverTests(unittest.TestCase):
+    def setUp(self):
+        self.assertTrue(callable(getattr(selection, "resolve_sdk_cli", None)),
+                        "Read-only ordinary SDK CLI resolver is not implemented")
+        import claude_cli
+        import claude_sdk_engine
+        self.cli, self.sdk = claude_cli, claude_sdk_engine
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.state = self.root / "state"
+        self.state.mkdir()
+        self.current = self.executable("current")
+        self.old = self.executable("old")
+        self.extra = self.executable(".local/bin")
+        self.addCleanup(patch.stopall)
+        patch.dict(os.environ, {"JAVIS_STATE_DIR": str(self.state), "JAVIS_CLAUDE_CLI": "",
+            "JAVIS_CLAUDE_BIN": str(self.old), "PATH": str(self.current.parent), "PATHEXT": ".EXE",
+            "HOME": str(self.root), "USERPROFILE": str(self.root), "APPDATA": str(self.root / "appdata"),
+            "LOCALAPPDATA": str(self.root / "local"), "ProgramFiles": str(self.root / "programs"),
+            "ProgramFiles(x86)": str(self.root / "programs86"), "ProgramData": str(self.root / "programdata"),
+            "NVM_HOME": str(self.root / "nvm"), "NVM_SYMLINK": str(self.root / "nvm-link")}).start()
+        patch.object(self.cli, "_BIN_NHO", {"data": None}).start()
+        patch("subprocess.run", side_effect=AssertionError("No native execution permitted")).start()
+        patch("subprocess.Popen", side_effect=AssertionError("No native execution permitted")).start()
+        patch("config.read_settings", side_effect=AssertionError("No decrypted settings permitted")).start()
+
+    def executable(self, directory):
+        path = self.root / directory / ("claude.exe" if os.name == "nt" else "claude")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"inert synthetic executable; never execute")
+        path.chmod(0o700)
+        return path
+
+    def resolve(self):
+        return selection.resolve_sdk_cli(self.cli, self.sdk, self.state)
+
+    def ordinary_branch(self):
+        # Run the exact current ordinary _options CLI branch, without constructing
+        # an engine, SDK options, or touching the rest of the prompt/auth code.
+        tree = ast.parse((SERVER / "claude_sdk_engine.py").read_bytes())
+        cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "ClaudeSDK")
+        method = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "_options")
+        branch = next(node for node in method.body if isinstance(node, ast.If)
+                      and ast.dump(node.test) == ast.dump(ast.parse("'cli_path' in fields", mode="eval").body))
+        namespace = {"fields": {"cli_path": None}, "kw": {}, "os": os}
+        with contextlib.redirect_stderr(io.StringIO()):
+            exec(compile(ast.Module(body=[branch], type_ignores=[]), str(SERVER / "claude_sdk_engine.py"), "exec"), namespace)
+        return Path(namespace["kw"]["cli_path"]) if "cli_path" in namespace["kw"] else None
+
+    def test_current_path_wins_over_remembered_and_other_finder_override_without_writes(self):
+        remembered = self.state / "bin_paths.json"
+        remembered.write_text(json.dumps({"claude": str(self.old)}), encoding="utf-8")
+        before = remembered.read_bytes()
+        self.assertEqual(self.resolve(), self.current)
+        self.assertIsNone(self.cli._BIN_NHO["data"])
+        self.assertEqual(remembered.read_bytes(), before)
+        self.assertEqual(self.ordinary_branch(), self.current)
+
+    def test_sdk_override_wins_and_invalid_override_never_falls_back(self):
+        os.environ["JAVIS_CLAUDE_CLI"] = "  " + str(self.old) + "  "
+        self.assertEqual(self.resolve(), self.old)
+        self.assertEqual(self.ordinary_branch(), self.old)
+        for value in (str(self.root / "missing.exe"), "relative.exe", str(self.root / "_bundled" / "claude.exe")):
+            os.environ["JAVIS_CLAUDE_CLI"] = value
+            with self.assertRaises(ValueError):
+                self.resolve()
+
+    def test_real_extra_directories_precede_remembered_cache(self):
+        os.environ["PATH"] = str(self.root / "empty")
+        self.cli._BIN_NHO["data"] = {"claude": str(self.old)}
+        self.assertEqual(self.resolve(), self.extra)
+        self.assertEqual(self.cli._BIN_NHO["data"], {"claude": str(self.old)})
+        self.assertFalse((self.state / "bin_paths.json").exists())
+        self.assertEqual(self.ordinary_branch(), self.extra)
+
+    def test_loaded_cache_wins_over_different_disk_without_cache_mutation(self):
+        os.environ["PATH"] = str(self.root / "empty")
+        self.extra.unlink()
+        self.cli._BIN_NHO["data"] = {"claude": str(self.old)}
+        remembered = self.state / "bin_paths.json"
+        remembered.write_text(json.dumps({"claude": str(self.current)}), encoding="utf-8")
+        before = remembered.read_bytes()
+        self.assertEqual(self.resolve(), self.old)
+        self.assertEqual(self.ordinary_branch(), self.old)
+        self.assertEqual(remembered.read_bytes(), before)
+
+    def test_cold_cache_is_read_without_loading_it_and_unresolved_has_no_sdk_fallback(self):
+        os.environ["PATH"] = str(self.root / "empty")
+        self.extra.unlink()
+        remembered = self.state / "bin_paths.json"
+        remembered.write_text(json.dumps({"claude": str(self.old)}), encoding="utf-8")
+        self.assertEqual(self.resolve(), self.old)
+        self.assertIsNone(self.cli._BIN_NHO["data"])
+        self.assertEqual(self.ordinary_branch(), self.old)
+        self.cli._BIN_NHO["data"] = None
+        remembered.unlink()
+        with self.assertRaisesRegex(ValueError, "unavailable"):
+            self.resolve()
+        self.assertIsNone(self.cli._BIN_NHO["data"])
+        self.assertFalse(remembered.exists())
+
+    def test_unknown_current_binary_cannot_choose_old_allowlisted_binary(self):
+        self.cli._BIN_NHO["data"] = {"claude": str(self.old)}
+        current = self.resolve()
+        self.assertEqual(current, self.current)
+        settings = self.root / "settings.json"
+        settings.write_text(json.dumps({"model": {"main": {"provider": "anthropic-cli", "model": "selected"},
+            "reasoning": "medium", "claude_auth": "subscription", "fast": False}}), encoding="utf-8")
+        self.old.write_bytes(b"different old inert allowlisted executable")
+        with patch.object(native, "VERIFIED_NATIVE_RUNTIMES", {(sys.platform, "old", hashlib.sha256(self.old.read_bytes()).hexdigest(), "sdk")}), \
+             patch.object(selection.importlib.metadata, "version", return_value="sdk"):
+            with self.assertRaisesRegex(ValueError, "runtime_unverified"):
+                selection.create_pin(settings, current)
+
+    def test_concrete_loaded_modules_and_unmodified_runtime_discovery_required(self):
+        with self.assertRaises(ValueError):
+            selection.resolve_sdk_cli(types.ModuleType("claude_cli"), self.sdk, self.state)
+        with patch.object(self.cli, "_THU_MUC_BIN_THEM", (str(self.old.parent),)):
+            with self.assertRaisesRegex(ValueError, "discovery_changed"):
+                self.resolve()
+        with patch.object(self.cli, "tim_binary", lambda name: str(self.old)):
+            with self.assertRaisesRegex(ValueError, "discovery_changed"):
+                self.resolve()
+        with patch.object(self.sdk.ClaudeSDK, "_options", lambda self: {"cli_path": str(self.old)}):
+            with self.assertRaisesRegex(ValueError, "discovery_changed"):
+                self.resolve()
+        with self.assertRaises(ValueError):
+            selection.resolve_sdk_cli(self.cli, self.sdk, self.root / "different-state")
+
+    def test_source_runtime_disagreement_cannot_claim_actual_ordinary_priority(self):
+        original = selection._read_stable
+
+        def changed_source(path, limit, **kwargs):
+            raw, identity = original(path, limit, **kwargs)
+            if Path(path).name == "claude_cli.py":
+                raw = raw.replace(b'p = shutil.which(ten) or shutil.which(ten, path=_duong_dan_tim_binary())',
+                                  b'p = shutil.which(ten, path=_duong_dan_tim_binary()) or shutil.which(ten)')
+            return raw, identity
+
+        with patch.object(selection, "_read_stable", side_effect=changed_source):
+            with self.assertRaisesRegex(ValueError, "discovery_changed"):
+                self.resolve()
+
+    def test_current_binary_replacement_between_resolution_passes_is_rejected(self):
+        original = selection._discovery_guard
+        calls = 0
+
+        def replace_before_second_pass(*args):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                self.current.write_bytes(b"changed inert executable")
+            return original(*args)
+
+        with patch.object(selection, "_discovery_guard", side_effect=replace_before_second_pass):
+            with self.assertRaisesRegex(ValueError, "discovery_changed"):
+                self.resolve()
+        self.assertEqual(calls, 2)
+
+    def test_missing_discovery_source_constant_returns_a_safe_unavailable_error(self):
+        original = selection._read_stable
+
+        def missing_constant(path, limit, **kwargs):
+            raw, identity = original(path, limit, **kwargs)
+            if Path(path).name == "claude_cli.py":
+                raw = raw.replace(b'_BIN_NHO_FILE = "bin_paths.json"', b'# absent discovery constant')
+            return raw, identity
+
+        with patch.object(selection, "_read_stable", side_effect=missing_constant):
+            with self.assertRaisesRegex(ValueError, "trial_selection_discovery_unavailable"):
+                self.resolve()
+
+    def test_loaded_cache_and_environment_change_between_passes_is_rejected(self):
+        original = selection._discovery_guard
+        for mutate in (lambda: os.environ.__setitem__("JAVIS_CLAUDE_CLI", str(self.current)),
+                       lambda: self.cli._BIN_NHO.__setitem__("data", {"claude": str(self.current)})):
+            os.environ["JAVIS_CLAUDE_CLI"] = ""
+            os.environ["PATH"] = str(self.root / "empty")
+            self.extra.unlink(missing_ok=True)
+            self.cli._BIN_NHO["data"] = {"claude": str(self.old)}
+            calls = 0
+
+            def change(*args):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    mutate()
+                return original(*args)
+
+            with patch.object(selection, "_discovery_guard", side_effect=change):
+                with self.assertRaisesRegex(ValueError, "discovery_changed"):
+                    self.resolve()
+
+    def test_cold_malformed_or_dead_remembered_file_is_unavailable_without_writes(self):
+        os.environ["PATH"] = str(self.root / "empty")
+        self.extra.unlink()
+        remembered = self.state / "bin_paths.json"
+        for raw in (b'{', b'{"claude":"missing"}', b'{"claude":3}', b'{"claude":"one","claude":"two"}'):
+            remembered.write_bytes(raw)
+            with self.assertRaises(ValueError):
+                self.resolve()
+            self.assertIsNone(self.cli._BIN_NHO["data"])
+            self.assertEqual(remembered.read_bytes(), raw)
 
 
 if __name__ == "__main__":

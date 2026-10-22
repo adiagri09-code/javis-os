@@ -416,3 +416,15 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   production trials. Task5 owner API contract is frozen in
   docs/dev/agent-skill-owner-trial-api-v1.md; concrete Dashboard review/fixes, current SDK
   CLI resolution, service/route/lifespan wiring and whole-branch review/CI remain.
+- Current ordinary SDK CLI resolution is now concrete and read-only, including exact
+  override/PATH/extra-directory/loaded-cache/cold-cache priority and source/runtime guards.
+  Independent review found no Important defect; parent caught a missing source constant
+  escaping as KeyError and added a behavioral safe-unavailable regression. Selection32
+  checks pass, and parent selection/Host/smoke regression passed3/3 scripts in29s. A separate
+  metadata-only actual-machine check resolved the same qualified CLI bytes (SHA256c9796b…ea53)
+  with claude-opus-5-5/medium and no finder-cache warming/native query. Application module
+  imports remained inside scratch state. Full owner service/routes remain pending.
+- Fresh main is now046ea863/version0.290.0 (#796/#797). Open PR inventory contained only
+  this draft; reservation was advanced to0.291.0 in ef617bf9 and PR795 retitled. Rebase/main
+  reconciliation waits for current owned source changes to be frozen/committed; do not
+  rebase over active agent edits. No integration or final CI claim yet.
