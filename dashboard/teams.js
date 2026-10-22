@@ -2143,11 +2143,17 @@
     var mine = m.author_kind === "owner";
     var author = mine ? null : (memberOf(S.team.members, m.author_ref) || (S.team.authors || {})[m.author_ref] || null);
     var who = mine ? tw("teams.owner") : author ? (author.name || author.slug || m.author_ref) : (m.author_ref || tw("teams.system"));
+    // Part of the message selected: quote just that part, like the main chat (read before the redraw below drops it).
+    var A = actsApi();
+    var el = S.el.querySelector('.tm-msg[data-mid="' + Number(m.id) + '"]');
+    var part = A && A.selectedIn && el ? A.selectedIn(el) : "";
+    var Q = quoteApi();
+    var partShort = function (n) { return Q ? Q.xemTruoc(part, n) : part.replace(/\s+/g, " ").slice(0, n); };
     // Replying to an assistant also calls that assistant (when nobody else is @-mentioned), so the correction lands
     // with the one who wrote the answer, like replying to someone in a group chat.
     var active = author && memberOf(S.team.members, m.author_ref);
-    S.replyTo = { id: Number(m.id), who: who, preview: plainPreview(m.content, 160),
-      quote: who + ": " + plainPreview(m.content, 280),
+    S.replyTo = { id: Number(m.id), who: who, preview: part ? partShort(160) : plainPreview(m.content, 160),
+      quote: who + ": " + (part || plainPreview(m.content, 280)),
       key: !mine && active && (!active.status || active.status === "active") ? m.author_ref : "" };
     S.picker = null;
     S.pending = null;

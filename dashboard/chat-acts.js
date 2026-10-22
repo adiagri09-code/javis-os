@@ -150,8 +150,22 @@
     return function () { return on; };
   }
 
+  // The text the user has selected INSIDE `el` (a chat message), trimmed; "" when nothing is selected there. Quoting a
+  // message with part of it selected quotes just that part (main chat and Team chat). `win` is for tests only.
+  function selectedIn(el, win) {
+    win = win || (typeof window !== "undefined" ? window : null);
+    try {
+      var sel = win && win.getSelection && win.getSelection();
+      if (el && sel && !sel.isCollapsed && sel.rangeCount && el.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+        return String(sel.toString() || "").trim();
+      }
+    } catch (e) { /* no selection API */ }
+    return "";
+  }
+
   var API = {
     copy: copy,
+    selectedIn: selectedIn,
     enterSends: enterSends,
     trackComposition: trackComposition,
     fmtTime: fmtTime,

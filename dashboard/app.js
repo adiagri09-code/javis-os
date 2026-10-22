@@ -2732,13 +2732,7 @@ function runMsgAct(btn) {
   if (act === "quote") {
     // Bôi đen một đoạn TRONG tin này thì trích đúng đoạn đó; không thì trích cả tin. Tin Javis lấy
     // markdown gốc (dataset.md), không lấy chữ đã vẽ, để đoạn trích còn nguyên đậm, danh sách, link.
-    let chon = "";
-    try {
-      const sel = window.getSelection && window.getSelection();
-      if (sel && !sel.isCollapsed && sel.rangeCount && msgEl.contains(sel.getRangeAt(0).commonAncestorContainer)) {
-        chon = String(sel.toString() || "").trim();
-      }
-    } catch (e) {}
+    const chon = window.JavisActs.selectedIn(msgEl);
     const b = msgEl.querySelector(".bubble");
     const ca = msgEl.classList.contains("msg-javis")
       ? window.JavisVisibleMarkdown(msgEl.dataset.md || (b ? b.innerText : ""))
