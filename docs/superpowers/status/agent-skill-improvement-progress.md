@@ -361,3 +361,10 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   settings. New source artifacts and hot-journal recovery are blocked; existing SHM read
   coordination is allowed. Parent's fresh SQL/context/Host/renderer/prefix regression
   passed5/5 scripts in19s. Full production composition and API remain unfinished.
+- Project/session attachment templates now share pure rendering with protected trial mode.
+  Ordinary limits/read order/errors and duplicate-row observations remain unchanged; trials
+  retain complete pinned text and all rows. Parent review caught full raw files retained
+  together after extraction (15 source bodies instead of the legacy at most2). A weakref
+  regression reproduced it and bounded prefix/original-length observations restored ordinary
+  retention. Incomplete prefixes cannot claim full protected text. Parent's fresh attachment/
+  renderer/project/agent/prefix regression passed6/6 scripts in17s, including13 new checks.

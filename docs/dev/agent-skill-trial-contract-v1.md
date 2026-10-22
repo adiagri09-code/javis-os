@@ -290,3 +290,12 @@ Each source has one consistent read transaction; separate databases still requir
 double observation/CAS. An omitted workflow source is a host declaration, not proof that
 the corresponding production dependency is absent. Coding/pinned-folder, adaptive routing,
 plugins, source document contents and complete rendering remain composer responsibilities.
+
+Project/session asset templates are shared pure functions in main_attachment_rendering.
+Ordinary main retains its actual15-row,2000-character/file,6000-character total limits and
+per-row read/error order. PreparedAttachmentText stores a bounded prefix plus the true
+source length so ordinary rendering does not retain every large raw document at once.
+Protected trial mode takes full texts/all rows and rejects an incomplete prepared prefix.
+It preserves raw CRLF/whitespace and known empty sources; a strict collector must reject
+required unreadable/binary sources before declaring complete coverage. These renderers
+never authorize or load source content themselves.

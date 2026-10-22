@@ -158,6 +158,7 @@ import agent_assets      # tài liệu & link gắn vào MỘT trợ lý (lưu t
 import workflow_chat     # persona_cua_phien: kênh agent:/workflow: đổi cách _do_turn chạy lượt
 import javis_core        # Javis Core (0.185.0): system assistant pinned in every brain
 import main_prompt_rendering  # pure shared prompt blocks; no live reads
+import main_attachment_rendering  # pure shared attachment templates; no live reads
 import memory_control    # 0.188.0: list/edit/forget memories, learning switch, person profile
 import memory_chat       # 0.190.0: the same, plus agent lessons, from chat (tool javis_memory)
 import memory_receipt    # 0.190.0: the "Đã nhớ · Hoàn tác" line under an answer, and no empty "đã quên"
@@ -727,14 +728,7 @@ def _project_block(project_id: str, chi_huong_dan: bool = False) -> str:
         return ra
 
     dong, da_nap = _liet_ke_tai_lieu(p.get("brain") or "brain", files, links)
-    if dong:
-        ra += ("\n\n# === TÀI LIỆU & LINK CỦA PROJECT ===\n"
-               "Đây là DANH SÁCH, không phải nội dung: mở file bằng tool đọc file khi cần, "
-               "đừng đoán nội dung từ cái tên. Link chỉ mở được nếu lượt này có tool duyệt web; "
-               "không có thì nói thẳng chứ đừng đoán nội dung trang.\n" + "\n".join(dong))
-    if da_nap:
-        ra += ("\n\n# === NỘI DUNG FILE ĐÃ GHIM (nạp sẵn, không cần mở lại) ===" + "".join(da_nap))
-    return ra
+    return ra + main_attachment_rendering.render_project_assets(dong, da_nap)
 
 
 def _project_has_rules(project_id: str) -> bool:
@@ -751,47 +745,28 @@ def _project_has_rules(project_id: str) -> bool:
 
 
 def _liet_ke_tai_lieu(brain: str, files: list, links: list):
-    """(dòng liệt kê, nội dung file đã ghim) cho một danh sách tài liệu + link.
+    """Observe ordinary pinned file rows; the shared pure renderer owns templates.
 
-    Tách khỏi `_project_block` vì khung "file & link của CUỘC TRÒ CHUYỆN" gắn tay dùng lại
-    nguyên bộ luật này. Hai chỗ mà chép đôi thì trần token trôi lệch, và trần token trôi lệch
-    là kiểu hỏng không ai thấy cho tới lúc hoá đơn hoặc lỗi quá hạn mức xuất hiện.
+    Preserve the legacy read order and per-row errors, including duplicate stored
+    paths and reads after the content budget is exhausted. Source permissions and
+    decoding remain on this production path, outside protected trial rendering.
     """
-    dong, da_nap, con_lai = [], [], PROJECT_GHIM_TONG_MAX
-    for f in files[:PROJECT_FILES_LIET_KE]:
-        ten, duong = f.get("name") or "", f.get("path") or ""
-        if not f.get("pinned"):
-            dong.append(f"- [file] {ten} - {duong}")
-            continue
-        duoi = os.path.splitext(duong)[1].lower()
-        if duoi not in PROJECT_GHIM_DUOI:
-            # Nói THẲNG là ghim nhưng không nạp được, kèm lý do. Im lặng bỏ qua thì người dùng
-            # ghim xong tưởng Javis đã đọc, rồi ngạc nhiên vì nó trả lời như chưa thấy gì.
-            dong.append(f"- [file, đã ghim nhưng là tệp nhị phân - tự mở khi cần] {ten} - {duong}")
-            continue
-        try:
-            # `_safe_serve_path` chứ không phải `_safe_path`: đây là đường ĐỌC, và trần duyệt
-            # có thể nằm CAO hơn gốc brain (vd localhost duyệt tới cả ổ đĩa). Lúc đó một đường
-            # dẫn lưu theo gốc brain sẽ không resolve được từ trần, và ngược lại - hàm serve
-            # thử cả hai quy ước, cả hai đều bị khoá trong trần. Nhánh THÊM file thì vẫn dùng
-            # `_safe_path` (chặt hơn): ở đó người dùng chọn từ trình duyệt file nên đường dẫn
-            # chắc chắn theo trần, và ghi vào kho thì phải chặt.
-            noi_dung = _safe_serve_path(brain, duong).read_text(
-                encoding="utf-8", errors="replace")
-        except Exception:
-            dong.append(f"- [file, đã ghim nhưng đọc không được] {ten} - {duong}")
-            continue
-        cat = noi_dung[:min(PROJECT_GHIM_FILE_MAX, max(0, con_lai))]
-        if not cat:
-            dong.append(f"- [file, đã ghim nhưng hết chỗ nạp trong lượt này] {ten} - {duong}")
-            continue
-        con_lai -= len(cat)
-        thieu = " (đã cắt bớt)" if len(cat) < len(noi_dung) else ""
-        da_nap.append(f"\n## {ten} - {duong}{thieu}\n{cat}")
-    for l in links[:PROJECT_FILES_LIET_KE]:
-        dong.append(f"- [link] {l.get('label') or l.get('url')} - {l.get('url')}"
-                    + (" (ghim)" if l.get("pinned") else ""))
-    return dong, da_nap
+    loaded = []
+    for item in files[:PROJECT_FILES_LIET_KE]:
+        prepared = None
+        path = item.get("path") or ""
+        if item.get("pinned") and os.path.splitext(path)[1].lower() in PROJECT_GHIM_DUOI:
+            try:
+                # Read policy includes the serving ceiling, as in the legacy path.
+                text = _safe_serve_path(brain, path).read_text(encoding="utf-8", errors="replace")
+                prepared = main_attachment_rendering.PreparedAttachmentText(text[:PROJECT_GHIM_FILE_MAX], len(text))
+                del text
+            except Exception:
+                pass
+        loaded.append(prepared)
+    return main_attachment_rendering.render_attachment_lists(
+        files, links, loaded, list_max=PROJECT_FILES_LIET_KE, allowed_suffixes=PROJECT_GHIM_DUOI,
+        file_max=PROJECT_GHIM_FILE_MAX, total_max=PROJECT_GHIM_TONG_MAX)
 
 
 def _session_block(session_id: str) -> str:
@@ -819,17 +794,7 @@ def _session_block(session_id: str) -> str:
     if not files and not links:
         return ""
     dong, da_nap = _liet_ke_tai_lieu(sess.get("brain") or "brain", files, links)
-    ra = ""
-    if dong:
-        ra += ("\n\n# === TÀI LIỆU & LINK NGƯỜI DÙNG GẮN VÀO CUỘC NÀY ===\n"
-               "Người dùng tự gắn tay ở khung \"Trong cuộc trò chuyện này\", nên đây là thứ họ "
-               "coi là quan trọng cho ĐÚNG cuộc này. Vẫn là DANH SÁCH chứ không phải nội dung: "
-               "mở file bằng tool đọc file khi cần, đừng đoán nội dung từ cái tên.\n"
-               + "\n".join(dong))
-    if da_nap:
-        ra += ("\n\n# === NỘI DUNG FILE ĐÃ GHIM TRONG CUỘC NÀY (nạp sẵn, không cần mở lại) ==="
-               + "".join(da_nap))
-    return ra
+    return main_attachment_rendering.render_session_assets(dong, da_nap)
 
 
 def _agent_assets_block(brain: str, meta: dict) -> str:
