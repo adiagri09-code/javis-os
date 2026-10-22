@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import winproc
 
 from improvement_blobs import MAX_ASSET_BYTES, check_ancestry
 from improvement_cases import _digest, _fields, _frozen, _text
@@ -116,12 +117,14 @@ def _private_directory(path: Path):
     if os.name != "nt":
         path.chmod(0o700)
         return
-    identity = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True, timeout=10, check=True)
+    identity = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True,
+                              timeout=10, check=True, creationflags=winproc.no_window())
     sid = list(csv.reader(identity.stdout.splitlines()))[0][1]
     if not re.fullmatch(r"S-1-[0-9-]+", sid):
         raise OSError("workspace_permissions_unavailable")
     permissions = subprocess.run(["icacls", str(path), "/inheritance:r", "/grant:r",
-        f"*{sid}:(OI)(CI)F", "*S-1-5-18:(OI)(CI)F", "/Q"], capture_output=True, timeout=10)
+        f"*{sid}:(OI)(CI)F", "*S-1-5-18:(OI)(CI)F", "/Q"], capture_output=True, timeout=10,
+        creationflags=winproc.no_window())
     if permissions.returncode:
         raise OSError("workspace_permissions_unavailable")
 

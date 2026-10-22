@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import hashlib
+import asyncio
 import importlib.metadata
 import json
-import os
+import math
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
+import winproc
 
 from improvement_blobs import MAX_ASSET_BYTES, check_ancestry
 from improvement_cases import _digest, _fields, _frozen, _text
@@ -75,12 +78,11 @@ def _runtime_observation(pin):
         return result
     with tempfile.TemporaryDirectory(prefix="improvement-verify-") as scratch:
         environment = worker_environment(Path(scratch))
-        flags = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
         version = subprocess.run([str(binary), "--version"], env=environment, capture_output=True,
-                                 text=True, timeout=10, check=True, **flags)
+                                 text=True, timeout=10, check=True, creationflags=winproc.no_window())
         result["cli_version"] = version.stdout.strip().split()[0]
         auth = subprocess.run([str(binary), "auth", "status", "--json"], env=environment, capture_output=True,
-                              text=True, timeout=15, check=True, **flags)
+                              text=True, timeout=15, check=True, creationflags=winproc.no_window())
         status = json.loads(auth.stdout)
         result["auth"] = {"logged_in": status.get("loggedIn") is True, "method": status.get("authMethod"),
                           "provider": status.get("apiProvider"), "plan": status.get("subscriptionType")}
@@ -88,7 +90,7 @@ def _runtime_observation(pin):
 
 
 class ClaudeTrialAdapter:
-    def __init__(self, config_pin):
+    def __init__(self, config_pin, *, workspace_root=None, before_engine_start=None):
         self.pin = _frozen(config_pin)
         _fields(self.pin, {"version", "provider", "engine_id", "model", "reasoning", "cli_path", "cli_hash",
                            "cli_version", "sdk_version", "profile_version", "profile_hash"})
@@ -99,6 +101,8 @@ class ClaudeTrialAdapter:
         for name, value in self.pin.items():
             if name != "version":
                 _text(value)
+        self.workspace_root = Path(workspace_root) if workspace_root is not None else None
+        self.before_engine_start = before_engine_start
 
     def verify(self):
         requested = {key: self.pin[key] for key in ("provider", "engine_id", "model", "reasoning")}
@@ -125,6 +129,120 @@ class ClaudeTrialAdapter:
             return unsupported("native_auth_policy_unverified")
         return {"supported": True, "reason": None, "requested": requested,
                 "capability_hash": _hash({"pin": self.pin, "runtime": observed}), "runtime": observed}
+
+    async def execute(self, request, workspace):
+        """The parent persists engine start before releasing a query in a clean process."""
+        from improvement_sandbox import TrialWorkspace, _private_directory, worker_environment
+        from improvement_store import _json
+        from improvement_worker import WorkerGroup, process_flags
+        if self.workspace_root is None or not callable(self.before_engine_start):
+            raise ValueError("trial_start_boundary_unbound")
+        request = _frozen(request)
+        _fields(request, {"version", "trial_id", "attempt", "deadline_at", "engine_config_hash", "capability_hash"})
+        if type(request["version"]) is not int or request["version"] != 1 or type(request["attempt"]) is not int:
+            raise ValueError("invalid_trial_execution_request")
+        deadline = request["deadline_at"]
+        if type(deadline) not in (int, float) or not math.isfinite(deadline) or deadline <= time.time():
+            raise ValueError("trial_deadline_expired")
+        for name in ("engine_config_hash", "capability_hash"):
+            _digest(request[name])
+        receipt = _frozen(workspace)
+        manifest = await asyncio.to_thread(TrialWorkspace(self.workspace_root).validate, receipt)
+        if (request["trial_id"] != receipt["trial_id"] or request["attempt"] != receipt["attempt"]
+                or request["engine_config_hash"] != manifest["engine_config_hash"]
+                or request["engine_config_hash"] != _hash(self.pin)):
+            raise ValueError("trial_configuration_drift")
+        verified = await asyncio.to_thread(self.verify)
+        if not verified.get("supported") or verified.get("capability_hash") != request["capability_hash"]:
+            raise ValueError("trial_capability_drift")
+        await asyncio.to_thread(_private_directory, Path(receipt["path"]) / "tmp")
+        environment = worker_environment(Path(receipt["path"]))
+        identity = {key: receipt[key] for key in ("trial_id", "attempt", "input_hash")}
+        process = guard = None
+        stderr_task = None
+        maximum = 8 * 1024 * 1024
+
+        async def send(packet):
+            raw = _json(packet).encode("utf-8") + b"\n"
+
+            def write():
+                process.stdin.write(raw)
+                process.stdin.flush()
+
+            await asyncio.to_thread(write)
+
+        async def drain_stderr():
+            # Drain to avoid a pipe deadlock; raw stderr is never a public result or artifact.
+            while await asyncio.to_thread(process.stderr.read, 4096):
+                pass
+
+        try:
+            async with asyncio.timeout(max(0.0, deadline - time.time())):
+                process = await asyncio.to_thread(subprocess.Popen,
+                    [sys.executable, str(Path(__file__).with_name("improvement_worker.py"))],
+                    cwd=receipt["path"], env=environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, start_new_session=sys.platform != "win32", creationflags=process_flags())
+                # The child blocks on its first input until its whole lifetime is owned.
+                guard = WorkerGroup(process.pid)
+                stderr_task = asyncio.create_task(drain_stderr())
+                await send({"version": 1, "config_pin": self.pin, "workspace_root": str(self.workspace_root),
+                            "receipt": receipt, "capability_hash": request["capability_hash"]})
+                sequence, state = 0, "starting"
+                while True:
+                    raw = await asyncio.to_thread(process.stdout.readline, maximum + 1)
+                    if not raw or len(raw) > maximum or not raw.endswith(b"\n"):
+                        raise ValueError("trial_worker_protocol_incomplete")
+                    packet = json.loads(raw)
+                    sequence += 1
+                    if (not isinstance(packet, dict) or type(packet.get("sequence")) is not int
+                            or packet.get("sequence") != sequence or type(packet.get("version")) is not int
+                            or packet.get("version") != 1):
+                        raise ValueError("invalid_trial_worker_packet")
+                    kind = packet.get("type")
+                    if kind == "worker_error":
+                        _fields(packet, {"version", "sequence", "type", "reason", "error_type"})
+                        yield packet
+                        raise RuntimeError("trial_worker_failed")
+                    extras = {"worker_ready": {"capability_hash"}, "engine_start_requested": set(),
+                              "engine_event": {"event"}, "fixture_event": {"event"},
+                              "worker_complete": {"fixture_events", "tool_denials"}}
+                    if kind not in extras:
+                        raise ValueError("invalid_trial_worker_packet")
+                    _fields(packet, {"version", "sequence", "type", *identity, *extras[kind]})
+                    if any(packet.get(key) != value for key, value in identity.items()):
+                        raise ValueError("trial_worker_identity_drift")
+                    if kind == "worker_ready":
+                        if state != "starting" or packet["capability_hash"] != request["capability_hash"]:
+                            raise ValueError("trial_capability_drift")
+                        state = "ready"
+                    elif kind == "engine_start_requested":
+                        if state != "ready":
+                            raise ValueError("trial_worker_start_repeated")
+                        await self.before_engine_start()
+                        await send({"type": "engine_start_ack", **identity})
+                        state = "running"
+                    elif state != "running":
+                        raise ValueError("trial_worker_event_before_start")
+                    yield packet
+                    if kind == "worker_complete":
+                        break
+                if await asyncio.to_thread(process.wait, timeout=5) != 0:
+                    raise RuntimeError("trial_worker_failed")
+        finally:
+            if guard is not None:
+                guard.close()
+            elif process is not None and process.poll() is None:
+                await asyncio.to_thread(winproc.kill_tree, process.pid)
+            if process is not None:
+                try:
+                    await asyncio.to_thread(process.wait, timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    await asyncio.to_thread(process.wait, timeout=5)
+                for stream in (process.stdin, process.stdout, process.stderr):
+                    stream.close()
+            if stderr_task is not None:
+                await asyncio.gather(stderr_task, return_exceptions=True)
 
 
 class TrialProfile:
