@@ -4089,7 +4089,8 @@
     clearTimeout(refreshTimer);
     if (colResize()) colResize().miniTip.hide();
     if (S && S.pickSt) closePicker();
-    if (S) { S.side = false; S.picker = null; stopMic(); stopReveal(); if (S.unpress) { S.unpress(); S.unpress = null; } }
+    if (S) { S.side = false; S.picker = null; stopMic(); stopReveal(); if (S.unpress) { S.unpress(); S.unpress = null; }
+      if (S.unswipe) { S.unswipe(); S.unswipe = null; } }
   }
 
   // ───────────── column widths (0.196.0) ─────────────
@@ -4191,40 +4192,22 @@
         if (S.renaming || S.renamingHead) saveRename(x.getAttribute("data-rename-for"), x.value);
       }, 0);
     });
-    // Phone: long press a message opens its sheet (emoji for assistant messages, Reply, Copy, Pin); swipe a message to
-    // the left replies to it, like Zalo.
-    var hold = null, hx = 0, hy = 0, held = false, swipe = null;
-    var SWIPE_AT = 60;
+    // Phone: long press a team row opens its Pin / Unpin menu. Long press on a message is msg-press.js and swipe to reply
+    // is msg-swipe.js, both bound below.
+    var hold = null, hx = 0, hy = 0, held = false;
     var stopHold = function () { clearTimeout(hold); hold = null; };
-    var endSwipe = function (fire) {
-      if (!swipe) return;
-      var sw = swipe;
-      swipe = null;
-      if (sw.bubble) { sw.bubble.style.transform = ""; sw.bubble.style.transition = ""; }
-      if (sw.el) sw.el.classList.remove("is-swiping", "is-armed");
-      if (fire && sw.dx <= -SWIPE_AT) startReply(sw.mid);
-    };
     el.addEventListener("pointerdown", function (e) {
       S.swallowClick = false;
       if (e.pointerType === "mouse") return;   // chuột đã có nút khi rê; giữ chuột để bôi chữ như thường
       // Nhấn giữ một dòng nhóm: mở menu Ghim / Bỏ ghim của nhóm đó, và chặn cú bấm mở nhóm sinh ra lúc nhấc tay.
       var row = e.target.closest && e.target.closest(".tm-team");
-      if (row) {
-        stopHold();
-        hx = e.clientX; hy = e.clientY;
-        hold = setTimeout(function () {
-          hold = null; held = true; S.swallowClick = true;
-          openRowMenu(row.getAttribute("data-team"));
-        }, 500);
-        return;
-      }
-      // Long press on a message is msg-press.js (bound below): it survives iOS's own long-press gesture, which
-      // cancelled this pointer timer. Here only the swipe-to-reply is tracked.
-      var msg = e.target.closest && e.target.closest(".tm-msg");
-      if (!msg || e.target.closest("button, a, input, textarea, select, .tm-sheet")) return;
+      if (!row) return;
       stopHold();
       hx = e.clientX; hy = e.clientY;
-      swipe = { el: msg, bubble: msg.querySelector(".tm-bubble"), mid: msg.getAttribute("data-mid"), dx: 0, on: false };
+      hold = setTimeout(function () {
+        hold = null; held = true; S.swallowClick = true;
+        openRowMenu(row.getAttribute("data-team"));
+      }, 500);
     });
     // Nhấn giữ đã mở bộ chọn: chặn menu ngữ cảnh mặc định của máy chạm (chọn chữ, sao chép) cho lần giữ đó.
     el.addEventListener("contextmenu", function (e) {
@@ -4235,22 +4218,21 @@
     });
     el.addEventListener("pointermove", function (e) {
       if (hold && (Math.abs(e.clientX - hx) > 10 || Math.abs(e.clientY - hy) > 10)) stopHold();
-      if (!swipe) return;
-      // The long-press menu is open: the finger is choosing an emoji, not swiping the bubble.
-      if (document.querySelector(".mp-layer")) { endSwipe(false); return; }
-      var dx = e.clientX - hx, dy = e.clientY - hy;
-      if (!swipe.on) {
-        if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { endSwipe(false); return; }   // scrolling, not swiping
-        if (dx > -12 || Math.abs(dx) <= Math.abs(dy)) return;
-        swipe.on = true;
-        swipe.el.classList.add("is-swiping");
-      }
-      swipe.dx = Math.max(-90, Math.min(0, dx));
-      if (swipe.bubble) swipe.bubble.style.transform = "translateX(" + swipe.dx + "px)";
-      swipe.el.classList.toggle("is-armed", swipe.dx <= -SWIPE_AT);
     });
-    el.addEventListener("pointerup", function () { stopHold(); endSwipe(true); });
-    ["pointercancel", "pointerleave"].forEach(function (n) { el.addEventListener(n, function () { stopHold(); endSwipe(false); }); });
+    el.addEventListener("pointerup", stopHold);
+    ["pointercancel", "pointerleave"].forEach(function (n) { el.addEventListener(n, stopHold); });
+    // Phone: swipe a message to the left to reply to it, like Zalo, with the same gesture as the main chat (msg-swipe.js:
+    // the bubble follows the finger, a quote mark shows once far enough, vertical moves keep scrolling, a wide code block
+    // or table scrolls sideways instead). Own and assistant messages both reply, as before.
+    var SW = typeof window !== "undefined" && window.JavisMsgSwipe;
+    if (SW) {
+      S.unswipe = SW.bind(el, {
+        selector: ".tm-msg",
+        bubble: ".tm-bubble",
+        can: function (m) { return !m.classList.contains("is-sheet"); },
+        run: function (m) { startReply(m.getAttribute("data-mid")); }
+      });
+    }
     // Phone (0.179.0): hold a message for the msg-press.js menu, emoji above the finger (slide to pick, assistant
     // messages) and Reply / Copy / Pin at the bottom.
     var MP = typeof window !== "undefined" && window.JavisMsgPress;

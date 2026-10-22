@@ -2779,9 +2779,7 @@ body.on-teams .cview-head { display: none; }
 .tm-hact .ic, .tm-hact svg { width: 15px; height: 15px; }
 .tm-hact:hover, .tm-hact:focus-visible { background: var(--surface-2); color: var(--text); }
 @media (hover: none) { .tm-hacts { display: none; } .tm-msg { -webkit-touch-callout: none; } }
-/* Swipe left to reply: a reply arrow shows on the right once the swipe is far enough. */
-.tm-msg.is-armed::after { content: ""; position: absolute; right: 6px; top: 50%; width: 22px; height: 22px; margin-top: -11px;
-  border-radius: 50%; background: var(--accent); opacity: .85; }
+/* Swipe left to reply: msg-swipe.js adds the main chat's quote mark (.msg-swipe-mark, style.css) on the right. */
 /* Long-press sheet under a message. */
 .tm-sheet { flex: 1 1 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 4px; padding: 8px;
   border: 1px solid var(--border); border-radius: 14px; background: var(--bg); box-shadow: 0 6px 20px rgba(0, 0, 0, .12); }

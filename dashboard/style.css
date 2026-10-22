@@ -1103,7 +1103,7 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
   display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--bg3);
   color: var(--text3); pointer-events: none; transition: background .12s ease, color .12s ease, transform .12s ease; }
 .msg-swipe-mark svg { width: 18px; height: 18px; }
-.msg.is-armed .msg-swipe-mark { background: var(--accent); color: #fff; transform: scale(1.1); }
+.msg.is-armed .msg-swipe-mark, .tm-msg.is-armed .msg-swipe-mark { background: var(--accent); color: #fff; transform: scale(1.1); }
 .msg-act { background: none; border: 1px solid transparent; color: var(--text3);
   border-radius: 6px; cursor: pointer; font-size: 13px; line-height: 1; padding: 3px 6px; }
 .msg-act:hover { color: var(--text-hi); border-color: var(--border); }

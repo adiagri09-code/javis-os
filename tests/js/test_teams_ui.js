@@ -249,11 +249,12 @@ check("0.176 corner press: like, or remove the reaction already there", /return 
       && JR0.cornerToggle(null) === "like" && JR0.cornerToggle({ value: "sad" }) === "none" && JR0.cornerToggle({ value: "none" }) === "like");
 check("điện thoại: nhấn giữ tin mở bảng, có ngưỡng rung tay", teamsJs.includes('"pointerdown"') && /> 10/.test(teamsJs));
 check("gói WS không mang phản hồi thì giữ phản hồi đang có", teamsJs.includes('!("reaction" in nm)'));
-check("0.176 swipe left past the threshold replies; vertical moves stay scrolling", /var SWIPE_AT = 60;/.test(teamsJs)
-      && /if \(fire && sw\.dx <= -SWIPE_AT\) startReply\(sw\.mid\)/.test(teamsJs) && /\.tm-msg \{ touch-action: pan-y;/.test(css));
+check("0.176 swipe left past the threshold replies; vertical moves stay scrolling (msg-swipe.js, shared with the main chat)",
+      /S\.unswipe = SW\.bind\(el, \{\s*selector: "\.tm-msg",\s*bubble: "\.tm-bubble",/.test(teamsJs)
+      && /run: function \(m\) \{ startReply\(m\.getAttribute\("data-mid"\)\); \}/.test(teamsJs) && /\.tm-msg \{ touch-action: pan-y;/.test(css));
 check("0.179 long press uses msg-press.js (Reply, Copy, Pin; emoji on assistant messages); unbound on leave",
       /S\.unpress = MP\.bind\(el, \{\s*selector: "\.tm-msg"/.test(teamsJs) && /if \(S\.unpress\) \{ S\.unpress\(\);/.test(teamsJs)
-      && /document\.querySelector\("\.mp-layer"\)\) \{ endSwipe\(false\); return; \}/.test(teamsJs));
+      && /if \(S\.unswipe\) \{ S\.unswipe\(\);/.test(teamsJs));
 check("bảng (bàn phím) đưa focus vào emoji đầu; đóng trả focus về nút góc hay nút Trả lời", /\.tm-sheet \.tm-rx-pick"\) \|\| box\.querySelector\("\.tm-sheet button"\);\s*if \(first\) first\.focus\(\)/.test(teamsJs)
       && /\.tm-rx-btn\[data-rx-toggle="' \+ S\.focusBack/.test(teamsJs));
 check("nhấn giữ chỉ cho chạm và bút, không cho chuột; chặn menu ngữ cảnh của lần giữ đó",
@@ -503,7 +504,8 @@ check("0.194.1 tin của chủ cũng có hàng thao tác dưới bong bóng, d�
 })(TM.messageHtml({ id: 8, author_kind: "owner", content: "x", meta: {}, ts: 1792200000 }, { members: members }))
   && /\.tm-msg-owner \.tm-col \{ align-items: flex-end;/.test(css) && /\.tm-msg-agent \.tm-col \{ align-items: flex-start;/.test(css));
 check("0.194.1 tin không có mốc giờ thì không bịa giờ", !TM.messageHtml(Object.assign({}, am, { ts: 0 }), { members: members }).includes("tm-time"));
-check("T5 nhấn giữ mở bảng cho mọi tin (cả tin của chủ)", teamsJs.includes('e.target.closest(".tm-msg")'));
+check("T5 nhấn giữ mở bảng cho mọi tin (cả tin của chủ)", /S\.unpress = MP\.bind\(el, \{\s*selector: "\.tm-msg",/.test(teamsJs)
+      && /S\.unswipe = SW\.bind\(el, \{\s*selector: "\.tm-msg",/.test(teamsJs));
 
 // Trang chiếm trọn chiều cao, khung soạn một hàng ở đáy.
 check("T5 console.js: trang Nhóm dùng cview-flush, body.on-teams; rời trang gỡ cả hai và báo teams.js",
