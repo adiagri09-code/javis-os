@@ -8912,11 +8912,12 @@
       try { _vtRevealInTree(rel); } catch (e) {}
     } finally { _vtNhatKyDangMo = false; }
   }
-  // Ctrl+D (Windows/Linux) hay Cmd+D (Mac) ở BẤT KỲ trang nào. Chặn luôn phím đánh dấu trang
-  // mặc định của trình duyệt, vì người dùng đã chọn phím này cho nhật ký.
+  // Cmd+D on Mac, Ctrl+D elsewhere, and only inside the note editor or the Vault panel: the
+  // browser's bookmark shortcut keeps working everywhere else (chat box, other pages).
   function _vtPhimNhatKy(e) {
-    if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
-    if (e.code !== "KeyD" && String(e.key || "").toLowerCase() !== "d") return;
+    const mac = /Mac|iPhone|iPad/.test(navigator.platform || "");
+    if (!(mac ? e.metaKey : e.ctrlKey) || e.shiftKey || e.altKey || e.code !== "KeyD") return;
+    if (!(e.target && e.target.closest && e.target.closest("#noteEditor, .hud-left"))) return;
     e.preventDefault();
     if (e.repeat) return;
     _vtMoNhatKyHomNay();

@@ -100,15 +100,27 @@ const dauPhim = CON.indexOf("function _vtPhimNhatKy");
 const cuoiPhim = CON.indexOf('document.addEventListener("keydown", _vtPhimNhatKy)', dauPhim);
 check("có bộ bắt phím nhật ký gắn ở mức document", dauPhim > 0 && cuoiPhim > dauPhim);
 let goi = 0;
+const nav = { platform: "Win32" };
 const P = vm.runInNewContext(CON.slice(dauPhim, cuoiPhim) + "; _vtPhimNhatKy",
-  { _vtMoNhatKyHomNay: () => { goi++; } });
-const phim = (o) => { let chan = false; P(Object.assign({ key: "d", code: "KeyD", preventDefault: () => { chan = true; } }, o)); return chan; };
+  { _vtMoNhatKyHomNay: () => { goi++; }, navigator: nav });
+// A key target inside the note editor / Vault panel, or outside them (chat box, other pages).
+const inEditor = { closest: (sel) => (/#noteEditor/.test(sel) ? {} : null) };
+const outside = { closest: () => null };
+const phim = (o) => { let chan = false; P(Object.assign({ key: "d", code: "KeyD", target: inEditor, preventDefault: () => { chan = true; } }, o)); return chan; };
+nav.platform = "Win32";
 goi = 0; check("Ctrl+D mở nhật ký và chặn bookmark", phim({ ctrlKey: true }) && goi === 1);
-goi = 0; check("Cmd+D (Mac) mở nhật ký", phim({ metaKey: true }) && goi === 1);
 goi = 0; check("bàn phím gõ tiếng Việt vẫn nhận theo code", phim({ ctrlKey: true, key: "đ" }) && goi === 1);
 goi = 0; check("giữ phím không mở liên tục", phim({ ctrlKey: true, repeat: true }) && goi === 0);
 goi = 0; check("Ctrl+Shift+D không bị chiếm", !phim({ ctrlKey: true, shiftKey: true }) && goi === 0);
 goi = 0; check("chữ d trơn khi gõ không bị chiếm", !phim({}) && goi === 0);
+goi = 0; check("CANARY: Ctrl+D outside the note editor and Vault panel keeps the browser bookmark",
+  !phim({ ctrlKey: true, target: outside }) && goi === 0);
+goi = 0; check("a key event with no element target is ignored", !phim({ ctrlKey: true, target: null }) && goi === 0);
+goi = 0; check("Windows/Linux: Win+D is not taken", !phim({ metaKey: true }) && goi === 0);
+nav.platform = "MacIntel";
+goi = 0; check("Cmd+D (Mac) mở nhật ký", phim({ metaKey: true }) && goi === 1);
+goi = 0; check("CANARY: Mac: Ctrl+D is left alone (Cmd is the shortcut there)", !phim({ ctrlKey: true }) && goi === 0);
+nav.platform = "Win32";
 check("tooltip có ghi phím tắt", /Ctrl\+D/.test(VI["vault.daily"]) && /Cmd\+D/.test(EN["vault.daily"]));
 
 // ============================================================

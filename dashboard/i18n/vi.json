@@ -142,7 +142,7 @@
   "vault.new_file": "Tạo file mới ở gốc brain",
   "vault.new_dir": "Tạo thư mục mới ở gốc brain",
   "vault.refresh": "Làm mới cây",
-  "vault.daily": "Nhật ký hôm nay (Ctrl+D / Cmd+D)",
+  "vault.daily": "Nhật ký hôm nay (Ctrl+D / Cmd+D khi đang ở khung ghi chú)",
   "vault.collapse": "Thu gọn panel Vault (như sidebar)",
   "vault.search_ph": "Tìm note...",
   "vault.search_clear": "Xoá tìm kiếm",

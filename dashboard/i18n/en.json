@@ -142,7 +142,7 @@
   "vault.new_file": "New file at the brain root",
   "vault.new_dir": "New folder at the brain root",
   "vault.refresh": "Refresh tree",
-  "vault.daily": "Today's daily note (Ctrl+D / Cmd+D)",
+  "vault.daily": "Today's daily note (Ctrl+D / Cmd+D while in the notes panel)",
   "vault.collapse": "Collapse the Vault panel (like the sidebar)",
   "vault.search_ph": "Find a note...",
   "vault.search_clear": "Clear search",
