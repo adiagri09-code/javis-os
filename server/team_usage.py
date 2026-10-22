@@ -138,8 +138,20 @@ def _aggregate(events, details=(), telemetry_errors=0):
                 sid and ex.get("cli_session_new") and len(same_session) == 1) else []
             for d in raw:
                 requests.append({"event_kind": "cli_detail", "execution": ex,
+                                 "provider": latest.get("provider"), "request_id": d.get("request_id"),
                                  "in": d["input"] + d["cache_read"] + d["cache_create"],
                                  "out": d["output"], "tokens_known": True})
+            # SDK observations and later CLI records can describe the same provider request.
+            # Raw detail supersedes its earlier observation; never infer identity from totals.
+            identified, anonymous = {}, []
+            for request in requests:
+                if request.get("request_id"):
+                    key = (request.get("provider"), (request.get("execution") or {}).get("cli_session_id") or sid,
+                           request["request_id"])
+                    identified[key] = request
+                else:
+                    anonymous.append(request)
+            requests = anonymous + list(identified.values())
             known = [e for e in requests if e.get("tokens_known")]
             reconciled = bool(known) and latest.get("tokens_known") and (
                 sum(e.get("in") or 0 for e in known) == latest.get("in") and

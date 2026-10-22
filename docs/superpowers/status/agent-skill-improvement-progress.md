@@ -205,3 +205,14 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   regression passed2/2 in17s with an empty auth HOME, not a real credential/model call.
   Task2 is complete as a component; the parent start callback still needs Task3/4's durable
   shared ledger binding. No owner run endpoint or production capability is enabled yet.
+- Task3 attribution substep: strict experiment/trial/case/variant/repeat/attempt/origin
+  metadata survives async context/thread reads without a Team ID. Added improve_probe to
+  the existing CallLedger, same mirrored trial reference; generic TTL does not settle live
+  trial calls, and post-engine calls cannot be refunded. No fake goals or Team jobs.
+- The existing usage index now projects improvement IDs with additive columns and a v2
+  backfill cursor. Nullable/zero/late usage uses the same event file and aggregation.
+  SDK and raw CLI records dedupe by actual provider request/session ID, not matching totals.
+  Telemetry errors are scoped; ledger rows only expose missing observations, never bills.
+- New usage suite8 checks and existing Team usage PASS2/2 files in6s; core ledger/index/turn
+  regressions PASS4/4 in20s. Task3 remains open: host telemetry collector, global daily/TPM
+  consistency, additional missing/late/conflicting coverage and durable runner binding.

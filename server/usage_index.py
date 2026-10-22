@@ -120,6 +120,15 @@ def _connect() -> sqlite3.Connection:
     conn.execute("CREATE TABLE IF NOT EXISTS usage_observations("
                  "event_key TEXT PRIMARY KEY, team_id TEXT, task_id TEXT, payload TEXT)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_team ON usage_observations(team_id,task_id)")
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(usage_observations)")}
+    for column in ("experiment_id", "trial_id"):
+        if column not in columns:
+            try:
+                conn.execute(f"ALTER TABLE usage_observations ADD COLUMN {column} TEXT")
+            except sqlite3.OperationalError:
+                if column not in {row[1] for row in conn.execute("PRAGMA table_info(usage_observations)")}:
+                    raise
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_improvement ON usage_observations(experiment_id,trial_id)")
     conn.execute("CREATE TABLE IF NOT EXISTS usage_cli_requests("
                  "request_key TEXT PRIMARY KEY, session_id TEXT, payload TEXT)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_cli_session ON usage_cli_requests(session_id)")
@@ -130,19 +139,19 @@ def _connect() -> sqlite3.Connection:
 def _project_observation(conn, event) -> None:
     """The event file owns bills; this rebuildable projection only supplies execution attribution."""
     ex = event.get("execution") or {}
-    if not ex.get("team_id") or not event.get("event_id"):
+    if not (ex.get("team_id") or (ex.get("experiment_id") and ex.get("trial_id"))) or not event.get("event_id"):
         return
     key = up.observation_key(event)
-    conn.execute("INSERT INTO usage_observations(event_key,team_id,task_id,payload) VALUES(?,?,?,?) "
+    conn.execute("INSERT INTO usage_observations(event_key,team_id,task_id,experiment_id,trial_id,payload) VALUES(?,?,?,?,?,?) "
                  "ON CONFLICT(event_key) DO UPDATE SET payload=excluded.payload",
-                 (key, ex["team_id"], ex.get("task_id"), json.dumps(event)))
+                 (key, ex.get("team_id"), ex.get("task_id"), ex.get("experiment_id"), ex.get("trial_id"), json.dumps(event)))
 
 
 def _ingest_team_events(conn) -> int:
     """Independent cursor backfills execution metadata without perturbing the legacy daily projection."""
     if not _EVENTS_PATH.exists():
         return 0
-    marker = "__execution_events_v1__:" + str(_EVENTS_PATH)
+    marker = "__execution_events_v2__:" + str(_EVENTS_PATH)
     row = conn.execute("SELECT offset FROM files_seen WHERE path=?", (marker,)).fetchone()
     offset = row[0] if row else 0
     if _EVENTS_PATH.stat().st_size < offset:
@@ -182,6 +191,29 @@ def execution_events(team_id, task_id=None):
         details = []
         for sid in sessions - {None, ""}:
             details.extend(json.loads(r[0]) for r in conn.execute(
+                "SELECT payload FROM usage_cli_requests WHERE session_id=?", (sid,)))
+        return events, details
+    finally:
+        conn.close()
+
+
+def improvement_events(experiment_id, trial_id=None):
+    """Read improvement attribution from the same rebuildable observation/request tables."""
+    conn = _connect()
+    try:
+        _ingest_team_events(conn)
+        conn.commit()
+        where, args = "experiment_id=?", [experiment_id]
+        if trial_id is not None:
+            where += " AND trial_id=?"
+            args.append(trial_id)
+        events = [json.loads(row[0]) for row in conn.execute(
+            "SELECT payload FROM usage_observations WHERE " + where, args)]
+        sessions = {event.get("execution", {}).get("cli_session_id") for event in events
+                    if event.get("execution", {}).get("cli_session_new")}
+        details = []
+        for sid in sessions - {None, ""}:
+            details.extend(json.loads(row[0]) for row in conn.execute(
                 "SELECT payload FROM usage_cli_requests WHERE session_id=?", (sid,)))
         return events, details
     finally:

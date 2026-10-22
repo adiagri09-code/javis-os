@@ -241,9 +241,9 @@ Tests: U01, existing Team usage regression, pre-start refund, post-start crash/u
 late CLI usage, repeat/attempt attribution, no duplicate raw/mirror totals, quota stop
 without provider/reasoning change or extra USD caps.
 
-- [ ] Add summary+late-request dedupe/unknown test without team_id, assert null cost stays
+- [x] Add summary+late-request dedupe/unknown test without team_id, assert null cost stays
   null and total tokens count each request once; capture metadata survives host context.
-- [ ] Run improvement_usage plus existing Team usage, observe missing-attribution RED.
+- [x] Run improvement_usage plus existing Team usage, observe missing-attribution RED.
 - [ ] Extend real telemetry/index/projection and bind existing CallLedger at host boundary.
 - [ ] Require improvement/Team usage and ledger regressions GREEN.
 - [ ] Commit shared telemetry changes.

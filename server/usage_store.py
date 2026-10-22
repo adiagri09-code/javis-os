@@ -43,15 +43,26 @@ def note_telemetry_error(execution=None) -> None:
             key = (ex["team_id"], ex.get("task_id"), ex.get("execution_id") or ex.get("turn_id"))
             with _LOCK:
                 _TELEMETRY_ERRORS[key] = _TELEMETRY_ERRORS.get(key, 0) + 1
+        elif ex.get("experiment_id") and ex.get("trial_id"):
+            key = ("improvement", ex["experiment_id"], ex["trial_id"], ex.get("execution_id"))
+            with _LOCK:
+                _TELEMETRY_ERRORS[key] = _TELEMETRY_ERRORS.get(key, 0) + 1
     except Exception:
         pass
 
 
 def telemetry_errors(team_id, task_id=None, execution_id=None) -> int:
     with _LOCK:
-        return sum(n for (team, task, execution), n in _TELEMETRY_ERRORS.items()
-                   if team == team_id and (task_id is None or task == task_id)
-                   and (execution_id is None or execution == execution_id))
+        return sum(n for key, n in _TELEMETRY_ERRORS.items() if len(key) == 3
+                   and key[0] == team_id and (task_id is None or key[1] == task_id)
+                   and (execution_id is None or key[2] == execution_id))
+
+
+def improvement_telemetry_errors(experiment_id, trial_id=None, execution_id=None) -> int:
+    with _LOCK:
+        return sum(n for key, n in _TELEMETRY_ERRORS.items() if len(key) == 4 and key[0] == "improvement"
+                   and key[1] == experiment_id and (trial_id is None or key[2] == trial_id)
+                   and (execution_id is None or key[3] == execution_id))
 
 
 def _today() -> str:
