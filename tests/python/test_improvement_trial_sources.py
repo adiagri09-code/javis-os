@@ -46,11 +46,11 @@ class SourceAuthorizationTests(unittest.TestCase):
             "permission_id": "host-authorized-source-" + str(index), "permission_version": 1,
             "freshness_policy": "snapshot_version"}
 
-    def authorize(self, *, brain=None, request=None, inventory=None, blobs=None):
+    def authorize(self, *, brain=None, request=None, inventory=None, blobs=None, baseline_content=None):
         with closing(self.f.rs._conn()) as connection:
             return sources.authorize_case(connection, brain or self.f.owner.brain_id,
                 self.request if request is None else request, self.inventory if inventory is None else inventory,
-                blobs=self.blobs if blobs is None else blobs)
+                blobs=self.blobs if blobs is None else blobs, baseline_content=baseline_content)
 
     def test_inventory_is_closed_canonical_sorted_and_detached_from_caller(self):
         value = list(reversed(self.inventory))
@@ -177,6 +177,31 @@ class SourceAuthorizationTests(unittest.TestCase):
         with self.assertRaises(AssetUnavailable):
             self.authorize(request=request, inventory=inventory)
 
+    def test_exact_nonempty_raw_or_redacted_body_inside_common_baseline_is_rejected(self):
+        raw, fixture = b"private raw source\r\n", b"redacted solver fixture\r\n"
+        snapshot = self.f.snapshot(12, raw=raw, fixture=fixture, redaction="host-reviewed")
+        case = {**self.cases[0], "id": "embedded", "snapshot_ids": [snapshot["snapshot_id"]]}
+        case_set = self.f.cases.put_case_set(self.f.owner, [case], 43, event_key="embedded-fixture-set")
+        request = {"case_set_id": case_set["case_set_id"], "case_id": "embedded",
+                   "pins": {**self.request["pins"], "case_set_hash": case_set["manifest_hash"]}}
+        inventory = [self.entry(snapshot["snapshot_id"])]
+        for content in (raw, fixture):
+            with self.assertRaisesRegex(PermissionError, "context_overlap"):
+                self.authorize(request=request, inventory=inventory, baseline_content="Owner prefix\n" + content.decode() + "Owner suffix\n")
+        # Deliberately an exact full-body byte comparison, with no partial or
+        # semantic matching claim; CRLF normalization is not equivalent bytes.
+        self.assertIsNone(self.authorize(request=request, inventory=inventory,
+            baseline_content=raw.decode().replace("\r\n", "\n") + fixture.decode().replace("\r\n", "\n")))
+
+    def test_empty_body_does_not_match_every_common_baseline(self):
+        snapshot = self.f.snapshot(13, raw=b"", fixture=b"")
+        case = {**self.cases[0], "id": "empty", "snapshot_ids": [snapshot["snapshot_id"]]}
+        case_set = self.f.cases.put_case_set(self.f.owner, [case], 43, event_key="empty-fixture-set")
+        request = {"case_set_id": case_set["case_set_id"], "case_id": "empty",
+                   "pins": {**self.request["pins"], "case_set_hash": case_set["manifest_hash"]}}
+        self.assertIsNone(self.authorize(request=request, inventory=[self.entry(snapshot["snapshot_id"])],
+                                         baseline_content="Nonempty protected common baseline"))
+
     def test_corrupted_or_missing_fixture_and_incorrect_host_blob_bytes_are_rejected(self):
         path = self.blobs._path(self.f.owner.brain_id, self.inventory[0]["fixture_hash"])
         path.write_text("enc:corrupt", encoding="ascii")
@@ -197,7 +222,8 @@ class SourceAuthorizationTests(unittest.TestCase):
             with patch.object(IC.CaseStore, "solver_case", side_effect=AssertionError("No solver projection")), \
                  patch.object(IC.CaseStore, "evaluator_case", side_effect=AssertionError("No answers")), \
                  patch.object(self.blobs, "read", wraps=self.blobs.read) as read:
-                self.assertIsNone(sources.authorize_case(connection, self.f.owner.brain_id, request, self.inventory, blobs=self.blobs))
+                self.assertIsNone(sources.authorize_case(connection, self.f.owner.brain_id, request, self.inventory,
+                    blobs=self.blobs, baseline_content="Protected baseline without full fixture bodies"))
             connection.set_authorizer(None)
             self.assertEqual(connection.total_changes, before)
             self.assertEqual(counts, {table: connection.execute("SELECT COUNT(*) FROM " + table).fetchone()[0] for table in tables})

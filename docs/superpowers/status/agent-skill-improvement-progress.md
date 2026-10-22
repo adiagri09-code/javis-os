@@ -448,3 +448,19 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   helpers are AST-identical; independent records5/Host24/snapshot25 checks pass. Existing
   SQLite SHM reader coordination is permitted, with no logical DB/WAL/blob changes. This
   is a component checkpoint, not API enablement or completed M1/business acceptance.
+
+- Snapshot capture, immutable owner context/contract/case-set associations, cold context
+  records, bounded request schemas and safe historical trial views now pass component
+  verification and independent review. Associations reject legacy unassociated adoption,
+  cross-context/contract rebinding and unauthorized snapshots across every split in one
+  writer transaction. Public contract checker pins are host-resolved and never executed
+  by the parser. Requests are bounded to2MiB/depth32 with exact unions; selected timeout
+  is1..300 seconds per technical attempt, without a money budget or model override.
+- Safe status distinguishes product and execution verdicts, excludes private checker
+  reason/evidence and native paths, and reads stored usage snapshots without ingesting
+  the ambient usage index. An independent pointer-integrity defect was reproduced then
+  fixed: both result and blob hashes are checked in the original read snapshot. A real
+  concurrent owner reevaluation preserves that initial status/result generation.
+  Unknown usage remains null, known zero remains zero, and subscription equivalent
+  stays separate from reported cash. Parent's fresh eight-script regression passed83s;
+  independent association19, requests21 and views7 checks also passed. APIs remain off.

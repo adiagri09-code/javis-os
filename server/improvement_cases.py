@@ -4,9 +4,11 @@ from __future__ import annotations
 import json
 import re
 import secrets
+import sqlite3
 import time
 from contextlib import closing
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import improvement_store as IM
@@ -204,23 +206,38 @@ class CaseStore:
         IM.ImprovementStore._event(connection, principal, key, operation, payload, result)
 
     def _put(self, principal, table, prefix, manifest, event_key, extra=None):
-        brain = IM._brain(principal)
+        IM._brain(principal)
         IM.ensure(self.store)
-        hashed = IM._hash(manifest)
         with self.store._Tx(self.store) as connection:
-            replay = IM.ImprovementStore._replay(connection, brain, event_key, prefix, manifest)
-            if replay is not None:
-                return replay
-            self._enabled(connection, brain)
-            row = connection.execute(f"SELECT id FROM {table} WHERE brain_id=? AND manifest_hash=?", (brain, hashed)).fetchone()
-            identifier = row["id"] if row else prefix + "_" + secrets.token_hex(12)
-            result = {"contract_id" if prefix == "ic" else "snapshot_id": identifier, "manifest_hash": hashed}
-            if extra:
-                result.update(extra(connection, identifier, row is None))
-            elif row is None:
-                connection.execute(f"INSERT INTO {table} VALUES(?,?,?,?,?)", (identifier, brain, hashed, IM._json(manifest), time.time()))
-            self._event(connection, principal, event_key, prefix, manifest, result)
-            return result
+            return self._put_in(connection, principal, table, prefix, manifest, event_key, extra)
+
+    def _own_transaction(self, connection):
+        """Private composition accepts only an active transaction on this exact DB."""
+        if type(connection) is not sqlite3.Connection or not connection.in_transaction:
+            raise ValueError("case_store_transaction_required")
+        databases = connection.execute("PRAGMA database_list").fetchall()
+        expected = getattr(self.store, "path", None)
+        if (expected is None or len(databases) != 1 or databases[0][1] != "main"
+                or Path(databases[0][2]).resolve() != Path(expected).resolve()):
+            raise ValueError("case_store_transaction_mismatch")
+
+    def _put_in(self, connection, principal, table, prefix, manifest, event_key, extra=None):
+        self._own_transaction(connection)
+        brain = IM._brain(principal)
+        hashed = IM._hash(manifest)
+        replay = IM.ImprovementStore._replay(connection, brain, event_key, prefix, manifest)
+        if replay is not None:
+            return replay
+        self._enabled(connection, brain)
+        row = connection.execute(f"SELECT id FROM {table} WHERE brain_id=? AND manifest_hash=?", (brain, hashed)).fetchone()
+        identifier = row["id"] if row else prefix + "_" + secrets.token_hex(12)
+        result = {"contract_id" if prefix == "ic" else "snapshot_id": identifier, "manifest_hash": hashed}
+        if extra:
+            result.update(extra(connection, identifier, row is None))
+        elif row is None:
+            connection.execute(f"INSERT INTO {table} VALUES(?,?,?,?,?)", (identifier, brain, hashed, IM._json(manifest), time.time()))
+        self._event(connection, principal, event_key, prefix, manifest, result)
+        return result
 
     def put_contract(self, principal, contract, *, event_key):
         IM._brain(principal)
@@ -237,6 +254,13 @@ class CaseStore:
             return {"contract_id": row["id"], "manifest_hash": row["manifest_hash"], "contract": json.loads(row["contract_json"])}
 
     def put_snapshot(self, principal, manifest, raw: bytes, fixture: bytes, *, event_key):
+        self._snapshot_inputs(principal, manifest, raw, fixture)
+        IM.ensure(self.store)
+        with self.store._Tx(self.store) as connection:
+            return self._put_snapshot_in(connection, principal, manifest, raw, fixture, event_key=event_key)
+
+    @staticmethod
+    def _snapshot_inputs(principal, manifest, raw, fixture):
         brain = IM._brain(principal)
         manifest = _frozen(manifest)
         _fields(manifest, _SNAPSHOT_KEYS)
@@ -261,6 +285,11 @@ class CaseStore:
         source_hash, fixture_hash = hashlib.sha256(raw).hexdigest(), hashlib.sha256(fixture).hexdigest()
         status = "sufficient" if manifest["sufficient_source"] and manifest["freshness"] == "current" else "insufficient_source"
         pinned = {**manifest, "source_hash": source_hash, "fixture_hash": fixture_hash, "status": status}
+        return brain, manifest, source_hash, fixture_hash, status, pinned
+
+    def _put_snapshot_in(self, connection, principal, manifest, raw: bytes, fixture: bytes, *, event_key):
+        self._own_transaction(connection)
+        brain, manifest, source_hash, fixture_hash, status, pinned = self._snapshot_inputs(principal, manifest, raw, fixture)
 
         def write(connection, identifier, fresh):
             if fresh:
@@ -270,7 +299,7 @@ class CaseStore:
                     (identifier, brain, IM._hash(pinned), IM._json(manifest), source_hash, fixture_hash, status, time.time()))
             return {"source_hash": source_hash, "fixture_hash": fixture_hash, "status": status}
 
-        return self._put(principal, "improvement_snapshots", "is", pinned, event_key, write)
+        return self._put_in(connection, principal, "improvement_snapshots", "is", pinned, event_key, write)
 
     def get_snapshot(self, principal, snapshot_id):
         brain = IM._brain(principal)
@@ -288,64 +317,72 @@ class CaseStore:
             raise ValueError("invalid_trial_cases")
         IM.ensure(self.store)
         with self.store._Tx(self.store) as connection:
-            self._enabled(connection, brain)
-            rows, private, identities, families, sources = [], {}, set(), set(), set()
-            for case in cases:
-                _fields(case, {"id", "family_key", "split", "task", "snapshot_ids", "answer", "evaluator_refs"})
-                if (not isinstance(case["id"], str) or not _ID.fullmatch(case["id"]) or case["id"] in identities
-                        or case["split"] not in ("tuning", "qualification", "regression")):
-                    raise ValueError("invalid_trial_case")
-                _text(case["family_key"], 500)
-                _text(case["task"], MAX_ASSET_BYTES)
-                if case["family_key"] in families:
-                    raise ValueError("duplicate_case_family")
-                refs = case["snapshot_ids"]
-                if (not isinstance(refs, list) or not refs or len(refs) > 100
-                        or any(not isinstance(ref, str) for ref in refs) or len(set(refs)) != len(refs)):
-                    raise ValueError("invalid_case_sources")
-                if not isinstance(case["evaluator_refs"], list) or len(case["evaluator_refs"]) > 100:
-                    raise ValueError("invalid_case_evaluators")
-                for ref in case["evaluator_refs"]:
-                    _text(ref, 128)
-                tokens = {"family:" + IM._hash(case["family_key"])}
-                for snapshot_id in refs:
-                    snapshot = self._row(connection, "improvement_snapshots", brain, snapshot_id)
-                    if snapshot["status"] != "sufficient":
-                        raise ValueError("insufficient_source")
-                    if snapshot["source_hash"] in sources:
-                        raise ValueError("duplicate_case_source")
-                    sources.add(snapshot["source_hash"])
-                    for content_hash in {snapshot["source_hash"], snapshot["fixture_hash"]}:
-                        self.blobs.read(brain, content_hash)
-                    tokens.add("source:" + snapshot["source_hash"])
-                answer = IM._json(case["answer"]).encode("utf-8")
-                if len(answer) > MAX_ASSET_BYTES:
-                    raise ValueError("case_answer_too_large")
-                private[case["id"]] = answer
-                rows.append({key: value for key, value in case.items() if key != "answer"} | {
-                    "answer_hash": IM._hash(case["answer"]), "fingerprints": sorted(tokens)})
-                identities.add(case["id"])
-                families.add(case["family_key"])
-            manifest = {"version": 1, "seed": seed, "cases": rows}
-            replay = IM.ImprovementStore._replay(connection, brain, event_key, "case_set", manifest)
-            if replay is not None:
-                return replay
-            hashed = IM._hash(manifest)
-            old = connection.execute("SELECT id FROM improvement_case_sets WHERE brain_id=? AND manifest_hash=?", (brain, hashed)).fetchone()
-            identifier = old["id"] if old else "ics_" + secrets.token_hex(12)
-            if not old:
-                connection.execute("INSERT INTO improvement_case_sets VALUES(?,?,?,?,?)", (identifier, brain, hashed, IM._json(manifest), time.time()))
-                for row in rows:
-                    self.blobs.write(brain, private[row["id"]])
-                    connection.execute("INSERT INTO improvement_cases VALUES(?,?,?,?,?)", (identifier, row["id"], brain, row["split"], IM._json(row)))
-                    for snapshot_id in row["snapshot_ids"]:
-                        connection.execute("INSERT INTO improvement_case_sources VALUES(?,?,?,?)", (identifier, row["id"], brain, snapshot_id))
-                    for token in row["fingerprints"]:
-                        connection.execute("INSERT INTO improvement_case_families VALUES(?,?,?,?,?)", (identifier, row["id"], brain, token, row["split"]))
-            result = {"case_set_id": identifier, "manifest_hash": hashed, "counts": {
-                split: sum(row["split"] == split for row in rows) for split in ("tuning", "qualification", "regression")}}
-            self._event(connection, principal, event_key, "case_set", manifest, result)
-            return result
+            return self._put_case_set_in(connection, principal, cases, seed, event_key=event_key)[0]
+
+    def _put_case_set_in(self, connection, principal, cases, seed, *, event_key):
+        self._own_transaction(connection)
+        brain = IM._brain(principal)
+        cases = _frozen(cases)
+        if not isinstance(cases, list) or not 1 <= len(cases) <= 1000 or type(seed) is not int:
+            raise ValueError("invalid_trial_cases")
+        self._enabled(connection, brain)
+        rows, private, identities, families, sources = [], {}, set(), set(), set()
+        for case in cases:
+            _fields(case, {"id", "family_key", "split", "task", "snapshot_ids", "answer", "evaluator_refs"})
+            if (not isinstance(case["id"], str) or not _ID.fullmatch(case["id"]) or case["id"] in identities
+                    or case["split"] not in ("tuning", "qualification", "regression")):
+                raise ValueError("invalid_trial_case")
+            _text(case["family_key"], 500)
+            _text(case["task"], MAX_ASSET_BYTES)
+            if case["family_key"] in families:
+                raise ValueError("duplicate_case_family")
+            refs = case["snapshot_ids"]
+            if (not isinstance(refs, list) or not refs or len(refs) > 100
+                    or any(not isinstance(ref, str) for ref in refs) or len(set(refs)) != len(refs)):
+                raise ValueError("invalid_case_sources")
+            if not isinstance(case["evaluator_refs"], list) or len(case["evaluator_refs"]) > 100:
+                raise ValueError("invalid_case_evaluators")
+            for ref in case["evaluator_refs"]:
+                _text(ref, 128)
+            tokens = {"family:" + IM._hash(case["family_key"])}
+            for snapshot_id in refs:
+                snapshot = self._row(connection, "improvement_snapshots", brain, snapshot_id)
+                if snapshot["status"] != "sufficient":
+                    raise ValueError("insufficient_source")
+                if snapshot["source_hash"] in sources:
+                    raise ValueError("duplicate_case_source")
+                sources.add(snapshot["source_hash"])
+                for content_hash in {snapshot["source_hash"], snapshot["fixture_hash"]}:
+                    self.blobs.read(brain, content_hash)
+                tokens.add("source:" + snapshot["source_hash"])
+            answer = IM._json(case["answer"]).encode("utf-8")
+            if len(answer) > MAX_ASSET_BYTES:
+                raise ValueError("case_answer_too_large")
+            private[case["id"]] = answer
+            rows.append({key: value for key, value in case.items() if key != "answer"} | {
+                "answer_hash": IM._hash(case["answer"]), "fingerprints": sorted(tokens)})
+            identities.add(case["id"])
+            families.add(case["family_key"])
+        manifest = {"version": 1, "seed": seed, "cases": rows}
+        replay = IM.ImprovementStore._replay(connection, brain, event_key, "case_set", manifest)
+        if replay is not None:
+            return replay, False
+        hashed = IM._hash(manifest)
+        old = connection.execute("SELECT id FROM improvement_case_sets WHERE brain_id=? AND manifest_hash=?", (brain, hashed)).fetchone()
+        identifier = old["id"] if old else "ics_" + secrets.token_hex(12)
+        if not old:
+            connection.execute("INSERT INTO improvement_case_sets VALUES(?,?,?,?,?)", (identifier, brain, hashed, IM._json(manifest), time.time()))
+            for row in rows:
+                self.blobs.write(brain, private[row["id"]])
+                connection.execute("INSERT INTO improvement_cases VALUES(?,?,?,?,?)", (identifier, row["id"], brain, row["split"], IM._json(row)))
+                for snapshot_id in row["snapshot_ids"]:
+                    connection.execute("INSERT INTO improvement_case_sources VALUES(?,?,?,?)", (identifier, row["id"], brain, snapshot_id))
+                for token in row["fingerprints"]:
+                    connection.execute("INSERT INTO improvement_case_families VALUES(?,?,?,?,?)", (identifier, row["id"], brain, token, row["split"]))
+        result = {"case_set_id": identifier, "manifest_hash": hashed, "counts": {
+            split: sum(row["split"] == split for row in rows) for split in ("tuning", "qualification", "regression")}}
+        self._event(connection, principal, event_key, "case_set", manifest, result)
+        return result, old is None
 
     def _case(self, connection, brain, case_set_id, case_id):
         row = connection.execute("SELECT case_json FROM improvement_cases WHERE case_set_id=? AND id=? AND brain_id=?",

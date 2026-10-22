@@ -7,22 +7,16 @@ import json
 import secrets
 import time
 from contextlib import closing
+from datetime import datetime, timezone
 
 import improvement_cases as IC
 import improvement_store as IM
 from evidence_store import redact
-from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable
+from improvement_blobs import MAX_ASSET_BYTES
 from improvement_claude import ClaudeTrialAdapter
-from resonance_store import Principal
+from improvement_trial_records import HostContextRecords, MAX_BINDING_BYTES, _brain
 
-MAX_BINDING_BYTES = 8 * MAX_ASSET_BYTES
 TARGET_FIELDS = ("id", "generation", "kind", "canonical_ref", "identity", "source_hash", "protected_hash", "ownership")
-
-
-def _brain(principal):
-    if not isinstance(principal, Principal):
-        raise PermissionError("owner_required")
-    return IM._brain(principal)
 
 
 def _capture(value):
@@ -67,7 +61,7 @@ def _capture(value):
     return capture
 
 
-class HostContextStore:
+class HostContextStore(HostContextRecords):
     def __init__(self, assets, *, context_capture, selected_engine, target_observer, fixture_observer):
         for callback in (context_capture, selected_engine, target_observer, fixture_observer):
             if (not callable(callback) or inspect.iscoroutinefunction(callback)
@@ -80,55 +74,6 @@ class HostContextStore:
         if revalidate is not None and (not callable(revalidate) or inspect.iscoroutinefunction(revalidate)
                 or inspect.iscoroutinefunction(getattr(revalidate, "__call__", None))):
             raise ValueError("host_trial_dependencies_required")
-
-    @staticmethod
-    def _row(connection, brain, experiment):
-        row = connection.execute("SELECT * FROM improvement_trial_contexts WHERE brain_id=? AND experiment_id=?",
-                                 (brain, experiment)).fetchone()
-        if row is None:
-            raise PermissionError("trial_context_unavailable")
-        return row
-
-    @staticmethod
-    def _grant(connection, row):
-        grant = connection.execute("SELECT * FROM improvement_trial_context_grants WHERE context_id=? AND brain_id=?",
-                                   (row["id"], row["brain_id"])).fetchone()
-        if grant is None:
-            raise PermissionError("trial_context_unavailable")
-        return grant
-
-    def _decode(self, row):
-        try:
-            hashes = json.loads(row["blob_hashes_json"])
-            if not isinstance(hashes, list) or not 1 <= len(hashes) <= MAX_BINDING_BYTES // MAX_ASSET_BYTES:
-                raise AssetUnavailable("invalid_trial_context_chunks")
-            raw = b"".join(self.blobs.read(row["brain_id"], digest) for digest in hashes)
-            if len(raw) > MAX_BINDING_BYTES or hashlib.sha256(raw).hexdigest() != row["binding_hash"]:
-                raise AssetUnavailable("trial_context_hash_mismatch")
-            binding = json.loads(raw)
-            if (IM._hash(binding["capture"]["baseline_context"]) != row["context_hash"]
-                    or IM._hash(binding["engine_config"]) != row["engine_config_hash"]
-                    or IM._hash(binding["grant"]) != row["grant_hash"]
-                    or IM._hash(binding["scope"]) != row["scope_hash"]):
-                raise AssetUnavailable("trial_context_reference_mismatch")
-            return binding
-        except (ValueError, TypeError, KeyError, UnicodeError) as error:
-            raise AssetUnavailable("trial_context_unavailable") from error
-
-    def _public(self, connection, row):
-        grant, binding = self._grant(connection, row), self._decode(row)
-        return {"context_id": row["id"], "experiment_id": row["experiment_id"],
-                "baseline_context_hash": row["context_hash"], "scope_hash": row["scope_hash"], "grant_hash": row["grant_hash"],
-                "engine_config_hash": row["engine_config_hash"], "engine_config": binding["engine_config"],
-                "target_generations": json.loads(row["target_generations_json"]), "policy_version": row["policy_version"],
-                "grant_status": grant["status"], "generation": grant["generation"]}
-
-    def get(self, principal, experiment_id):
-        brain = _brain(principal)
-        if IM._schema_version(self.store) < 3:
-            raise PermissionError("trial_context_unavailable")
-        with closing(self.store._conn()) as connection:
-            return self._public(connection, self._row(connection, brain, experiment_id))
 
     def _targets(self, connection, brain, identifiers):
         targets = []
@@ -277,7 +222,8 @@ class HostContextStore:
                 or request["engine_config"] != binding["engine_config"]):
             raise IM.ConflictError("trial_host_binding_drift")
         from improvement_trial_sources import authorize_case
-        authorize_case(connection, brain, request, binding["fixture_inventory"], blobs=self.blobs)
+        authorize_case(connection, brain, request, binding["fixture_inventory"], blobs=self.blobs,
+                       baseline_content=binding["capture"]["baseline_context"]["content"])
         return row, binding
 
     def context_loader(self, principal, request):
@@ -285,6 +231,89 @@ class HostContextStore:
         with closing(self.store._conn()) as connection:
             _, binding = self._bound(connection, principal, request)
             return binding["capture"]["baseline_context"]
+
+    def _snapshot_binding(self, connection, principal, experiment_id, source_ref):
+        row = self._row(connection, _brain(principal), experiment_id)
+        if self._grant(connection, row)["status"] != "active":
+            raise PermissionError("trial_source_grant_revoked")
+        policy = self.assets._policy(connection, row["brain_id"])
+        if policy["mode"] == "off":
+            raise PermissionError("improvement_disabled")
+        binding = self._decode(row)
+        if policy["version"] != row["policy_version"]:
+            raise IM.ConflictError("trial_host_binding_drift")
+        if (source_ref not in binding["scope"]["source_refs"]
+                or source_ref not in {entry["source_ref"] for entry in binding["fixture_inventory"]}):
+            raise PermissionError("trial_fixture_scope_unavailable")
+        targets = self._targets(connection, row["brain_id"], sorted(json.loads(row["target_generations_json"])))
+        if targets != binding["targets"]:
+            raise IM.ConflictError("trial_host_binding_drift")
+        return row, binding
+
+    def _snapshot_observe(self, principal, binding):
+        if self._observe(principal, binding["capture"]["surface"], binding["targets"], binding["scope"]["source_refs"],
+                         binding["fixture_inventory"], binding["capture"]) != {
+                key: binding[key] for key in ("capture", "engine_config", "targets", "fixture_inventory")}:
+            raise IM.ConflictError("trial_host_authority_changed")
+
+    def capture_snapshot(self, principal, experiment_id, source_ref, *, event_key):
+        """Capture one host-bound current fixture; no caller-supplied bytes or grants.
+
+        Same-event replay returns historical metadata without source I/O, including
+        after revocation. It never refreshes source authority or reactivates a grant.
+        Every new event requires current authority and commits its association in
+        the same transaction as the immutable CaseStore snapshot and inner event.
+        """
+        from improvement_trial_file_sources import BrainFileFixtures
+        brain = _brain(principal)
+        if (not isinstance(experiment_id, str) or not IC._ID.fullmatch(experiment_id)
+                or not isinstance(source_ref, str) or not source_ref.strip() or len(source_ref) > 256):
+            raise ValueError("invalid_host_snapshot_request")
+        if type(self.fixture_observer) is not BrainFileFixtures:
+            raise ValueError("concrete_brain_file_fixtures_required")
+        if IM._schema_version(self.store) < 3:
+            raise PermissionError("trial_context_unavailable")
+        payload = {"experiment_id": experiment_id, "source_ref": source_ref}
+        with closing(self.store._conn()) as connection:
+            self._row(connection, brain, experiment_id)
+            replay = self.assets._replay(connection, brain, event_key, "trial_snapshot_capture", payload)
+            if replay is not None:
+                return replay
+            row, binding = self._snapshot_binding(connection, principal, experiment_id, source_ref)
+        self._snapshot_observe(principal, binding)
+        entry = next(entry for entry in binding["fixture_inventory"] if entry["source_ref"] == source_ref)
+        captured = self.fixture_observer.capture(principal, source_ref, expected_entry=IC._frozen(entry))
+        IC._fields(captured, {"manifest", "raw", "fixture"})
+        expected_manifest = {key: entry[key] for key in ("source_ref", "source_version", "timezone", "data_period",
+                                                        "cutoff", "schema", "redaction", "sufficient_source")}
+        if (captured["manifest"] != {"version": 1, "freshness": "current", **expected_manifest}
+                or not isinstance(captured["raw"], bytes) or not isinstance(captured["fixture"], bytes)
+                or hashlib.sha256(captured["raw"]).hexdigest() != entry["source_hash"]
+                or hashlib.sha256(captured["fixture"]).hexdigest() != entry["fixture_hash"]):
+            raise IM.ConflictError("trial_fixture_capture_mismatch")
+        from improvement_trial_sources import _exclude_baseline_body
+        baseline = binding["capture"]["baseline_context"]["content"].encode("utf-8")
+        for raw in (captured["raw"], captured["fixture"]):
+            _exclude_baseline_body(raw, baseline)
+        manifest = {**captured["manifest"], "grant_hash": row["grant_hash"],
+                    "captured_at": datetime.now(timezone.utc).isoformat()}
+        inner_key = "host-snapshot-" + IM._hash([experiment_id, source_ref, event_key])
+        with self.store._Tx(self.store) as connection:
+            replay = self.assets._replay(connection, brain, event_key, "trial_snapshot_capture", payload)
+            if replay is not None:
+                return replay
+            current, current_binding = self._snapshot_binding(connection, principal, experiment_id, source_ref)
+            if current["id"] != row["id"] or current_binding != binding:
+                raise IM.ConflictError("trial_host_binding_drift")
+            result = IC.CaseStore(self.assets)._put_snapshot_in(connection, principal, manifest,
+                captured["raw"], captured["fixture"], event_key=inner_key)
+            # Check after blob publication too: a source edit during encryption
+            # cannot publish an authorized association for the now-stale fixture.
+            self._snapshot_observe(principal, binding)
+            self._snapshot_binding(connection, principal, experiment_id, source_ref)
+            result = {**result, "context_id": row["id"], "experiment_id": experiment_id, "source_ref": source_ref}
+            self.assets._event(connection, principal, event_key, "trial_snapshot_capture", payload, result)
+            return result
 
     def live_guard(self, principal, request):
         request = IC._frozen(request)
@@ -300,22 +329,3 @@ class HostContextStore:
             self._bound(connection, principal, request)
         return {**{key: row[key] for key in ("scope_hash", "grant_hash", "engine_config_hash")},
                 "baseline_context_hash": row["context_hash"], "target_generations": request["target_generations"]}
-
-    def revoke(self, principal, experiment_id, *, expected_generation, event_key):
-        brain = _brain(principal)
-        if IM._schema_version(self.store) < 3:
-            raise PermissionError("trial_context_unavailable")
-        payload = {"experiment_id": experiment_id, "expected_generation": expected_generation}
-        with self.store._Tx(self.store) as connection:
-            replay = self.assets._replay(connection, brain, event_key, "trial_context_revoke", payload)
-            if replay is not None:
-                return replay
-            row = self._row(connection, brain, experiment_id)
-            grant = self._grant(connection, row)
-            if type(expected_generation) is not int or grant["generation"] != expected_generation or grant["status"] != "active":
-                raise IM.ConflictError("trial_context_grant_stale")
-            connection.execute("UPDATE improvement_trial_context_grants SET status='revoked',generation=generation+1,revoked_at=? WHERE context_id=?",
-                               (time.time(), row["id"]))
-            result = self._public(connection, row)
-            self.assets._event(connection, principal, event_key, "trial_context_revoke", payload, result)
-            return result

@@ -78,14 +78,25 @@ def _manifest(row):
     return manifest
 
 
-def authorize_case(connection, brain, request, inventory, *, blobs):
+def _exclude_baseline_body(raw, baseline):
+    """Basic exact full-body exclusion only; no partial or semantic taint claim."""
+    if raw and raw in baseline:
+        raise PermissionError("trial_source_context_overlap")
+
+
+def authorize_case(connection, brain, request, inventory, *, blobs, baseline_content=None):
     """Prove exact granted snapshot membership and bytes; return no case or content.
 
     No qualification reservation, exposure, solver projection or answer read occurs.
     ``blobs`` is a required host dependency that verifies encrypted storage itself.
+    ``baseline_content`` is optional trusted host content; when supplied, reject
+    any complete nonempty source/fixture body embedded verbatim in that baseline.
     """
     if not callable(getattr(blobs, "read", None)):
         raise ValueError("trial_source_blobs_required")
+    if baseline_content is not None and not isinstance(baseline_content, str):
+        raise ValueError("invalid_trial_source_baseline")
+    baseline = baseline_content.encode("utf-8") if baseline_content is not None else None
     inventory = validate_inventory(inventory)
     request = IC._frozen(request)
     if not isinstance(request, dict) or not isinstance(request.get("pins"), dict):
@@ -121,3 +132,5 @@ def authorize_case(connection, brain, request, inventory, *, blobs):
             raw = blobs.read(brain, digest)
             if not isinstance(raw, bytes) or len(raw) > MAX_ASSET_BYTES or hashlib.sha256(raw).hexdigest() != digest:
                 raise AssetUnavailable("trial_source_bytes_changed")
+            if baseline is not None:
+                _exclude_baseline_body(raw, baseline)
