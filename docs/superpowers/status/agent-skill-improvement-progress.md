@@ -464,3 +464,37 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   Unknown usage remains null, known zero remains zero, and subscription equivalent
   stays separate from reported cash. Parent's fresh eight-script regression passed83s;
   independent association19, requests21 and views7 checks also passed. APIs remain off.
+
+- Explicit owner admission and the13-route API are now wired into main on the draft
+  branch. Browser owner sessions remain mandatory even for full API tokens; existing
+  global authentication/CSRF still run first. The route snapshot adds exactly13 entries.
+  Cold metadata never constructs a trial service/source collector or ingests usage.
+  Production and developer capabilities remain false pending M1 final verification.
+- Admission freezes actual associated IDs and all nine pins into an immutable experiment
+  plan. Real native availability runs before reservations; one existing DB transaction
+  commits qualification claims, trial, call and owner intent. Historical replay keeps
+  its original deadline; changed requests/slots conflict. M1 changed candidate bodies
+  are explicitly unavailable until M2. Admission26 and helper6 checks pass independently;
+  an incompatible-plan race commits exactly one linked trial/call with no exposure.
+- The process-owned service now retains full preflight/admission through HTTP and repeated
+  internal cancellation. Review reproduced cleanup-read interruption and a shutdown
+  handoff after the close flag; both are fixed and independently verified. Queued task
+  reservations refund without dispatch, foreign leases survive shutdown, and genuine
+  cleanup failures remain visible after operation removal. Parent owner-service11 checks
+  pass. Main shutdown also moves its factory-lock wait off the event loop and retains
+  close through repeated cancellation; main7 checks pass.
+- Fresh parent integration regression passed12/12 scripts in137s. The newly public bundle
+  endpoint exposed an inherited missing off-policy guard; component/API tests reproduced
+  it, then the actual bundle writer was fixed after historical replay and before new
+  work. Related store/API/helper3/3 passed23s; independent actual ASGI verification agrees.
+  Route/auth security, prompt budget, Windows console and3 i18n scripts pass. One unrelated
+  existing webhook test fails POSIX mode600 on Windows (observed666 after chmod600);
+  its test and secret-store Git blobs are identical to origin/main. No assertion was
+  relaxed. Linux CI remains required, including the corrected POSIX scratch-parent path.
+- The actual-main end-to-end protocol test passed in119.6s with synthetic Claude
+  verification/execution only and a scratch persisted sonnet/high selection. All13 handlers,
+  real ledger/NativeUsageRecorder/results, original-deadline replay, owner reevaluation,
+  cross-brain denial, recovery/revocation and orderly shutdown were exercised. One synthetic
+  execution observed partial3/2 tokens and null requests; product/execution/aggregate verdicts
+  remain separate. Fresh whole-branch review/CI/rebase/publication are still pending.
+  No additional real model query, business pilot, activation or production restart occurred.

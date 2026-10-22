@@ -5708,5 +5708,135 @@
    "POST"
   ],
   "trong": null
+ },
+ {
+  "order": 573,
+  "type": "APIRoute",
+  "path": "/improvement-trials/recover",
+  "name": "improvement_trial_recover",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 574,
+  "type": "APIRoute",
+  "path": "/improvement-contexts/{experiment_id}",
+  "name": "improvement_context_create",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 575,
+  "type": "APIRoute",
+  "path": "/improvement-contexts/{experiment_id}",
+  "name": "improvement_context_get",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 576,
+  "type": "APIRoute",
+  "path": "/improvement-contexts/{experiment_id}/revoke",
+  "name": "improvement_context_revoke",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 577,
+  "type": "APIRoute",
+  "path": "/improvement-contexts/{experiment_id}/snapshots",
+  "name": "improvement_snapshot_create",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 578,
+  "type": "APIRoute",
+  "path": "/improvement-contracts",
+  "name": "improvement_contract_create",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 579,
+  "type": "APIRoute",
+  "path": "/improvement-contexts/{experiment_id}/case-sets",
+  "name": "improvement_case_set_create",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 580,
+  "type": "APIRoute",
+  "path": "/improvement-bundles",
+  "name": "improvement_bundle_create",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 581,
+  "type": "APIRoute",
+  "path": "/improvement-trials",
+  "name": "improvement_trial_start",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 582,
+  "type": "APIRoute",
+  "path": "/improvement-trials/{trial_id}",
+  "name": "improvement_trial_get",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 583,
+  "type": "APIRoute",
+  "path": "/improvement-trials/{trial_id}/cancel",
+  "name": "improvement_trial_cancel",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 584,
+  "type": "APIRoute",
+  "path": "/improvement-trials/{trial_id}/attempts/{attempt}/owner-decisions",
+  "name": "improvement_owner_decision",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 585,
+  "type": "APIRoute",
+  "path": "/improvement-trials/{trial_id}/attempts/{attempt}/reevaluate",
+  "name": "improvement_trial_reevaluate",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
  }
 ]

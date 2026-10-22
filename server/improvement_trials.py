@@ -127,35 +127,41 @@ class TrialStore:
         brain = IM._brain(principal)
         request = _request(request)
         IM.ensure(self.store)
+        with self.store._Tx(self.store) as connection:
+            return self._reserve_in(connection, principal, request, event_key=event_key)
+
+    def _reserve_in(self, connection, principal, request, *, event_key):
+        self.cases._own_transaction(connection)
+        brain = IM._brain(principal)
+        request = _request(request)
         logical = IM._hash([request["pins"]["experiment_id"], request["variant"], request["case_set_id"],
                             request["case_id"], request["repeat"]])
-        with self.store._Tx(self.store) as connection:
-            replay = self.assets._replay(connection, brain, event_key, "trial_reserve", request)
-            if replay is not None:
-                return replay
-            self._current(connection, brain, request)
-            old = connection.execute("SELECT * FROM improvement_trials WHERE brain_id=? AND logical_key=?", (brain, logical)).fetchone()
-            if old:
-                if old["request_hash"] != IM._hash(request):
-                    raise IM.ConflictError("trial_identity_conflict")
-                result = self._public(connection, old)
-            else:
-                now = time.time()
-                if request["deadline_at"] <= now:
-                    raise ValueError("trial_deadline_expired")
-                identifier = "it_" + secrets.token_hex(12)
-                connection.execute("INSERT INTO improvement_trials VALUES(?,?,?,?,?,?,?,?,?,?)", (
-                    identifier, brain, logical, IM._hash(request), IM._json(request), "reserved", 1, 1, now, now))
-                call = self.ledger.reserve(purpose="improve_probe", reason_ref=f"improvement_trial:{identifier}:attempt:1",
-                    brain_id=brain, context_ref="improvement:" + request["pins"]["experiment_id"], obligation=True,
-                    mirror_ref="improvement_trial:" + identifier, attempt=1, now=now, c=connection)
-                if call is None:
-                    raise IM.ConflictError("trial_call_capacity_unavailable")
-                connection.execute("INSERT INTO improvement_trial_attempts(trial_id,brain_id,attempt,status,call_id,created_at,updated_at) "
-                                   "VALUES(?,?,1,'reserved',?,?,?)", (identifier, brain, call, now, now))
-                result = self._public(connection, self._row(connection, brain, identifier))
-            self.assets._event(connection, principal, event_key, "trial_reserve", request, result)
-            return result
+        replay = self.assets._replay(connection, brain, event_key, "trial_reserve", request)
+        if replay is not None:
+            return replay
+        self._current(connection, brain, request)
+        old = connection.execute("SELECT * FROM improvement_trials WHERE brain_id=? AND logical_key=?", (brain, logical)).fetchone()
+        if old:
+            if old["request_hash"] != IM._hash(request):
+                raise IM.ConflictError("trial_identity_conflict")
+            result = self._public(connection, old)
+        else:
+            now = time.time()
+            if request["deadline_at"] <= now:
+                raise ValueError("trial_deadline_expired")
+            identifier = "it_" + secrets.token_hex(12)
+            connection.execute("INSERT INTO improvement_trials VALUES(?,?,?,?,?,?,?,?,?,?)", (
+                identifier, brain, logical, IM._hash(request), IM._json(request), "reserved", 1, 1, now, now))
+            call = self.ledger.reserve(purpose="improve_probe", reason_ref=f"improvement_trial:{identifier}:attempt:1",
+                brain_id=brain, context_ref="improvement:" + request["pins"]["experiment_id"], obligation=True,
+                mirror_ref="improvement_trial:" + identifier, attempt=1, now=now, c=connection)
+            if call is None:
+                raise IM.ConflictError("trial_call_capacity_unavailable")
+            connection.execute("INSERT INTO improvement_trial_attempts(trial_id,brain_id,attempt,status,call_id,created_at,updated_at) "
+                               "VALUES(?,?,1,'reserved',?,?,?)", (identifier, brain, call, now, now))
+            result = self._public(connection, self._row(connection, brain, identifier))
+        self.assets._event(connection, principal, event_key, "trial_reserve", request, result)
+        return result
 
     def claim(self, principal, identifier, *, expected_generation, now=None, lease_seconds=60):
         brain = IM._brain(principal)
@@ -425,18 +431,23 @@ class TrialStore:
         brain = IM._brain(principal)
         if IM._schema_version(self.store) < 3:
             return {"not_run": 0, "unknown": 0}
-        result = {"not_run": 0, "unknown": 0}
         with self.store._Tx(self.store) as connection:
-            now = time.time() if now is None else now
-            rows = list(connection.execute("SELECT t.* FROM improvement_trials t JOIN improvement_trial_attempts a "
-                "ON t.id=a.trial_id AND t.attempt=a.attempt WHERE t.brain_id=? "
-                "AND t.status IN ('reserved','prepared','running','evaluating') AND "
-                "((a.lease_until IS NOT NULL AND a.lease_until<=?) OR "
-                "(a.lease_until IS NULL AND json_extract(t.request_json,'$.deadline_at')<=?))", (brain, now, now)))
-            for row in rows:
-                call = connection.execute("SELECT c.engine_at FROM agent_calls c JOIN improvement_trial_attempts a "
-                    "ON c.id=a.call_id WHERE a.trial_id=? AND a.attempt=?", (row["id"], row["attempt"])).fetchone()
-                status = "not_run" if call["engine_at"] is None else "unknown"
-                self._stop(connection, row, status, now)
-                result[status] += 1
+            return self._recover_in(connection, principal, now=now)
+
+    def _recover_in(self, connection, principal, *, now=None):
+        self.cases._own_transaction(connection)
+        brain = IM._brain(principal)
+        result = {"not_run": 0, "unknown": 0}
+        now = time.time() if now is None else now
+        rows = list(connection.execute("SELECT t.* FROM improvement_trials t JOIN improvement_trial_attempts a "
+            "ON t.id=a.trial_id AND t.attempt=a.attempt WHERE t.brain_id=? "
+            "AND t.status IN ('reserved','prepared','running','evaluating') AND "
+            "((a.lease_until IS NOT NULL AND a.lease_until<=?) OR "
+            "(a.lease_until IS NULL AND json_extract(t.request_json,'$.deadline_at')<=?))", (brain, now, now)))
+        for row in rows:
+            call = connection.execute("SELECT c.engine_at FROM agent_calls c JOIN improvement_trial_attempts a "
+                "ON c.id=a.call_id WHERE a.trial_id=? AND a.attempt=?", (row["id"], row["attempt"])).fetchone()
+            status = "not_run" if call["engine_at"] is None else "unknown"
+            self._stop(connection, row, status, now)
+            result[status] += 1
         return result

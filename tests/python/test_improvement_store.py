@@ -268,6 +268,17 @@ class ImprovementStoreTests(unittest.TestCase):
         history = {row["id"]: row for row in self.store.revisions(self.owner, first["target_id"])}
         self.assertEqual(history[current["revision_id"]]["parent_id"], first["revision_id"])
 
+    def test_disabled_policy_rejects_new_bundle_events_but_preserves_historical_replay(self):
+        revision = self.capture()
+        identifiers = [revision["revision_id"]]
+        original = self.store.create_bundle(self.owner, identifiers, event_key="bundle-before-disabled")
+        self.store.set_policy(self.owner, "off", expected_version=0, event_key="disable-before-bundle")
+        before = self.store.events(self.owner)
+        self.assertEqual(self.store.create_bundle(self.owner, identifiers, event_key="bundle-before-disabled"), original)
+        with self.assertRaisesRegex(PermissionError, "improvement_disabled"):
+            self.store.create_bundle(self.owner, identifiers, event_key="new-bundle-while-disabled")
+        self.assertEqual(self.store.events(self.owner), before)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,7 @@
 # Owner trial API contract, M1
 
-Status: implementation contract, not enabled routes. M0 metadata remains available;
-trial and activation capabilities remain false until the composition below passes.
+Status: implemented on the M1 development branch. The owner routes are registered;
+trial and activation capabilities remain false pending final integration verification.
 The M0-M8 Goal authorizes implementation; this document freezes the service boundary
 for Task5 and does not authorize production activation.
 
@@ -91,10 +91,10 @@ baseline context. Host evaluator_refs come from the selected approved contract. 
 all referenced snapshots against the selected context grant, including qualification and
 regression cases, without exposing or consuming holdouts during authorization.
 
-CaseStore does not currently persist a contract/experiment association. Add an immutable
-scoped service association in the existing database; creation is idempotent and must not
-leave an unassociated case set that can later start under another contract. Historical
-unassociated component records remain readable but unavailable for new owner API dispatch.
+CaseStore retains its component interface; TrialCaseAssociations persists an immutable
+scoped service association in the existing database. Case creation and the association
+share one writer transaction. Historical unassociated component records remain readable
+but cannot be adopted or dispatched through the owner API, even with identical input.
 Trial start resolves only approved associated context/contract/case set and actual stored
 bundle/revision membership, constructs the existing nine pins and internal request, and
 uses the host clock for deadline. Qualification reservation uses the real CaseStore, never
@@ -116,6 +116,33 @@ real host clock, without querying or silently retrying.
 Await TrialTasks.close at the beginning of main shutdown, before source/store/MCP/executor
 teardown. Shutdown closes only acquired writer tokens; foreign opaque leases remain intact.
 Unsettled storage cleanup remains a visible failure, including after a task finishes.
+
+The process service retains admission from the first preflight await through handoff.
+Concurrent identical requests join one operation; a changed payload under the same event
+key conflicts before a second native probe. Qualification claims, trial, call ledger,
+the immutable experiment plan and successful owner admission commit in one transaction.
+The plan freezes all nine pins and a versioned explicit-owner timeout policy. The owner
+chooses1..300 seconds for a single attempt; the host allocates the deadline once after
+preflight, and replay preserves that original deadline. This is a technical wall-time
+bound, not a money cap or a change to the selected model/reasoning.
+
+Only an exact frozen current baseline and a candidate with identical captured bytes are
+admitted by this M1 surface. Changed candidates require M2's separately validated authoring
+path. Equal arms support technical plumbing checks and do not establish improvement.
+Historical same-event replay uses stored records without probing sources/authentication
+or reopening terminal work. A new event for an already admitted logical slot conflicts.
+
+Status returns separate product, execution and aggregate verdicts. Its usage has an
+explicit stored_result or unavailable origin; GET neither ingests the ambient usage index
+nor invents zero tokens/requests/cash. It omits raw output, private checker explanations,
+answers, baseline content and native paths. Artifact hashes identify the recorded product;
+business owner confirmation still requires independent review of that exact product.
+The M2 operator report must supply the authorized product-review experience; a synthetic
+API confirmation is only a protocol test. No business acceptance is implied here.
+
+Creating a new bundle event obeys mode=off inside the existing writer transaction.
+Historical same-event bundle replay remains available. Revocation, cancellation, recovery
+and historical decision evidence remain separate from permission to launch new work.
 
 ## Required verification before capability enablement
 

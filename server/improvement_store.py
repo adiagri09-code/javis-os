@@ -352,6 +352,8 @@ class ImprovementStore:
             replay = self._replay(connection, brain, event_key, "bundle", assets)
             if replay is not None:
                 return replay
+            if self._policy(connection, brain)["mode"] == "off":
+                raise PermissionError("improvement_disabled")
             manifest = []
             for revision_id in assets:
                 row = connection.execute("SELECT id,target_id,manifest_hash,content_hash FROM improvement_revisions "

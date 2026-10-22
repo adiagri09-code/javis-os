@@ -24390,6 +24390,11 @@ async def _warm_mcp_hub():
 async def _shutdown_mcp_pool():
     """Đóng các session MCP sống lâu (stdio subprocess, httpx client) khi server tắt."""
     try:
+        await _shutdown_improvement_trials()
+    except Exception:
+        # The service has drained workers before reporting unsettled storage.
+        print("[improvement shutdown] trial_shutdown_incomplete", file=__import__('sys').stderr)
+    try:
         await tasks_feature.shutdown()
     except Exception as e:
         print(f"[kanban shutdown] {e}", file=__import__('sys').stderr)
@@ -26617,4 +26622,71 @@ improvement_api.register(app, improvement_api.ImprovementApiDeps(
     resolve_brain=lambda value: improvement_api.strict_brain(value,
         default_root=Path(BRAINS_DIR) / "Brain Default", brains_root=Path(BRAINS_DIR)),
     agent_key=lambda root, slug: _agent_jobs_key(root, slug, register=True),
+))
+
+
+# Explicit owner trials are lazy; importing routes does not start or recover work.
+import improvement_trial_api  # noqa: E402
+import improvement_trial_service  # noqa: E402
+
+_IMPROVEMENT_TRIAL_SERVICE = None
+_IMPROVEMENT_TRIAL_SHUTTING_DOWN = False
+
+
+def _improvement_trial_host(source_selections=None):
+    with _LAZY_LOCK:
+        if _IMPROVEMENT_TRIAL_SHUTTING_DOWN:
+            raise RuntimeError("trial_service_closed")
+        return improvement_trial_service.dashboard_host(__import__(__name__), _improvement_write_store(),
+                                                       source_selections=source_selections)
+
+
+def _improvement_trial_service():
+    global _IMPROVEMENT_TRIAL_SERVICE
+    with _LAZY_LOCK:
+        if _IMPROVEMENT_TRIAL_SHUTTING_DOWN:
+            raise RuntimeError("trial_service_closed")
+        if _IMPROVEMENT_TRIAL_SERVICE is None:
+            _IMPROVEMENT_TRIAL_SERVICE = improvement_trial_service.OwnerTrialService(_improvement_trial_host())
+        return _IMPROVEMENT_TRIAL_SERVICE
+
+
+def _improvement_trial_active_service():
+    with _LAZY_LOCK:
+        return _IMPROVEMENT_TRIAL_SERVICE
+
+
+async def _shutdown_improvement_trials():
+    from improvement_trial_runner import _drain
+
+    def mark_closing():
+        global _IMPROVEMENT_TRIAL_SHUTTING_DOWN
+        # A worker may still hold this lock while constructing dependencies.
+        # Never wait for that filesystem/store lifetime on the server loop.
+        with _LAZY_LOCK:
+            _IMPROVEMENT_TRIAL_SHUTTING_DOWN = True
+            return _IMPROVEMENT_TRIAL_SERVICE
+
+    async def finish():
+        service = await asyncio.to_thread(mark_closing)
+        if service is not None:
+            await service.close()
+
+    closing = asyncio.create_task(finish())
+    values, cancelled = await _drain(asyncio.gather(closing, return_exceptions=True))
+    if cancelled is not None:
+        raise cancelled
+    if isinstance(values[0], BaseException):
+        raise values[0]
+
+
+improvement_trial_api.register(app, improvement_trial_api.TrialApiDeps(
+    read_store=_improvement_read_store,
+    write_store=_improvement_write_store,
+    resolve_brain=lambda value: improvement_api.strict_brain(value,
+        default_root=Path(BRAINS_DIR) / "Brain Default", brains_root=Path(BRAINS_DIR)),
+    owner_session=_doi_phien_that,
+    capture_host=_improvement_trial_host,
+    service=_improvement_trial_service,
+    active_service=_improvement_trial_active_service,
 ))

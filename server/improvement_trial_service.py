@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 import sys
 import types
+import asyncio
 from pathlib import Path
 
 from evidence_store import redact
@@ -156,3 +157,163 @@ def dashboard_host(main, assets, *, source_selections=None):
     current_sources()
     return HostContextStore(assets, context_capture=_RetainedDashboard(collector, current_sources), selected_engine=selected_engine,
                             target_observer=targets, fixture_observer=_fixtures(source_selections))
+
+
+class OwnerTrialService:
+    """Own explicit starts from preflight through durable admission and dispatch.
+
+    Production constructs this with dashboard_host. No request can supply a host,
+    adapter or runner. The service must close before its native source lifetimes.
+    """
+    def __init__(self, host, *, checker_registry=None):
+        from improvement_trial_admission import TrialAdmission
+        from improvement_trial_runner import TrialRunner
+        from improvement_trial_tasks import TrialTasks
+        if type(host) is not HostContextStore:
+            raise TypeError("concrete_owner_trial_host_required")
+        self.host, self.assets = host, host.assets
+        self.admission = TrialAdmission(host, checker_registry=checker_registry)
+        self.trials = self.admission.trials
+        self.tasks = TrialTasks(self.trials, TrialRunner(self.trials,
+            context_loader=host.context_loader, live_guard=host.live_guard, checker_registry=checker_registry))
+        self._loop = None
+        self._operations = {}
+        self._closed = False
+        self._closing = None
+        self._cleanup_failed = False
+
+    def _bind(self):
+        loop = asyncio.get_running_loop()
+        if self._loop is None:
+            self._loop = loop
+        elif self._loop is not loop:
+            raise RuntimeError("trial_service_loop_changed")
+
+    @staticmethod
+    def _consume(task):
+        if not task.cancelled():
+            task.exception()
+
+    async def _join(self, task):
+        from improvement_trial_runner import _drain
+        values, cancelled = await _drain(asyncio.gather(task, return_exceptions=True))
+        if cancelled is not None:
+            raise cancelled
+        if isinstance(values[0], BaseException):
+            raise values[0]
+        return values[0]
+
+    async def start(self, principal, value):
+        from improvement_trial_records import _brain
+        from improvement_trial_requests import validate_body
+        import improvement_store as IM
+        self._bind()
+        if self._closed:
+            raise RuntimeError("trial_service_closed")
+        data = validate_body(value, "start_trial")
+        key, digest = (_brain(principal), data["event_key"]), IM._hash(data)
+        existing = self._operations.get(key)
+        if existing is not None:
+            if existing[0] != digest:
+                raise IM.ConflictError("trial_start_identity_conflict")
+            return await self._join(existing[1])
+        task = asyncio.create_task(self._start(principal, data))
+        self._operations[key] = digest, task
+
+        def finished(completed):
+            if self._operations.get(key, (None, None))[1] is completed:
+                self._operations.pop(key)
+            self._consume(completed)
+        task.add_done_callback(finished)
+        return await self._join(task)
+
+    async def _abandon_unclaimed(self, principal, admitted):
+        from improvement_trial_runner import _drain, _settled_call
+        import improvement_store as IM
+
+        async def clean():
+            current = await asyncio.to_thread(self.trials.get, principal, admitted.trial_id)
+            if current["status"] == "reserved":
+                try:
+                    await _settled_call(self.trials.reject_unclaimed, principal, admitted.trial_id,
+                        expected_generation=current["generation"], reason="cancelled")
+                except IM.ConflictError:
+                    pass  # An acquired/foreign opaque lease cannot be closed here.
+
+        cleanup = asyncio.create_task(clean())
+        values, cancelled = await _drain(asyncio.gather(cleanup, return_exceptions=True))
+        if isinstance(values[0], BaseException):
+            self._cleanup_failed = True
+            raise values[0]
+        if cancelled is not None:
+            raise cancelled
+
+    async def _start(self, principal, data):
+        from improvement_trial_runner import _drain
+        from improvement_trial_views import read_trial
+        admitted, handed_off = None, False
+        try:
+            pending = asyncio.create_task(asyncio.to_thread(self.admission.admit, principal, data))
+            values, cancelled = await _drain(asyncio.gather(pending, return_exceptions=True))
+            if isinstance(values[0], BaseException):
+                raise values[0]
+            admitted = values[0]
+            if cancelled is not None:
+                raise cancelled
+            if self._closed:
+                await self._abandon_unclaimed(principal, admitted)
+            else:
+                current = await asyncio.to_thread(self.trials.get, principal, admitted.trial_id)
+                if self._closed:
+                    await self._abandon_unclaimed(principal, admitted)
+                elif current["status"] == "reserved":
+                    await self.tasks.start(principal, admitted.request, event_key=admitted.reserve_event_key)
+                    handed_off = True
+            return await asyncio.to_thread(read_trial, self.assets, principal, admitted.trial_id)
+        except (Exception, asyncio.CancelledError):
+            if admitted is not None and not handed_off:
+                await self._abandon_unclaimed(principal, admitted)
+            raise
+
+    async def cancel(self, principal, identifier, *, expected_generation, event_key):
+        from improvement_trial_views import read_trial
+        self._bind()
+        await self.tasks.cancel(principal, identifier, expected_generation=expected_generation, event_key=event_key)
+        return await asyncio.to_thread(read_trial, self.assets, principal, identifier)
+
+    async def close(self):
+        self._bind()
+        self._closed = True
+        if self._closing is None:
+            self._closing = asyncio.create_task(self._close())
+            self._closing.add_done_callback(self._consume)
+        return await self._join(self._closing)
+
+    async def _close(self):
+        from improvement_trial_runner import _drain
+        # Close the dispatcher while preflight/admission operations drain. A
+        # start already awaiting its task reservation must see Tasks' closed
+        # flag too; later admitted records are refunded by the service itself.
+        dispatcher_close = asyncio.create_task(self.tasks.close())
+        pending = tuple(item[1] for item in self._operations.values())
+        values, _ = await _drain(asyncio.gather(dispatcher_close, *pending, return_exceptions=True))
+        if self._cleanup_failed or isinstance(values[0], BaseException):
+            raise RuntimeError("trial_shutdown_incomplete")
+
+
+def recover_trials(assets, principal, *, event_key):
+    """Idempotent owner recovery settles expired work; it never dispatches it."""
+    import improvement_store as IM
+    from improvement_trial_records import _brain
+    from improvement_trials import TrialStore
+    brain = _brain(principal)
+    if IM._schema_version(assets.store) < 3:
+        return {"not_run": 0, "unknown": 0}
+    trials = TrialStore(assets)
+    with assets.store._Tx(assets.store) as connection:
+        replay = assets._replay(connection, brain, event_key, "trial_owner_recover", {})
+        if replay is not None:
+            return replay
+        result = trials._recover_in(connection, principal)
+        assets._event(connection, principal, event_key, "trial_owner_recover", {}, result)
+        return result

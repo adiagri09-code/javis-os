@@ -389,10 +389,10 @@ sources remain unavailable until a concrete safe lifetime path exists.
 Tests: full owner API/auth/CSRF/cross-brain/disabled policy/unsupported/stale/cancel/retry;
 isolate all runtime roots and avoid main startup background tasks.
 
-- [ ] Add explicit-trial auth/off/unsupported/cancel/stale route tests before wiring.
-- [ ] Run new route tests RED; implement validated owner schemas and dependency injection.
-- [ ] Update intentional route snapshot; run API/security/i18n tests GREEN.
-- [ ] Commit operator/API surface with capability=false for any unverified adapter.
+- [x] Add explicit-trial auth/off/unsupported/cancel/stale route tests before wiring.
+- [x] Run new route tests RED; implement validated owner schemas and dependency injection.
+- [x] Update intentional route snapshot; run new API/auth/CSRF/security/i18n tests GREEN.
+- [x] Commit operator/API surface with capability=false for any unverified adapter.
 
 Task5 service/route request fields are now frozen in
 docs/dev/agent-skill-owner-trial-api-v1.md from the actual service/source audit. Browser

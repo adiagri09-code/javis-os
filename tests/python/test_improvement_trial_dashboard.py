@@ -16,7 +16,8 @@ from unittest.mock import patch
 
 # A user-home temp directory inherits real ancestor .claude/settings.json.
 # Use a disposable drive-root fixture so no real owner instructions enter tests.
-_SCRATCH_LIFETIME = tempfile.TemporaryDirectory(prefix="trial-dashboard-", dir=Path(tempfile.gettempdir()).anchor)
+_SCRATCH_PARENT = Path(tempfile.gettempdir()).anchor if os.name == "nt" else tempfile.gettempdir()
+_SCRATCH_LIFETIME = tempfile.TemporaryDirectory(prefix="trial-dashboard-", dir=_SCRATCH_PARENT)
 SCRATCH = Path(_SCRATCH_LIFETIME.name)
 for key, child in {"JAVIS_STATE_DIR": "boot-state", "BRAINS_DIR": "boot-brains", "BRAIN_PATH": "boot-brain",
                    "OBSIDIAN_VAULT_PATH": "boot-vault", "SOURCES_PATH": "boot-sources",

@@ -461,46 +461,53 @@ class CaseStore:
         pins = _frozen(pins)
         self._pin_shape(pins)
         IM.ensure(self.store)
-        payload = {"case_set_id": case_set_id, "pins": pins}
         with self.store._Tx(self.store) as connection:
-            replay = IM.ImprovementStore._replay(connection, brain, event_key, "qualification_reserve", payload)
-            if replay is not None:
-                return replay
-            self._enabled(connection, brain)
-            case_set = self._row(connection, "improvement_case_sets", brain, case_set_id)
-            policy = IM.ImprovementStore._policy(connection, brain)
-            if case_set["manifest_hash"] != pins["case_set_hash"] or policy["version"] != pins["policy_version"]:
-                raise IM.ConflictError("stale_qualification_pin")
-            old = connection.execute("SELECT * FROM improvement_qualification WHERE brain_id=? AND case_set_id=?", (brain, case_set_id)).fetchone()
-            if old and old["pins_hash"] != IM._hash(pins):
-                raise IM.ConflictError("qualification_already_reserved")
-            if not old:
-                if not connection.execute("SELECT 1 FROM improvement_contracts WHERE brain_id=? AND manifest_hash=?", (brain, pins["contract_hash"])).fetchone():
+            return self._reserve_qualification_in(connection, principal, case_set_id, pins, event_key=event_key)
+
+    def _reserve_qualification_in(self, connection, principal, case_set_id, pins, *, event_key):
+        self._own_transaction(connection)
+        brain = IM._brain(principal)
+        pins = _frozen(pins)
+        self._pin_shape(pins)
+        payload = {"case_set_id": case_set_id, "pins": pins}
+        replay = IM.ImprovementStore._replay(connection, brain, event_key, "qualification_reserve", payload)
+        if replay is not None:
+            return replay
+        self._enabled(connection, brain)
+        case_set = self._row(connection, "improvement_case_sets", brain, case_set_id)
+        policy = IM.ImprovementStore._policy(connection, brain)
+        if case_set["manifest_hash"] != pins["case_set_hash"] or policy["version"] != pins["policy_version"]:
+            raise IM.ConflictError("stale_qualification_pin")
+        old = connection.execute("SELECT * FROM improvement_qualification WHERE brain_id=? AND case_set_id=?", (brain, case_set_id)).fetchone()
+        if old and old["pins_hash"] != IM._hash(pins):
+            raise IM.ConflictError("qualification_already_reserved")
+        if not old:
+            if not connection.execute("SELECT 1 FROM improvement_contracts WHERE brain_id=? AND manifest_hash=?", (brain, pins["contract_hash"])).fetchone():
+                raise PermissionError("trial_record_unavailable")
+            for key in ("base_bundle_hash", "candidate_bundle_hash"):
+                if not connection.execute("SELECT 1 FROM improvement_bundles WHERE brain_id=? AND manifest_hash=?", (brain, pins[key])).fetchone():
                     raise PermissionError("trial_record_unavailable")
-                for key in ("base_bundle_hash", "candidate_bundle_hash"):
-                    if not connection.execute("SELECT 1 FROM improvement_bundles WHERE brain_id=? AND manifest_hash=?", (brain, pins[key])).fetchone():
-                        raise PermissionError("trial_record_unavailable")
-                tokens = {row[0] for row in connection.execute("SELECT fingerprint FROM improvement_case_families WHERE case_set_id=? "
-                    "AND brain_id=? AND split='qualification'", (case_set_id, brain))}
-                if not tokens:
-                    raise ValueError("qualification_cases_required")
-                for token in tokens:
-                    if (connection.execute("SELECT 1 FROM improvement_qualification_claims WHERE brain_id=? AND fingerprint=?", (brain, token)).fetchone()
-                            or connection.execute("SELECT 1 FROM improvement_case_exposures WHERE brain_id=? AND fingerprint=?", (brain, token)).fetchone()):
-                        raise IM.ConflictError("qualification_family_unavailable")
-                for row in connection.execute("SELECT DISTINCT s.manifest_json FROM improvement_case_sources c JOIN improvement_snapshots s "
-                    "ON s.id=c.snapshot_id AND s.brain_id=c.brain_id WHERE c.case_set_id=? AND c.brain_id=?", (case_set_id, brain)):
-                    if json.loads(row[0])["grant_hash"] != pins["grant_hash"]:
-                        raise IM.ConflictError("stale_source_grant")
-                identifier = "iq_" + secrets.token_hex(12)
-                connection.execute("INSERT INTO improvement_qualification VALUES(?,?,?,?,?,?,?,?)", (
-                    identifier, brain, case_set_id, IM._hash(pins), IM._json(pins), "reserved", time.time(), None))
-                for token in tokens:
-                    connection.execute("INSERT INTO improvement_qualification_claims VALUES(?,?,?)", (brain, token, identifier))
-                old = self._row(connection, "improvement_qualification", brain, identifier)
-            result = self._reservation(old)
-            self._event(connection, principal, event_key, "qualification_reserve", payload, result)
-            return result
+            tokens = {row[0] for row in connection.execute("SELECT fingerprint FROM improvement_case_families WHERE case_set_id=? "
+                "AND brain_id=? AND split='qualification'", (case_set_id, brain))}
+            if not tokens:
+                raise ValueError("qualification_cases_required")
+            for token in tokens:
+                if (connection.execute("SELECT 1 FROM improvement_qualification_claims WHERE brain_id=? AND fingerprint=?", (brain, token)).fetchone()
+                        or connection.execute("SELECT 1 FROM improvement_case_exposures WHERE brain_id=? AND fingerprint=?", (brain, token)).fetchone()):
+                    raise IM.ConflictError("qualification_family_unavailable")
+            for row in connection.execute("SELECT DISTINCT s.manifest_json FROM improvement_case_sources c JOIN improvement_snapshots s "
+                "ON s.id=c.snapshot_id AND s.brain_id=c.brain_id WHERE c.case_set_id=? AND c.brain_id=?", (case_set_id, brain)):
+                if json.loads(row[0])["grant_hash"] != pins["grant_hash"]:
+                    raise IM.ConflictError("stale_source_grant")
+            identifier = "iq_" + secrets.token_hex(12)
+            connection.execute("INSERT INTO improvement_qualification VALUES(?,?,?,?,?,?,?,?)", (
+                identifier, brain, case_set_id, IM._hash(pins), IM._json(pins), "reserved", time.time(), None))
+            for token in tokens:
+                connection.execute("INSERT INTO improvement_qualification_claims VALUES(?,?,?)", (brain, token, identifier))
+            old = self._row(connection, "improvement_qualification", brain, identifier)
+        result = self._reservation(old)
+        self._event(connection, principal, event_key, "qualification_reserve", payload, result)
+        return result
 
     def consume_qualification(self, principal, reservation_id, pins, *, event_key):
         brain = IM._brain(principal)
