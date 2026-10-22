@@ -52,12 +52,25 @@
     "image/gif": ".gif", "image/bmp": ".bmp", "image/avif": ".avif",
     "image/heic": ".heic", "image/heif": ".heif",
   };
-  function duoiTheoLoai(mime, tenGoc) {
+  // Extensions the server stores in images/ (files_upload in server/main.py checks the same set).
+  var STORABLE_EXTS = [".webp", ".jpg", ".jpeg", ".png", ".gif", ".avif", ".bmp"];
+  // Extension from the MIME type; when the type is unknown (the clipboard sometimes sends an
+  // empty one) the original name's extension counts only if it is a storable one. Null = unknown.
+  function knownExt(mime, tenGoc) {
     var m = String(mime == null ? "" : mime).toLowerCase().split(";")[0].trim();
     if (DUOI_THEO_LOAI[m]) return DUOI_THEO_LOAI[m];
-    // Khong doan duoc tu MIME (clipboard co luc tra rong) thi lay duoi cua ten goc.
     var t = /(\.[a-z0-9]{2,5})$/i.exec(String(tenGoc == null ? "" : tenGoc));
-    return t ? t[1].toLowerCase() : ".png";
+    var x = t ? t[1].toLowerCase() : "";
+    return STORABLE_EXTS.indexOf(x) >= 0 ? x : null;
+  }
+  function duoiTheoLoai(mime, tenGoc) {
+    return knownExt(mime, tenGoc) || ".png";
+  }
+  // Extension to upload the ORIGINAL file under, or null when it may not be stored as-is
+  // (HEIC, or a type we cannot vouch for).
+  function storableExt(mime, tenGoc) {
+    var x = knownExt(mime, tenGoc);
+    return x && STORABLE_EXTS.indexOf(x) >= 0 ? x : null;
   }
   // SVG is never treated as an image here: it can carry script, so it is never stored.
   function laAnh(mime, tenGoc) {
@@ -104,7 +117,7 @@
   }
 
   var api = {
-    tenAnhTheoGio: tenAnhTheoGio, duoiTheoLoai: duoiTheoLoai, laAnh: laAnh,
+    tenAnhTheoGio: tenAnhTheoGio, duoiTheoLoai: duoiTheoLoai, storableExt: storableExt, laAnh: laAnh,
     khongNen: khongNen, laHeic: laHeic, khungMoi: khungMoi, chonBanNhe: chonBanNhe, coKhiKeo: coKhiKeo,
     CANH_TOI_DA: CANH_TOI_DA, TRAN_MB: TRAN_MB,
   };
@@ -174,9 +187,10 @@
     }
     // Tra { blob, duoi, goc } - goc=true nghia la giu nguyen ban goc, khong nen.
     function nenAnh(file) {
-      var duoiGoc = duoiTheoLoai(file.type, file.name);
+      // Null when the original may not be uploaded as-is: then only a re-encoded copy goes up.
+      var duoiGoc = storableExt(file.type, file.name);
       if (khongNen(file.type, file.name)) {
-        return Promise.resolve({ blob: file, duoi: duoiGoc, goc: true });
+        return Promise.resolve({ blob: file, duoi: ".gif", goc: true });
       }
       return doAnh(file).then(function (a) {
         var k = khungMoi(a.w, a.h, CANH_TOI_DA);
@@ -186,18 +200,21 @@
         ct.drawImage(a.nguon, 0, 0, k.w, k.h);
         a.dong();
         return veRaBlob(cv, "image/webp", CHAT_LUONG).then(function (b) {
-          if (!b) return { blob: file, duoi: duoiGoc, goc: true };
+          if (!b) return duoiGoc ? { blob: file, duoi: duoiGoc, goc: true } : { unsupported: true };
           // Trinh duyet khong biet webp thi no tra ve png ma KHONG bao loi - phai lay duoi
           // theo loai blob THAT, khong thi file .webp ben trong lai la png.
           var duoi = duoiTheoLoai(b.type, "") || ".webp";
-          if (chonBanNhe(file.size, b.size, k.doi) === "goc") {
+          // An original that may not be stored as-is (e.g. HEIC) always goes up re-encoded.
+          if (duoiGoc && chonBanNhe(file.size, b.size, k.doi) === "goc") {
             return { blob: file, duoi: duoiGoc, goc: true };
           }
           return { blob: b, duoi: duoi, goc: false };
         });
       }).catch(function () {
-        // Khong doc duoc: HEIC thi chan (xem laHeic), dinh dang khac cu gui ban goc.
+        // Khong doc duoc: HEIC thi chan (xem laHeic). Another type goes up as-is only when its
+        // extension is a storable one; an unknown type is not uploaded.
         if (laHeic(file.type, file.name)) return { heic: true };
+        if (!duoiGoc) return { unsupported: true };
         return { blob: file, duoi: duoiGoc, goc: true };
       });
     }
@@ -280,6 +297,7 @@
       noi(tw("nimg.dang_xu_ly"));
       return nenAnh(file).then(function (kq) {
         if (kq.heic) { noi(tw("nimg.heic"), "err"); return false; }
+        if (kq.unsupported) { noi(tw("nimg.unsupported"), "err"); return false; }
         return taiLen(kq.blob, tenAnhTheoGio(new Date(), kq.duoi)).then(function (path) {
           if (!chen(ctx, path)) throw new Error(tw("nimg.loi_chen"));
           noi(tw("nimg.xong", { kb: Math.max(1, Math.round(kq.blob.size / 1024)) }), "ok");

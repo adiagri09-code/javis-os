@@ -53,6 +53,20 @@ check("MIME có charset vẫn đọc được", NI.duoiTheoLoai("image/png; char
 // dán vào bị đặt tên .png.
 check("MIME rỗng thì suy từ tên file", NI.duoiTheoLoai("", "anh-chup.JPG") === ".jpg");
 check("không biết gì thì mặc định .png", NI.duoiTheoLoai("", "") === ".png");
+// Unknown MIME: the original name's extension is used only when it is a storable one.
+check("CANARY: unknown MIME does not take an unchecked extension from the name",
+      NI.duoiTheoLoai("", "a.html") === ".png" && NI.duoiTheoLoai("application/octet-stream", "x.exe") === ".png");
+check("unknown MIME with a storable name extension keeps it", NI.duoiTheoLoai("", "a.avif") === ".avif");
+check("original stored as-is only with a storable extension",
+      NI.storableExt("", "a.JPG") === ".jpg" && NI.storableExt("image/png", "") === ".png");
+check("CANARY: HEIC, TIFF and unknown types are never uploaded as-is",
+      NI.storableExt("image/heic", "a.heic") === null && NI.storableExt("image/tiff", "a.tiff") === null &&
+      NI.storableExt("", "blob") === null);
+check("decode failure uploads the original only when storable, else reports unsupported",
+      /if \(!duoiGoc\) return \{ unsupported: true \};/.test(SRC) &&
+      /if \(kq\.unsupported\) \{ noi\(tw\("nimg\.unsupported"\), "err"\); return false; \}/.test(SRC));
+check("a non-storable original always goes up re-encoded",
+      /if \(duoiGoc && chonBanNhe\(/.test(SRC));
 check("nhận ra ảnh theo MIME", NI.laAnh("image/png", "") === true);
 check("nhận ra ảnh theo tên khi MIME rỗng", NI.laAnh("", "x.webp") === true);
 check("file .pdf không phải ảnh", NI.laAnh("application/pdf", "a.pdf") === false);
@@ -170,7 +184,7 @@ check("lọc menu '/' theo chữ 'anh' ra nút ảnh", EC.filterCmds("chen anh")
 check("CANARY: phím tắt ảnh KHÔNG cướp Ctrl+Shift+I của devtools",
       EC.keyLabel(nutAnh) === "Ctrl+Alt+I");
 
-["ecmd.image", "nimg.dang_xu_ly", "nimg.xong", "nimg.qua_lon", "nimg.loi", "nimg.tay_keo"].forEach((k) => {
+["ecmd.image", "nimg.dang_xu_ly", "nimg.xong", "nimg.qua_lon", "nimg.loi", "nimg.tay_keo", "nimg.unsupported"].forEach((k) => {
   check("có khoá dịch " + k + " ở cả vi và en", !!VI[k] && !!EN[k] && VI[k] !== EN[k]);
 });
 
