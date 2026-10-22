@@ -173,6 +173,21 @@ check("tay kéo bám theo cuộn trang", /addEventListener\("scroll"/.test(SRC))
 check("bấm đúp tay kéo thì về cỡ gốc", /dblclick/.test(SRC) && /removeAttribute\("data-img-size"\)/.test(SRC));
 check("KHÔNG dùng ký tự em dash", !SRC.includes("\u2014"));
 
+// The grip and the status toast are appended to <body>: they must sit above the full-screen
+// editor (.ne-full) and the file-editor modal (.jvfe-modal), or they are hidden under them.
+const CSS = D("style.css");
+const zOf = (re, src) => { const m = re.exec(src); return m ? +m[1] : -1; };
+const zModal = zOf(/\.jvfe-modal\{[^}]*z-index:(\d+)/, D("file-editor.js"));
+const zFull = zOf(/\.note-editor\.ne-full \{[^}]*z-index: (\d+)/, CSS);
+const zGrip = zOf(/\.ni-grip \{[^}]*z-index: (\d+)/, CSS);
+const zStatus = zOf(/\.ni-status \{[^}]*z-index: (\d+)/, CSS);
+check("found the z-index of the full-screen editor and the file-editor modal", zModal > 0 && zFull > 0);
+check("CANARY: resize grip sits above the full-screen editor and the file-editor modal",
+      zGrip > zModal && zGrip > zFull);
+check("CANARY: status toast sits above the full-screen editor and the file-editor modal",
+      zStatus > zModal && zStatus > zFull);
+check("status toast text is 16px", /\.ni-status \{[^}]*font-size: 16px/.test(CSS));
+
 check("index.html nạp note-images.js", /note-images\.js/.test(HTML));
 check("nạp SAU editor-cmds.js", HTML.indexOf("note-images.js") > HTML.indexOf("editor-cmds.js"));
 
