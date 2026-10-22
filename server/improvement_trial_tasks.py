@@ -12,6 +12,7 @@ import improvement_cases as IC
 import improvement_store as IM
 from improvement_trial_runner import _drain, _settled_call
 from improvement_trials import TERMINAL
+from improvement_sandbox import WorkspaceCleanupError
 
 
 class TrialTasks:
@@ -114,9 +115,11 @@ class TrialTasks:
 
         try:
             return await self.runner.run(principal, reserved["trial_id"], on_claimed=claimed)
-        except (Exception, asyncio.CancelledError):
+        except (Exception, asyncio.CancelledError) as error:
             # Unexpected pre-claim errors cannot leave a refundable reservation
             # outstanding. A foreign or acquired lease never grants this CAS.
+            if isinstance(error, WorkspaceCleanupError):
+                self._cleanup_failed = True
             try:
                 if key in self._leases:
                     row = await asyncio.to_thread(self.trials.get, principal, reserved["trial_id"])

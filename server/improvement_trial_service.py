@@ -313,7 +313,9 @@ def recover_trials(assets, principal, *, event_key):
     with assets.store._Tx(assets.store) as connection:
         replay = assets._replay(connection, brain, event_key, "trial_owner_recover", {})
         if replay is not None:
-            return replay
-        result = trials._recover_in(connection, principal)
-        assets._event(connection, principal, event_key, "trial_owner_recover", {}, result)
-        return result
+            result = replay
+        else:
+            result = trials._recover_in(connection, principal)
+            assets._event(connection, principal, event_key, "trial_owner_recover", {}, result)
+    trials.cleanup_terminal(principal)
+    return result

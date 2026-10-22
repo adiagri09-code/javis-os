@@ -81,6 +81,66 @@ class TrialStoreTests(unittest.TestCase):
         with self.rs._conn() as connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM agent_calls").fetchone()[0], 1)
 
+    def test_distinct_trials_compete_for_one_brain_model_slot_atomically(self):
+        first, first_token = self.prepared()
+        second = self.reserve("second-model-slot", repeat=2)
+        claimed = self.trials.claim(self.owner, second["trial_id"], expected_generation=1)
+        manifest = self.trials.materialize(self.owner, second["trial_id"],
+            expected_generation=claimed["generation"], lease_token=claimed["lease_token"], baseline_context=self.context)
+        receipt = self.trials.workspace.prepare(second["trial_id"], 1, manifest)
+        second = self.trials.prepared(self.owner, second["trial_id"], expected_generation=claimed["generation"],
+                                     lease_token=claimed["lease_token"], receipt=receipt)
+        contenders = [(first, first_token), (second, claimed["lease_token"])]
+
+        def start(contender):
+            row, token = contender
+            # Independent stores/connections share only the durable database gate.
+            store = IT.TrialStore(self.assets)
+            try:
+                return store.start_engine(self.owner, row["trial_id"], expected_generation=row["generation"],
+                                          lease_token=token)
+            except IM.ConflictError as error:
+                return str(error)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(start, contenders))
+        winners = [result for result in results if isinstance(result, dict)]
+        self.assertEqual(len(winners), 1, "One brain started multiple model trials")
+        self.assertEqual([result for result in results if isinstance(result, str)], ["trial_brain_capacity_unavailable"])
+        winner = winners[0]
+        loser_index = next(index for index, result in enumerate(results) if isinstance(result, str))
+        loser, token = contenders[loser_index]
+        self.assertEqual(self.trials.get(self.owner, loser["trial_id"])["status"], "prepared")
+        self.assertIsNone(self.ledger.get(loser["attempts"][0]["call_id"])["engine_at"])
+        self.trials.cancel(self.owner, winner["trial_id"], expected_generation=winner["generation"],
+                           event_key="release-model-slot")
+        running = start((loser, token))
+        self.assertIsInstance(running, dict)
+        self.assertEqual(running["status"], "running")
+
+    def test_model_slot_does_not_block_a_different_authorized_brain(self):
+        first, token = self.prepared()
+        self.trials.start_engine(self.owner, first["trial_id"], expected_generation=first["generation"],
+                                 lease_token=token)
+        fixture = fixtures.ImprovementCaseTests()
+        fixture.owner, fixture.assets, fixture.cases = self.other, self.assets, self.cases
+        case_set, _ = fixture.case_set()
+        pins = fixture.pins(case_set, engine_config_hash=self.request["pins"]["engine_config_hash"])
+        request = {**copy.deepcopy(self.request), "pins": pins, "case_set_id": case_set["case_set_id"],
+                   "target_generations": {target["id"]: target["generation"]
+                                          for target in self.assets.targets(self.other)}}
+        trial = self.trials.reserve(self.other, request, event_key="other-brain-model-slot")
+        claimed = self.trials.claim(self.other, trial["trial_id"], expected_generation=1)
+        manifest = self.trials.materialize(self.other, trial["trial_id"], expected_generation=claimed["generation"],
+                                          lease_token=claimed["lease_token"], baseline_context=self.context)
+        receipt = self.trials.workspace.prepare(trial["trial_id"], 1, manifest)
+        prepared = self.trials.prepared(self.other, trial["trial_id"], expected_generation=claimed["generation"],
+                                        lease_token=claimed["lease_token"], receipt=receipt)
+        running = self.trials.start_engine(self.other, trial["trial_id"], expected_generation=prepared["generation"],
+                                           lease_token=claimed["lease_token"])
+        self.assertEqual(running["status"], "running")
+        self.assertEqual(self.trials.get(self.owner, first["trial_id"])["status"], "running")
+
     def test_stale_policy_target_and_foreign_scope_cannot_reserve_or_read(self):
         for changes in ({"pins": {**self.request["pins"], "policy_version": 999}},
                         {"target_generations": {key: 999 for key in self.request["target_generations"]}},

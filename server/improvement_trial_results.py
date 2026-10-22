@@ -225,4 +225,6 @@ class TrialResults:
             connection.execute("UPDATE improvement_trial_attempts SET status=?,result_json=?,lease_token=NULL,lease_until=NULL,updated_at=? "
                                "WHERE trial_id=? AND attempt=?", (status, IM._json(pointer), now, identifier, number))
             connection.execute("UPDATE improvement_trials SET status=?,generation=generation+1,updated_at=? WHERE id=?", (status, now, identifier))
-            return self.trials._public(connection, self.trials._row(connection, brain, identifier))
+            result = self.trials._public(connection, self.trials._row(connection, brain, identifier))
+        self.trials.cleanup_terminal(principal, identifier)
+        return result

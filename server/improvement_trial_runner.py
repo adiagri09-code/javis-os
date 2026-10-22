@@ -13,6 +13,7 @@ from improvement_claude import ClaudeTrialAdapter
 from improvement_telemetry import NativeUsageRecorder
 from improvement_trial_results import _guard
 from improvement_trials import TERMINAL
+from improvement_sandbox import WorkspaceCleanupError
 
 HEARTBEAT_SECONDS = 20
 LEASE_SECONDS = 60
@@ -79,6 +80,8 @@ class TrialRunner:
             raise ValueError("synchronous_trial_claim_observer_required")
         initial = await asyncio.to_thread(self.trials.get, principal, trial_id)
         if initial["status"] != "reserved":
+            if initial["status"] in TERMINAL:
+                await _settled_call(self.trials.cleanup_terminal, principal, trial_id)
             return await self._response(principal, trial_id)
 
         async def reject_unclaimed(reason):
@@ -107,6 +110,27 @@ class TrialRunner:
         except (PermissionError, IM.ConflictError):
             await reject_unclaimed("timeout" if initial["request"]["deadline_at"] <= time.time() else "authority_changed")
             return await self._response(principal, trial_id)
+        lifetime = [None]
+        try:
+            return await self._run_claimed(principal, trial_id, claimed, on_claimed, lifetime)
+        finally:
+            async def cleanup():
+                if lifetime[0] is None:
+                    await _settled_call(self.trials.cleanup_terminal, principal, trial_id)
+                    return
+                try:
+                    await _settled_call(self.trials.workspace.cleanup, trial_id, claimed["attempt"])
+                except Exception:
+                    raise WorkspaceCleanupError() from None
+                finally:
+                    await _settled_call(self.trials.workspace.release_execution, lifetime[0])
+            values, cancelled = await _drain(asyncio.gather(asyncio.create_task(cleanup()), return_exceptions=True))
+            if isinstance(values[0], BaseException):
+                raise values[0]
+            if cancelled is not None:
+                raise cancelled
+
+    async def _run_claimed(self, principal, trial_id, claimed, on_claimed, lifetime):
         if on_claimed is not None:
             try:
                 on_claimed(IC._frozen(claimed))
@@ -183,6 +207,11 @@ class TrialRunner:
 
         async def process():
             nonlocal current, manifest, phase, evaluation
+            def acquire():
+                lifetime[0] = self.trials.workspace.acquire_execution(current["brain_id"], trial_id, current["attempt"])
+                if lifetime[0] is None:
+                    raise _RunFailure("capacity_unavailable")
+            await _settled_call(acquire)
             await authority()
             phase = "unsupported_configuration"
             adapter = self.adapter_factory(request["engine_config"], workspace_root=self.trials.workspace.root,
@@ -269,24 +298,27 @@ class TrialRunner:
                       "timeout" if isinstance(error, TimeoutError) else
                       error.reason if isinstance(error, _RunFailure) else phase)
             async def close_attempt():
-                async with lock:
-                    latest = await asyncio.to_thread(self.trials.get, principal, trial_id)
-                    try:
-                        await _settled_call(self.trials.abort, principal, trial_id,
-                            expected_generation=latest["generation"], lease_token=token, reason=reason)
-                    except IM.ConflictError:
-                        pass  # Never close a lease now owned by another host attempt.
-                    # Revoke finish's CAS before waiting for a host checker. If its
-                    # final transaction already committed, abort preserves that result.
+                try:
+                    async with lock:
+                        latest = await asyncio.to_thread(self.trials.get, principal, trial_id)
+                        try:
+                            await _settled_call(self.trials.abort, principal, trial_id,
+                                expected_generation=latest["generation"], lease_token=token, reason=reason)
+                        except IM.ConflictError:
+                            pass  # Never close a lease now owned by another host attempt.
+                        latest = await asyncio.to_thread(self.trials.get, principal, trial_id)
+                        if recorder is not None:
+                            status = latest["status"] if latest["status"] in {"completed", "failed", "cancelled"} else "unknown"
+                            try:
+                                await _settled_call(recorder.finish, status)
+                            except Exception:
+                                pass  # The durable marked call keeps missing usage observable.
+                finally:
+                    # Own the checker through *all* closing failures, including
+                    # lock acquisition, row reads, abort and telemetry settlement.
+                    # Workspace and brain locks cannot be released before it ends.
                     if evaluation is not None:
                         await asyncio.gather(evaluation, return_exceptions=True)
-                    latest = await asyncio.to_thread(self.trials.get, principal, trial_id)
-                    if recorder is not None:
-                        status = latest["status"] if latest["status"] in {"completed", "failed", "cancelled"} else "unknown"
-                        try:
-                            await _settled_call(recorder.finish, status)
-                        except Exception:
-                            pass  # The durable marked call keeps missing usage observable.
 
             _, cancelled = await _drain(asyncio.create_task(close_attempt()))
             if cancelled is not None:

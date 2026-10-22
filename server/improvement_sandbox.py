@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import contextlib
 import csv
+import errno
 import hashlib
 import json
 import os
@@ -23,6 +24,11 @@ from evidence_store import redact
 _IDENTITY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 _DEVICE = re.compile(r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])", re.I)
 _SOURCE_FIELDS = {"source_version", "data_period", "timezone", "cutoff", "schema"}
+
+
+class WorkspaceCleanupError(RuntimeError):
+    def __init__(self):
+        super().__init__("trial_workspace_cleanup_failed")
 
 
 def _bytes_hash(content):
@@ -187,6 +193,74 @@ class TrialWorkspace:
             raise ValueError("invalid_trial_workspace")
         return path, journal
 
+    def _try_lifetime_lock(self, namespace, key):
+        """An OS-held lock disappears on host death, unlike the durable journal."""
+        _private_directory(self.root)
+        directory = self.root / namespace
+        check_ancestry(directory)
+        directory.mkdir(exist_ok=True)
+        path = directory / (_bytes_hash(key.encode()) + ".lock")
+        check_ancestry(path)
+        handle = open(path, "a+b", buffering=0)
+        try:
+            if not handle.seek(0, os.SEEK_END):
+                handle.write(b"\0")
+            handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as error:
+            handle.close()
+            if error.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                return None
+            raise
+        except BaseException:
+            handle.close()
+            raise
+        return handle
+
+    @staticmethod
+    def release_execution(handles):
+        # Closing releases these kernel locks on both platforms. The worker is
+        # launched without inherited handles; only its owning host holds them.
+        for handle in reversed(handles):
+            handle.close()
+
+    def acquire_execution(self, brain_id, trial_id, attempt):
+        self._paths(trial_id, attempt)
+        _text(brain_id, 1000)
+        brain = self._try_lifetime_lock(".executions", brain_id)
+        if brain is None:
+            return None
+        try:
+            workspace = self._try_lifetime_lock(".lifetimes", f"{trial_id}:{attempt}")
+            if workspace is None:
+                brain.close()
+                return None
+            return brain, workspace
+        except BaseException:
+            brain.close()
+            raise
+
+    def try_cleanup(self, trial_id, attempt):
+        """Recovery must never remove a workspace still held by a live runner."""
+        path, journal = self._paths(trial_id, attempt)
+        if not path.exists() and not journal.exists():
+            return False
+        handle = self._try_lifetime_lock(".lifetimes", f"{trial_id}:{attempt}")
+        if handle is None:
+            return False
+        try:
+            self.cleanup(trial_id, attempt)
+            return True
+        except Exception:
+            raise WorkspaceCleanupError() from None
+        finally:
+            handle.close()
+
     @contextlib.contextmanager
     def _lock(self, trial_id, attempt):
         _private_directory(self.root)
@@ -261,7 +335,7 @@ class TrialWorkspace:
 
     def cleanup(self, trial_id, attempt):
         path, journal = self._paths(trial_id, attempt)
-        if not path.exists():
+        if not path.exists() and not journal.exists():
             return
         with self._lock(trial_id, attempt):
             # Check the final resolved target immediately before recursive removal on Windows and Unix.
@@ -278,7 +352,8 @@ class TrialWorkspace:
                 candidate.chmod(stat.S_IREAD | stat.S_IWRITE)
                 function(name)
 
-            shutil.rmtree(path, onexc=unlock)
+            if path.exists():
+                shutil.rmtree(path, onexc=unlock)
             if journal.exists():
                 record = json.loads(journal.read_text(encoding="utf-8"))
                 record["state"] = "cleaned"

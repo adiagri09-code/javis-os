@@ -76,6 +76,13 @@ class TrialTaskTests(unittest.IsolatedAsyncioTestCase):
         self.f.hang = True
         row = await self.start()
         await asyncio.wait_for(self.f.acked.wait(), 10)
+        # ACK alone precedes the adapter's usage packet. Freeze at its actual
+        # blocking yield so autonomous trace rejection cannot race this check.
+        for _ in range(1000):
+            if "observe:3" in self.f.log:
+                break
+            await asyncio.sleep(.01)
+        self.assertIn("observe:3", self.f.log)
         original = self.f.f.trials.cancel
         observed = []
 

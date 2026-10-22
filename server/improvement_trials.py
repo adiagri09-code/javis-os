@@ -14,7 +14,7 @@ import improvement_store as IM
 
 TERMINAL = frozenset({"completed", "failed", "unknown", "interrupted", "cancelled", "not_run"})
 FAILURE_REASONS = frozenset({"unsupported_configuration", "authority_changed", "worker_failed", "evidence_failed",
-                             "telemetry_failed", "evaluation_failed", "timeout", "cancelled", "runner_failed"})
+                             "telemetry_failed", "evaluation_failed", "timeout", "cancelled", "runner_failed", "capacity_unavailable"})
 
 
 def _request(value):
@@ -344,6 +344,10 @@ class TrialStore:
             engine = request["engine_config"]
             marker_now = time.time() if now is None else now
             self._leased(connection, principal, identifier, expected_generation, lease_token, marker_now)
+            if connection.execute("SELECT 1 FROM improvement_trials WHERE brain_id=? AND id<>? "
+                                  "AND status IN ('running','evaluating') LIMIT 1",
+                                  (row["brain_id"], identifier)).fetchone():
+                raise IM.ConflictError("trial_brain_capacity_unavailable")
             if not self.ledger._mark_engine_in(connection, attempt["call_id"], engine["provider"], engine["model"], marker_now):
                 raise IM.ConflictError("trial_engine_marker_stale")
             connection.execute("UPDATE improvement_trial_attempts SET status='running',engine_at=?,updated_at=? "
@@ -380,16 +384,18 @@ class TrialStore:
             if not attempt["writer_hash"] or not secrets.compare_digest(writer, attempt["writer_hash"]):
                 raise IM.ConflictError("trial_abort_writer_unbound")
             if row["status"] in TERMINAL:
-                return self._public(connection, row)
-            if (type(expected_generation) is not int or row["generation"] != expected_generation
-                    or attempt["lease_token"] != lease_token):
-                raise IM.ConflictError("trial_abort_stale")
-            status = "not_run" if attempt["engine_at"] is None else "unknown"
-            result = self._stop(connection, row, status, time.time(), reason)
-            payload = {"trial_id": identifier, "attempt": row["attempt"], "reason": reason}
-            self.assets._event(connection, principal, "trial-abort:" + identifier + ":" + str(row["attempt"]),
-                               "trial_abort", payload, result)
-            return result
+                result = self._public(connection, row)
+            else:
+                if (type(expected_generation) is not int or row["generation"] != expected_generation
+                        or attempt["lease_token"] != lease_token):
+                    raise IM.ConflictError("trial_abort_stale")
+                status = "not_run" if attempt["engine_at"] is None else "unknown"
+                result = self._stop(connection, row, status, time.time(), reason)
+                payload = {"trial_id": identifier, "attempt": row["attempt"], "reason": reason}
+                self.assets._event(connection, principal, "trial-abort:" + identifier + ":" + str(row["attempt"]),
+                                   "trial_abort", payload, result)
+        self.cleanup_terminal(principal, identifier)
+        return result
 
     def reject_unclaimed(self, principal, identifier, *, expected_generation, reason):
         """Refund a stale reservation only if no host has acquired its lease."""
@@ -419,20 +425,41 @@ class TrialStore:
         with self.store._Tx(self.store) as connection:
             replay = self.assets._replay(connection, brain, event_key, "trial_cancel", payload)
             if replay is not None:
-                return replay
-            row = self._row(connection, brain, identifier)
-            if type(expected_generation) is not int or row["generation"] != expected_generation or row["status"] in TERMINAL:
-                raise IM.ConflictError("trial_cancel_stale")
-            result = self._stop(connection, row, "cancelled", time.time())
-            self.assets._event(connection, principal, event_key, "trial_cancel", payload, result)
-            return result
+                result = replay
+            else:
+                row = self._row(connection, brain, identifier)
+                if type(expected_generation) is not int or row["generation"] != expected_generation or row["status"] in TERMINAL:
+                    raise IM.ConflictError("trial_cancel_stale")
+                result = self._stop(connection, row, "cancelled", time.time())
+                self.assets._event(connection, principal, event_key, "trial_cancel", payload, result)
+        self.cleanup_terminal(principal, identifier)
+        return result
+
+    def cleanup_terminal(self, principal, identifier=None):
+        """Retry only this brain's terminal attempts, outside any writer transaction.
+
+        The lifetime lock, not an expired database lease, proves no live runner
+        still needs those bytes. Untracked paths and other brains are untouched.
+        """
+        brain = IM._brain(principal)
+        with closing(self.store._conn()) as connection:
+            if identifier is not None:
+                self._row(connection, brain, identifier)
+            rows = list(connection.execute("SELECT a.trial_id,a.attempt FROM improvement_trial_attempts a "
+                "JOIN improvement_trials t ON t.id=a.trial_id WHERE a.brain_id=? AND t.brain_id=? "
+                "AND a.status IN ('completed','failed','unknown','interrupted','cancelled','not_run') "
+                + ("AND t.id=? " if identifier is not None else ""),
+                (brain, brain, identifier) if identifier is not None else (brain, brain)))
+        return sum(self.workspace.try_cleanup(row["trial_id"], row["attempt"]) for row in rows)
 
     def recover(self, principal, *, now=None):
         brain = IM._brain(principal)
         if IM._schema_version(self.store) < 3:
             return {"not_run": 0, "unknown": 0}
         with self.store._Tx(self.store) as connection:
-            return self._recover_in(connection, principal, now=now)
+            result = self._recover_in(connection, principal, now=now)
+        self.cleanup_terminal(principal)
+        return result
 
     def _recover_in(self, connection, principal, *, now=None):
         self.cases._own_transaction(connection)
