@@ -16,6 +16,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+TEST_ROOT = Path(tempfile.mkdtemp(prefix="trial-selection-"))
+for key, child in {"JAVIS_STATE_DIR": "state", "BRAIN_PATH": "brain", "BRAINS_DIR": "brains",
+                   "OBSIDIAN_VAULT_PATH": "vault", "SOURCES_PATH": "sources",
+                   "JAVIS_SESSIONS_DB": "state/sessions.sqlite3"}.items():
+    os.environ[key] = str(TEST_ROOT / child)
+
 import improvement_claude as native
 
 if importlib.util.find_spec("improvement_trial_selection"):
