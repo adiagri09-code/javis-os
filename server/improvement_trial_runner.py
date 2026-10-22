@@ -73,8 +73,10 @@ class TrialRunner:
                 pass  # Interrupted/not-run attempts need not have an evaluation result.
         return {**current, "result": result}
 
-    async def run(self, principal, trial_id):
+    async def run(self, principal, trial_id, *, on_claimed=None):
         IM._brain(principal)
+        if on_claimed is not None and not _synchronous(on_claimed):
+            raise ValueError("synchronous_trial_claim_observer_required")
         initial = await asyncio.to_thread(self.trials.get, principal, trial_id)
         if initial["status"] != "reserved":
             return await self._response(principal, trial_id)
@@ -105,6 +107,13 @@ class TrialRunner:
         except (PermissionError, IM.ConflictError):
             await reject_unclaimed("timeout" if initial["request"]["deadline_at"] <= time.time() else "authority_changed")
             return await self._response(principal, trial_id)
+        if on_claimed is not None:
+            try:
+                on_claimed(IC._frozen(claimed))
+            except BaseException:
+                await _settled_call(self.trials.abort, principal, trial_id,
+                    expected_generation=claimed["generation"], lease_token=claimed["lease_token"], reason="runner_failed")
+                raise
         request = IC._frozen(claimed["request"])
         token = claimed["lease_token"]
         lock = asyncio.Lock()

@@ -325,3 +325,25 @@ claim to capture actual hook, HTTP or webhook registration maps. Packs, unknown 
 visibility, closures/external handlers, cached errors or inconsistent loaded code remain
 explicitly unsupported. A complete Dashboard composer must include or reject its other
 prompt contributors separately; this component does not establish full prompt coverage.
+
+### Process-owned trial tasks
+
+`TrialTasks(trials, runner)` owns explicit reservation/dispatch operations independently
+of a cancelled HTTP response. `start(principal, request, event_key=...)` retains committing
+storage threads and dispatches one runner per brain/trial. It does not verify a runtime or
+authorize a context itself; the owner service must perform those checks before calling it.
+Idempotency replays refresh current metadata and never silently retry an uncertain attempt.
+
+`cancel(..., expected_generation=..., event_key=...)` commits owner cancellation before
+cancelling its local worker task. `close()` prevents new starts, drains pending operations,
+then closes only acquired leases using writer-bound aborts and awaits worker cleanup.
+`TrialRunner.run(..., on_claimed=...)` is a private synchronous host notification of an
+actual claim; its token never becomes public trial metadata. A failing notification refunds
+the claim before any adapter. An opaque lease from another host is never owner-cancelled
+by shutdown. Unclaimed cleanup uses the existing strict no-lease CAS.
+
+Repeated cancellation cannot abandon an owned storage operation or shutdown. Post-commit
+read failures attempt a refund; failures to settle a committed/owned operation remain a
+visible `trial_shutdown_incomplete`, including after its task leaves the live registry.
+The application lifespan must await close before closing source/store lifetimes. This
+component is not yet HTTP/lifespan wiring, a recovery scheduler or an enabled trial API.

@@ -159,6 +159,36 @@ class TrialRunnerTests(unittest.IsolatedAsyncioTestCase):
         with self.f.rs._conn() as connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM improvement_trial_observations").fetchone()[0], 7)
 
+    async def test_host_claim_callback_observes_owned_lease_before_any_adapter(self):
+        observed = []
+
+        def claimed(row):
+            self.assertEqual(self.adapters, [])
+            self.assertIsNotNone(row["lease_token"])
+            self.assertIsNone(self.call()["engine_at"])
+            observed.append(row)
+
+        result = await self.runner().run(self.f.owner, self.trial["trial_id"], on_claimed=claimed)
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(len(observed), 1)
+
+    async def test_failing_host_claim_callback_refunds_owned_claim_without_query(self):
+        def fail(row):
+            raise RuntimeError("synthetic claim observer failed")
+
+        with self.assertRaises(RuntimeError):
+            await self.runner().run(self.f.owner, self.trial["trial_id"], on_claimed=fail)
+        self.assertEqual(self.call()["status"], "refunded")
+        self.assertEqual(self.adapters, [])
+
+    async def test_async_host_claim_callback_is_rejected_before_claim(self):
+        async def unsupported(row):
+            pass
+
+        with self.assertRaises(ValueError):
+            await self.runner().run(self.f.owner, self.trial["trial_id"], on_claimed=unsupported)
+        self.assertEqual(self.f.trials.get(self.f.owner, self.trial["trial_id"])["generation"], 1)
+
     async def test_repeated_terminal_run_returns_stored_result_without_another_adapter_or_call(self):
         first = await self.run_trial()
         second = await self.run_trial()

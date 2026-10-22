@@ -391,3 +391,10 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   blob path. Ledger and engine marker stayed empty; this is not model feasibility evidence.
   The private output is retained. An early explicit output-path gate and a fresh shallow
   test root are being prepared; no provider/model/reasoning fallback is allowed.
+- Process-owned trial task supervision now retains committing reservations across HTTP
+  cancellation, dispatches once and commits explicit owner cancellation before worker
+  cancellation. Shutdown drains pending starts, uses only acquired writer tokens and waits
+  for cleanup. Independent review reproduced one foreign-lease shutdown defect and four
+  cleanup failure variants; all original reproductions now pass independently. Parent's
+  fresh15 task/24 Runner checks passed2/2 scripts in38s; independent rerun passed in36s.
+  Unknown cleanup remains a visible shutdown failure. HTTP/lifespan integration is pending.
