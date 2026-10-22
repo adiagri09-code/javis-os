@@ -80,9 +80,9 @@
       var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
     } catch (e) {}
   }
-  // li dang chua caret trong ban render. DUNG CHUNG cho nut checkbox, Enter va Tab: chep moi
-  // noi mot ban thi som muon cac ban troi khoi nhau.
-  function liTuCaret(wys) {
+  // The li holding the caret in the render pane. SHARED by the checkbox button, Enter and Tab:
+  // one copy per caller would drift apart sooner or later.
+  function liAtCaret(wys) {
     var s = window.getSelection();
     var n = s && s.anchorNode;
     var el = n && (n.nodeType === 1 ? n : n.parentElement);
@@ -91,12 +91,12 @@
   function wysTask(ctx) {
     var wys = ctx.wys;
     try { wys.focus(); } catch (e) {}
-    var li = liTuCaret(wys);
+    var li = liAtCaret(wys);
     // Chua o trong danh sach thi tao danh sach truoc roi moi gan checkbox - lam nguoc lai
     // thi execCommand nuot mat cai checkbox vua chen.
     if (!li) {
       try { document.execCommand("insertUnorderedList"); } catch (e) {}
-      li = liTuCaret(wys);
+      li = liAtCaret(wys);
     }
     if (!li) { try { document.execCommand("insertHTML", false, CB_HTML); } catch (e) {} return; }
     if (li.classList.contains("task-item")) return;      // da la task roi, bam nua khong nhan doi
@@ -105,35 +105,33 @@
     caretEnd(li);
   }
 
-  // ---------------------------------------------------------------- danh sach: Enter va Tab
-  // Ham thuan, chay duoc duoi node. Phan nghe phim nam o cuoi file, trong phan DOM.
-  var THUT = "    ";   // 4 dau cach: dung khuon Turndown dung khi ghi muc con ra markdown
+  // ---------------------------------------------------------------- lists: Enter and Tab
+  // Pure functions, runnable under node. The key listeners sit at the end of the file, in the DOM part.
+  var INDENT = "    ";   // 4 spaces: the pattern Turndown uses when writing a sub-item to markdown
 
-  // Doc dau muc cua MOT dong markdown. Tra null neu khong phai dong danh sach.
-  //   loai  task | ul | ol
-  //   dau   phan dau muc that cua dong (ke ca thut le); caret phai qua no moi tinh la noi dung
-  //   tiep  dau muc cho dong ke tiep: task luon CHUA tick, so thi tang mot
-  // Task phai xet TRUOC bullet: "- [ ] x" cung khop khuon "- x".
-  function dongDanhSach(line) {
-    var l = String(line == null ? "" : line).replace(/ /g, " ");
+  // Read the list marker of ONE markdown line. Returns null when it is not a list line.
+  //   kind    task | ul | ol
+  //   marker  the line's real marker (indent included); the caret must be past it to be in content
+  //   next    the marker for the next line: a task is always UNCHECKED, a number goes up by one
+  // Tasks must be checked BEFORE bullets: "- [ ] x" also matches the "- x" pattern.
+  function parseListLine(line) {
+    var l = String(line == null ? "" : line).replace(/\u00a0/g, " ");
     var m = /^(\s*)([-*+]) \[([ xX])\](?: (.*))?$/.exec(l);
     if (m) {
-      return { loai: "task", indent: m[1], noiDung: m[4] || "",
-               dau: m[1] + m[2] + " [" + m[3] + "] ", tiep: m[1] + m[2] + " [ ] " };
+      return { kind: "task", indent: m[1], content: m[4] || "",
+               marker: m[1] + m[2] + " [" + m[3] + "] ", next: m[1] + m[2] + " [ ] " };
     }
-    // Bat buoc co dau cach sau dau muc: nho vay "---" (duong ke) va "-5" khong bi bat.
+    // A space after the marker is required: that keeps "---" (a rule) and "-5" out.
     m = /^(\s*)([-*+]) (.*)$/.exec(l);
-    if (m) return { loai: "ul", indent: m[1], noiDung: m[3], dau: m[1] + m[2] + " ", tiep: m[1] + m[2] + " " };
+    if (m) return { kind: "ul", indent: m[1], content: m[3], marker: m[1] + m[2] + " ", next: m[1] + m[2] + " " };
     m = /^(\s*)(\d{1,9})([.)]) (.*)$/.exec(l);
     if (m) {
-      return { loai: "ol", indent: m[1], noiDung: m[4], dau: m[1] + m[2] + m[3] + " ",
-               tiep: m[1] + (parseInt(m[2], 10) + 1) + m[3] + " " };
+      return { kind: "ol", indent: m[1], content: m[4], marker: m[1] + m[2] + m[3] + " ",
+               next: m[1] + (parseInt(m[2], 10) + 1) + m[3] + " " };
     }
     return null;
   }
 
-  // Enter trong o nguon tho. Tra mo ta thay doi {s, e, text}: thay doan [s, e) bang text, caret
-  // dung sau text. Tra null = de trinh duyet xuong dong binh thuong.
   // True when the line starting at lineStart sits inside a ``` or ~~~ code fence: an odd number
   // of fence lines comes before it.
   function insideCodeFence(v, lineStart) {
@@ -142,60 +140,62 @@
     });
     return fences.length % 2 === 1;
   }
-  function enterDanhSach(value, pos) {
+  // Enter in the raw source textarea. Returns an edit {s, e, text}: replace [s, e) with text, the
+  // caret ends after text. Null = let the browser insert a plain newline.
+  function continueList(value, pos) {
     var v = String(value == null ? "" : value);
     if (typeof pos !== "number" || pos !== Math.floor(pos) || pos < 0 || pos > v.length) return null;
     var ls = v.lastIndexOf("\n", pos - 1) + 1;
     var le = v.indexOf("\n", pos); if (le < 0) le = v.length;
     if (insideCodeFence(v, ls)) return null;         // "- a" inside a code block is code, not a list
-    var d = dongDanhSach(v.slice(ls, le));
+    var d = parseListLine(v.slice(ls, le));
     if (!d) return null;
-    if (pos - ls < d.dau.length) return null;        // caret con nam trong dau muc
-    // Dong chi co dau muc: Enter GO dau muc, day la loi ra khoi danh sach.
-    if (!d.noiDung.trim()) return { s: ls, e: le, text: "" };
-    return { s: pos, e: pos, text: "\n" + d.tiep };
+    if (pos - ls < d.marker.length) return null;     // caret still inside the marker
+    // A line with only a marker: Enter REMOVES the marker, which is the way out of the list.
+    if (!d.content.trim()) return { s: ls, e: le, text: "" };
+    return { s: pos, e: pos, text: "\n" + d.next };
   }
 
-  // Tab / Shift+Tab trong o nguon tho. Tra {s, e, text, selS, selE}: thay doan [s, e) bang text
-  // roi chon lai [selS, selE). Tra null = khong co gi de lam.
-  //   - Caret tren dong danh sach, hoac dang chon nhieu dong: thut CA DONG vao/ra 4 cach.
-  //   - Caret tren dong chu thuong: chen 4 cach ngay tai caret, nhu moi trinh soan.
-  function thutLe(value, s, e, lui) {
+  // Tab / Shift+Tab in the raw source textarea. Returns {s, e, text, selS, selE}: replace [s, e)
+  // with text, then select [selS, selE). Null = nothing to do.
+  //   - Caret on a list line, or several lines selected: indent/outdent WHOLE lines by 4 spaces.
+  //   - Caret on a plain text line: insert 4 spaces at the caret, like any editor.
+  function indentLines(value, s, e, outdent) {
     var v = String(value == null ? "" : value);
     if (typeof s !== "number" || typeof e !== "number" || s < 0 || e > v.length || s > e) return null;
     var ls = v.lastIndexOf("\n", s - 1) + 1;
-    var e2 = (e > s && v.charAt(e - 1) === "\n") ? e - 1 : e;   // chon toi dau dong sau thi bo dong do
+    var e2 = (e > s && v.charAt(e - 1) === "\n") ? e - 1 : e;   // selection ending at the next line start skips that line
     var le = v.indexOf("\n", e2); if (le < 0) le = v.length;
-    var khoi = v.slice(ls, le);
-    if (!lui && s === e && !dongDanhSach(khoi)) {
-      return { s: s, e: s, text: THUT, selS: s + THUT.length, selE: s + THUT.length };
+    var block = v.slice(ls, le);
+    if (!outdent && s === e && !parseListLine(block)) {
+      return { s: s, e: s, text: INDENT, selS: s + INDENT.length, selE: s + INDENT.length };
     }
-    var dauDong = 0, tong = 0;
-    var moi = khoi.split("\n").map(function (ln, i) {
-      var d = THUT.length;
-      if (!lui) ln = THUT + ln;
+    var firstDelta = 0, total = 0;
+    var out = block.split("\n").map(function (ln, i) {
+      var d = INDENT.length;
+      if (!outdent) ln = INDENT + ln;
       else {
         var m = /^( {1,4}|\t)/.exec(ln);
         d = m ? -m[1].length : 0;
         if (m) ln = ln.slice(m[1].length);
       }
-      if (i === 0) dauDong = d;
-      tong += d;
+      if (i === 0) firstDelta = d;
+      total += d;
       return ln;
     }).join("\n");
-    if (!tong) return null;
-    return { s: ls, e: le, text: moi,
-             // Chon tu dau dong thi giu ca phan thut vua them trong vung chon.
-             selS: (s === ls && s !== e) ? ls : Math.max(ls, s + dauDong), selE: Math.max(ls, e + tong) };
+    if (!total) return null;
+    return { s: ls, e: le, text: out,
+             // A selection starting at the line start keeps the added indent inside the selection.
+             selS: (s === ls && s !== e) ? ls : Math.max(ls, s + firstDelta), selE: Math.max(ls, e + total) };
   }
 
-  // Go dau muc o dau mot doan trong ban render -> doi doan do thanh danh sach.
-  // "-", "*", "+" -> bullet; "1." / "3)" -> danh sach so bat dau tu so do. Null = khong phai.
-  function dauMucGo(text) {
-    var t = String(text == null ? "" : text).replace(/ /g, " ");
-    if (/^[-*+] $/.test(t)) return { loai: "ul" };
+  // A marker typed at the start of a paragraph in the render pane -> turn that paragraph into a list.
+  // "-", "*", "+" -> bullet; "1." / "3)" -> numbered list starting at that number. Null = not a marker.
+  function typedListMarker(text) {
+    var t = String(text == null ? "" : text).replace(/\u00a0/g, " ");
+    if (/^[-*+] $/.test(t)) return { kind: "ul" };
     var m = /^(\d{1,9})[.)] $/.exec(t);
-    if (m) return { loai: "ol", batDau: parseInt(m[1], 10) };
+    if (m) return { kind: "ol", start: parseInt(m[1], 10) };
     return null;
   }
 
@@ -350,7 +350,7 @@
   var api = {
     CMDS: CMDS, run: run, keyLabel: keyLabel, matchCmd: matchCmd,
     menuCmds: menuCmds, filterCmds: filterCmds, slashTrigger: slashTrigger, esc: esc,
-    dongDanhSach: dongDanhSach, enterDanhSach: enterDanhSach, thutLe: thutLe, dauMucGo: dauMucGo,
+    parseListLine: parseListLine, continueList: continueList, indentLines: indentLines, typedListMarker: typedListMarker,
     // Nhan nut cho thanh cong cu: SVG neu co icon, chu da escape neu la chu thuan.
     btnHtml: function (c) { return c.btn.icon ? ic(c.btn.icon) : esc(c.btn.text); },
     btnTitle: function (c) { var k = keyLabel(c); return nhan(c) + (k ? " (" + k + ")" : ""); },
@@ -518,13 +518,14 @@
       if (pop && !e.target.closest(".ec-pop")) dongMenu();
     });
 
-    // ----- Enter noi dong danh sach / task, Tab thut le, go "- " ra danh sach -----
-    // Ban render (.ne-wys): Chromium TU noi bullet va danh sach so khi Enter, nen chi phai lo
-    // task (li moi khong co checkbox) va loi ra khoi task rong. O nguon tho thi tu lam het.
+    // ----- Enter continues list / task lines, Tab indents, typing "- " makes a list -----
+    // Render pane (.ne-wys): Chromium continues bullets and numbered lists on Enter BY ITSELF, so
+    // only tasks need help (the new li has no checkbox) plus leaving an empty task. In the raw
+    // source pane we do everything ourselves.
 
-    // Sua textarea qua execCommand de Ctrl+Z hoan tac duoc; trinh duyet nao tu choi thi ghi
-    // thang vao value roi tu bao "input" de co danh dau da sua va tu luu van biet.
-    function suaTa(ta, ed) {
+    // Edit the textarea through execCommand so Ctrl+Z can undo it; a browser that refuses gets the
+    // value written directly plus an "input" event so the dirty mark and autosave still notice.
+    function editTextarea(ta, ed) {
       try { ta.focus(); } catch (x) {}
       ta.selectionStart = ed.s; ta.selectionEnd = ed.e;
       var ok = false;
@@ -537,126 +538,126 @@
       var b = ed.selE != null ? ed.selE : a;
       ta.selectionStart = a; ta.selectionEnd = b;
     }
-    function baoDaSua(wys) {
+    function markEdited(wys) {
       try { wys.dispatchEvent(new Event("input", { bubbles: true })); } catch (x) {}
     }
-    // Chuyen node trong DOM la range cua selection bi keo ve node cha. Nho vi tri caret theo
-    // text node (node van song sau khi chuyen) roi dat lai.
-    function nhoCaret() {
+    // Moving a node in the DOM pulls the selection range back to the parent node. Remember the
+    // caret by text node (the node survives the move) and put it back afterwards.
+    function saveCaret() {
       var s = window.getSelection();
       return (s && s.rangeCount) ? { n: s.anchorNode, o: s.anchorOffset } : null;
     }
-    function datCaret(c) {
+    function restoreCaret(c) {
       if (!c || !c.n || !c.n.isConnected) return;
       try {
         var r = document.createRange(); r.setStart(c.n, c.o); r.collapse(true);
         var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
       } catch (x) {}
     }
-    function laList(el) { return !!el && (el.tagName === "UL" || el.tagName === "OL"); }
-    function cbCua(li) {
+    function isList(el) { return !!el && (el.tagName === "UL" || el.tagName === "OL"); }
+    function checkboxOf(li) {
       for (var c = li.firstElementChild; c; c = c.nextElementSibling) {
         if (c.tagName === "INPUT" && c.classList.contains("md-cb")) return c;
       }
       return null;
     }
-    // li khong co chu nao cua chinh no (bo qua checkbox va danh sach con)
-    function liTrong(li) {
+    // An li with no text of its own (the checkbox and sub-lists are ignored)
+    function liIsEmpty(li) {
       var t = "";
       for (var c = li.firstChild; c; c = c.nextSibling) {
         if (c.nodeType === 3) t += c.textContent;
-        else if (c.nodeType === 1 && !laList(c) && c.tagName !== "INPUT" && c.tagName !== "BR") t += c.textContent;
+        else if (c.nodeType === 1 && !isList(c) && c.tagName !== "INPUT" && c.tagName !== "BR") t += c.textContent;
       }
-      return !t.replace(/[\s ​]/g, "");
+      return !t.replace(/[\s\u00a0\u200b]/g, "");
     }
-    function caretSauCb(li) {
-      var cb = cbCua(li);
-      var sau = cb && cb.nextSibling;
+    function caretAfterCheckbox(li) {
+      var cb = checkboxOf(li);
+      var next = cb && cb.nextSibling;
       try {
         var r = document.createRange();
-        if (sau && sau.nodeType === 3) r.setStart(sau, Math.min(1, sau.length));
+        if (next && next.nodeType === 3) r.setStart(next, Math.min(1, next.length));
         else if (cb) r.setStartAfter(cb);
         else r.setStart(li, 0);
         r.collapse(true);
         var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
       } catch (x) {}
     }
-    // Bien li thanh task chua tick. Da co checkbox thi de yen (goi lai bao nhieu lan cung duoc).
-    function dapCheckbox(li) {
-      if (!li || li.tagName !== "LI" || cbCua(li)) return false;
+    // Turn an li into an unchecked task. One that already has a checkbox is left alone (idempotent).
+    function addCheckbox(li) {
+      if (!li || li.tagName !== "LI" || checkboxOf(li)) return false;
       li.classList.add("task-item");
-      // Chromium chep ca class cua li cu sang li moi: noi tu viec da xong la viec moi
-      // sinh ra da mang vet gach ngang cua viec hoan thanh.
+      // Chromium copies the old li's classes onto the new one: continuing from a done task would
+      // give the new task the strike-through of a finished one.
       li.classList.remove("task-done");
-      // Enter giua dong: phan chu chay xuong mang theo dau cach (Chromium doi thanh nbsp), khong
-      // bo thi luu ra "- [ ]  chu" thua mot dau cach.
-      var dau = li.firstChild;
-      if (dau && dau.nodeType === 3) dau.textContent = dau.textContent.replace(/^[  ]+/, "");
+      // Enter mid-line: the text that moves down carries its leading space (Chromium turns it into
+      // nbsp); left in place it saves as "- [ ]  text" with one space too many.
+      var first = li.firstChild;
+      if (first && first.nodeType === 3) first.textContent = first.textContent.replace(/^[ \u00a0]+/, "");
       li.insertAdjacentHTML("afterbegin", CB_HTML);
       return true;
     }
-    // Chay SAU khi Chromium da tach li. truoc = li dung ngay tren li cu luc bam phim.
-    function napTask(wys, truoc) {
-      var li = liTuCaret(wys);
+    // Runs AFTER Chromium split the li. before = the li right above the old li when the key was pressed.
+    function fillNewTask(wys, before) {
+      var li = liAtCaret(wys);
       if (!li) return;
-      if (dapCheckbox(li)) caretSauCb(li);
-      // Enter o DAU dong: Chromium day dong moi len TREN, caret o lai dong cu. Dong moi do
-      // nam giua "truoc" va li dang chua caret.
-      var tren = li.previousElementSibling;
-      if (tren && tren !== truoc && tren.tagName === "LI") dapCheckbox(tren);
-      baoDaSua(wys);
+      if (addCheckbox(li)) caretAfterCheckbox(li);
+      // Enter at the START of a line: Chromium pushes the new line ABOVE and the caret stays on the
+      // old one. That new line sits between "before" and the li holding the caret.
+      var above = li.previousElementSibling;
+      if (above && above !== before && above.tagName === "LI") addCheckbox(above);
+      markEdited(wys);
     }
-    // Task rong + Enter: go checkbox, roi muc con thi lui ra mot cap, muc cap ngoai cung thi
-    // tro thanh doan van thuong. Tra true neu da xu ly (chan Enter cua trinh duyet).
-    function thoatDanhSach(li) {
-      var cb = cbCua(li);
-      if (cb) { var sau = cb.nextSibling; cb.remove(); if (sau && sau.nodeType === 3 && /^[  ]$/.test(sau.textContent)) sau.remove(); }
+    // Empty task + Enter: drop the checkbox, then a sub-item moves out one level and a top-level
+    // item becomes a plain paragraph. Returns true when handled (the browser's Enter is blocked).
+    function exitList(li) {
+      var cb = checkboxOf(li);
+      if (cb) { var next = cb.nextSibling; cb.remove(); if (next && next.nodeType === 3 && /^[ \u00a0]$/.test(next.textContent)) next.remove(); }
       li.classList.remove("task-item", "task-done");
       if (!li.firstChild) li.appendChild(document.createElement("br"));
       try { var r = document.createRange(); r.setStart(li, 0); r.collapse(true); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); } catch (x) {}
-      if (thutLiRa(li)) return true;
+      if (outdentLi(li)) return true;
       var list = li.parentNode;
       try { document.execCommand(list && list.tagName === "OL" ? "insertOrderedList" : "insertUnorderedList"); } catch (x) {}
       return true;
     }
-    // Tab trong li: dua li vao danh sach con cua li ngay tren. Lam tay chu khong dung
-    // lenh indent cua execCommand vi Chromium dat <ul> con ngang hang <li> (khong nam TRONG li),
-    // Turndown doc kieu do khong ra thut le va muc con rot ve cap ngoai khi luu.
-    function thutLiVao(li) {
-      var tren = li.previousElementSibling, list = li.parentNode;
-      if (!tren || tren.tagName !== "LI" || !laList(list)) return false;
-      var c = nhoCaret();
-      var con = tren.lastElementChild;
-      if (!laList(con) || con.tagName !== list.tagName) {
-        con = document.createElement(list.tagName);
-        tren.appendChild(con);
+    // Tab in an li: move it into the sub-list of the li right above. Done by hand rather than with
+    // execCommand's indent because Chromium puts the sub <ul> NEXT TO the <li> (not INSIDE it),
+    // which Turndown does not read as indentation, so the sub-item falls back a level on save.
+    function indentLi(li) {
+      var above = li.previousElementSibling, list = li.parentNode;
+      if (!above || above.tagName !== "LI" || !isList(list)) return false;
+      var c = saveCaret();
+      var sub = above.lastElementChild;
+      if (!isList(sub) || sub.tagName !== list.tagName) {
+        sub = document.createElement(list.tagName);
+        above.appendChild(sub);
       }
-      con.appendChild(li);
-      datCaret(c);
+      sub.appendChild(li);
+      restoreCaret(c);
       return true;
     }
-    // Shift+Tab: dua li ra ngoai mot cap, ngay sau li cha. Cac li dung SAU no trong cung danh
-    // sach con theo no xuong lam con cua no, nhu vay thu tu tren duoi khong doi.
-    function thutLiRa(li) {
-      var list = li.parentNode, cha = list && list.parentNode;
-      if (!laList(list) || !cha || cha.tagName !== "LI") return false;
-      var c = nhoCaret();
+    // Shift+Tab: move the li out one level, right after its parent li. The li items AFTER it in the
+    // same sub-list follow it down as its children, so the top-to-bottom order does not change.
+    function outdentLi(li) {
+      var list = li.parentNode, parentLi = list && list.parentNode;
+      if (!isList(list) || !parentLi || parentLi.tagName !== "LI") return false;
+      var c = saveCaret();
       if (li.nextElementSibling) {
-        var con = li.lastElementChild;
-        if (!laList(con) || con.tagName !== list.tagName) {
-          con = document.createElement(list.tagName);
-          li.appendChild(con);
+        var sub = li.lastElementChild;
+        if (!isList(sub) || sub.tagName !== list.tagName) {
+          sub = document.createElement(list.tagName);
+          li.appendChild(sub);
         }
-        while (li.nextSibling) con.appendChild(li.nextSibling);
+        while (li.nextSibling) sub.appendChild(li.nextSibling);
       }
-      cha.parentNode.insertBefore(li, cha.nextSibling);
+      parentLi.parentNode.insertBefore(li, parentLi.nextSibling);
       if (!list.firstElementChild) list.remove();
-      datCaret(c);
+      restoreCaret(c);
       return true;
     }
-    function nhuongPhim(e) {
-      if (e.isComposing || e.keyCode === 229) return true;     // bo go tieng Viet dang chot chu
-      if (pop || document.querySelector(".ts-pop")) return true; // menu "/" hoac menu goi y task
+    function yieldKey(e) {
+      if (e.isComposing || e.keyCode === 229) return true;     // an IME (e.g. Vietnamese) is committing text
+      if (pop || document.querySelector(".ts-pop")) return true; // the "/" menu or the task suggestion menu
       return false;
     }
 
@@ -670,39 +671,39 @@
       if (ctx.mode() === "source") {
         var ta = ctx.ta;
         if (!ta || ta.selectionStart !== ta.selectionEnd) return;
-        var ed = enterDanhSach(ta.value, ta.selectionStart);
+        var ed = continueList(ta.value, ta.selectionStart);
         if (!ed) return;
         e.preventDefault();
-        suaTa(ta, ed);
+        editTextarea(ta, ed);
         return;
       }
       var s = window.getSelection();
       if (!s || !s.isCollapsed) return;
-      var li = liTuCaret(ctx.wys);
-      if (!li || !li.classList.contains("task-item")) return;  // bullet/so: Chromium tu noi
-      if (liTrong(li)) { if (thoatDanhSach(li)) { e.preventDefault(); baoDaSua(ctx.wys); } return; }
-      var truoc = li.previousElementSibling, wys = ctx.wys;
-      setTimeout(function () { napTask(wys, truoc); }, 0);
+      var li = liAtCaret(ctx.wys);
+      if (!li || !li.classList.contains("task-item")) return;  // bullet/number: Chromium continues it
+      if (liIsEmpty(li)) { if (exitList(li)) { e.preventDefault(); markEdited(ctx.wys); } return; }
+      var before = li.previousElementSibling, wys = ctx.wys;
+      setTimeout(function () { fillNewTask(wys, before); }, 0);
     }, true);
 
     document.addEventListener("keydown", function (e) {
       if (e.key !== "Tab" || e.defaultPrevented) return;
-      if (e.ctrlKey || e.metaKey || e.altKey || nhuongPhim(e)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || yieldKey(e)) return;
       var ctx = ctxTu(e.target);
       if (!ctx) return;
       if (ctx.mode() === "source") {
         var ta = ctx.ta;
         if (!ta) return;
-        // Chan Tab ca khi khong co gi de lui: de mac dinh thi focus nhay khoi o soan.
+        // Block Tab even with nothing to outdent: by default focus would jump out of the editor.
         e.preventDefault();
-        var ed = thutLe(ta.value, ta.selectionStart, ta.selectionEnd, e.shiftKey);
-        if (ed) suaTa(ta, ed);
+        var ed = indentLines(ta.value, ta.selectionStart, ta.selectionEnd, e.shiftKey);
+        if (ed) editTextarea(ta, ed);
         return;
       }
-      var li = liTuCaret(ctx.wys);
+      var li = liAtCaret(ctx.wys);
       if (li) {
         e.preventDefault();
-        if (e.shiftKey ? thutLiRa(li) : thutLiVao(li)) baoDaSua(ctx.wys);
+        if (e.shiftKey ? outdentLi(li) : indentLi(li)) markEdited(ctx.wys);
         return;
       }
       if (e.shiftKey) return;
@@ -711,8 +712,8 @@
       e.preventDefault();
     }, true);
 
-    // Go "- " / "* " / "1. " o dau mot doan trong ban render -> thanh danh sach that. Khong co
-    // buoc nay thi doan van giu nguyen chu "- ", Turndown luu ra "\- " va Enter khong noi duoc.
+    // Typing "- " / "* " / "1. " at the start of a paragraph in the render pane -> a real list.
+    // Without this the paragraph keeps the text "- ", Turndown saves "\- " and Enter cannot continue it.
     document.addEventListener("keyup", function (e) {
       if (e.key !== " " || e.isComposing) return;
       var ctx = ctxTu(e.target);
@@ -721,19 +722,19 @@
       if (!s || !s.rangeCount || !s.isCollapsed) return;
       var n = s.anchorNode, el = n && (n.nodeType === 1 ? n : n.parentElement);
       if (!el || !ctx.wys.contains(el) || el.closest("li,pre,code,blockquote")) return;
-      var khoi = el.closest("p,div,h1,h2,h3,h4,h5,h6");
-      if (!khoi || khoi === ctx.wys || !/^(P|DIV)$/.test(khoi.tagName)) return;
-      if (khoi.tagName === "DIV" && khoi.className) return;   // khoi dac biet: frontmatter, code...
-      var dm = dauMucGo(khoi.textContent);
-      if (!dm) return;
-      khoi.innerHTML = "<br>";
-      try { var r = document.createRange(); r.setStart(khoi, 0); r.collapse(true); s.removeAllRanges(); s.addRange(r); } catch (x) {}
-      try { document.execCommand(dm.loai === "ol" ? "insertOrderedList" : "insertUnorderedList"); } catch (x) {}
-      if (dm.loai === "ol" && dm.batDau !== 1) {
-        var li = liTuCaret(ctx.wys), ol = li && li.parentNode;
-        if (ol && ol.tagName === "OL") ol.setAttribute("start", String(dm.batDau));
+      var block = el.closest("p,div,h1,h2,h3,h4,h5,h6");
+      if (!block || block === ctx.wys || !/^(P|DIV)$/.test(block.tagName)) return;
+      if (block.tagName === "DIV" && block.className) return;   // special blocks: frontmatter, code...
+      var mk = typedListMarker(block.textContent);
+      if (!mk) return;
+      block.innerHTML = "<br>";
+      try { var r = document.createRange(); r.setStart(block, 0); r.collapse(true); s.removeAllRanges(); s.addRange(r); } catch (x) {}
+      try { document.execCommand(mk.kind === "ol" ? "insertOrderedList" : "insertUnorderedList"); } catch (x) {}
+      if (mk.kind === "ol" && mk.start !== 1) {
+        var li = liAtCaret(ctx.wys), ol = li && li.parentNode;
+        if (ol && ol.tagName === "OL") ol.setAttribute("start", String(mk.start));
       }
-      baoDaSua(ctx.wys);
+      markEdited(ctx.wys);
     });
 
     window.JavisEditorCmds = api;
