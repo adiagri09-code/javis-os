@@ -680,7 +680,7 @@ class WebhookWorker:
         """The hook's task or workflow: the only delivery that calls a model. The event and delivery ids go into the
         prompt (spec §8.4): the run is tied to them in the workflow history. Returns (status, detail, result)."""
         from webhook_triggers import event_prompt, payload_text, _is_silent
-        prompt = event_prompt(hook, payload_text(body, ct), base["received_at"], fields,
+        prompt = event_prompt(hook, payload_text(body, ct, compact=True), base["received_at"], fields,
                               ids={"event": base["event_id"], "delivery": b.get("delivery_id", "")})
         result, error, needs_input = "", "", False
         try:

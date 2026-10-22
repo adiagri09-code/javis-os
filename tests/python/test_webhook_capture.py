@@ -60,6 +60,7 @@ async def main():
     check("check: a fixture whose expected decision differs fails the run (exit 1)", code == 1)
 
     real_capture()
+    await prompt_sees_whole_order()
 
 
 def real_capture():
@@ -108,6 +109,45 @@ def real_capture():
     res = wc.check(spec, [str(fx)])
     check("real capture: the spec's illustrative names (status 1, items[*].name) would ignore every real new order",
           res[0]["decision"] == "filtered", res)
+
+
+async def prompt_sees_whole_order():
+    """0.287.0: a hook whose prompt decides by the order's fields must get the whole order. The AI run read the first
+    8000 characters of the pretty-printed body, which cut a one-item POSCake order before its id and total."""
+    fx = json.loads((ROOT / "tests" / "fixtures" / "webhooks" / "captured" / "poscake-order-create.json")
+                    .read_text(encoding="utf-8"))
+    order = fx["payload"]
+    order["items"] = order["items"] * 4                    # a four-item order, still well under the body cap
+    seen = []
+
+    async def capture(brain, text, level):
+        seen.append(text)
+        return "[SILENT]", ""
+    sd = Path(tempfile.mkdtemp(prefix="wh-prompt-"))
+    f = mx.make(sd, run_task=capture)
+    h, t, _ = f.create("/b1", name="Mọi nguồn", target="task", text="Đọc trạng thái đơn rồi làm theo.")
+    big = "x" * 70000
+    for key, doc in (("p-1", order), ("p-2", {"long_text_0287": big})):
+        c, r = await f.accept(h["id"], t, json.dumps(doc, ensure_ascii=False).encode(), "application/json", key)
+        check(f"prompt: event {key} accepted", c == 202, (c, r))
+    await f.wait_idle()
+    f.store().close()
+    f._store = None
+    p1 = next((x for x in seen if '"event_type"' in x), "")
+    check("prompt: a four-item POSCake order reaches the AI whole (order id, total, every item, no cut)",
+          '"id":739' in p1 and '"total_price"' in p1 and p1.count('"variation_info"') == 4 and "đã cắt" not in p1,
+          len(p1))
+    import webhook_rules as wr
+    one = wr.validate({"dedup": {"business_paths": ["shop_id", "id", "status"], "ttl_s": 604800, "missing": "accept"},
+                       "correlation": "id"})
+    other = wr.evaluate(one, b'{"type": "contact.subscribed", "data": {"email": "a@example.com"}}', "application/json")
+    pos = wr.evaluate(one, json.dumps(order).encode(), "application/json")
+    check("one webhook for every source (guide §3): another platform's event runs, a POSCake order gets its key",
+          other["decision"] == "run" and not other.get("business_key") and pos["decision"] == "run"
+          and bool(pos.get("business_key")), (other["decision"], pos["decision"]))
+    p2 = next((x for x in seen if '"long_text_0287"' in x), "")
+    check("prompt: a body past the limit is cut with a note saying so, not silently",
+          "đã cắt" in p2 and len(p2) < 45000, len(p2))
 
 
 if __name__ == "__main__":

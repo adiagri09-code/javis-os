@@ -60,7 +60,10 @@ from webhook_auth import hash_token, new_token, token_from_request  # noqa: F401
 
 BODY_MAX_BYTES = webhook_store.BODY_DEFAULT     # a hook's default body cap (spec §11: 256 KiB)
 BODY_CEILING = webhook_store.BODY_CEILING       # the hard ceiling a hook may raise its cap to (2 MiB)
-PAYLOAD_PROMPT_CHARS = 8000
+# What the AI run reads of an event (0.287.0: 8000 cut a one-item POSCake order before its id and total, so a prompt
+# that decides by the order's fields could not see them). The prompt gets compact JSON; the detail view, pretty JSON.
+PAYLOAD_PROMPT_CHARS = 40000
+PAYLOAD_VIEW_CHARS = 64000
 RATE_PER_HOUR = webhook_store.RATE_PER_HOUR
 WORKER_MAX = webhook_worker.WORKER_MAX
 SWEEP_S = webhook_worker.SWEEP_S
@@ -135,16 +138,18 @@ class WebhookDeps:
     brain_exists: Optional[Callable] = None
 
 
-def payload_text(body: bytes, content_type: str) -> str:
-    """The event as readable text for a prompt: JSON pretty-printed, a form as key: value lines, anything else decoded
-    as text. Never raises."""
+def payload_text(body: bytes, content_type: str, compact: bool = False) -> str:
+    """The event as readable text: JSON pretty-printed (`compact`: on one line, for a prompt, about a fifth shorter), a
+    form as key: value lines, anything else decoded as text. Never raises."""
     text = body.decode("utf-8", "replace")
     ct = (content_type or "").lower()
     if not text.strip():
         return ""
     try:
         if "json" in ct or text.lstrip()[:1] in ("{", "["):
-            return json.dumps(json.loads(text), ensure_ascii=False, indent=2)
+            doc = json.loads(text)
+            return json.dumps(doc, ensure_ascii=False, separators=(",", ":")) if compact else \
+                json.dumps(doc, ensure_ascii=False, indent=2)
     except Exception:
         pass
     if "x-www-form-urlencoded" in ct:
@@ -161,7 +166,10 @@ def event_prompt(hook: dict, payload: str, received_at: float, fields: Optional[
                  ids: Optional[dict] = None) -> str:
     """What the engine receives. Prompt text stays Vietnamese (docs/dev/them-mot-ngon-ngu.md). The fence markers are
     neutralised inside the payload so it cannot close its own block. `ids` (event, delivery) tie the run to the log."""
-    body = (payload or "(không có dữ liệu)")[:PAYLOAD_PROMPT_CHARS]
+    body = payload or "(không có dữ liệu)"
+    if len(body) > PAYLOAD_PROMPT_CHARS:
+        body = body[:PAYLOAD_PROMPT_CHARS] + (f"\n... (đã cắt: dữ liệu dài {len(payload)} ký tự, đây là "
+                                              f"{PAYLOAD_PROMPT_CHARS} ký tự đầu; bản đầy đủ ở trang Sự kiện)")
     body = body.replace("<<<", "< < <").replace(">>>", "> > >")
     when = time.strftime("%Y-%m-%d %H:%M", time.localtime(received_at))
     head = f"SỰ KIỆN WEBHOOK \"{hook.get('name') or hook.get('id')}\" vừa tới lúc {when}."
@@ -1096,7 +1104,7 @@ class WebhookFeature(webhook_worker.WebhookWorker):
         if out["would_run"]:
             out["deliveries"] = self._plan_view(h, cfg, res, body, ct)
             if any(a["kind"] == "ai" for a in webhook_actions.effective(cfg.get("actions"))):
-                out["prompt"] = event_prompt(h, payload_text(body, ct), time.time(), res["fields"])
+                out["prompt"] = event_prompt(h, payload_text(body, ct, compact=True), time.time(), res["fields"])
         if p.get("event"):
             # A LOGGED event holds customer data: masked like its detail view unless the owner asks for the raw view,
             # which is recorded (spec §12). A payload the owner pasted is theirs and is shown as pasted.
@@ -1608,12 +1616,12 @@ class WebhookFeature(webhook_worker.WebhookWorker):
             ct = ev.get("content_type") or ""
             if raw:
                 await asyncio.to_thread(st.audit, "view_raw", ev["hook_id"], event_id)
-                ev["payload"] = payload_text(bytes(body), ct)[:PAYLOAD_PROMPT_CHARS]
+                ev["payload"] = payload_text(bytes(body), ct)[:PAYLOAD_VIEW_CHARS]
             else:
                 doc, kind = webhook_rules.parse_payload(bytes(body), ct)
                 m = mask_payload(doc)
                 ev["payload"] = (json.dumps(m, ensure_ascii=False, indent=2, default=str) if kind in ("json", "form") else
-                                 _mask_text(str(m.get("_text", ""))) if isinstance(m, dict) else str(m))[:PAYLOAD_PROMPT_CHARS]
+                                 _mask_text(str(m.get("_text", ""))) if isinstance(m, dict) else str(m))[:PAYLOAD_VIEW_CHARS]
                 ev = mask_row(ev, (await asyncio.to_thread(self._corr_keys)).get(ev.get("hook_id"), ""))
             ev["masked"] = not raw
             ev.pop("hook_snapshot", None)

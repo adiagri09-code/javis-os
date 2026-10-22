@@ -35,14 +35,18 @@ Người chỉ cần chạy một quy trình thì không cần phần này. Ô *
 ```json
 {
   "filter": {"all": [
-    {"path": "status", "op": "eq", "value": 1},
-    {"path": "items[*].name", "op": "contains", "value": "TRỢ LÝ AI JAVIS", "quantifier": "any", "case_sensitive": false}
+    {"path": "status", "op": "eq", "value": 0},
+    {"path": "items[*].variation_info.name", "op": "contains", "value": "TRỢ LÝ AI JAVIS", "quantifier": "any",
+     "case_sensitive": false}
   ]},
-  "mapping": {"order_id": "id", "phone": {"path": "customer.phone", "transform": "digits"}},
+  "mapping": {"order_id": "id", "phone": {"path": "bill_phone_number", "transform": "digits"}},
   "dedup": {"business_paths": ["shop_id", "id", "status"], "ttl_s": 604800},
   "correlation": "id"
 }
 ```
+
+Tên trường trong ví dụ là của POSCake thật (đơn mới có `status` 0, tên sản phẩm nằm ở `items[*].variation_info.name`).
+Nền tảng khác đặt tên khác: xem ở phần Sự kiện, bấm Chi tiết một sự kiện đã nhận.
 
 - **filter**: chỉ chạy khi khớp. Kiểu dữ liệu được so đúng: số `1` khác chữ `"1"`. Trường thiếu thì không bao giờ
   coi là khớp. `items[*]` kiểm từng món trong đơn, cần nói rõ `any` (có món nào khớp) hay `all` (mọi món đều khớp).
@@ -56,6 +60,24 @@ Người chỉ cần chạy một quy trình thì không cần phần này. Ô *
 
 Trước khi lưu, dán dữ liệu mẫu rồi bấm **Chạy thử**: Javis cho thấy từng điều kiện khớp hay không và trường nào được
 trích. Chạy thử không lưu, không chạy, không gửi gì, không gọi AI.
+
+### Một webhook cho mọi nguồn, lời dặn quyết định
+
+Không muốn lập nhiều webhook thì dùng một cái nhận hết, để lời dặn (việc viết bằng lời) tự xử lý từng sự kiện:
+
+```json
+{"dedup": {"business_paths": ["shop_id", "id", "status"], "ttl_s": 604800, "missing": "accept"}, "correlation": "id"}
+```
+
+- Không có `filter`: mọi sự kiện đều tới lời dặn. AI nhận nguyên nội dung sự kiện (tới 40.000 ký tự; dài hơn thì
+  bị cắt và AI được báo là đã cắt).
+- `dedup` chặn một đơn POSCake bị gửi hai lần cùng trạng thái. `"missing": "accept"` để sự kiện của nền tảng khác (không
+  có các trường đó) vẫn chạy bình thường thay vì bị cách ly.
+- Lời dặn ví dụ: "Tự xác định nguồn và loại sự kiện. POSCake đơn mới: ... Đã thanh toán: ... Systeme.io đăng ký: ...
+  Sự kiện khác: không làm gì."
+- Mỗi sự kiện tốn một lượt AI, kể cả khi lời dặn bảo không làm gì (30 lượt mỗi giờ, hết thì sự kiện chờ, không mất).
+- Nền tảng chỉ cho dán đường link (như POSCake) cần webhook tạo trước bản 0.274.0, vì chỉ webhook đó nhận khoá trên
+  địa chỉ (`?token=`).
 
 ## 4. Gửi tiếp sang nơi khác (ô Hành động)
 
