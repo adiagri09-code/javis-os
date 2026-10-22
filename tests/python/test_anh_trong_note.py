@@ -16,6 +16,7 @@ vào nó dù file đã cũ.
 """
 from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
+import shutil
 import sys
 import tempfile
 import time
@@ -61,6 +62,21 @@ r2 = c.post("/files/upload", data={"brain": brain, "folder": "images"},
 check("CANARY: hai ảnh cùng một giây thì tên thứ hai được tách ra, không ghi đè",
       r2.get("path") != r.get("path") and len(os.listdir(os.path.join(brain, "images"))) == 2,
       r2)
+
+# SVG can carry script and note images render inline: the images folder takes raster only.
+r_svg = c.post("/files/upload", data={"brain": brain, "folder": "images"},
+               files={"file": ("evil.svg", b"<svg onload='alert(1)'/>", "image/svg+xml")})
+check("CANARY: an .svg upload to images/ is rejected with 400", r_svg.status_code == 400, r_svg.text)
+check("the rejected .svg is not written to disk",
+      not any(n.endswith(".svg") for n in os.listdir(os.path.join(brain, "images"))),
+      os.listdir(os.path.join(brain, "images")))
+r_noext = c.post("/files/upload", data={"brain": brain, "folder": "images"},
+                 files={"file": ("blob", b"xxxx", "application/octet-stream")})
+check("a file with no image extension is rejected too", r_noext.status_code == 400, r_noext.text)
+r_att = c.post("/files/upload", data={"brain": brain, "folder": "attachments"},
+               files={"file": ("doc.svg", b"<svg/>", "image/svg+xml")})
+check("other logical folders keep their old rules", r_att.status_code == 200, r_att.text)
+shutil.rmtree(os.path.join(brain, "attachments"), ignore_errors=True)
 
 # Brain đặt tên kiểu "06 - Images" thì phải DÙNG LẠI, không đẻ thư mục thứ hai.
 brain2 = tempfile.mkdtemp(prefix="brain-anh2-")

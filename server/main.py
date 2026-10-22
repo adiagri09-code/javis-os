@@ -8175,6 +8175,9 @@ _THU_MUC_LOGIC = {
     # attachments/ là vùng cache và xoá file quá 30 ngày, còn ảnh note thì có note trỏ vào.
     "images": (r"^(\d+\s*[-_.]\s*)?images$", "images"),
 }
+# Note images are embedded and shown inline, so the "images" folder takes raster formats only.
+# SVG can carry script and is never stored there.
+_NOTE_IMAGE_EXTS = {".webp", ".jpg", ".jpeg", ".png", ".gif", ".avif", ".bmp"}
 
 
 @app.post("/files/upload")
@@ -8186,6 +8189,11 @@ async def files_upload(file: UploadFile = File(...), brain: str = Form("brain"),
         mau = _THU_MUC_LOGIC.get(folder.strip().lower())
         if not mau:
             return JSONResponse({"error": localefmt.chu("Thư mục không hợp lệ", "Invalid folder")}, status_code=400)
+        if folder.strip().lower() == "images" and \
+                os.path.splitext(_sanitize_filename(file.filename))[1].lower() not in _NOTE_IMAGE_EXTS:
+            return JSONResponse({"error": localefmt.chu(
+                "Ảnh trong note chỉ nhận WebP, JPG, PNG, GIF, AVIF hoặc BMP",
+                "Note images accept only WebP, JPG, PNG, GIF, AVIF or BMP")}, status_code=400)
         d = Path(_resolve_subfolder(_brain_root(brain), *mau))
         try:
             # Client lưu và mở file bằng đường dẫn tương đối TRẦN duyệt, nên phải quy về đó -

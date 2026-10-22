@@ -73,7 +73,10 @@ check("CANARY: nén NẶNG hơn thì giữ bản gốc", NI.chonBanNhe(3000, 520
 check("đã thu nhỏ khung thì vẫn lấy bản nén", NI.chonBanNhe(3000, 5200, true) === "nen");
 check("nén thất bại (không có blob) thì giữ bản gốc", NI.chonBanNhe(3000, 0, true) === "goc");
 check("gif giữ nguyên, không qua canvas (mất ảnh động)", NI.khongNen("image/gif", "a.gif") === true);
-check("svg giữ nguyên, không qua canvas (là vector)", NI.khongNen("image/svg+xml", "a.svg") === true);
+// SVG can carry script and the note renders images inline, so it must never be stored.
+check("SVG is not treated as an image (by MIME)", NI.laAnh("image/svg+xml", "a.svg") === false);
+check("SVG is not treated as an image (by name, empty MIME)", NI.laAnh("", "a.svg") === false);
+check("SVG has no stored extension", NI.duoiTheoLoai("image/svg+xml", "") !== ".svg");
 check("png thì được nén", NI.khongNen("image/png", "a.png") === false);
 
 // ============================================================

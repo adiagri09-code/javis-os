@@ -49,7 +49,7 @@
 
   var DUOI_THEO_LOAI = {
     "image/webp": ".webp", "image/jpeg": ".jpg", "image/jpg": ".jpg", "image/png": ".png",
-    "image/gif": ".gif", "image/svg+xml": ".svg", "image/bmp": ".bmp", "image/avif": ".avif",
+    "image/gif": ".gif", "image/bmp": ".bmp", "image/avif": ".avif",
     "image/heic": ".heic", "image/heif": ".heif",
   };
   function duoiTheoLoai(mime, tenGoc) {
@@ -59,9 +59,12 @@
     var t = /(\.[a-z0-9]{2,5})$/i.exec(String(tenGoc == null ? "" : tenGoc));
     return t ? t[1].toLowerCase() : ".png";
   }
+  // SVG is never treated as an image here: it can carry script, so it is never stored.
   function laAnh(mime, tenGoc) {
-    if (/^image\//i.test(String(mime || ""))) return true;
-    return /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|heif)$/i.test(String(tenGoc || ""));
+    var m = String(mime || "");
+    if (/^image\/svg/i.test(m)) return false;
+    if (/^image\//i.test(m)) return true;
+    return /\.(png|jpe?g|gif|webp|bmp|avif|heic|heif)$/i.test(String(tenGoc || ""));
   }
   // Anh HEIC/HEIF cua iPhone: Safari doc duoc (nen ra webp binh thuong), con Chrome/Edge tren
   // Windows thi KHONG. Gui nguyen file .heic len la note hien o xam o moi trinh duyet khong phai
@@ -74,8 +77,8 @@
   // bien thanh anh diem, vua mo vua to hon ban goc).
   function khongNen(mime, tenGoc) {
     var m = String(mime || "").toLowerCase();
-    if (m === "image/gif" || m === "image/svg+xml") return true;
-    return /\.(gif|svg)$/i.test(String(tenGoc || ""));
+    if (m === "image/gif") return true;
+    return /\.gif$/i.test(String(tenGoc || ""));
   }
   // Khung moi sau khi thu nho theo canh dai nhat. KHONG bao gio phong to anh nho len.
   function khungMoi(w, h, max) {
