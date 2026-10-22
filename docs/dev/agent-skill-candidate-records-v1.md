@@ -34,9 +34,8 @@ Viewing metadata creates no private-content authority.
 ledger. It validates expected generation and event-key payload, records revocation
 and its event atomically, and replays historical results without restoring a grant.
 Revocation is allowed even when the improvement policy is off. Private exact-text
-reads are a later M2A unit and must revalidate current source and permission before
-returning content. The owner staging service below observes that authority before
-every new authoring write.
+reads revalidate current source and permission before returning content. The owner
+staging service below observes that authority before every new authoring write.
 
 ## Explicit owner staging
 
@@ -77,6 +76,33 @@ are rejected. Lexical helper/script references cannot change, including Windows
 path separators; that inventory is explicitly incomplete and does not certify
 dependency semantics or obedience to owner rules. M2A never turns these structural
 checks into executable admission or activation authority.
+
+## Private exact review
+
+`PrivateReview.candidate` returns complete before/after UTF-8 text with independently
+computed raw-byte SHA-256 and sizes, proposed byte bounds and separate unresolved
+semantic status. It verifies encrypted patch/provenance and the originating owner
+event, then rechecks current source, native permissions and active scoped context
+grant after reads. Edit permission and read permission are separate: a revoked
+edit decision remains revoked while an owner with a still-active source read
+grant can inspect its history. No read creates a grant or semantic acceptance.
+
+`PrivateReview.artifact` reuses `TrialProducts.artifact`, the actual immutable
+case-set/contract/context association and `BrainFileFixtures`. It returns complete
+artifact text, the task, public contract and exact authorized fixture facts/source
+versions. Current fixture content and native authority are rechecked before and
+after reads. It never reads answer blobs, returns checker internals, refreshes
+usage or constructs a live Host/settings/auth/model-capture builder. Qualification
+products require an already-consumed qualification reservation; review cannot
+consume or reset it. Current implementation supports skill targets.
+
+Policy-off preserves private history only when the existing read grant and current
+source permissions still permit it. Revoked, changed, missing, corrupt or unsupported
+sources reject the complete private response; cold metadata remains separate.
+Artifacts are UTF-8-only; aggregate artifact/fixture review content is bounded at
+8MiB, with explicit unavailable status above that size. Text is never silently
+truncated or redacted while claiming the original hash. Reading does not accept
+the artifact, append an owner decision or change any verdict, usage or ledger row.
 
 ## Upgrade and recovery
 

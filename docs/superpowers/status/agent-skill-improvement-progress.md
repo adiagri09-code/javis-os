@@ -28,15 +28,18 @@
   branch `codex/agent-skill-improvement-m2a`, release0.292.0 reservationf6d8d356,
   attached draft PR799: https://github.com/blogminhquy/javis-os/pull/799.
 - Dependency: independently reviewed M1 head23e546b9/PR795. Final-head Linux
-  CI39847154134 is still pending; no M1 merge/publication or M2 integration claim.
+  CI39847154134 failed only the actual main E2E (not_run/authority_changed before
+  engine marker); all earlier failing suites passed. Portable diagnosis is in
+  progress; no M1 merge/publication or M2 integration claim.
   M2A targets the M1 branch temporarily and must rebase/retarget onto published
   main before integration. The original checkout remains untouched.
 - Plan: `../plans/2026-10-23-agent-skill-improvement-m2a.md`, reviewed/self-reviewed.
   Tasks1–2 add schema4 owner-authority/immutable candidate metadata and byte-exact
   owner staging. Their new suites pass12/11/14 tests; relevant assets, Host,
-  store/case/trial/admission regressions pass. Private review and UI remain later
-  tasks. Whole-branch independent review is still pending. Trial/activation flags
-  stay false; no actual engine calls in M2A.
+  store/case/trial/admission regressions pass. Task3 exact private review passes13
+  tests and its combined8 selectors pass54s. UI Task4 and fresh whole-branch
+  independent review remain pending. Trial/activation flags stay false; no actual
+  engine calls in M2A.
 - Owner delegated pilot choice. An objective Python bug-fix/test pilot is selected
   for reproducibility alongside the spec's required business pilots. This choice
   does not supply an accepted business dataset or owner acceptance evidence.

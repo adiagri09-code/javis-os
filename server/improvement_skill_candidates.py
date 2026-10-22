@@ -36,16 +36,16 @@ class SkillCandidates:
         self.assets, self.store, self.blobs = assets, assets.store, assets.blobs
         self.pack_state_dir = Path(pack_state_dir).absolute()
 
-    def _state(self, connection, principal, experiment_id, target_id, base_revision_id, before_hash=None):
+    def _state(self, connection, principal, experiment_id, target_id, base_revision_id, before_hash=None, *, _private_read=False):
         brain = _brain(principal)
         context = HostContextRecords._row(connection, brain, experiment_id)
         grant = HostContextRecords._grant(connection, context)
         policy = self.assets._policy(connection, brain)
-        if policy["mode"] == "off":
+        if not _private_read and policy["mode"] == "off":
             raise PermissionError("improvement_disabled")
         if grant["status"] != "active":
             raise PermissionError("trial_source_grant_revoked")
-        if policy["version"] != context["policy_version"]:
+        if not _private_read and policy["version"] != context["policy_version"]:
             raise IM.ConflictError("candidate_context_changed")
         target = self.assets._target(connection, brain, target_id)
         generations = json.loads(context["target_generations_json"])
