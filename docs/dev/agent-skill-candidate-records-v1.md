@@ -126,6 +126,29 @@ that deletes candidate history.
 
 ## Verification
 
+Browser authoring uses9 owner-session-only routes in `improvement_candidate_api`.
+API tokens cannot substitute for the browser owner session; global CSRF checks
+still run first. Cold context/candidate lists do not decrypt or initialize an
+operation owner. Explicit baseline, candidate and artifact reads use POST with
+closed bounded bodies and recheck existing read grants/current source authority.
+`/improvement-candidate-baselines/{experiment_id}/review` accepts `{target_id}`;
+it returns original UTF-8 bytes as exact text/hash/size and an editable-start byte.
+The older skill editor's parsed body is unsuitable for exact offsets.
+
+Studio preserves original content in inert text nodes and downloads, verifies
+SHA-256/size before enabling exact-diff authorization, maps LF-normalized textarea
+UTF-16 selection back to original UTF-8/CRLF byte offsets, and drops stale brain
+or context responses. A historical decision is followed by a fresh metadata read.
+An edit grant still says nothing about semantic quality or runtime eligibility.
+The secondary artifact entry requires an existing stored trial ID and attempt;
+viewing it records no acceptance decision. No context is silently prepared and
+no trial starts from this panel.
+
+Complete authoring/private-read worker operations remain retained through HTTP
+cancellation and shutdown before trial/store lifetimes end. Fixed errors never
+project private bytes or filesystem paths. A whole response is unavailable if
+its redaction policy would otherwise alter exact content or hashes.
+
 `test_improvement_candidate_records.py` uses actual scratch SQLite, encrypted host
 bindings, cases, contracts, a trial and the existing call ledger. It covers schema3
 cold reads, preservation of all previous rows, serialized concurrent upgrade,

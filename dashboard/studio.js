@@ -1455,6 +1455,13 @@
     const sw = box.querySelector(".sk3-sw");
     sw.onclick = () => { sw.disabled = true; toggleSkill(s, !on); };
     box.querySelector("#skDEdit").onclick = () => openSkillForm(s.slug);
+    if (on && !s.system && s.source !== ".agents" && window.JavisImprovementCandidates) {
+      const improve = document.createElement("button");
+      improve.type = "button";
+      improve.textContent = t("improve.title");
+      improve.onclick = () => window.JavisImprovementCandidates.open({brain:brain(), slug:s.slug});
+      box.querySelector(".sk3-d-act").append(improve);
+    }
     const exp = box.querySelector("#skDExp"); if (exp) exp.onclick = () => exportItem("skill", s.slug);
     const del = box.querySelector("#skDDel"); if (del) del.onclick = () => deleteSkill(s.slug, s.name);
     napThanSkill(s.slug);

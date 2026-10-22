@@ -43,7 +43,8 @@ class MainTrialTests(unittest.TestCase):
     def test_api_token_cannot_replace_real_owner_session_for_any_new_route(self):
         routes = [(route.path, sorted(route.methods)[0]) for route in self.main.app.routes
                   if getattr(route, "path", "").startswith(("/improvement-contexts", "/improvement-trials",
-                                                              "/improvement-contracts", "/improvement-bundles"))]
+                                                              "/improvement-contracts", "/improvement-bundles"))
+                  and getattr(route, "name", "") != "improvement_artifact_review"]
         self.assertEqual(len(routes), 13)
         with patch.object(self.main.cfgmod, "gate_active", return_value=True), \
                 patch.object(self.main.cfgmod, "valid_session", return_value=False), \

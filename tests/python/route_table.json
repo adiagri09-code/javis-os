@@ -5838,5 +5838,95 @@
    "POST"
   ],
   "trong": null
+ },
+ {
+  "order": 586,
+  "type": "APIRoute",
+  "path": "/improvement-candidate-contexts",
+  "name": "improvement_candidate_contexts",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 587,
+  "type": "APIRoute",
+  "path": "/improvement-candidates",
+  "name": "improvement_candidates",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 588,
+  "type": "APIRoute",
+  "path": "/improvement-edit-regions",
+  "name": "improvement_edit_region",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 589,
+  "type": "APIRoute",
+  "path": "/improvement-candidates",
+  "name": "improvement_candidate_stage",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 590,
+  "type": "APIRoute",
+  "path": "/improvement-candidates/{candidate_id}/review",
+  "name": "improvement_candidate_review",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 591,
+  "type": "APIRoute",
+  "path": "/improvement-candidates/{candidate_id}/authorize",
+  "name": "improvement_candidate_authorize",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 592,
+  "type": "APIRoute",
+  "path": "/improvement-edit-authorities/{authority_id}/revoke",
+  "name": "improvement_candidate_authority_revoke",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 593,
+  "type": "APIRoute",
+  "path": "/improvement-trials/{trial_id}/artifact-review",
+  "name": "improvement_artifact_review",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 594,
+  "type": "APIRoute",
+  "path": "/improvement-candidate-baselines/{experiment_id}/review",
+  "name": "improvement_candidate_baseline_review",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
  }
 ]

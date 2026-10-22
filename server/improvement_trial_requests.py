@@ -285,9 +285,9 @@ def project_contract(value, *, checker_registry):
         raise TrialRequestError("trial_request_unavailable") from None
 
 
-async def parse_body(request, operation):
+async def read_json(request):
     """Bound bytes before JSON decoding, including cached and fragmented bodies."""
-    if not isinstance(request, Request) or type(operation) is not str or operation not in _OPERATIONS:
+    if not isinstance(request, Request):
         raise TrialRequestError()
     raw = bytearray()
     try:
@@ -310,8 +310,14 @@ async def parse_body(request, operation):
         _depth(raw)
         value = json.loads(raw.decode("utf-8", errors="strict"), object_pairs_hook=_pairs,
                            parse_constant=lambda _: _invalid(), parse_float=_finite)
-        return validate_body(value, operation)
+        return value
     except TrialRequestError:
         raise
     except (ValueError, TypeError, OverflowError, UnicodeError, RecursionError):
         raise TrialRequestError() from None
+
+
+async def parse_body(request, operation):
+    if type(operation) is not str or operation not in _OPERATIONS:
+        raise TrialRequestError()
+    return validate_body(await read_json(request), operation)

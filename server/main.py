@@ -24390,6 +24390,10 @@ async def _warm_mcp_hub():
 async def _shutdown_mcp_pool():
     """Đóng các session MCP sống lâu (stdio subprocess, httpx client) khi server tắt."""
     try:
+        await _shutdown_improvement_candidates()
+    except Exception:
+        print("[improvement shutdown] candidate_shutdown_incomplete", file=__import__('sys').stderr)
+    try:
         await _shutdown_improvement_trials()
     except Exception:
         # The service has drained workers before reporting unsettled storage.
@@ -26689,4 +26693,54 @@ improvement_trial_api.register(app, improvement_trial_api.TrialApiDeps(
     capture_host=_improvement_trial_host,
     service=_improvement_trial_service,
     active_service=_improvement_trial_active_service,
+))
+
+
+# Candidate authoring is lazy and has no engine dependency or startup recovery.
+import improvement_candidate_api  # noqa: E402
+
+_IMPROVEMENT_CANDIDATE_OPERATIONS = None
+_IMPROVEMENT_CANDIDATE_SHUTTING_DOWN = False
+
+
+def _improvement_candidate_operations():
+    global _IMPROVEMENT_CANDIDATE_OPERATIONS
+    with _LAZY_LOCK:
+        if _IMPROVEMENT_CANDIDATE_SHUTTING_DOWN:
+            raise RuntimeError("candidate_operations_closed")
+        if _IMPROVEMENT_CANDIDATE_OPERATIONS is None:
+            _IMPROVEMENT_CANDIDATE_OPERATIONS = improvement_candidate_api.CandidateOperations()
+        return _IMPROVEMENT_CANDIDATE_OPERATIONS
+
+
+async def _shutdown_improvement_candidates():
+    from improvement_trial_runner import _drain
+
+    def mark_closing():
+        global _IMPROVEMENT_CANDIDATE_SHUTTING_DOWN
+        with _LAZY_LOCK:
+            _IMPROVEMENT_CANDIDATE_SHUTTING_DOWN = True
+            return _IMPROVEMENT_CANDIDATE_OPERATIONS
+
+    async def finish():
+        operations = await asyncio.to_thread(mark_closing)
+        if operations is not None:
+            await operations.close()
+
+    closing = asyncio.create_task(finish())
+    values, cancelled = await _drain(asyncio.gather(closing, return_exceptions=True))
+    if cancelled is not None:
+        raise cancelled
+    if isinstance(values[0], BaseException):
+        raise values[0]
+
+
+improvement_candidate_api.register(app, improvement_candidate_api.CandidateApiDeps(
+    read_store=_improvement_read_store,
+    write_store=_improvement_write_store,
+    resolve_brain=lambda value: improvement_api.strict_brain(value,
+        default_root=Path(BRAINS_DIR) / "Brain Default", brains_root=Path(BRAINS_DIR)),
+    owner_session=_doi_phien_that,
+    operations=_improvement_candidate_operations,
+    pack_state_dir=lambda: Path(cfgmod.STATE_DIR) / "packs-state",
 ))

@@ -10,7 +10,7 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.292.0] - 2026-10-23
 ### Added
-- **Prepare owner review of skill body proposals.** Reserve explicit edit authority, immutable candidate diffs and private trial-artifact review. Changed-candidate execution and live activation remain disabled.
+- **Review skill body proposals.** Studio displays complete baseline text, diffs and stored trial artifacts. Owners can stage a proposal, authorize an exact region or diff, and revoke edit authority. Encrypted proposal storage and downloads preserve exact hashes and bytes. Changed-candidate execution and live activation remain disabled.
 
 ## [0.291.0] - 2026-10-23
 ### Added

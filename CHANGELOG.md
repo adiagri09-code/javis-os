@@ -8,7 +8,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.292.0] - 2026-10-23
 ### Thêm mới
-- **Chuẩn bị duyệt đề xuất sửa thân skill.** Đặt chỗ cho quyền sửa rõ ràng, bản diff bất biến và kiểm sản phẩm thử nghiệm riêng tư. Chưa bật thử candidate thay đổi hoặc áp dụng trên bộ não thật.
+- **Duyệt đề xuất sửa thân skill.** Studio có màn hình xem nguyên văn bản gốc, diff và kết quả thử đã lưu; chủ sở hữu có thể tạo đề xuất, cấp quyền sửa đúng vùng hoặc diff và thu hồi quyền. Nội dung được lưu mã hóa riêng, giữ nguyên hash và byte khi tải xuống. Chưa bật thử candidate thay đổi hoặc áp dụng trên bộ não thật.
 
 ## [0.291.0] - 2026-10-23
 ### Thêm mới

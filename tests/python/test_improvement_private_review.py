@@ -45,6 +45,42 @@ class CandidatePrivateReviewTests(unittest.TestCase):
         self.assertEqual(value["region"], {"start": self.f.start, "end": self.f.end})
         self.assertEqual(self.f.f.count("improvement_events"), before_events)
 
+    def test_baseline_private_read_requires_existing_grant_and_rechecks_revoke_during_decrypt(self):
+        target = self.f.f.target["target_id"]
+        before_events = self.f.f.count("improvement_events")
+        self.f.f.assets.set_policy(self.f.owner, "off", expected_version=0, event_key="off-before-baseline-view")
+        value = self.review.baseline(self.f.owner, "experiment-owner", target)
+        self.assertEqual(value["baseline"]["text"].encode("utf-8"), self.f.raw)
+        with patch.object(self.f.f.blobs, "read", side_effect=AssertionError("Foreign read before decrypt")):
+            with self.assertRaises(PermissionError):
+                self.review.baseline(self.f.f.other, "experiment-owner", target)
+        original, changed = self.f.f.blobs.read, []
+        def read(brain, digest):
+            raw = original(brain, digest)
+            if not changed:
+                changed.append(1)
+                self.f.f.host.revoke(self.f.owner, "experiment-owner", expected_generation=1, event_key="revoke-during-baseline-view")
+            return raw
+        with patch.object(self.f.f.blobs, "read", side_effect=read), self.assertRaises(PermissionError):
+            self.review.baseline(self.f.owner, "experiment-owner", target)
+        # Exactly the explicit policy/revoke actions; private views create no events.
+        self.assertEqual(self.f.f.count("improvement_events"), before_events + 2)
+
+    def test_baseline_permission_change_during_decrypt_rejects_exact_view(self):
+        original, changed = self.f.f.blobs.read, []
+        mode = self.f.f.skill.stat().st_mode
+        def read(brain, digest):
+            raw = original(brain, digest)
+            if not changed:
+                changed.append(1)
+                self.f.f.skill.chmod(mode & ~stat.S_IWUSR)
+            return raw
+        try:
+            with patch.object(self.f.f.blobs, "read", side_effect=read), self.assertRaises((IM.ConflictError, PermissionError)):
+                self.review.baseline(self.f.owner, "experiment-owner", self.f.f.target["target_id"])
+        finally:
+            self.f.f.skill.chmod(mode)
+
     def test_revoked_context_and_foreign_brain_cannot_decrypt_private_content(self):
         self.f.f.host.revoke(self.f.owner, "experiment-owner", expected_generation=1, event_key="revoke-before-private-view")
         with patch.object(self.f.f.blobs, "read", side_effect=AssertionError("Denied read must precede decryption")):

@@ -16,6 +16,7 @@ import improvement_store as IM
 from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES
 from improvement_candidate_records import CandidateRecords, identifier
 from improvement_skill_candidates import SkillCandidates
+from improvement_skill_patch import body_layout
 from improvement_trial_associations import _association
 from improvement_trial_file_sources import BrainFileFixtures
 from improvement_trial_host import TARGET_FIELDS
@@ -46,6 +47,32 @@ class PrivateReview:
         self.fixtures = BrainFileFixtures() if fixture_observer is None else fixture_observer
         if type(self.fixtures) is not BrainFileFixtures:
             raise TypeError("concrete_private_review_fixtures_required")
+
+    def baseline(self, principal, experiment_id, target_id):
+        brain = _brain(principal)
+        identifier(experiment_id)
+        identifier(target_id)
+
+        def state(connection):
+            target = self.assets._target(connection, brain, target_id)
+            return self.skills._state(connection, principal, experiment_id, target_id,
+                target["current_revision_id"], _private_read=True)
+
+        with closing(self.store._conn()) as connection:
+            connection.execute("BEGIN")
+            before = state(connection)
+        observed, raw = self.skills.observe(principal, before["target"])
+        layout = body_layout(raw)
+        if self.skills.observe(principal, before["target"])[0] != observed:
+            raise IM.ConflictError("private_review_authority_changed")
+        with closing(self.store._conn()) as connection:
+            connection.execute("BEGIN")
+            if state(connection) != before:
+                raise IM.ConflictError("private_review_authority_changed")
+        target = before["target"]
+        return {"target_id": target_id, "base_revision_id": target["current_revision_id"],
+            "base_generation": target["generation"], "baseline": _exact(raw),
+            "editable_start": layout["editable_start"]}
 
     def _candidate_state(self, connection, principal, candidate_id):
         row = self.records._row(connection, _brain(principal), candidate_id)

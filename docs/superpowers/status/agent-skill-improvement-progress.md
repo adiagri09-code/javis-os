@@ -27,19 +27,24 @@
 - Worktree: `C:/Users/admin/.codex/worktrees/agent-skill-improvement-m2a/Javis-OS`;
   branch `codex/agent-skill-improvement-m2a`, release0.292.0 reservationf6d8d356,
   attached draft PR799: https://github.com/blogminhquy/javis-os/pull/799.
-- Dependency: independently reviewed M1 head23e546b9/PR795. Final-head Linux
-  CI39847154134 failed only the actual main E2E (not_run/authority_changed before
-  engine marker); all earlier failing suites passed. Portable diagnosis is in
-  progress; no M1 merge/publication or M2 integration claim.
+- Dependency: independently reviewed M1 heade0381902/PR795. Its deterministic
+  POSIX directory-stat race repair passed the actual ChangeTime reproduction and
+  focused author/root/peer regressions. Fresh Linux CI39852883192 is running;
+  no M1 merge/publication or M2 integration claim.
   M2A targets the M1 branch temporarily and must rebase/retarget onto published
   main before integration. The original checkout remains untouched.
 - Plan: `../plans/2026-10-23-agent-skill-improvement-m2a.md`, reviewed/self-reviewed.
   Tasks1–2 add schema4 owner-authority/immutable candidate metadata and byte-exact
   owner staging. Their new suites pass12/11/14 tests; relevant assets, Host,
   store/case/trial/admission regressions pass. Task3 exact private review passes13
-  tests and its combined8 selectors pass54s. UI Task4 and fresh whole-branch
-  independent review remain pending. Trial/activation flags stay false; no actual
-  engine calls in M2A.
+  tests and its combined8 selectors pass54s. Task4 adds9 browser-owner routes,
+  complete baseline/diff/artifact review and inert vi/en Studio authoring. API7,
+  actual-main4 and final private-review15 tests pass; focused14 Python scripts,
+  JS5 scripts and unchanged-prefix595-route snapshot pass. Headless Chromium
+  at390px vi/en verifies exact downloads, inert content and UTF-8/CRLF selection.
+  An extra unrelated webhook POSIX-mode600 test fails on Windows; no test/guard
+  was weakened. Fresh whole-branch independent review and final CI/integration
+  remain pending. Trial/activation flags stay false; no actual engine calls in A.
 - Owner delegated pilot choice. An objective Python bug-fix/test pilot is selected
   for reproducibility alongside the spec's required business pilots. This choice
   does not supply an accepted business dataset or owner acceptance evidence.
@@ -50,7 +55,7 @@
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
 | M1 | Tasks1–5 implemented and independently reviewed; Task6 final-head CI/integration pending | One historical real-engine synthetic baseline; aggregate unknown; no business pilot | Trial/activation flags false; not enabled |
-| M2 | M2A schema/metadata engineering in progress; later A tasks and B–F open | No skill feasibility yet | Not enabled |
+| M2 | M2A Tasks1–4 implemented; whole-branch review/final CI/integration and B–F open | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
 | M5 | Pending | No agent pilot | Not enabled |
