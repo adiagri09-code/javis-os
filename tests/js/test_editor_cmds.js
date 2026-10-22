@@ -81,7 +81,7 @@ check("title nút không phím tắt thì trơn", EC.btnTitle(EC.CMDS.find(c => 
 // CHỌN, mà gõ "/" xong thì có chọn gì đâu. Chúng vẫn giữ nút và Ctrl+B / Ctrl+I.
 check("menu '/' KHÔNG còn đậm và nghiêng",
       EC.menuCmds().every(c => c.id !== "bold" && c.id !== "italic"));
-check("menu '/' còn đúng 11 mục", EC.menuCmds().length === 11);
+check("the '/' menu has exactly 11 entries", EC.menuCmds().length === 11);
 check("CANARY: đậm/nghiêng VẪN nằm trên thanh công cụ", EC.CMDS.length === 13);
 check("CANARY: đậm/nghiêng VẪN còn phím tắt",
       id(EC.matchCmd(ev({ ctrlKey: 1, key: "b" }))) === "bold" &&
