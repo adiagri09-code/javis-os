@@ -384,7 +384,9 @@ class HostContextTests(unittest.TestCase):
         self.host.context_capture = Capture()
         meta = self.create()
         self.host.live_guard(owner, self.request(meta))
-        self.assertEqual(observations, ["initial", "revalidated", "revalidated"])
+        # Frozen revalidation now brackets slow target-blob reads in both the
+        # writer and live observer; volatile initial capture is still used once.
+        self.assertEqual(observations, ["initial", "revalidated", "revalidated", "revalidated", "revalidated"])
 
     def test_protected_sql_text_cannot_copy_an_authorized_fixture_into_baseline(self):
         from improvement_trial_semantics import capture_semantics

@@ -138,6 +138,18 @@ class HostContextStore(HostContextRecords):
             raw = self.blobs.read(_brain(principal), target["source_hash"]).decode("utf-8", errors="strict")
             if raw and raw in capture["baseline_context"]["content"]:
                 raise ValueError("trial_target_context_overlap")
+        if frozen_capture is not None:
+            # Encrypted target reads can outlive an earlier protected-context or
+            # fixture observation. Revalidate actual sources after that slow I/O.
+            if revalidate is not None:
+                final_capture = _capture(revalidate(principal, IC._frozen(surface), IC._frozen(targets),
+                                                   frozen_capture=IC._frozen(frozen_capture)))
+            else:
+                final_capture = _capture(self.context_capture(principal, IC._frozen(surface), IC._frozen(targets)))
+            final_inventory = validate_inventory(self.fixture_observer(principal, list(source_refs),
+                                                                        frozen_inventory=IC._frozen(inventory)))
+            if final_capture != capture or final_inventory != inventory:
+                raise IM.ConflictError("trial_host_authority_changed")
         if (IC._frozen(self.target_observer(principal, identifiers)) != targets
                 or IC._frozen(self.selected_engine()) != engine):
             raise IM.ConflictError("trial_host_authority_changed")
@@ -206,8 +218,22 @@ class HostContextStore(HostContextRecords):
             self.assets._event(connection, principal, event_key, "trial_context_create", payload, result)
             return result
 
-    def _bound(self, connection, principal, request):
+    def _bound(self, connection, principal, request, *, allow_unlinked=False):
+        row, binding, _ = self._bound_with_lineage(connection, principal, request, allow_unlinked=allow_unlinked)
+        return row, binding
+
+    def _bound_with_lineage(self, connection, principal, request, *, allow_unlinked=False):
         brain = _brain(principal)
+        from improvement_experiment_lineage import require_experiment_version
+        require_experiment_version(connection, brain, request)
+        proof = None
+        if request.get("version") == 2:
+            if request.get("variant") != "baseline":
+                raise PermissionError("experiment_candidate_execution_unavailable")
+            from improvement_experiment_lineage import load_lineage
+            proof = load_lineage(connection, brain, request, blobs=self.blobs, current=True, require_link=not allow_unlinked)
+            if proof["comparison"]["kind"] != "tuning":
+                raise PermissionError("experiment_final_execution_unavailable")
         row = self._row(connection, brain, request["pins"]["experiment_id"])
         if self._grant(connection, row)["status"] != "active":
             raise PermissionError("trial_source_grant_revoked")
@@ -224,7 +250,10 @@ class HostContextStore(HostContextRecords):
         from improvement_trial_sources import authorize_case
         authorize_case(connection, brain, request, binding["fixture_inventory"], blobs=self.blobs,
                        baseline_content=binding["capture"]["baseline_context"]["content"])
-        return row, binding
+        if request.get("version") == 2:
+            from improvement_experiment_lineage import current_fences
+            current_fences(connection, brain, proof)
+        return row, binding, proof
 
     def context_loader(self, principal, request):
         request = IC._frozen(request)
@@ -326,6 +355,13 @@ class HostContextStore(HostContextRecords):
             raise IM.ConflictError("trial_host_authority_changed")
         # Recheck revocation/policy after potentially slow source/config I/O.
         with closing(self.store._conn()) as connection:
-            self._bound(connection, principal, request)
+            _, final_binding, proof = self._bound_with_lineage(connection, principal, request)
+        if proof is not None:
+            # The final bound pass decrypts fixtures/context. Observe real sources
+            # afterward, then refresh SQL fences without another slow blob read.
+            self._snapshot_observe(principal, final_binding)
+            from improvement_experiment_lineage import current_fences
+            with closing(self.store._conn()) as connection:
+                current_fences(connection, _brain(principal), proof)
         return {**{key: row[key] for key in ("scope_hash", "grant_hash", "engine_config_hash")},
                 "baseline_context_hash": row["context_hash"], "target_generations": request["target_generations"]}

@@ -142,9 +142,25 @@ source/seed/order substitution; stage/authorize after seal; KEEP_BASE/replay.
 
 ## Task3 — closed v2 and actual tuning-baseline execution
 
-- [ ] Reproduce the named behavioral RED cases.
-- [ ] Implement this unit and inspect its exact source/authority boundaries.
-- [ ] Run named GREEN/regression checks, record actual evidence and commit the unit.
+- [x] Reproduce the named behavioral RED cases.
+- [x] Implement this unit and inspect its exact source/authority boundaries.
+- [x] Run named GREEN/regression checks, record actual evidence and commit the unit.
+
+Evidence: final five new-unit scripts34 tests GREEN79s. Initial related14-script
+run13/14 GREEN260s; only old frozen-capture call count needed3->5 after the new
+post-I/O revalidation (one initial capture preserved), full Host24 GREEN15s.
+Old M1 E2E/Runner/light-startup3/3 GREEN332s. Independent source review reproduced
+v1 downgrade and late matrix/fixture authority/phase races; root RED->GREEN and
+original independent repros now reject. No open Important scoped findings.
+
+Measured follow-up: repeated public-source compilation consumed84% of capture
+CPU. Bounded exact-content/filename code cache retains all fresh reads and live
+function checks; cache tests3 RED->6 GREEN, independent6 GREEN. Independent
+revalidation5.352->0.699s with byte-identical cached/uncached complete captures.
+Root cache/Dashboard/old E2E3/3 GREEN75s; the same old E2E288->40s on this machine.
+No timeout, freshness, native or quality gate was relaxed. Native four-file source
+profile is unchanged. Candidate/final execution stays closed; the internal slot
+admission is not an owner HTTP selector. Task6 must enforce next-cell scheduling.
 
 
 New improvement_experiment_protocol.py (pure), improvement_experiment_lineage.py

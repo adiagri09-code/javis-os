@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import json
+import math
 
 from improvement_store import _json, _hash
 
@@ -87,3 +89,116 @@ def comparison_matrix(value, arm_hash, ordinal, kind, case_ids, case_seed):
     if len(_json(matrix).encode("utf-8")) > 1048576:
         raise ValueError("comparison_matrix_too_large")
     return matrix
+
+
+def _freeze(value):
+    try:
+        return json.loads(_json(value))
+    except (TypeError, ValueError, RecursionError) as error:
+        raise ValueError("invalid_experiment_protocol") from error
+
+
+def _id(value):
+    if type(value) is not str or not _ID.fullmatch(value):
+        raise ValueError("invalid_experiment_identity")
+
+
+def _digest(value):
+    if type(value) is not str or not _HASH.fullmatch(value):
+        raise ValueError("invalid_experiment_hash")
+
+
+def validate_lineage(value):
+    value = _freeze(value)
+    _fields(value, {"version", "context_id", "definition_hash", "comparison_id", "comparison_hash", "matrix_hash",
+                    "arm_ordinal", "arm_hash", "candidate_id", "pair_id", "cell_position"})
+    for key in ("context_id", "comparison_id", "candidate_id"):
+        _id(value[key])
+    for key in ("definition_hash", "comparison_hash", "matrix_hash", "arm_hash", "pair_id"):
+        _digest(value[key])
+    if (type(value["version"]) is not int or value["version"] != 1
+            or type(value["arm_ordinal"]) is not int or value["arm_ordinal"] not in (1, 2)
+            or type(value["cell_position"]) is not int or not 0 <= value["cell_position"] < 4000):
+        raise ValueError("invalid_experiment_lineage")
+    return value
+
+
+def validate_request_v2(value):
+    """Pure shape/pin checks only; scoped SQL/blob/source authorization is separate."""
+    request = _freeze(value)
+    required = {"version", "pins", "case_set_id", "case_id", "variant", "repeat", "engine_config",
+                "baseline_context_hash", "target_generations", "deadline_at", "lineage"}
+    if type(request) is not dict or set(request) not in (required, required | {"qualification_id"}):
+        raise ValueError("invalid_experiment_request")
+    if (type(request["version"]) is not int or request["version"] != 2
+            or type(request["variant"]) is not str or request["variant"] not in ("baseline", "candidate")
+            or type(request["repeat"]) is not int or request["repeat"] not in (1, 2)):
+        raise ValueError("invalid_experiment_request")
+    for key in ("case_set_id", "case_id"):
+        _id(request[key])
+    if "qualification_id" in request:
+        _id(request["qualification_id"])
+    _digest(request["baseline_context_hash"])
+    pins = request["pins"]
+    _fields(pins, {"experiment_id", "base_bundle_hash", "candidate_bundle_hash", "contract_hash", "case_set_hash",
+                   "engine_config_hash", "grant_hash", "scope_hash", "policy_version"})
+    _id(pins["experiment_id"])
+    for key in set(pins) - {"experiment_id", "policy_version"}:
+        _digest(pins[key])
+    if type(pins["policy_version"]) is not int or not 0 <= pins["policy_version"] < 2 ** 63:
+        raise ValueError("invalid_experiment_policy")
+    lineage = validate_lineage(request["lineage"])
+    if lineage["arm_hash"] != pins["candidate_bundle_hash"]:
+        raise ValueError("experiment_arm_pin_changed")
+    engine = request["engine_config"]
+    _fields(engine, {"version", "provider", "engine_id", "model", "reasoning", "cli_path", "cli_hash",
+                     "cli_version", "sdk_version", "profile_version", "profile_hash"})
+    if type(engine["version"]) is not int or engine["version"] != 1:
+        raise ValueError("invalid_experiment_engine")
+    if any(type(child) is not str or not 1 <= len(child) <= 4096 for key, child in engine.items() if key != "version"):
+        raise ValueError("invalid_experiment_engine")
+    for key in ("cli_hash", "profile_hash"):
+        _digest(engine[key])
+    if (engine["provider"] != "anthropic-cli" or engine["engine_id"] != "claude-sdk"
+            or _hash(engine) != pins["engine_config_hash"]):
+        raise ValueError("unsupported_experiment_engine")
+    targets = request["target_generations"]
+    if type(targets) is not dict or len(targets) != 1:
+        raise ValueError("invalid_experiment_targets")
+    for identifier, generation in targets.items():
+        _id(identifier)
+        if type(generation) is not int or not 1 <= generation < 2 ** 63:
+            raise ValueError("invalid_experiment_targets")
+    deadline = request["deadline_at"]
+    if type(deadline) not in (int, float) or not math.isfinite(deadline) or deadline <= 0:
+        raise ValueError("invalid_experiment_deadline")
+    if len(_json(request).encode("utf-8")) > 65536:
+        raise ValueError("experiment_request_too_large")
+    return request
+
+
+def matrix_cell(matrix, position):
+    if (type(matrix) is not dict or type(matrix.get("pairs")) is not list or not 1 <= len(matrix["pairs"]) <= 2000
+            or type(position) is not int or not 0 <= position < 2 * len(matrix["pairs"])):
+        raise ValueError("invalid_comparison_cell")
+    pair = _freeze(matrix["pairs"][position // 2])
+    _fields(pair, {"pair_id", "case_id", "repeat", "first_variant"})
+    _digest(pair["pair_id"])
+    _id(pair["case_id"])
+    if (type(pair["repeat"]) is not int or pair["repeat"] not in (1, 2)
+            or type(pair["first_variant"]) is not str or pair["first_variant"] not in ("baseline", "candidate")):
+        raise ValueError("invalid_comparison_cell")
+    variant = pair["first_variant"] if position % 2 == 0 else ("candidate" if pair["first_variant"] == "baseline" else "baseline")
+    return {key: pair[key] for key in ("pair_id", "case_id", "repeat")} | {"variant": variant}
+
+
+def logical_key_v2(request):
+    request = validate_request_v2(request)
+    lineage = request["lineage"]
+    return _hash(["improvement-trial-v2", request["pins"]["experiment_id"], lineage["comparison_id"],
+        lineage["comparison_hash"], lineage["arm_hash"], lineage["pair_id"], lineage["cell_position"],
+        request["case_set_id"], request["case_id"], request["repeat"], request["variant"]])
+
+
+def comparison_hash(row):
+    return _hash({key: row[key] for key in ("id", "experiment_id", "ordinal", "kind", "definition_hash", "arm_hash", "matrix_hash", "cell_count")})

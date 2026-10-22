@@ -17,6 +17,8 @@ import re
 import stat
 import sys
 import types
+import threading
+from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -36,6 +38,8 @@ MAX_DASHBOARD_FILES = 800
 MAX_NATIVE_RULE_FILES = 100
 _TARGET_KEYS = {"id", "generation", "kind", "canonical_ref", "identity", "source_hash", "protected_hash", "ownership"}
 _SERVER = Path(__file__).resolve().parent
+_COMPILED_CODE_CACHE = OrderedDict()
+_COMPILED_CODE_LOCK = threading.RLock()
 
 
 def _utc_now():
@@ -215,6 +219,22 @@ def _nested_codes(code):
             yield from _nested_codes(item)
 
 
+def _compiled_codes(raw, filename):
+    """Cache pure compilation only; callers must freshly stable-read the source."""
+    digest = hashlib.sha256(raw).hexdigest()
+    with _COMPILED_CODE_LOCK:
+        saved = _COMPILED_CODE_CACHE.get(filename)
+        if saved is not None and saved[0] == digest:
+            _COMPILED_CODE_CACHE.move_to_end(filename)
+            return saved[1]
+        codes = tuple(_nested_codes(compile(raw, filename, "exec", dont_inherit=True)))
+        _COMPILED_CODE_CACHE[filename] = (digest, codes)
+        _COMPILED_CODE_CACHE.move_to_end(filename)
+        while len(_COMPILED_CODE_CACHE) > 32:
+            _COMPILED_CODE_CACHE.popitem(last=False)
+        return codes
+
+
 def _verified_function(function, module, name, compiled, error):
     if (type(module) is not types.ModuleType or sys.modules.get(module.__name__) is not module or type(function) is not types.FunctionType
             or function.__globals__ is not module.__dict__ or function.__name__ != name
@@ -229,7 +249,7 @@ def _verified_function(function, module, name, compiled, error):
     if path not in compiled:
         raw, _ = _read_stable(path, 8 * MAX_SETTINGS_BYTES)
         try:
-            compiled[path] = list(_nested_codes(compile(raw, function.__code__.co_filename, "exec", dont_inherit=True)))
+            compiled[path] = _compiled_codes(raw, function.__code__.co_filename)
         except (SyntaxError, ValueError, RecursionError):
             raise ValueError(error) from None
     if not any(code == function.__code__ for code in compiled[path]):

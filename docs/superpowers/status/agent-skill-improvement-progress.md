@@ -50,6 +50,7 @@
   Important issues and independently checked five migration/reader/CAS/SQL cases
   plus a distinct valid context competing in proposed/blocked/stopping phases.
   Root final unit regression7/7 GREEN84s (new experiment suite19 tests GREEN29s).
+  Exact Task1 checkpoint5e5ed821 Linux CI39868224361 passed both jobs.
   This is not the final whole-B review; Tasks2–6 and final CI/publication remain.
 - Task2 host planning now derives definitions from actual associated sources,
   verifies A proposal bytes/provenance and pins one chosen active edit authority.
@@ -61,6 +62,23 @@
   Independent review's final protected-context read races were reproduced RED,
   fixed with final full observations and independently rechecked; no open
   Important scoped findings. Tasks3–6 and whole-B acceptance remain open.
+  Exact Task2 checkpoint2e9d2db8 Linux CI39869374705 passed both jobs.
+- Task3 now carries closed v2 comparison lineage through actual preflight,
+  atomic trial/call/link, baseline Runner/workspace, usage and immutable results.
+  V1 history/replay survives; experiment-owned new work cannot downgrade to v1.
+  Current fences refresh after slow reads; stopping blocks late checker results.
+  Candidate/final execution remains closed before decryption/probe/reservation.
+  Final five new-unit scripts34 tests GREEN79s; related Host24 GREEN15s after
+  expected frozen-revalidation count update; old M1 E2E/Runner/light-startup3/3
+  GREEN332s. Scoped independent source review has no open Important findings
+  after reproduced downgrade/post-I/O races were fixed and rechecked.
+- Public-source compilation dominated capture CPU. The bounded exact-byte code
+  cache keeps fresh stable reads and every live-function/path check. Independent
+  cached/uncached full captures match; revalidation5.352->0.699s on this machine.
+  Cache6 tests pass independently. Root cache/Dashboard/old E2E3/3 GREEN75s,
+  E2E288->40s. This is measured technical overhead reduction, not model/business
+  effectiveness. No real native/model/auth query or four-file profile change.
+  Tasks4–6 and final whole-B review, exact-head CI/merge/publication remain open.
 
 ## M2A engineering continuation
 

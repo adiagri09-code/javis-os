@@ -122,6 +122,9 @@ class PrivateReview:
         request = _request(json.loads(trial["request_json"]))
         if IM._hash(request) != trial["request_hash"]:
             raise AssetUnavailable("private_review_trial_changed")
+        if request.get("version") == 2:
+            from improvement_experiment_lineage import load_lineage
+            load_lineage(connection, brain, request, blobs=self.blobs, current=False, require_link=True, trial_id=trial_id)
         context = HostContextRecords._row(connection, brain, request["pins"]["experiment_id"])
         grant = HostContextRecords._grant(connection, context)
         if grant["status"] != "active":

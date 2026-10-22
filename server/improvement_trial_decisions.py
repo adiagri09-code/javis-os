@@ -45,6 +45,9 @@ class OwnerDecisionStore:
         request = json.loads(row["request_json"])
         if IM._hash(request) != row["request_hash"]:
             raise IM.ConflictError("trial_request_drift")
+        if request.get("version") == 2:
+            from improvement_experiment_lineage import load_lineage
+            load_lineage(connection, brain, request, blobs=self.trials.blobs, current=False, require_link=True, trial_id=identifier)
         pins = request["pins"]
         case_set = self.trials.cases._row(connection, "improvement_case_sets", brain, request["case_set_id"])
         if case_set["manifest_hash"] != pins["case_set_hash"]:
