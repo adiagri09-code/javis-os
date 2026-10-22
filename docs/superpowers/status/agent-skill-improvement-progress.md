@@ -88,3 +88,14 @@ continue its implementation on the integrated baseline. Full M0–M8 Goal remain
   deleted/replaced targets never inherit identity. Tests use scratch roots, no model calls.
 - CI run `39784692950` on the pre-fix head: Docker size succeeded; full Python suite still
   running when final fixes were prepared. Its result cannot certify the final head.
+- That pre-fix run subsequently passed fully. Final-head run `39785987176` passed all
+  improvement tests but failed the unchanged Team runner's reply-concurrency timing probe:
+  peak was 1 instead of 2, while both replies completed. No Team runtime file had changed.
+  Reproduced deterministically by delaying the second fake engine start by 0.2s; the old
+  fixed 0.1s sleep falsely rejected the parallel runner. Replaced this timing assumption
+  with a bounded rendezvous, retaining the peak=2 and both-done assertions and the delayed
+  startup. Focused regression then passed 4/4 files in 36s. A separate negative control
+  forced sequential replies and verified the same peak=2 assertion still rejects them.
+  New final-head CI is required before integration; no red run was merged.
+- Fresh-process restart probe passed: two independent processes preserved the encrypted
+  bytes, revision identity and one idempotent event. No model call or live action occurred.
