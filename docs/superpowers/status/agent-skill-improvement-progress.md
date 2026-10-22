@@ -17,7 +17,30 @@
   Publication39856024117 succeeded on the actual main merge. No production
   deployment, restart or activation occurred. Earlier reservations, failures and
   checkpoints below remain historical and do not supersede this state.
-- Current engineering continuation is M2A below, release0.292.0.
+- M2A engineering published: PR799 straight squash merged
+  `cbef2f464932e533825512e8e11c2299e6b3bf4f` as0.292.0. Final-head Linux
+  CI39862650038 passed on d4703f34; actual merged tree is identical.
+  Publication39865749261 succeeded. M1 main CI39856024098 also passed.
+- Current engineering continuation is M2B below. Earlier pending/failure
+  checkpoints remain historical; complete M2/business/rollout gates remain open.
+
+## M2B engineering continuation
+
+- Reuse the clean managed M2 worktree, branch `codex/agent-skill-improvement-m2b`,
+  from actual published A main cbef2f46/0.292.0. Fresh main/open-PR inspection
+  found no open reservations;0.293.0 is the next free release.
+- Plan: `../plans/2026-10-23-agent-skill-improvement-m2b.md`, self-reviewed
+  against actual source. Six units cover schema5/experiment ownership, real A
+  arms/full counterbalanced matrix, closed request-v2/baseline execution,
+  both-variant qualification preflight, immutable complete-pair reports and
+  owner cancellation/recovery. No B implementation code has been written yet.
+- Read-only B–F audits identified exact case-set association, fresh proposal
+  lineage after context changes, chosen active edit authority, native delivery
+  limits and missing preparation/navigation. Those boundaries are in the plan;
+  actual effort/internal semantic use stay unknown where unobservable.
+- Reserve VERSION/both changelogs and an attached draft PR before code.
+  Changed-candidate execution, compose, real activation and live canary remain
+  unavailable until their actual prerequisites and owner scope grants exist.
 
 ## M2A engineering continuation
 
@@ -76,7 +99,7 @@
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
 | M1 | Complete engineering: PR795 merged9dd7a9f9, CI39852883192 and publication39856024117 succeeded;0.291.0 | One historical real-engine synthetic baseline; aggregate unknown; no business pilot | Trial/activation flags false; not enabled |
-| M2 | M2A Tasks1–4 implemented and independently reviewed; final CI/integration and B–F open | No skill feasibility yet | Not enabled |
+| M2 | M2A published0.292.0: PR799 mergedcbef2f46, CI39862650038/publication39865749261 passed; B starting, C–F open | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
 | M5 | Pending | No agent pilot | Not enabled |
