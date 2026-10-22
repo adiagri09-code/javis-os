@@ -566,6 +566,9 @@ class ClaudeSDK:
     def is_available(self) -> bool:
         if not _SDK_OK:
             return False
+        trial_profile = getattr(self, "trial_profile", None)
+        if trial_profile is not None:
+            return os.path.isfile(trial_profile.pin["cli_path"])
         from claude_cli import find_claude_cli
         return find_claude_cli() is not None
 
@@ -737,6 +740,9 @@ class ClaudeSDK:
             pass
 
     def _options(self):
+        trial_profile = getattr(self, "trial_profile", None)
+        if trial_profile is not None:
+            return trial_profile.options(self)
         from claude_agent_sdk import ClaudeAgentOptions
         fields = getattr(ClaudeAgentOptions, "__dataclass_fields__", {})
         kw = {"cwd": self.cwd}
@@ -1055,6 +1061,9 @@ class ClaudeSDK:
             await client.connect()
             with _LOCK:
                 _ACTIVE[client] = (self.tag, loop)
+            trial_profile = getattr(self, "trial_profile", None)
+            if trial_profile is not None:
+                await trial_profile.before_query()
             if isinstance(prompt, list):
                 # Lượt có ẢNH (0.81.0): `prompt` là danh sách khối nội dung Anthropic (ảnh + chữ). SDK nhận một luồng
                 # tin nhắn thay cho chuỗi; gửi đúng MỘT tin user mang các khối đó.
@@ -1134,7 +1143,10 @@ class ClaudeSDK:
                     yield {"type": "error", "content": err}
                     break
                 da_co_chu = True   # có sự kiện đầu tiên → từ đây dùng trần ngắn IDLE
-                events, sid = map_message(msg)
+                if trial_profile is not None:
+                    events, sid = trial_profile.observe(msg), getattr(msg, "session_id", None)
+                else:
+                    events, sid = map_message(msg)
                 if sid:
                     if sid != self.session_id and self.javis_vault:
                         # Nhãn dự án cho trang Token: log thô chỉ có cwd (= gốc project ở MỌI

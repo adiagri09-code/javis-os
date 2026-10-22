@@ -1,0 +1,182 @@
+"""Dedicated trial options and raw result observations do not inherit chat behavior."""
+from _paths import ROOT, SERVER  # noqa: F401
+
+import asyncio
+import hashlib
+import importlib.util
+import json
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
+TEST_ROOT = Path(tempfile.mkdtemp(prefix="improvement-claude-"))
+for key, name in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",
+                  "BRAIN_PATH": "brain", "SOURCES_PATH": "sources"}.items():
+    os.environ[key] = str(TEST_ROOT / name)
+
+if importlib.util.find_spec("improvement_claude"):
+    import improvement_claude as IC
+else:
+    IC = None
+
+
+class ProfileTests(unittest.TestCase):
+    def setUp(self):
+        self.assertIsNotNone(IC, "A dedicated verified trial profile is not implemented")
+        from improvement_sandbox import FixtureBroker
+        self.broker = FixtureBroker([], hashlib.sha256(b"grant").hexdigest())
+        self.pin = {"provider": "anthropic-cli", "model": "claude-opus-5-5", "reasoning": "medium",
+                    "cli_path": str(TEST_ROOT / "claude"), "sdk_version": "0.2.116"}
+
+    def profile(self, before_query=None):
+        return IC.TrialProfile(self.pin, self.broker, "Exact owner instructions\r\n", before_query=before_query)
+
+    def engine(self, profile):
+        from claude_sdk_engine import ClaudeSDK
+        engine = ClaudeSDK(system_prompt="ambient preset", cwd=str(TEST_ROOT), model="wrong-model")
+        engine.trial_profile = profile
+        engine.allowed_tools = ["Bash", "mcp__javis"]
+        engine.mcp_config = "production-mcp.json"
+        engine.effort = "low"
+        return engine
+
+    def test_trial_options_do_not_load_chat_plugins_settings_or_tools(self):
+        profile = self.profile()
+        engine = self.engine(profile)
+        with patch.object(engine, "_mcp_servers", side_effect=AssertionError("Loaded production MCP")):
+            options = engine._options()
+        self.assertEqual(options.model, self.pin["model"])
+        self.assertEqual(options.effort, "medium")
+        self.assertEqual(options.system_prompt, "Exact owner instructions\r\n")
+        for name in ("tools", "skills", "setting_sources", "plugins", "add_dirs"):
+            self.assertEqual(getattr(options, name), [], name)
+        self.assertEqual(options.agents, {})
+        self.assertEqual(options.hooks, {})
+        self.assertEqual(set(options.mcp_servers), {"fixture"})
+        self.assertEqual(options.allowed_tools, ["mcp__fixture__fixture_read"])
+        self.assertTrue(options.strict_mcp_config)
+        self.assertEqual(options.permission_mode, "default")
+        self.assertFalse(options.continue_conversation)
+        self.assertIsNone(options.resume)
+        self.assertIsNone(options.session_id)
+        self.assertIsNone(options.fallback_model)
+        self.assertIsNone(options.max_budget_usd)
+        self.assertIsNone(options.max_turns)
+        self.assertIn("no-session-persistence", options.extra_args)
+        self.assertTrue(json.loads(options.settings)["disableAllHooks"])
+        denied = asyncio.run(options.can_use_tool("Bash", {"command": "touch outside"}, None))
+        self.assertEqual(denied.behavior, "deny")
+
+    def test_resume_or_reusing_a_trial_profile_is_rejected(self):
+        profile = self.profile()
+        engine = self.engine(profile)
+        engine.session_id = "old-arm-session"
+        with self.assertRaisesRegex(ValueError, "trial_resume_forbidden"):
+            engine._options()
+
+    def test_trial_availability_uses_only_the_exact_pinned_binary(self):
+        pinned = Path(self.pin["cli_path"])
+        pinned.write_text("Synthetic file only; never execute")
+        engine = self.engine(self.profile())
+        with patch("claude_cli.find_claude_cli", side_effect=AssertionError("Ambient CLI fallback")):
+            self.assertTrue(engine.is_available())
+            pinned.unlink()
+            self.assertFalse(engine.is_available())
+
+    def test_raw_result_preserves_null_usage_and_final_exact_bytes(self):
+        from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
+        profile = self.profile()
+        interim = profile.observe(AssistantMessage([TextBlock("Intermediate narration")], model="observed-model"))
+        self.assertFalse(any(e["type"] == "artifact" for e in interim))
+        result = ResultMessage("success", 10, 5, False, 1, "session", result="```json\r\n{}\r\n```\r\n")
+        events = profile.observe(result)
+        artifact = next(e for e in events if e["type"] == "artifact")
+        usage = next(e for e in events if e["type"] == "usage")
+        self.assertEqual(artifact["content"].encode(), result.result.encode())
+        self.assertIsNone(usage["usage"])
+        self.assertIsNone(usage["cost_usd"])
+        self.assertEqual(profile.observed_models, {"observed-model"})
+        self.assertEqual(profile.actual_reasoning_coverage, "unknown")
+
+    def test_missing_result_and_explicit_zero_usage_remain_distinct(self):
+        from claude_agent_sdk import ResultMessage
+        events = self.profile().observe(ResultMessage("success", 0, 0, False, 1, "session",
+                                                     usage={"input_tokens": 0, "output_tokens": 0}, total_cost_usd=0.0))
+        self.assertFalse(any(e["type"] == "artifact" for e in events))
+        self.assertEqual(next(e for e in events if e["type"] == "usage")["cost_usd"], 0.0)
+        self.assertEqual(next(e for e in events if e["type"] == "terminal")["artifact_status"], "unknown")
+
+    def test_parent_permission_must_arrive_before_native_query(self):
+        from claude_agent_sdk import ResultMessage
+        queries = []
+
+        class Client:
+            def __init__(self, options):
+                pass
+
+            async def connect(self):
+                pass
+
+            async def query(self, prompt):
+                queries.append(prompt)
+
+            async def receive_response(self):
+                yield ResultMessage("success", 0, 0, False, 1, "session", result="Done")
+
+            async def disconnect(self):
+                pass
+
+        async def no_permission():
+            raise RuntimeError("host_engine_start_not_acknowledged")
+
+        async def run():
+            engine = self.engine(self.profile(no_permission))
+            with patch.object(engine, "is_available", return_value=True), patch("claude_agent_sdk.ClaudeSDKClient", Client), \
+                    patch("claude_token_gate.xep_hang", new=AsyncMock(return_value="")):
+                return [event async for event in engine.query("Pinned task")]
+
+        events = asyncio.run(run())
+        self.assertFalse(queries)
+        self.assertTrue(any(e["type"] == "error" for e in events))
+
+    def test_existing_engine_query_uses_raw_trial_observations_after_ack(self):
+        from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
+        order = []
+
+        class Client:
+            def __init__(self, options):
+                self.options = options
+
+            async def connect(self):
+                order.append("connected")
+
+            async def query(self, prompt):
+                order.append("query")
+
+            async def receive_response(self):
+                yield AssistantMessage([TextBlock("Interim, not the product")], model="claude-opus-5-5")
+                yield ResultMessage("success", 0, 0, False, 1, "session", result="Exact final\r\n")
+
+            async def disconnect(self):
+                order.append("disconnected")
+
+        async def ack():
+            order.append("durable_ack")
+
+        async def run():
+            engine = self.engine(self.profile(ack))
+            with patch.object(engine, "is_available", return_value=True), patch("claude_agent_sdk.ClaudeSDKClient", Client), \
+                    patch("claude_token_gate.xep_hang", new=AsyncMock(return_value="")), \
+                    patch("claude_sdk_engine.map_message", side_effect=AssertionError("Generic mapper loses unknown usage")):
+                return [event async for event in engine.query("Pinned task")]
+
+        events = asyncio.run(run())
+        self.assertEqual(order, ["connected", "durable_ack", "query", "disconnected"])
+        self.assertEqual([e["content"] for e in events if e["type"] == "artifact"], ["Exact final\r\n"])
+        self.assertIsNone(next(e for e in events if e["type"] == "usage")["usage"])
+
+
+if __name__ == "__main__":
+    unittest.main()

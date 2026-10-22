@@ -135,3 +135,23 @@ continue its implementation on the integrated baseline. Full M0–M8 Goal remain
 - Actual host selection was read through non-secret fields only: anthropic-cli,
   claude-opus-5-5, medium. CLI auth status reports logged in; no account tokens were copied
   or output. Production adapter capability remains false until released-path verification.
+- Task 2 workspace substep committed as e0acfe16: eleven scratch tests verify exact fixture
+  capabilities, separate attempts, pinned hashes, credential-text rejection, concurrent prepare,
+  actual Windows junction boundaries and cleanup preserving another attempt. No live dispatch.
+- Dedicated Claude profile now has a narrow existing-engine seam: no inherited settings,
+  built-in tools, hooks, skills, plugins, subagents, sessions, model fallback or cost cap.
+  Host acknowledgement precedes native query; raw observations preserve null usage, observed
+  models and exact final-result bytes. Seven profile tests and existing SDK/completion scripts
+  passed; production worker and runtime verification are still in progress, capability=false.
+- Formal opt-in native test uses this profile through the existing engine factory, dummy auth
+  and a localhost fake provider. PASS1/1 in5s with SDK0.2.116/native2.1.304: exact fixture tool
+  inventory, requested model/effort, real tool hit/miss, unknown tools denied, outside canary
+  unchanged, ambient hook/MCP/memory absent. This is synthetic, not real-model business evidence.
+  Initial RED found ambient CLI discovery despite an explicit binary pin; trial availability
+  now checks only that pin. A later timeout was a test-server query-string parsing defect;
+  fixed without changing product behavior. Timeout cleanup terminates the owned process tree.
+- Owner delegated pilot selection on22October. Selected first additional pilot: Python bug
+  fixes in Javis-OS, using isolated repository snapshots and independent behavioral/regression
+  tests as the business criterion. Preserve source-family splits, frozen qualification and
+  all attempts. This choice does not close the spec's data-reconciliation Pilot A or document
+  Pilot B gates; no historical case or user skill has yet been selected or run.

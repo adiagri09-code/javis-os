@@ -154,8 +154,9 @@ reservation, replay/resume versus new candidate, interrupted migration/restart.
 
 ## Task 2: hermetic trial worker and selected Claude adapter
 
-Files: improvement_sandbox.py, improvement_worker.py, narrow claude_sdk_engine.py seam,
-test_improvement_sandbox.py, test_improvement_claude.py.
+Files: improvement_sandbox.py, improvement_claude.py, improvement_worker.py,
+narrow claude_sdk_engine.py seam, test_improvement_sandbox.py,
+test_improvement_claude.py, test_improvement_native.py.
 Each attempt gets a fresh workspace/context and output directory. Input is a host-created
 manifest of only authorized pinned snapshots/effective revisions. No checker, answer, live
 canonical path or prior arm/session is passed. Read fixtures route only through a broker
@@ -184,9 +185,9 @@ symlink/junction escape, stale mirror, answer access, other arm output, inherite
 server env and tool keys. Fake local provider/native process test is synthetic and must
 demonstrate actual host tool denial. Run real selected-model smoke only after those pass.
 
-- [ ] Add inherited-env and adversarial native tool tests; assert no outside marker file,
+- [x] Add inherited-env and adversarial native tool tests; assert no outside marker file,
   fixture_miss with zero live-dispatch calls, no answer/config in worker request/env.
-- [ ] Run sandbox/Claude scripts; observe RED before adding the dedicated profile.
+- [x] Run sandbox/Claude scripts; observe RED before adding the dedicated profile.
 - [ ] Implement hermetic worker, explicit native options, fixture broker and receipt.
   Set ENABLE_TOOL_SEARCH=false in the explicit worker environment: the verified profile
   has exactly the fixture MCP tool and no inert deferred placeholder. Persist broker errors
