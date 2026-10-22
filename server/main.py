@@ -26768,7 +26768,7 @@ async def voice_elevenlabs_voices():
 # Improvement M0 is metadata-only: importing or reading status never starts a trial.
 import improvement_api  # noqa: E402
 from improvement_blobs import RevisionBlobs  # noqa: E402
-from improvement_store import ImprovementStore  # noqa: E402
+from improvement_store import ImprovementStore, read_existing as _read_improvement_existing  # noqa: E402
 
 
 def _improvement_write_store():
@@ -26776,9 +26776,8 @@ def _improvement_write_store():
 
 
 def _improvement_read_store():
-    if not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
-        return None
-    return _improvement_write_store()
+    return _read_improvement_existing(Path(cfgmod.STATE_DIR) / "resonance.sqlite3",
+                                      RevisionBlobs(Path(cfgmod.STATE_DIR) / "improvement"))
 
 
 improvement_api.register(app, improvement_api.ImprovementApiDeps(

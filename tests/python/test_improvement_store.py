@@ -52,6 +52,18 @@ class ImprovementStoreTests(unittest.TestCase):
         with self.rs._conn() as c:
             self.assertIsNone(c.execute("SELECT name FROM sqlite_master WHERE name='improvement_targets'").fetchone())
 
+    def test_existing_metadata_reader_cannot_write_or_create_a_database(self):
+        missing = self.root / "missing.sqlite3"
+        self.assertIsNone(IM.read_existing(missing, self.blobs))
+        self.assertFalse(missing.exists())
+        self.assertIsNone(IM.read_existing(self.root / "resonance.sqlite3", self.blobs))
+        first = self.capture()
+        reader = IM.read_existing(self.root / "resonance.sqlite3", self.blobs)
+        self.assertEqual(reader.read_revision(self.owner, first["revision_id"]), self.source()[1])
+        with reader.store._conn() as connection:
+            with self.assertRaises(sqlite3.OperationalError):
+                connection.execute("CREATE TABLE forbidden_write(value TEXT)")
+
     def test_capture_preserves_bytes_and_replays_same_event(self):
         first = self.capture()
         self.assertEqual(first, self.capture())
@@ -160,6 +172,14 @@ class ImprovementStoreTests(unittest.TestCase):
         with self.assertRaises(IM.AssetUnavailable):
             self.store.read_revision(self.owner, first["revision_id"])
 
+    def test_empty_revision_rejects_decryption_failure(self):
+        first = self.capture(content=b"")
+        self.assertEqual(self.store.read_revision(self.owner, first["revision_id"]), b"")
+        path = next((self.root / "assets").rglob("*.enc"))
+        path.write_text("enc:corrupted", encoding="ascii")
+        with self.assertRaises(IM.AssetUnavailable):
+            self.store.read_revision(self.owner, first["revision_id"])
+
     def test_migration_is_idempotent_and_future_schema_is_rejected(self):
         self.capture()
         IM.ensure(self.rs)
@@ -211,6 +231,17 @@ class ImprovementStoreTests(unittest.TestCase):
                                    True, source.ownership, source.identity)
         with self.assertRaises(ValueError):
             self.store.capture(self.owner, source, raw, event_key="wrong-source-kind")
+
+    def test_new_revision_parent_is_the_current_source_after_a_reversion(self):
+        first = self.capture()
+        source, raw = self.source(b"Version B")
+        self.store.capture(self.owner, source, raw, event_key="parent-second", expected_generation=1)
+        source, raw = self.source()
+        self.store.capture(self.owner, source, raw, event_key="parent-restore", expected_generation=2)
+        source, raw = self.source(b"Version C")
+        current = self.store.capture(self.owner, source, raw, event_key="parent-third", expected_generation=3)
+        history = {row["id"]: row for row in self.store.revisions(self.owner, first["target_id"])}
+        self.assertEqual(history[current["revision_id"]]["parent_id"], first["revision_id"])
 
 
 if __name__ == "__main__":

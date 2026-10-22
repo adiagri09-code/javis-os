@@ -36,11 +36,11 @@
 
 Schema: improvement schema marker, policies, targets, revisions, bundles plus scoped asset references, and append-only events with request hash/result for idempotency. Unique live canonical target per brain; new identity after retirement; immutable revisions/bundles enforced at SQLite level. Source updates require expected generation. Missing records cannot cross brain.
 
-- [ ] Add tests for default/read-only behavior, exact bytes and repeated capture, history, CAS race across two connections, atomic event replay/conflict, owner/cross-brain isolation, parent/bundle ownership and retirement/recreation.
-- [ ] Run tests, confirm RED for missing foundation behavior.
-- [ ] Implement atomic migrations (individual statements inside existing `_Tx`), policy guard and immutable capture, encrypted blobs and integrity checks.
-- [ ] Run tests GREEN, including corrupt/missing blob and migration future-version/rollback cases.
-- [ ] Commit tested task with ledger evidence.
+- [x] Add tests for default/read-only behavior, exact bytes and repeated capture, history, CAS race across two connections, atomic event replay/conflict, owner/cross-brain isolation, parent/bundle ownership and retirement/recreation.
+- [x] Run tests, confirm RED for missing foundation behavior.
+- [x] Implement atomic migrations (individual statements inside existing `_Tx`), policy guard and immutable capture, encrypted blobs and integrity checks.
+- [x] Run tests GREEN, including corrupt/missing blob and migration future-version/rollback cases.
+- [x] Commit tested task with ledger evidence.
 
 ## Task 2: Canonical source capture with ownership guard
 
@@ -48,10 +48,10 @@ Schema: improvement schema marker, policies, targets, revisions, bundles plus sc
 
 **Interface produced:** frozen `SourceSnapshot(kind,canonical_ref,source_hash,protected_hash,enabled,ownership,identity)` plus `capture_source(root,kind,slug)` returning `(snapshot,raw_bytes)`. Validate filesystem ancestry and non-link components; sources are `skills/<slug>/SKILL.md` or `agents/<slug>.md`, never legacy mirror. Bound capture to 1 MiB as an explicit resource limit, fail rather than truncate. User skill `learn_lock` and bundled/pack-owned resources are blocked; metadata alone cannot declare them editable. Initial ownership is protected unless host has explicit managed-region authority. Agent identity is supplied by the host registry at the service boundary, not by model text.
 
-- [ ] Add failing tests for disabled shadowing, linked directories/files, traversal/Windows path forms, system/locked skills, raw CRLF, content edits and capture size/race rejection.
-- [ ] Implement source snapshot with read-before/after file identity checks and no filesystem writes; use canonical inventory semantics and existing source ownership helpers.
-- [ ] Run source/store tests plus existing owner-rule/skill tests; record both fresh and baseline results.
-- [ ] Commit tested task.
+- [x] Add failing tests for disabled shadowing, linked directories/files, traversal/Windows path forms, system/locked skills, raw CRLF, content edits and capture size/race rejection.
+- [x] Implement source snapshot with read-before/after file identity checks and no filesystem writes; use canonical inventory semantics and existing source ownership helpers.
+- [x] Run source/store tests plus existing owner-rule/skill tests; record both fresh and baseline results.
+- [x] Commit tested task.
 
 ## Task 3: Lazy authenticated owner metadata routes
 
@@ -61,18 +61,18 @@ Schema: improvement schema marker, policies, targets, revisions, bundles plus sc
 
 Expose `GET/PUT /improvement-policy`, `GET /improvement-targets`, `POST /improvement-targets/capture`, `GET /improvement-targets/{id}/revisions`, `POST /improvement-targets/{id}/retire`. Use expected versions and event keys; return metadata/capabilities (`trial=false`, `activation=false`), never ciphertext/blob paths/source body. Owner explicit capture is blocked in off mode. Every DB/file operation runs off event loop. Existing auth/CSRF middleware remains authoritative.
 
-- [ ] Add route tests before implementation for no-state GET, valid owner capture/history, off behavior, unknown brain, malformed request, stale version and cross-brain id denial.
-- [ ] Add actual-main auth/CSRF tests with scratch roots before import, no startup context manager, and no engine construction.
-- [ ] Implement/wire routes, update intentional snapshot, run route/security/improvement regression checks.
-- [ ] Commit tested task.
+- [x] Add route tests before implementation for no-state GET, valid owner capture/history, off behavior, unknown brain, malformed request, stale version and cross-brain id denial.
+- [x] Add actual-main auth/CSRF tests with scratch roots before import, no startup context manager, and no engine construction.
+- [x] Implement/wire routes, update intentional snapshot, run route/security/improvement regression checks.
+- [x] Commit tested task.
 
 ## Task 4: Evidence, fresh review and integration
 
 **Files:** update progress, M0 operator docs and bilingual release notes, PR description.
 
-- [ ] Run focused foundation, ownership/skill, auth/CSRF, route snapshot, schema/restart and localization checks. Compile/import relevant modules under isolated state.
-- [ ] Request fresh whole-branch review against spec M0, address critical/important findings with reproducing RED→GREEN tests; record rulings/deferred minors.
-- [ ] Verify diff, source-doc hashes and complete M0 acceptance matrix; keep M1–M8 pending.
+- [x] Run focused foundation, ownership/skill, auth/CSRF, route snapshot, schema/restart and localization checks. Compile/import relevant modules under isolated state.
+- [x] Request fresh whole-branch review against spec M0, address critical/important findings with reproducing RED→GREEN tests; record rulings/deferred minors.
+- [x] Verify diff, source-doc hashes and complete M0 acceptance matrix; keep M1–M8 pending.
 - [ ] Push, wait for current-head CI, mark draft ready and merge only green/review-clean; verify release workflow. If external CI waits, use the live job handle and continue independent planning, never assume completion.
 - [ ] Continue M1 from latest integrated main, reserving its own version and plan.
 

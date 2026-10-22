@@ -3,6 +3,7 @@ from _paths import ROOT, SERVER  # noqa: F401
 
 import importlib.util
 import os
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,7 +20,7 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 import resonance_store as RS  # noqa: E402
 from improvement_blobs import RevisionBlobs  # noqa: E402
-from improvement_store import ImprovementStore  # noqa: E402
+from improvement_store import ImprovementStore, read_existing  # noqa: E402
 
 if importlib.util.find_spec("improvement_api"):
     import improvement_api as IA
@@ -43,7 +44,7 @@ class ImprovementApiTests(unittest.TestCase):
         self.store_calls = 0
 
         def read_store():
-            return self.wrapper
+            return read_existing(self.database, RevisionBlobs(self.root / "assets"))
 
         def write_store():
             self.store_calls += 1
@@ -126,6 +127,41 @@ class ImprovementApiTests(unittest.TestCase):
 
 
 class MainSecurityTests(unittest.TestCase):
+    def test_installed_status_reads_never_initialize_the_runtime_store(self):
+        import main
+        state = Path(tempfile.mkdtemp(prefix="installed-", dir=TEST_ROOT))
+        wrapper = ImprovementStore(RS.GoalStore(state / "resonance.sqlite3"), RevisionBlobs(state / "improvement"))
+        principal = RS.Principal("owner", "owner", str((TEST_ROOT / "brains" / "Brain Default").resolve()))
+        wrapper.set_policy(principal, "off", expected_version=0, event_key="installed-policy")
+        with patch.object(main.cfgmod, "STATE_DIR", state), \
+             patch.object(main, "_resonance_store", side_effect=AssertionError("Status initialized runtime store")), \
+             patch.object(main.cfgmod, "gate_active", return_value=True), \
+             patch.object(main.cfgmod, "valid_session", return_value=True):
+            client = TestClient(main.app, base_url="http://testserver")
+            response = client.get("/improvement-policy", cookies={"javis_session": "owner-cookie"})
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["policy"], {"mode": "off", "version": 1})
+            self.assertEqual(client.get("/improvement-targets", cookies={"javis_session": "owner-cookie"}).json()["targets"], [])
+
+    def test_real_status_does_not_migrate_an_existing_legacy_database(self):
+        self.assertIsNotNone(IA)
+        import main
+        state = Path(tempfile.mkdtemp(prefix="legacy-", dir=TEST_ROOT))
+        database = state / "resonance.sqlite3"
+        with sqlite3.connect(database) as connection:
+            connection.execute("CREATE TABLE legacy_marker(value TEXT)")
+        with patch.object(main.cfgmod, "STATE_DIR", state), patch.object(RS, "STATE_DIR", state), \
+             patch.object(main, "_RESONANCE_STORE", None), \
+             patch.object(main.cfgmod, "gate_active", return_value=True), \
+             patch.object(main.cfgmod, "valid_session", return_value=True):
+            client = TestClient(main.app, base_url="http://testserver")
+            response = client.get("/improvement-policy", cookies={"javis_session": "owner-cookie"})
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["policy"], {"mode": "suggest", "version": 0})
+        with sqlite3.connect(database) as connection:
+            tables = [r[0] for r in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        self.assertEqual(tables, ["legacy_marker"], "A metadata status read must not run GoalStore migrations")
+
     def test_real_main_keeps_auth_and_csrf_gates_on_new_routes(self):
         self.assertIsNotNone(IA, "Improvement routes must exist before checking main wiring")
         import main

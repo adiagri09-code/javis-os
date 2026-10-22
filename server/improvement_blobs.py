@@ -12,6 +12,7 @@ from typing import Callable
 
 MAX_ASSET_BYTES = 1024 * 1024
 _DIGEST = re.compile(r"[0-9a-f]{64}")
+_ENVELOPE = "revision-v1:"
 
 
 class AssetUnavailable(RuntimeError):
@@ -62,7 +63,7 @@ class RevisionBlobs:
             encrypt = encrypt_required
         else:
             encrypt = self.encrypt
-        ciphertext = encrypt(base64.b64encode(content).decode("ascii"))
+        ciphertext = encrypt(_ENVELOPE + base64.b64encode(content).decode("ascii"))
         if not isinstance(ciphertext, str) or not ciphertext.startswith("enc:"):
             raise AssetUnavailable("asset_encryption_unavailable")
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -92,7 +93,10 @@ class RevisionBlobs:
                 from secrets_store import decrypt
             else:
                 decrypt = self.decrypt
-            raw = base64.b64decode(decrypt(ciphertext), validate=True)
+            plaintext = decrypt(ciphertext)
+            if not isinstance(plaintext, str) or not plaintext.startswith(_ENVELOPE):
+                raise AssetUnavailable("asset_decryption_failed")
+            raw = base64.b64decode(plaintext[len(_ENVELOPE):], validate=True)
             if len(raw) > MAX_ASSET_BYTES or hashlib.sha256(raw).hexdigest() != digest:
                 raise AssetUnavailable("asset_integrity_failed")
             return raw

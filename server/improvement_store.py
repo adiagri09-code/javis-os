@@ -9,9 +9,11 @@ import hashlib
 import json
 import re
 import secrets
+import sqlite3
 import time
 from contextlib import closing
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES, RevisionBlobs  # noqa: F401
 
@@ -92,6 +94,26 @@ def has_schema(store) -> bool:
         if not version or version["version"] != SCHEMA_VERSION:
             raise SchemaError("unsupported_improvement_schema")
         return True
+
+
+class _ReadDatabase:
+    """Read the existing shared file without running GoalStore initialization."""
+
+    def __init__(self, path: Path):
+        self.uri = path.resolve().as_uri() + "?mode=ro"
+
+    def _conn(self):
+        connection = sqlite3.connect(self.uri, uri=True, timeout=10)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+
+def read_existing(path: Path, blobs: RevisionBlobs):
+    """Return metadata access only when an installed compatible schema exists."""
+    if not path.is_file():
+        return None
+    database = _ReadDatabase(path)
+    return ImprovementStore(database, blobs) if has_schema(database) else None
 
 
 def ensure(store) -> None:
@@ -240,11 +262,10 @@ class ImprovementStore:
             if existing:
                 revision_id = existing["id"]
             else:
-                parent = connection.execute("SELECT id FROM improvement_revisions WHERE target_id=? "
-                                            "ORDER BY rowid DESC LIMIT 1", (target_id,)).fetchone()
+                parent_id = old["current_revision_id"] if old else None
                 revision_id = "ir_" + secrets.token_hex(12)
                 connection.execute("INSERT INTO improvement_revisions VALUES(?,?,?,?,?,?,?,?)",
-                                   (revision_id, target_id, brain, parent["id"] if parent else None, manifest_hash,
+                                   (revision_id, target_id, brain, parent_id, manifest_hash,
                                     _json(manifest), digest, now))
             connection.execute("UPDATE improvement_targets SET current_revision_id=? WHERE id=?", (revision_id, target_id))
             result = {"target_id": target_id, "revision_id": revision_id, "generation": generation,

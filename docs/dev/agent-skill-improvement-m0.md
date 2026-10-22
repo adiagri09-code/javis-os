@@ -52,6 +52,8 @@ Requests cannot declare a path, protected hash, actor, ownership or desired perm
 
 Reads of missing improvement state do not create a new database, encrypt a source or start
 an engine. `off` rejects new capture; the owner can still inspect history and retire tracking.
+Existing metadata reads open SQLite in read-only mode, without initializing or migrating
+the shared runtime store. Retiring a target explicitly switches to the write dependency.
 No UI activation button or trial endpoint is advertised before later milestones pass.
 
 ## Persistence and recovery
@@ -92,6 +94,8 @@ within the open-handle source separately. Windows Python can expose different me
 through those APIs; cross-comparing them rejected valid captures. Raw-byte hashes remain
 the source of content identity.
 
-M1 and later add isolated trial execution, contracts/case sets, patch comparison, activation,
+The [trial boundary contract v1](agent-skill-trial-contract-v1.md) freezes the M0 contract
+for the next milestone; it does not enable execution. M1 and later implement isolated
+trial execution, contracts/case sets, patch comparison, activation,
 canary and the UI. M0's metadata tests do not establish those later capabilities or business
 quality gains.

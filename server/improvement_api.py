@@ -157,6 +157,8 @@ def register(app, deps: ImprovementApiDeps):
             wrapper = await asyncio.to_thread(deps.read_store)
             if wrapper is None:
                 raise PermissionError("target_unavailable")
+            await asyncio.to_thread(wrapper.revisions, principal, target_id)
+            wrapper = await asyncio.to_thread(deps.write_store)
             result = await asyncio.to_thread(wrapper.retire, principal, target_id,
                 expected_generation=data["expected_generation"], event_key=data["event_key"])
             return {"ok": True, "target": result}

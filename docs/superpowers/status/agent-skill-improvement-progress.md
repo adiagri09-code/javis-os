@@ -16,7 +16,7 @@
 
 | Milestone | Engineering | Business evidence | Rollout |
 |---|---|---|---|
-| M0 | In progress: baseline, gap audit, immutable asset/policy plan | Not applicable to foundation | Off/suggest only; no live activation |
+| M0 | Implementation and fresh review fixes verified; PR #794 awaiting final-head CI/integration | Not applicable to foundation | Off/suggest only; no live activation |
 | M1 | Pending | No real-engine smoke yet | Not enabled |
 | M2 | Pending | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
@@ -56,4 +56,35 @@
 
 ## Next action
 
-Write/review M0 plan, add failing foundation tests, implement immutable storage and guarded source capture, then add lazy owner routes and verify auth/CSRF/schema recovery. Finish PR #794 with a fresh implementation review and green CI before merging. Continue M1 afterwards; full Goal remains active.
+Push the review fixes and final documentation, wait for final-head CI on PR #794, merge only
+when green and verify publication. Prepare M1 from the frozen trial boundary while waiting;
+continue its implementation on the integrated baseline. Full M0–M8 Goal remains active.
+
+## M0 implementation evidence
+
+- Implemented immutable revisions/bundles and append-only events in the existing shared SQLite
+  store, encrypted exact-byte blobs, owner-only policy/CAS/idempotency, canonical ownership
+  capture and six authenticated metadata endpoints. No engine, canonical write or activation.
+- Final focused command: `D:/Project/Javis-OS/.venv/Scripts/python.exe tests/run.py improvement
+  route_table prompt_budget team_quality_contracts team_quality_usage agent_rules learn_sua_skill -v`:
+  **PASS 9/9 files, 51 seconds**. The three improvement scripts contain **39 behavioral tests**
+  (20 store, 10 assets, 9 API), including actual-main authentication/CSRF and read-only access.
+- Localization: three i18n scripts passed. Route snapshot intentionally adds six routes.
+- Earlier broad security selection: 8/9 files passed. The unrelated unchanged webhook test
+  requires POSIX mode 0600; Windows reports 0666 after chmod(0600). Ran the exact test from
+  an archived clean baseline `a9ee52ff` and reproduced the identical assertion failure.
+  Proof is in the local ignored ledger's `baseline-webhook-windows.txt`. No assertion or
+  production permissions were weakened. Linux full CI remains mandatory.
+- Fresh independent whole-branch review of `a9ee52ff..6f0541de`: no Critical findings;
+  three P2 findings, all reproduced RED then fixed in one pass: cold GET migrated legacy
+  DB; revision C after A/B/restore-A had wrong parent; corrupt empty ciphertext was accepted.
+  Fixes use an actual read-only SQLite reader, current revision pointer for parentage, and
+  a nonempty encrypted envelope. New tests verify all three plus existing-schema reads.
+- Frozen M0 trial boundary: `docs/dev/agent-skill-trial-contract-v1.md`. This is a contract
+  for M1, not a runtime or supported adapter. M1–M8 remain pending.
+- M0 acceptance: same-byte capture deduplicates; protected bytes preserved and never edited;
+  off blocks new captures; migration interruption rolls back; future schema rejected;
+  encrypted loss/corruption unavailable; two-connection CAS has exactly one winner;
+  deleted/replaced targets never inherit identity. Tests use scratch roots, no model calls.
+- CI run `39784692950` on the pre-fix head: Docker size succeeded; full Python suite still
+  running when final fixes were prepared. Its result cannot certify the final head.
