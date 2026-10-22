@@ -180,3 +180,12 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
 - Rebased M1 onto published09903315. Resolved the shared migration by preserving schema2
   and its backup under the transactional schema recheck; retained M0's new first-writer test
   and progress evidence. Post-rebase cases/store PASS2/2 in20s; diff whitespace check passed.
+- PR795 now targets main ataf45da49 and remains draft. The temporary M0 backport worktree
+  was archived through the app with a recoverable snapshot and PR794 reference; do not
+  reuse its old filesystem path. Active M1 worktree remains unchanged.
+- Contract review found missing public objective/criterion descriptions and an undeclared
+  final artifact destination. Added strict required intent/output fields, a safe public
+  projection without checker implementation refs, and portable output-path validation.
+  Behavioral RED -> GREEN, case suite now28 checks, PASS1/1 in8s. M1 has not been released
+  or enabled, so this tightens the draft contract before external records exist. Worker
+  materialization of this public projection and complete installation receipts remain next.

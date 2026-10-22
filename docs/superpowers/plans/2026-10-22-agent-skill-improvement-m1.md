@@ -115,8 +115,8 @@ contract/config. Resume matches all pins; a new candidate cannot consume the old
 Host dictionaries require strict required/allowed keys; canonical hashes and exact schema
 versions are returned with IDs. Calls consume M0 ImprovementStore/RevisionBlobs/_Tx/_event.
 
-**Closed record keys:** contract `{version,criteria,primary_metric,evaluator,unknown_conditions,
-output_hash_policy}`; criterion `{id,category,critical,kind,config}`, category mandatory/business,
+**Closed record keys:** contract `{version,objective,output,criteria,primary_metric,evaluator,unknown_conditions,
+output_hash_policy}`; criterion `{id,category,critical,description,kind,config}`, category mandatory/business,
 kind team-acceptance kind or host_checker; evaluator `{id,version,hash}`. primary_metric
 `{criterion_id,direction,aggregation}` names an existing business criterion. At least one
 mandatory and one business criterion; owner_confirm is a valid business criterion, whose
@@ -131,6 +131,12 @@ contract. Qualification pins `{experiment_id,base_bundle_hash,candidate_bundle_h
 contract_hash,case_set_hash,engine_config_hash,grant_hash,policy_version,scope_hash}` are
 exact, not open-ended caller metadata. Clone detection checks both underlying snapshot/task
 content identities and stable source/family membership across case-set IDs.
+Objective and descriptions preserve the public business intent; evaluator implementations
+and answers stay private. M1 declares one final UTF-8 artifact as output `{kind:"text",path,
+media_type}`. `public_contract(contract)` returns objective/output/public criteria, retaining
+structural requirements while replacing checker pins with `independent_check`. The worker
+must receive that pinned projection before query. `output_path()` rejects traversal, device
+names and cross-platform ambiguity, following [Win32 naming rules](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file).
 Track exposure at the underlying family/content level too: a tuning clone cannot expose
 an unseen/reserved qualification family through another set. Future improver materialization
 has a separate `improver_cases(p,case_set_id)->list[dict]` interface that returns tuning only

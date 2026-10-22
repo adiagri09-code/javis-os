@@ -43,16 +43,36 @@ def _digest(value):
         raise ValueError("invalid_trial_hash")
 
 
+def output_path(value):
+    """One declared relative artifact path has the same meaning on Windows and Unix."""
+    if (not isinstance(value, str) or not value or len(value.encode("utf-8")) > 400
+            or any(c in value for c in '\\<>:"|?*') or any(ord(c) < 32 for c in value)):
+        raise ValueError("invalid_trial_output_path")
+    for part in value.split("/"):
+        if (not part or part in (".", "..") or part.endswith((".", " "))
+                or re.fullmatch(r"(?:con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])",
+                                part.split(".", 1)[0].rstrip(" "), re.I)):
+            raise ValueError("invalid_trial_output_path")
+    return value
+
+
 def _contract(value):
-    _fields(value, {"version", "criteria", "primary_metric", "evaluator", "unknown_conditions", "output_hash_policy"})
+    _fields(value, {"version", "objective", "output", "criteria", "primary_metric", "evaluator", "unknown_conditions", "output_hash_policy"})
     if type(value["version"]) is not int or value["version"] != 1 or value["output_hash_policy"] != "raw_sha256":
         raise ValueError("unsupported_trial_contract")
+    _text(value["objective"], 4000)
+    _fields(value["output"], {"kind", "path", "media_type"})
+    if value["output"]["kind"] != "text":
+        raise ValueError("unsupported_trial_output_kind")
+    output_path(value["output"]["path"])
+    _text(value["output"]["media_type"], 128)
     criteria = value["criteria"]
     if not isinstance(criteria, list) or not 1 <= len(criteria) <= 12:
         raise ValueError("invalid_trial_criteria")
     identifiers, categories = set(), set()
     for criterion in criteria:
-        _fields(criterion, {"id", "category", "critical", "kind", "config"})
+        _fields(criterion, {"id", "category", "critical", "description", "kind", "config"})
+        _text(criterion["description"], 2000)
         if (not isinstance(criterion["id"], str) or not _ID.fullmatch(criterion["id"])
                 or criterion["id"] in identifiers or criterion["category"] not in ("mandatory", "business")
                 or type(criterion["critical"]) is not bool):
@@ -101,6 +121,21 @@ def _contract(value):
     for condition in value["unknown_conditions"]:
         _text(condition, 128)
     IM._json(value)
+
+
+def public_contract(value):
+    """Preserve the owner's acceptance intent while keeping evaluator internals private."""
+    contract = _frozen(value)
+    _contract(contract)
+    criteria = []
+    for item in contract["criteria"]:
+        public = {key: item[key] for key in ("id", "category", "critical", "description")}
+        if item["kind"] in ("host_checker", "command_ok"):
+            public["kind"] = "independent_check"
+        else:
+            public.update(kind=item["kind"], config=item["config"])
+        criteria.append(public)
+    return {key: contract[key] for key in ("version", "objective", "output")} | {"criteria": criteria}
 
 
 class CaseStore:

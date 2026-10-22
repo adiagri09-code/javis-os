@@ -28,6 +28,13 @@ a Team job. A structural pass never implies a business or owner-confirmation pas
 decisions bind the exact case/output hash. Checkers are host registered, pinned, and outside
 the solver's filesystem, environment and tool inventory.
 
+M1's acceptance record requires a public objective, a description for every criterion and
+one declared UTF-8 text artifact `{kind:"text",path,media_type}`. The solver receives a
+hash-pinned public projection of these requirements, without evaluator implementation
+identities/hashes or answers. Structural requirements remain visible. Full and public
+contract hashes are distinct pins; the host verifies their relationship. Missing public
+intent is invalid, rather than permission to infer the owner's business requirements.
+
 ## Isolation and lifecycle
 
 Every `(experiment, variant, case, repeat, attempt)` has a fresh workspace and context.

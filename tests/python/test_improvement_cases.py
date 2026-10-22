@@ -45,10 +45,13 @@ class ImprovementCaseTests(unittest.TestCase):
         self.other = RS.Principal("owner", "owner", "brain-b")
 
     def contract(self):
-        return {"version": 1, "criteria": [
+        return {"version": 1, "objective": "Report the authorized input accurately as JSON.",
+            "output": {"kind": "text", "path": "answer.json", "media_type": "application/json"}, "criteria": [
             {"id": "shape", "category": "mandatory", "critical": True, "kind": "json_keys",
+             "description": "Return an object with the value field.",
              "config": {"path": "answer.json", "keys": ["value"]}},
             {"id": "content", "category": "business", "critical": True, "kind": "owner_confirm",
+             "description": "The value must accurately represent the authorized input.",
              "config": {"path": "answer.json"}}],
             "primary_metric": {"criterion_id": "content", "direction": "higher", "aggregation": "all_pass"},
             "evaluator": {"id": "trial-evaluator", "version": "1", "hash": digest("host-evaluator-v1")},
@@ -111,6 +114,41 @@ class ImprovementCaseTests(unittest.TestCase):
             with self.assertRaises(sqlite3.IntegrityError):
                 connection.execute("DELETE FROM improvement_contracts WHERE id=?", (first["contract_id"],))
 
+    def test_contract_requires_public_business_intent_and_declared_output(self):
+        for missing in ("objective", "output", "description"):
+            payload = self.contract()
+            if missing == "description":
+                payload["criteria"][1].pop("description", None)
+            else:
+                payload.pop(missing, None)
+            with self.subTest(missing=missing), self.assertRaises(ValueError):
+                self.cases.put_contract(self.owner, payload, event_key="missing-public-" + missing)
+
+    def test_public_contract_preserves_requirements_without_checker_implementation(self):
+        self.assertTrue(hasattr(IC, "public_contract"), "Solver needs a safe public acceptance projection")
+        payload = self.contract()
+        payload["criteria"][1].update(kind="host_checker", config={"checker_id": "private-checker",
+            "version": "private-version", "hash": digest("private-evaluator-code")})
+        projected = IC.public_contract(payload)
+        self.assertEqual(projected["objective"], payload["objective"])
+        self.assertEqual(projected["output"], payload["output"])
+        self.assertEqual(projected["criteria"][0]["config"], payload["criteria"][0]["config"])
+        self.assertEqual(projected["criteria"][1]["description"], payload["criteria"][1]["description"])
+        self.assertNotIn("private-checker", json.dumps(projected))
+        self.assertNotIn("private-version", json.dumps(projected))
+        self.assertNotIn(digest("private-evaluator-code"), json.dumps(projected))
+        projected["criteria"][0]["config"]["path"] = "caller-mutation"
+        self.assertEqual(payload["criteria"][0]["config"]["path"], "answer.json")
+
+    def test_declared_output_path_is_portable_and_cannot_escape_the_artifact_root(self):
+        self.assertTrue(hasattr(IC, "output_path"), "Artifact destination needs a shared safe path validator")
+        self.assertEqual(IC.output_path("reports/answer.json"), "reports/answer.json")
+        for path in ("../answer.json", "C:answer.json", "C:/answer.json", "//server/share", "reports\\answer.json",
+                     "reports/CON.txt", "report./answer.json", "reports//answer.json", "reports/./answer.json",
+                     "reports/COM¹.txt", "reports/LPT²", "reports/line\nfeed.txt", "reports/CONOUT$"):
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "invalid_trial_output_path"):
+                IC.output_path(path)
+
     def test_mutating_the_callers_contract_cannot_change_the_pinned_record(self):
         payload = self.contract()
         expected = copy.deepcopy(payload)
@@ -151,6 +189,7 @@ class ImprovementCaseTests(unittest.TestCase):
     def test_structural_checks_cannot_be_declared_as_business_correctness(self):
         payload = self.contract()
         payload["criteria"][1] = {"id": "content", "category": "business", "critical": True,
+                                    "description": "Claim business correctness using only a keyword.",
                                     "kind": "file_contains", "config": {"path": "answer.json", "must_contain": ["total"]}}
         with self.assertRaisesRegex(ValueError, "business"):
             self.cases.put_contract(self.owner, payload, event_key="structural-not-business")
