@@ -11,13 +11,16 @@
 - Branch: `codex/agent-skill-improvement-m0`; release reservation: 0.287.0, commit `74ad991e`.
 - Draft PR: https://github.com/blogminhquy/javis-os/pull/794 (attached to this chat).
 - Original checkout remains untouched by implementation; only the three relevant source documents were copied.
+- Current engineering branch: `codex/agent-skill-improvement-m1`; 0.288.0 reservation
+  `884bfbca`, dependent draft https://github.com/blogminhquy/javis-os/pull/795 (attached).
+  M0 is still awaiting CI/integration on `bfc33ee6`; M1 cannot merge ahead of it.
 
 ## Milestones
 
 | Milestone | Engineering | Business evidence | Rollout |
 |---|---|---|---|
 | M0 | Implementation and fresh review fixes verified; PR #794 awaiting final-head CI/integration | Not applicable to foundation | Off/suggest only; no live activation |
-| M1 | Pending | No real-engine smoke yet | Not enabled |
+| M1 | Engineering-only Task 1 starts on verified M0 code; plan/audits/native synthetic probes ready | No real-engine smoke yet | Not enabled; M0 integration gate remains open |
 | M2 | Pending | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
