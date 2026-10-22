@@ -117,6 +117,24 @@ Await TrialTasks.close at the beginning of main shutdown, before source/store/MC
 teardown. Shutdown closes only acquired writer tokens; foreign opaque leases remain intact.
 Unsettled storage cleanup remains a visible failure, including after a task finishes.
 
+One model trial per brain is the default. A cross-process brain lifetime lock spans
+materialization, worker closure, evaluation and plaintext cleanup. An independent atomic
+database check rejects another running/evaluating trial before its ledger marker. Capacity
+rejection does not silently queue or retry a model query; its unstarted attempt is not_run
+and refunded. A different brain retains independent capacity. The active-experiment limit
+belongs to M2's experiment lifecycle, beyond M1's immutable admission-plan records.
+
+Execution workspaces are temporary decrypted copies. Normal completion, cancellation and
+host abort remove them after the owning worker/evaluator has settled; encrypted artifacts,
+receipts, results and the cleaned journal remain available. A per-attempt kernel lock keeps
+recovery from deleting a live worker's workspace, including after durable cancellation or
+lease expiry. Unlink failures remain explicit and are retried by scoped owner recovery.
+After a host crash/restart, invoke the explicit recovery endpoint for the authorized brain;
+it settles expired attempts and retries terminal-workspace cleanup. Replaying its event
+keeps the original durable result and still retries pending cleanup. Startup and cold GET
+do not dispatch or automatically recover work. Untracked files and other brains are outside
+this recovery operation. No uncertain query resumes.
+
 The process service retains admission from the first preflight await through handoff.
 Concurrent identical requests join one operation; a changed payload under the same event
 key conflicts before a second native probe. Qualification claims, trial, call ledger,

@@ -512,3 +512,25 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   provider. The lifetime cleanup fix changes the profile again, so qualification must run
   on the final frozen profile. Historical real smoke remains attributed to06e75, with its
   original aggregate unknown verdict. Plaintext cleanup and concurrency fixes are ongoing.
+
+- Review fixes are committed as3affde20/4c75c379. Plaintext cleanup now waits for the
+  actual worker and checker lifetime, including repeated cancellation and storage failures
+  during closing reads/abort. Both failure variants were reproduced before correction.
+  Kernel locks enforce per-brain capacity and protect live workspaces across processes;
+  the durable marker transaction independently checks running/evaluating capacity.
+  Cancellation/recovery cannot release capacity while the old worker is still closing.
+- Seven final regression scripts passed in300s: smoke, actual-main end-to-end, results,
+  Runner, task supervisor,17 new lifetime cases and34 trial-store cases. The new lifetime
+  checks include actual host-process death, recovery/replay, interrupted cleanup, encrypted
+  history preservation and cross-brain independence. Independent original reproductions
+  now show no orphan, no retained plaintext, one same-brain model trial and no cleanup
+  before a blocked checker settles, including when storage reads/abort fail.
+- Final isolated native qualification passed5/5 in15.517s on profile
+  c3b4f27ee81899fa1ae650513ae5c4b051cdcfd7b4106635a2e6acd2209f4df6. Historical real
+  smoke06e75 is unchanged. A separate14-script required regression passed205s, covering
+  current learning, owner/grant, ledger/usage, Team acceptance, skill usage and prompt budget.
+  The M1 verification map and recovery runbook document the boundaries. Crash cleanup is
+  explicit scoped recovery; trusted host checkers must settle before ownership is released.
+  Final independent review reports no open Important findings; its fresh Runner/lifetime17
+  checks passed2/2 in53s and all original reproductions pass. Final CI/integration remain
+  pending; business and rollout gates stay open.

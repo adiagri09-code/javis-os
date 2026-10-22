@@ -413,10 +413,10 @@ Fresh independent whole-branch review then one fixes pass with reproducing tests
 final-head CI, PR integration, published build verification and progress update. Continue
 M2 engineering where prerequisites pass; keep business/rollout gates separate.
 
-- [ ] Self-review full M1 matrix and exact interface signatures; fix gaps before execution.
+- [x] Self-review full M1 matrix and exact interface signatures; fix gaps before execution.
 - [x] Run selected-model technical smoke only when verified, recording actual usage and
   sources; otherwise preserve unsupported status and continue independent engineering.
-- [ ] Fresh whole-branch review; one fixes pass with behavioral RED-to-GREEN evidence.
+- [x] Fresh whole-branch review; one fixes pass with behavioral RED-to-GREEN evidence.
 - [ ] Final-head CI GREEN, merge/new-version publication verified, progress recorded.
 
 Selected-engine feasibility: exact qualified Windows CLI2.1.308/SDK0.2.116, persisted
@@ -428,3 +428,15 @@ and native event/tool outcome coverage). Known token totals4362/158 have partial
 attribution; requests is null. No provider/model/reasoning fallback or second model query.
 Evidence export is docs/dev/agent-skill-selected-engine-feasibility-2026-10-23.json. This
 checks the feasibility execution item, not Task6/M1/Goal completion or business acceptance.
+
+The source/test acceptance map is docs/dev/agent-skill-m1-verification.md. Fresh whole-M1
+review reproduced orphaned worker creation, retained decrypted workspaces and missing
+per-brain model capacity. Behavioral RED-to-GREEN fixes retain native spawn/cleanup,
+protect worker/checker workspace lifetimes with kernel locks, clean terminal copies and
+guard engine markers atomically. Cleanup-read and abort failures were also reproduced;
+evaluation is now joined unconditionally before deleting temporary input. Encrypted
+history and historical real-smoke provenance remain unchanged. Final qualification uses
+the separate c3b4f27ee81899fa1ae650513ae5c4b051cdcfd7b4106635a2e6acd2209f4df6 profile
+with a localhost fake provider. Fresh independent review reports no open Important findings;
+its final Runner/lifetime17 checks passed2/2 in53s and all four original reproductions pass.
+Exact-head CI and publication remain required.

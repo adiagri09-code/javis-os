@@ -2,11 +2,11 @@
   "label": "synthetic/native-technical-qualification-only",
   "production_billing": false,
   "passed": true,
-  "profile_hash": "06e75c3046a666790035fd4ef8910abe3a1113baba5bc67f6f96a9378a98abed",
+  "profile_hash": "c3b4f27ee81899fa1ae650513ae5c4b051cdcfd7b4106635a2e6acd2209f4df6",
   "scenarios": [
     {
       "scenario": "synthetic/native-pending-query-cancellation",
-      "elapsed_s": 4.0,
+      "elapsed_s": 5.453,
       "production_billing": false,
       "query_count": 1,
       "owned_process_count": 4,
@@ -23,7 +23,7 @@
     },
     {
       "scenario": "synthetic/native-local-fake-provider",
-      "elapsed_s": 4.25,
+      "elapsed_s": 5.656,
       "production_billing": false,
       "runtime": {
         "version": "2.1.308",
@@ -113,8 +113,8 @@
   "selected_configuration_hash": "3bf3fc794eb7c1d9fd9470903d90105f292c998dd84f587b219e7de4ebae6cf8",
   "source_sha256": {
     "server/improvement_worker.py": "6b5222f7b034095ecd2fed10b629a8adb12688d9260e9eb273ec06d733a80851",
-    "server/improvement_claude.py": "0b175c683fdf43eebc6db87667c3e84ccf70cf17fcb57a7f184648d22b967ada",
-    "server/improvement_sandbox.py": "1af0f887ed9a198e6c840e266dd42f28a3704aa8747c61321624b81469215470",
+    "server/improvement_claude.py": "7549aecf35133fc864c7fb67364cbd90ac15d9ba70a8808e14a14cf87ba54453",
+    "server/improvement_sandbox.py": "c0b2ce5999f40261c13ca341d997364ff78699bab387e47185bd2d3da05185e5",
     "server/claude_sdk_engine.py": "6b13f5b77f78e0dfe3ffc1268e46ef70d8d800324e8dd2664f793f0b8df49906",
     "tests/python/test_improvement_native.py": "869d1cb826d8396e684bccaa04fde3103921c596ecb1e75bb35351a93348a929",
     "tests/python/test_improvement_runtime_qualification.py": "73b39b1a6bf04bb3c661d686c673eb1b2679e8b1be82f799217b871ce4ab2423"
@@ -122,11 +122,12 @@
   "verification": {
     "qualification_tests": 5,
     "qualification_passed": 5,
-    "worker_tests": 6,
+    "worker_tests": 9,
     "profile_tests": 20,
-    "selection_tests": 20,
+    "selection_tests": 32,
     "windows_no_console": "passed",
-    "unknown_runtime_no_execution": "passed"
+    "unknown_runtime_no_execution": "passed",
+    "runner_tests": 24
   },
   "reused_blackbox_assertions": [
     "outside Bash marker absent",
@@ -154,6 +155,26 @@
     "runtime": "D:/Project/Javis-OS/.venv/Scripts/python.exe",
     "script": "tests/python/test_improvement_runtime_qualification.py",
     "opt_in_environment": "JAVIS_TEST_NATIVE_QUALIFICATION_CLI=<explicit exact candidate path>",
-    "default": "native tests skipped; engineering/unknown-runtime tests run without opt-in"
+    "default": "native tests skipped; engineering/unknown-runtime tests run without opt-in",
+    "evidence_environment": "JAVIS_TEST_NATIVE_QUALIFICATION_EVIDENCE=docs/dev/agent-skill-runtime-2.1.308-qualification.json",
+    "state_isolation": "Before server imports, set JAVIS_STATE_DIR, BRAINS_DIR, OBSIDIAN_VAULT_PATH, BRAIN_PATH, SOURCES_PATH and SESSIONS_PATH to scratch directories; use tests/python on sys.path."
+  },
+  "prior_profile_hash": "06e75c3046a666790035fd4ef8910abe3a1113baba5bc67f6f96a9378a98abed",
+  "provenance_note": "This rerun covers only the current final profile with scratch state, empty auth HOME, dummy credential and localhost fake inference. Retained selected_configuration metadata was not reread from production settings. Historical real-smoke artifacts retain their original 06e75c3046a666790035fd4ef8910abe3a1113baba5bc67f6f96a9378a98abed profile and are not evidence for this updated profile.",
+  "verification_scope": {
+    "current_profile_rerun": [
+      "qualification_tests",
+      "qualification_passed",
+      "unknown_runtime_no_execution"
+    ],
+    "retained_prior_check_profile_hash": "79bad7e9cb477a79e6d91833be967dcd2c301086381f7d56491dfbeae9107b4e",
+    "retained_prior_checks": [
+      "worker_tests",
+      "profile_tests",
+      "selection_tests",
+      "runner_tests",
+      "windows_no_console"
+    ],
+    "qualification_elapsed_s": 15.517
   }
 }
