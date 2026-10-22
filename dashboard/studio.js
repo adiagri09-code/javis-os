@@ -1459,7 +1459,8 @@
       const improve = document.createElement("button");
       improve.type = "button";
       improve.textContent = t("improve.title");
-      improve.onclick = () => window.JavisImprovementCandidates.open({brain:brain(), slug:s.slug});
+      improve.onclick = () => window.JavisImprovementCandidates.open({brain:brain(), slug:s.slug,
+        isCurrent:() => _skState.open === s.slug && _skState.skills.some(x => x.slug === s.slug && x.enabled !== false && !x.system)});
       box.querySelector(".sk3-d-act").append(improve);
     }
     const exp = box.querySelector("#skDExp"); if (exp) exp.onclick = () => exportItem("skill", s.slug);

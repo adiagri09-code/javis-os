@@ -43,8 +43,11 @@
   JS5 scripts and unchanged-prefix595-route snapshot pass. Headless Chromium
   at390px vi/en verifies exact downloads, inert content and UTF-8/CRLF selection.
   An extra unrelated webhook POSIX-mode600 test fails on Windows; no test/guard
-  was weakened. Fresh whole-branch independent review and final CI/integration
-  remain pending. Trial/activation flags stay false; no actual engine calls in A.
+  was weakened. Fresh whole-branch independent review through65740de1 found no
+  Important/Critical issues; the subsequent stale-Studio-skill correction also
+  passed independent RED/GREEN reproduction and narrow review. Final CI and
+  integration remain pending. Trial/activation flags stay false; no actual engine
+  calls in A.
 - Owner delegated pilot choice. An objective Python bug-fix/test pilot is selected
   for reproducibility alongside the spec's required business pilots. This choice
   does not supply an accepted business dataset or owner acceptance evidence.

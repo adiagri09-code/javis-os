@@ -14,7 +14,8 @@
     const el = node("button", label, action); el.type = "button"; el.onclick = fn; return el;
   }
   function alive(s, version = s.version) {
-    return active === s && s.version === version && (!window.currentBrainPath || window.currentBrainPath() === s.brain);
+    return active === s && s.version === version && (!s.isCurrent || s.isCurrent())
+      && (!window.currentBrainPath || window.currentBrainPath() === s.brain);
   }
   function close() {
     if (!active) return;
@@ -228,11 +229,11 @@
       }
     } catch (error) { failure(s, error); }
   }
-  function shell(brain, slug) {
+  function shell(brain, slug, isCurrent) {
     close();
     const panel = node("section"); panel.className = "improvement-candidate-panel"; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-modal", "true");
     panel.setAttribute("aria-label", tr("title"));
-    const s = {brain,slug,panel,version:++epoch,events:new Map(),rows:[]}; active = s;
+    const s = {brain,slug,isCurrent,panel,version:++epoch,events:new Map(),rows:[]}; active = s;
     panel.append(node("h2", tr("title")), button(tr("close"), "close", close));
     info(panel, tr("scope_hint"));
     s.status = node("p", tr("loading"), "status"); s.status.setAttribute("role", "status"); panel.append(s.status);
@@ -251,8 +252,8 @@
     s.status.tabIndex = -1; s.status.focus();
     return s;
   }
-  async function open({brain, slug}) {
-    const s = shell(brain, slug);
+  async function open({brain, slug, isCurrent}) {
+    const s = shell(brain, slug, isCurrent);
     const contextLabel = node("label", tr("context")); s.choose = node("select", null, "context"); contextLabel.append(s.choose); s.panel.append(contextLabel);
     s.prepare = button(tr("load_baseline"), "load-baseline", () => baseline(s)); s.prepare.disabled = true; s.panel.append(s.prepare);
     s.panel.append(button(tr("capture"), "capture", async () => {
@@ -267,15 +268,15 @@
     const attempt = field(artifacts, "attempt", "input"); attempt.value = "1"; attempt.min = "1";
     artifacts.append(button(tr("review_artifact"), "review-artifact", () => {
       if (alive(s) && trial.value.trim() && Number.isSafeInteger(Number(attempt.value)) && Number(attempt.value) > 0) {
-        return openArtifact({brain:s.brain,trialId:trial.value.trim(),attempt:Number(attempt.value)});
+        return openArtifact({brain:s.brain,trialId:trial.value.trim(),attempt:Number(attempt.value),isCurrent:s.isCurrent});
       }
       failure(s, {status:400});
     }));
     s.panel.append(artifacts);
     await load(s);
   }
-  async function openArtifact({brain, trialId, attempt}) {
-    const s = shell(brain, "");
+  async function openArtifact({brain, trialId, attempt, isCurrent}) {
+    const s = shell(brain, "", isCurrent);
     try {
       const value = (await request(s, "/improvement-trials/" + encodeURIComponent(trialId) + "/artifact-review", {attempt})).review;
       const bytes = await exact(value.artifact);

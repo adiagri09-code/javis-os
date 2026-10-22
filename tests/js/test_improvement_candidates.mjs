@@ -62,6 +62,15 @@ for (const lang of ["vi","en"]) {
   f.ctx.window.JavisImprovementCandidates.close();
 }
 {
+  const f = await fixture(); let sameSkill = true;
+  await f.ctx.window.JavisImprovementCandidates.open({brain:"brain-one",slug:"test-skill",isCurrent:()=>sameSkill});
+  let resolve; f.defer(new Promise(r=>{resolve=r;}));
+  const pending = f.find("review-candidate-one").onclick();
+  sameSkill=false; f.intervals.forEach(fn=>fn()); resolve(); await pending;
+  assert.ok(!f.body.querySelector('[data-action="authorize"]'),"A switched Studio skill cannot retain review actions");
+  assert.ok(!f.body.querySelector('[data-action="close"]'),"Close stale skill panel");
+}
+{
   const f = await fixture(); f.setRows([{...candidate,base_generation:2}]);
   await f.find("review-candidate-one").onclick();
   assert.equal(f.body.querySelector('[data-action="authorize"]'), null, "Changed target generation cannot authorize");
