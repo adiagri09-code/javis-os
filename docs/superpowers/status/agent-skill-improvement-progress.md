@@ -11,28 +11,23 @@
 - M0 branch: `codex/agent-skill-improvement-m0`; release0.287.0, PR #794 merged
   `0990331574e617fa1a79cd69fcd7b87d465448c5`; publication39797072172 succeeded.
 - Original checkout remains untouched by implementation; only the three relevant source documents were copied.
-- Current engineering branch: `codex/agent-skill-improvement-m1`, release0.291.0 reserved
-  on https://github.com/blogminhquy/javis-os/pull/795 (attached, ready for review).
-  Rebased onto main046ea863/0.290.0; code checkpoints4c75c379 and0ea1e134 include reviewed
-  lifetime/capacity and POSIX semantic-identity fixes. Independent review has no open
-  Important findings after the reproduced CI corrections described below.
-  CI39847154134 on23e546b9 passed the earlier six failing scripts except for a
-  separate end-to-end directory-stat race. The final repair and deterministic
-  negative guards below are independently reviewed; fresh final-head CI is required.
-  Final-head CI, merge and publication remain pending. Earlier reservations/checkpoints
-  below are historical; they do not supersede this current state.
+- M1 engineering integrated: release0.291.0, PR795 straight squash merged
+  `9dd7a9f9de3e8fadb338298e0f9743d48e5c1d4b`. Final-head Linux CI39852883192
+  passed on independently reviewed e0381902; the merged tree is identical.
+  Publication39856024117 succeeded on the actual main merge. No production
+  deployment, restart or activation occurred. Earlier reservations, failures and
+  checkpoints below remain historical and do not supersede this state.
+- Current engineering continuation is M2A below, release0.292.0.
 
 ## M2A engineering continuation
 
 - Worktree: `C:/Users/admin/.codex/worktrees/agent-skill-improvement-m2a/Javis-OS`;
   branch `codex/agent-skill-improvement-m2a`, release0.292.0 reservationf6d8d356,
   attached draft PR799: https://github.com/blogminhquy/javis-os/pull/799.
-- Dependency: independently reviewed M1 heade0381902/PR795. Its deterministic
-  POSIX directory-stat race repair passed the actual ChangeTime reproduction and
-  focused author/root/peer regressions. Fresh Linux CI39852883192 is running;
-  no M1 merge/publication or M2 integration claim.
-  M2A targets the M1 branch temporarily and must rebase/retarget onto published
-  main before integration. The original checkout remains untouched.
+- Dependency M1 is published as0.291.0 on main9dd7a9f9. Replayed only A's six
+  own commits onto that actual merged source; the resulting tree is byte-identical
+  to the reviewed A checkpoint b01ddf1b. PR799 targets main for final CI/integration;
+  0.292.0 remains the next free reservation. The original checkout remains untouched.
 - Plan: `../plans/2026-10-23-agent-skill-improvement-m2a.md`, reviewed/self-reviewed.
   Tasks1–2 add schema4 owner-authority/immutable candidate metadata and byte-exact
   owner staging. Their new suites pass12/11/14 tests; relevant assets, Host,
@@ -57,8 +52,8 @@
 | Milestone | Engineering | Business evidence | Rollout |
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
-| M1 | Tasks1–5 implemented and independently reviewed; Task6 final-head CI/integration pending | One historical real-engine synthetic baseline; aggregate unknown; no business pilot | Trial/activation flags false; not enabled |
-| M2 | M2A Tasks1–4 implemented; whole-branch review/final CI/integration and B–F open | No skill feasibility yet | Not enabled |
+| M1 | Complete engineering: PR795 merged9dd7a9f9, CI39852883192 and publication39856024117 succeeded;0.291.0 | One historical real-engine synthetic baseline; aggregate unknown; no business pilot | Trial/activation flags false; not enabled |
+| M2 | M2A Tasks1–4 implemented and independently reviewed; final CI/integration and B–F open | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
 | M5 | Pending | No agent pilot | Not enabled |

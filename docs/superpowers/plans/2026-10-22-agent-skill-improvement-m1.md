@@ -417,7 +417,13 @@ M2 engineering where prerequisites pass; keep business/rollout gates separate.
 - [x] Run selected-model technical smoke only when verified, recording actual usage and
   sources; otherwise preserve unsupported status and continue independent engineering.
 - [x] Fresh whole-branch review; one fixes pass with behavioral RED-to-GREEN evidence.
-- [ ] Final-head CI GREEN, merge/new-version publication verified, progress recorded.
+- [x] Final-head CI GREEN, merge/new-version publication verified, progress recorded.
+
+M1 engineering integration: exact e0381902 passed Linux CI39852883192; PR795
+straight squash merged9dd7a9f9de3e8fadb338298e0f9743d48e5c1d4b as0.291.0. The
+merged tree matches the reviewed/tested head. Publication39856024117 succeeded.
+This completes engineering Task6, without changing the historical unknown smoke
+verdict or claiming business acceptance, live canary, activation or deployment.
 
 Selected-engine feasibility: exact qualified Windows CLI2.1.308/SDK0.2.116, persisted
 anthropic-cli/claude-opus-5-5/medium/subscription/fastfalse. First deep-output attempt verified
@@ -439,4 +445,4 @@ history and historical real-smoke provenance remain unchanged. Final qualificati
 the separate c3b4f27ee81899fa1ae650513ae5c4b051cdcfd7b4106635a2e6acd2209f4df6 profile
 with a localhost fake provider. Fresh independent review reports no open Important findings;
 its final Runner/lifetime17 checks passed2/2 in53s and all four original reproductions pass.
-Exact-head CI and publication remain required.
+The exact-head CI and publication evidence above complete this engineering gate.

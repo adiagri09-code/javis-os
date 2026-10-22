@@ -47,6 +47,12 @@ This plan covers only subproject A. Write and self-review each later plan agains
 
 M1 code checkpoint4c75c379, documentation46a42fb3, PR795. Independent M1 review passed. Integrate this subproject only after M1 final CI/merge/publication; before code, fetch main, inspect open PR reservations and reserve the next free release in its own draft PR. Do not include M2 source changes in PR795.
 
+Integration update: M1 final CI39852883192 passed exact e0381902; PR795 merged
+main9dd7a9f9 as0.291.0 and publication39856024117 succeeded. A's six own commits
+were replayed onto that actual main without source-tree changes.0.292.0 remains
+the sole open reservation. A's whole review and narrow stale-skill correction
+review have no Important findings; final-head CI and A integration remain open.
+
 ## Source reuse and deliberate changes
 
 - `improvement_assets.capture_source` is the actual canonical/pack/system/disabled/identity authority observer. Supply the actual pack-state root; do not invoke capture to stage a candidate.
