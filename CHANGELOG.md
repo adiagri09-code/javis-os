@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.287.0] - 2026-10-22
+### Thêm mới
+- **Đặt nền cho cải tiến có kiểm chứng.** Chuẩn bị quản lý bản agent và skill để thử thay đổi riêng, giữ nguyên nội dung đang dùng. Chưa tự chạy phép thử hoặc áp dụng trên bộ não thật.
+
 ## [0.286.0] - 2026-10-22
 ### Sửa lỗi
 - **Chọn model trong chat với trợ lý không còn đổi model của khung chat chính.** Áp dụng cho mọi trợ lý lẫn Javis Core: model chọn ở đó chỉ ghim cho đúng cuộc chat ấy. Trợ lý chưa chọn model thì chạy theo model chính, và có thêm dòng "Theo model của khung chat chính" để bỏ ghim.
