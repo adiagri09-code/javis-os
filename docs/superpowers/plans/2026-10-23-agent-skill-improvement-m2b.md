@@ -83,9 +83,21 @@ may use current constant; historical fixture/backup assertions retain literal4.
 
 ## Task2 — host definition, arms, matrix and irreversible selection
 
-- [ ] Reproduce the named behavioral RED cases.
-- [ ] Implement this unit and inspect its exact source/authority boundaries.
-- [ ] Run named GREEN/regression checks, record actual evidence and commit the unit.
+- [x] Reproduce the named behavioral RED cases.
+- [x] Implement this unit and inspect its exact source/authority boundaries.
+- [x] Run named GREEN/regression checks, record actual evidence and commit the unit.
+
+Unit evidence: comparison-plan suite24 tests GREEN48s; related8/8 regression
+GREEN157s. Independent review reproduced final protected-context observation
+races in create/bind; root2 RED then GREEN after final full observations, and
+reviewer's original diagnostics independently pass. No open Important findings
+in this scoped unit review. Whole-B review/release remains pending.
+
+Sequencing detail: KEEP_BASE seals and enters stopping atomically now. Candidate
+selection fails closed until Task5 can verify exact complete immutable tuning
+reports; final-matrix freeze requires the matching stored selection. Task5 must
+open that branch with report evidence, not caller references or trial counts.
+Host definitions freeze multiple_tests=2 before results (the actual A arm limit).
 
 
 New improvement_comparison_plans.py and tests; narrowly extend A new-write guards.

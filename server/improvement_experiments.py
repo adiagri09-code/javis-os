@@ -115,29 +115,37 @@ class ExperimentRecords:
         value = _definition(definition)
         _generation(expected_context_generation)
         IM.ensure(self.store)
-        payload = {"definition": value, "expected_context_generation": expected_context_generation}
         with self.store._Tx(self.store) as connection:
-            replay = self.assets._replay(connection, brain, event_key, "experiment_create", payload)
-            if replay is not None:
-                return replay
-            self._bound_in(connection, brain, value, expected_context_generation)
-            existing = connection.execute("SELECT * FROM improvement_experiments WHERE id=? AND brain_id=?",
-                                          (value["experiment_id"], brain)).fetchone()
-            if existing is not None:
-                if existing["definition_hash"] != IM._hash(value):
-                    raise IM.ConflictError("experiment_identity_conflict")
-                result = self._public(existing)
-            else:
-                if connection.execute("SELECT 1 FROM improvement_experiments WHERE brain_id=? "
-                        "AND phase NOT IN ('completed','rejected','inconclusive','cancelled','stale')", (brain,)).fetchone():
-                    raise IM.ConflictError("experiment_brain_busy")
-                now = time.time()
-                connection.execute("INSERT INTO improvement_experiments(id,brain_id,context_id,target_id,definition_hash,definition_json,"
-                    "phase,generation,created_at,updated_at) VALUES(?,?,?,?,?,?,'proposed',1,?,?)", (
-                    value["experiment_id"], brain, value["context_id"], value["target_id"], IM._hash(value), IM._json(value), now, now))
-                result = self._public(self._row(connection, brain, value["experiment_id"]))
-            self.assets._event(connection, principal, event_key, "experiment_create", payload, result)
-            return result
+            return self._create_in(connection, principal, value, expected_context_generation, event_key)
+
+    def _create_in(self, connection, principal, value, expected_context_generation, event_key):
+        """Use an existing concrete writer; never open a nested transaction."""
+        IC.CaseStore(self.assets)._own_transaction(connection)
+        brain = _brain(principal)
+        value = _definition(value)
+        _generation(expected_context_generation)
+        payload = {"definition": value, "expected_context_generation": expected_context_generation}
+        replay = self.assets._replay(connection, brain, event_key, "experiment_create", payload)
+        if replay is not None:
+            return replay
+        self._bound_in(connection, brain, value, expected_context_generation)
+        existing = connection.execute("SELECT * FROM improvement_experiments WHERE id=? AND brain_id=?",
+                                      (value["experiment_id"], brain)).fetchone()
+        if existing is not None:
+            if existing["definition_hash"] != IM._hash(value):
+                raise IM.ConflictError("experiment_identity_conflict")
+            result = self._public(existing)
+        else:
+            if connection.execute("SELECT 1 FROM improvement_experiments WHERE brain_id=? "
+                    "AND phase NOT IN ('completed','rejected','inconclusive','cancelled','stale')", (brain,)).fetchone():
+                raise IM.ConflictError("experiment_brain_busy")
+            now = time.time()
+            connection.execute("INSERT INTO improvement_experiments(id,brain_id,context_id,target_id,definition_hash,definition_json,"
+                "phase,generation,created_at,updated_at) VALUES(?,?,?,?,?,?,'proposed',1,?,?)", (
+                value["experiment_id"], brain, value["context_id"], value["target_id"], IM._hash(value), IM._json(value), now, now))
+            result = self._public(self._row(connection, brain, value["experiment_id"]))
+        self.assets._event(connection, principal, event_key, "experiment_create", payload, result)
+        return result
 
     def block(self, principal, experiment_id, blocker, *, expected_generation, event_key):
         """Record a host-observed blocker; opening status never repeats the preflight."""

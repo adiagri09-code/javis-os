@@ -34,6 +34,17 @@ class SkillCandidates:
         self.assets, self.store, self.blobs = assets, assets.store, assets.blobs
         self.pack_state_dir = Path(pack_state_dir).absolute()
 
+    @staticmethod
+    def _edit_open(connection, brain, experiment_id):
+        # Released schema4 authoring still works; B adds an irreversible write fence.
+        if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='improvement_experiments'").fetchone():
+            row = connection.execute("SELECT e.phase,EXISTS(SELECT 1 FROM improvement_experiment_selections s "
+                "WHERE s.experiment_id=e.id AND s.brain_id=e.brain_id) AS sealed FROM improvement_experiments e "
+                "WHERE e.id=? AND e.brain_id=?", (experiment_id, brain)).fetchone()
+            if row is not None and (row["sealed"] or row["phase"] in
+                    ("stopping", "completed", "rejected", "inconclusive", "cancelled", "stale")):
+                raise IM.ConflictError("experiment_sealed")
+
     def _state(self, connection, principal, experiment_id, target_id, base_revision_id, before_hash=None, *, _private_read=False):
         brain = _brain(principal)
         context = HostContextRecords._row(connection, brain, experiment_id)
@@ -208,6 +219,7 @@ class SkillCandidates:
             replay = self.assets._replay(connection, brain, event_key, "candidate_region_declare", payload)
             if replay is not None:
                 return replay
+            self._edit_open(connection, brain, experiment_id)
             revision = IC.CaseStore._row(connection, "improvement_revisions", brain, base_revision_id)
             state = self._state(connection, principal, experiment_id, revision["target_id"], base_revision_id)
         if state["target"]["generation"] != expected_target_generation:
@@ -223,6 +235,7 @@ class SkillCandidates:
             replay = self.assets._replay(connection, brain, event_key, "candidate_region_declare", payload)
             if replay is not None:
                 return replay
+            self._edit_open(connection, brain, experiment_id)
             self._guard(connection, principal, state, observed)
             result = self._insert_authority(connection, principal, state, observed, kind="editable_region", start=start, end=end)
             self.assets._event(connection, principal, event_key, "candidate_region_declare", payload, result)
@@ -258,6 +271,7 @@ class SkillCandidates:
             replay = self.assets._replay(connection, brain, event_key, "skill_candidate_stage", payload)
             if replay is not None:
                 return replay
+            self._edit_open(connection, brain, experiment_id)
             state = self._state(connection, principal, experiment_id, patch["target_id"], patch["base_revision_id"], patch.get("before_hash"))
         observed, raw = self.observe(principal, state["target"])
         validated = validate_body_patch(raw, patch, None)
@@ -268,6 +282,7 @@ class SkillCandidates:
             replay = self.assets._replay(connection, brain, event_key, "skill_candidate_stage", payload)
             if replay is not None:
                 return replay
+            self._edit_open(connection, brain, experiment_id)
             self._guard(connection, principal, state, observed)
             candidates = connection.execute("SELECT target_id,base_revision_id,ordinal FROM improvement_skill_candidates "
                 "WHERE brain_id=? AND experiment_id=? ORDER BY ordinal", (brain, experiment_id)).fetchall()
@@ -332,6 +347,7 @@ class SkillCandidates:
             if replay is not None:
                 return replay
             candidate = self.records._row(connection, brain, candidate_id)
+            self._edit_open(connection, brain, candidate["experiment_id"])
             if candidate["base_hash"] != before_hash or candidate["content_hash"] != after_hash:
                 raise IM.ConflictError("candidate_diff_changed")
             state = self._state(connection, principal, candidate["experiment_id"], candidate["target_id"], candidate["base_revision_id"], before_hash)
@@ -344,6 +360,7 @@ class SkillCandidates:
             replay = self.assets._replay(connection, brain, event_key, "candidate_diff_authorize", payload)
             if replay is not None:
                 return replay
+            self._edit_open(connection, brain, candidate["experiment_id"])
             self._guard(connection, principal, state, observed)
             self.read_proposal(connection, principal, candidate, state, observed, base_raw)
             self._guard(connection, principal, state, observed)

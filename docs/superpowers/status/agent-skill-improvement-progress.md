@@ -51,6 +51,16 @@
   plus a distinct valid context competing in proposed/blocked/stopping phases.
   Root final unit regression7/7 GREEN84s (new experiment suite19 tests GREEN29s).
   This is not the final whole-B review; Tasks2–6 and final CI/publication remain.
+- Task2 host planning now derives definitions from actual associated sources,
+  verifies A proposal bytes/provenance and pins one chosen active edit authority.
+  Whole compact matrices counterbalance both variants; each challenger has a
+  distinct fresh baseline comparison. KEEP_BASE seals and enters stopping in one
+  transaction; all new A edit writes honor the seal while history/revoke survive.
+  Candidate selection remains closed until Task5 immutable report verification.
+  Root comparison suite24 tests GREEN48s and related8/8 regression GREEN157s.
+  Independent review's final protected-context read races were reproduced RED,
+  fixed with final full observations and independently rechecked; no open
+  Important scoped findings. Tasks3–6 and whole-B acceptance remain open.
 
 ## M2A engineering continuation
 

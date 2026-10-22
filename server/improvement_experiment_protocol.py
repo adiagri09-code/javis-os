@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from improvement_store import _json
+from improvement_store import _json, _hash
 
 _ID = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}")
 _HASH = re.compile(r"[0-9a-f]{64}")
@@ -60,3 +60,30 @@ def definition(value):
     if len(_json(value).encode("utf-8")) > 16384:
         raise ValueError("experiment_definition_too_large")
     return value
+
+
+def comparison_matrix(value, arm_hash, ordinal, kind, case_ids, case_seed):
+    """Complete metadata-only schedule; two complementary cells per canonical pair."""
+    value = definition(value)
+    if (type(arm_hash) is not str or not _HASH.fullmatch(arm_hash) or type(ordinal) is not int or ordinal not in (1, 2)
+            or type(kind) is not str or kind not in ("tuning", "final") or type(case_seed) is not int
+            or type(case_ids) is not list or not 1 <= len(case_ids) <= 1000
+            or any(type(item) is not str or not _ID.fullmatch(item) for item in case_ids)
+            or len(set(case_ids)) != len(case_ids)):
+        raise ValueError("invalid_comparison_matrix")
+    seed = _hash(["javis-comparison-schedule-v1", _hash(value), arm_hash, ordinal, kind, case_seed])
+    ordered = sorted(case_ids, key=lambda identifier: (_hash([seed, identifier]), identifier))
+    repeats = value["repeat_policy"]["repeats"]
+    pairs = []
+    for index, case_id in enumerate(ordered):
+        for repeat in range(1, repeats + 1):
+            position = index * repeats + repeat - 1
+            pairs.append({"pair_id": _hash(["javis-comparison-pair-v1", seed, case_id, repeat]),
+                "case_id": case_id, "repeat": repeat,
+                "first_variant": "baseline" if (int(seed[0], 16) + position) % 2 == 0 else "candidate"})
+    matrix = {"version": 1, "experiment_id": value["experiment_id"], "definition_hash": _hash(value), "arm_hash": arm_hash,
+        "ordinal": ordinal, "kind": kind, "case_set_id": value["case_set_id"], "case_set_hash": value["case_set_hash"],
+        "repeat_policy": value["repeat_policy"], "schedule_seed": seed, "pairs": pairs}
+    if len(_json(matrix).encode("utf-8")) > 1048576:
+        raise ValueError("comparison_matrix_too_large")
+    return matrix

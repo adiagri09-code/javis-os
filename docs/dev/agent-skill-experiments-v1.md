@@ -62,3 +62,31 @@ restore a grant or dispatch a query. `begin_stop` retains the active capacity
 fence; later service code must settle actual worker/checker/workspace ownership
 before finalizing. No automatic recovery, model retry or activation exists in
 this storage unit. A candidate's immutable semantic status remains `unreviewed`.
+# Host plans and frozen comparisons
+
+The internal ExperimentPlans path derives definition pins from an existing exact
+Host context, contract, associated case set and canonical baseline bundle. It
+observes current sources around slow reads and before commit. Owner inputs cannot
+assert hashes, evaluator identity, accepted-business evidence or repeat counts.
+The fixed multiple-test family is two proposals, frozen before any results.
+
+Each bound arm verifies actual encrypted A bytes, patch, provenance and original
+owner event, and pins one explicitly chosen active region/exact-diff authority.
+Revoking that chosen authority makes new comparison work unavailable; another
+active grant cannot silently replace it. Historical metadata replay grants no
+new authority. Semantic status remains unreviewed.
+
+Tuning freezes every tuning case/repeat as a complete compact encrypted schedule,
+with two complementary variant cells per pair and balanced ordering. Each arm
+gets its own fresh baseline identity. No call, trial, holdout claim or answer
+projection occurs during planning. Maximum1000-case/two-repeat matrices fit the
+exact1MiB byte bound without truncation.
+
+KEEP_BASE commits the irreversible selection and stopping intent together,
+including when sources are revoked or improvement policy is off. It retains
+capacity pending actual worker cleanup. New staging/region/diff writes reject
+after sealing; prior replay, private authorized history and revoke remain.
+Candidate selection is unavailable until exact complete tuning reports exist;
+final freezing requires that stored selection. HTTP/service wiring and actual
+v2 dispatch are later units, so this checkpoint exposes no new owner API.
+
