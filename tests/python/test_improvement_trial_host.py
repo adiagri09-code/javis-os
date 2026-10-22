@@ -317,6 +317,98 @@ class HostContextTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.create()
 
+    def typed_capture(self, *, discovery_target=False):
+        from improvement_trial_semantics import capture_semantics
+
+        legacy = self.capture["sources"][0]
+        text = self.capture["baseline_context"]["content"]
+        sources = [{"kind": "file", "ref": legacy["ref"], "locator": {"root": legacy["root"], "relative": legacy["relative"]},
+            "role": "protected", "required": True, "present": True, "identity": legacy["identity"], "hash": legacy["hash"],
+            "projection": text, "projection_hash": IM._hash(text)}]
+        if discovery_target:
+            target = self.observe_targets(self.f.owner, self.target_ids)[0]
+            projection = {"name": "Pinned target discovery metadata"}
+            sources.append({"kind": "file", "ref": "target-discovery", "locator": {"root": str(self.f.root), "relative": target["canonical_ref"]},
+                "role": "discovery", "required": True, "present": True, "identity": IM._hash(target["identity"]), "hash": target["source_hash"],
+                "projection": projection, "projection_hash": IM._hash(projection)})
+        projection = {"files": [], "project_instructions": "Private semantic input already rendered separately"}
+        sources.append({"kind": "sql", "ref": "session-membership", "locator": {"database": str(self.f.root / "sessions.sqlite3"), "scope": "synthetic"},
+            "role": "authority", "required": True, "present": True, "identity": IM._hash("synthetic-database-incarnation"),
+            "hash": IM._hash(projection), "projection": projection, "projection_hash": IM._hash(projection)})
+        return capture_semantics(surface=self.capture["surface"], sources=sources, content=text, complete_plan=True)
+
+    def test_typed_file_and_sql_sources_stay_private_and_bind_real_history(self):
+        self.capture = self.typed_capture()
+        meta = self.create()
+        request = self.request(meta)
+        self.assertEqual(self.host.context_loader(self.f.owner, request), self.capture["baseline_context"])
+        self.assertNotIn("Private semantic", json.dumps(meta))
+        self.host.live_guard(self.f.owner, request)
+        projection = self.capture["sources"][-1]["projection"]
+        projection["files"] = ["newly-added.md"]
+        self.capture["sources"][-1]["hash"] = self.capture["sources"][-1]["projection_hash"] = IM._hash(projection)
+        with self.assertRaises(IM.ConflictError):
+            self.host.live_guard(self.f.owner, request)
+
+    def test_target_discovery_metadata_does_not_duplicate_target_body(self):
+        self.capture = self.typed_capture(discovery_target=True)
+        meta = self.create()
+        self.host.live_guard(self.f.owner, self.request(meta))
+        target_source = self.capture["sources"][1]
+        target_source.update(role="protected", projection=self.capture["baseline_context"]["content"],
+                             projection_hash=IM._hash(self.capture["baseline_context"]["content"]),
+                             hash=self.capture["baseline_context"]["hash"])
+        from improvement_trial_semantics import capture_semantics
+        self.capture = capture_semantics(surface=self.capture["surface"], sources=self.capture["sources"],
+            content=self.capture["baseline_context"]["content"], complete_plan=True)
+        with self.assertRaisesRegex(ValueError, "trial_target_context_overlap"):
+            self.host.create(self.f.owner, "typed-target-second-experiment", self.capture["surface"], self.target_ids,
+                             source_refs=list(self.fixture_content), event_key="typed-target-overlap")
+
+    def test_host_revalidation_receives_frozen_capture_without_refreshing_volatile_inputs(self):
+        frozen = self.typed_capture()
+        observations = []
+        owner = self.f.owner
+
+        class Capture:
+            def __call__(capture_self, principal, surface, targets):
+                observations.append("initial")
+                return copy.deepcopy(frozen)
+
+            def revalidate(capture_self, principal, surface, targets, *, frozen_capture):
+                self.assertEqual(principal, owner)
+                self.assertEqual(frozen_capture, frozen)
+                observations.append("revalidated")
+                return copy.deepcopy(frozen_capture)
+
+        self.host.context_capture = Capture()
+        meta = self.create()
+        self.host.live_guard(owner, self.request(meta))
+        self.assertEqual(observations, ["initial", "revalidated", "revalidated"])
+
+    def test_protected_sql_text_cannot_copy_an_authorized_fixture_into_baseline(self):
+        from improvement_trial_semantics import capture_semantics
+
+        self.capture = self.typed_capture()
+        fixture = self.fixture_content[next(iter(self.fixture_content))].decode("utf-8")
+        sql = self.capture["sources"][-1]
+        sql.update(role="protected", projection=fixture, hash=IM._hash(fixture), projection_hash=IM._hash(fixture))
+        self.capture = capture_semantics(surface=self.capture["surface"], sources=self.capture["sources"],
+            content=self.capture["baseline_context"]["content"] + fixture, complete_plan=True)
+        with self.assertRaisesRegex(ValueError, "trial_case_context_overlap"):
+            self.create()
+
+    def test_discovery_metadata_does_not_authorize_full_target_source_in_baseline(self):
+        from improvement_trial_semantics import capture_semantics
+
+        self.capture = self.typed_capture(discovery_target=True)
+        target = self.observe_targets(self.f.owner, self.target_ids)[0]
+        raw = self.f.assets.blobs.read(self.f.owner.brain_id, target["source_hash"]).decode("utf-8")
+        self.capture = capture_semantics(surface=self.capture["surface"], sources=self.capture["sources"],
+            content=self.capture["baseline_context"]["content"] + raw, complete_plan=True)
+        with self.assertRaisesRegex(ValueError, "trial_target_context_overlap"):
+            self.create()
+
 
 if __name__ == "__main__":
     unittest.main()

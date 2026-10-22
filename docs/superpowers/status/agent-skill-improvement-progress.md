@@ -23,7 +23,7 @@
 | Milestone | Engineering | Business evidence | Rollout |
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
-| M1 | Tasks1–4 complete; Task5 encrypted bindings, strict file/selection and fixture inventory components tested; full production collector/provider/API and final integration pending | Synthetic lifecycle/context/recorder checks only; no real-engine smoke yet | Not enabled; base M0 integrated and published |
+| M1 | Tasks1–4 complete; Task5 bindings, shared rendering, current-file provider, typed captures and catalog tested; full production composition/SQL/API and final integration pending | Synthetic checks only; no real-engine smoke; newly installed CLI2.1.308 requires qualification | Not enabled; base M0 integrated and published |
 | M2 | Pending | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
@@ -328,3 +328,28 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   suite; its original failure was reproduced and the shared alias restored. Parent's fresh
   prompt/memory/language regression passed15/15 scripts in24s. This is a rendering component,
   not the complete read-only collector or an enabled trial endpoint.
+- Concrete current-file provider19 and catalog15 checks now cover native ACL/identity,
+  exact selected UTF-8 bytes, fresh source membership and production discovery precedence.
+  Independent review reproduced and verified fixes for cross-member content/ACL/root drift,
+  ordinary YAML dates and Windows filename casing. Mutable-file snapshot_version remains
+  unsupported. No authorized source is silently refreshed and no raw catalog body is
+  inserted into the baseline.
+- Typed private capture v2 separates raw/semantic source pins from rendered model context,
+  supports freshly revalidated dependencies with frozen clock/usage, and retains v1 history.
+  Independent review reproduced SQL protected-text fixture aliasing and a raw target body
+  mislabeled as discovery. Behavioral fixes check raw protected-text aliases, require file
+  discovery metadata and reject full immutable target content in the common baseline.
+  Parent's fresh provider/catalog/semantics/host regression passed4/4 scripts in14s. Complete
+  dashboard composition, SQL lifecycle integration, owner API and real-engine smoke remain.
+- Expanded source/context/storage/runner/usage regression passed13/13 scripts in78s after
+  the independent fixes. The existing SQL component is under correction: a new readonly
+  SQLite connection can create WAL/SHM files across lifecycle races. The selected production
+  stores' existing native connection/lock must own the read instead. Existing SHM reader
+  coordination is permitted; logical DB/WAL writes, migrations and new source artifacts are
+  excluded. This is unfinished engineering, not evidence of a complete SQL collector.
+- Fresh nonsecret selection remains anthropic-cli/claude-opus-5-5/medium/subscription,
+  fast=false. Installed CLI changed from verified2.1.304 to PE2.1.308.0,
+  SHA256c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53,
+  SDK0.2.116. Strict pin creation rejected the unverified runtime before native execution.
+  Controlled dummy-provider qualification is separate pending engineering; no real auth,
+  model call, implicit older-binary fallback or user configuration change occurred.

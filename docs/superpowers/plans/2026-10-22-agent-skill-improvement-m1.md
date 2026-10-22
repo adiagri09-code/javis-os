@@ -368,6 +368,24 @@ clock/usage rendering only. Reject unsupported dynamic surfaces explicitly, with
 an easier kernel+memory subset a complete main surface. No live prompt builder, migration,
 memory healing, plugin loading/visibility callback or mirror sync may run merely to poll.
 
+Implemented dependency components add improvement_trial_catalog.py,
+improvement_trial_file_sources.py and improvement_trial_semantics.py with focused tests.
+Typed private capture v2 separates file/SQL/inventory/runtime/renderer projections from
+the rendered baseline. Optional trusted collector.revalidate(...,frozen_capture=...) keeps
+initial clock/usage while freshly observing semantic dependencies; exact host comparison
+still applies. Current mutable-file provider supports require_current_version only, with
+actual native authority projections and a final all-member check. Its lack of immutable
+snapshot_version support remains explicit. Shared pure rendering is committedc6417044;
+production composition and owner API remain pending.
+
+SQL refinement: mode=ro alone can create native WAL/SHM sidecars, including after a static
+precheck. Reuse already initialized production store connections under their actual close/
+mutation locks for WAL sources, issuing only the collector's narrow read queries and an
+owned read transaction. Do not construct a store or change its authorizer/query-only/
+row-factory/progress state just to collect. Native existing SHM reader coordination is
+allowed; logical DB/WAL writes and new source artifacts are excluded. Unsupported/cold
+sources remain unavailable until a concrete safe lifetime path exists.
+
 Tests: full owner API/auth/CSRF/cross-brain/disabled policy/unsupported/stale/cancel/retry;
 isolate all runtime roots and avoid main startup background tasks.
 

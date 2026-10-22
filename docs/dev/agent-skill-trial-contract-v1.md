@@ -220,7 +220,49 @@ components validate observer evidence; production source-provider permission enf
 still required before any owner execution API is enabled. Grant revocation and fresh source/
 config/target checks occur around I/O; metadata/old context remain historical evidence.
 
-These components do not declare an ordinary dashboard collector complete. Its shared pure
-renderer, complete typed dependency collector, source-provider integration and owner API
-remain unfinished. No source inventory or qualification content is inserted into the
-common owner baseline merely to satisfy a completeness flag.
+These components do not declare an ordinary dashboard collector complete. Complete typed
+dependency composition, source-provider integration and owner API remain unfinished. No
+source inventory or qualification content is inserted into the common owner baseline merely
+to satisfy a completeness flag.
+
+### Concrete current-file provider and catalog observations
+
+`BrainFileFixtures` observes explicit `brain-file:<portable-relative>` references inside
+the authenticated owner's canonical brain. Host-selected metadata declares timezone,
+period/cutoff/schema and `require_current_version`; it cannot declare roots, hashes or
+permission versions. Native Windows DACL/owner/group or Linux mode/identity/ACL projections,
+root/ancestor incarnation, source bytes and credential/path policies determine authority.
+Permission versions are positive hashes of observed authority, not monotonic ACL counters.
+Hard links, reparse paths and denied credential/internal paths are unsupported. Observation
+returns metadata only; capture returns exact UTF-8 raw/fixture bytes and manifest fields for
+host-added grant/time. All selected members are re-observed together before returning.
+Mutable files cannot prove retention of an old version, so this provider refuses
+`snapshot_version`; an immutable version provider remains a separate requirement.
+
+`capture_catalog` observes actual canonical/legacy agent/workflow paths, canonical/disabled/
+mirror skill precedence, loops/pause state and skill priority. It records absent directories,
+exact native filenames, full file hashes/identity and metadata projections, then repeats
+membership/source observation. It does not load plugins, sync mirrors or return raw bodies.
+Ordinary YAML dates are canonicalized to ISO strings; aliases, malformed data, credentials
+and oversized inputs fail closed. This catalog is one context dependency, not a full main
+surface. Source access is a host operation; it is not exposed to an isolated solver.
+
+### Typed private context and frozen volatile rendering
+
+Private context capture version2 records file, SQL, inventory, runtime and renderer sources
+with roles, locators, presence/identity, source and projection hashes. File source hashes
+pin original UTF-8 bytes; SQL/other semantic hashes pin canonical JSON projections. Protected
+string projections must appear verbatim in the rendered baseline. File discovery requires
+metadata mappings. Source payloads remain separate private evidence: validation never
+automatically appends them to the model input or infers complete production coverage.
+The host also compares raw UTF-8 hashes of protected strings against fixtures, and rejects
+full immutable target source bytes in the common baseline even under a discovery label.
+These are basic alias guards; collectors must still classify/exclude case/qualification
+inputs and mutable target bodies correctly.
+
+An optional trusted collector `revalidate(..., frozen_capture=...)` receives the persisted
+host capture on the second observation and live guards. It must freshly observe nonvolatile
+dependencies while retaining the original clock/usage render. Returned captures still pass
+closed validation and exact binding comparison. Deterministic legacy collectors continue
+to be called normally. This protocol does not expose a client-selected frozen clock or make
+a partial collector a supported production surface.

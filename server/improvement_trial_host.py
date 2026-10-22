@@ -27,6 +27,12 @@ def _brain(principal):
 
 def _capture(value):
     capture = IC._frozen(value)
+    if isinstance(capture, dict) and type(capture.get("version")) is int and capture["version"] == 2:
+        from improvement_trial_semantics import validate_capture
+        capture = validate_capture(capture)
+        if capture["baseline_context"]["coverage"] != "complete":
+            raise PermissionError("trial_context_incomplete")
+        return capture
     IC._fields(capture, {"version", "surface", "plan_hash", "sources", "baseline_context"})
     if type(capture["version"]) is not int or capture["version"] != 1 or not isinstance(capture["surface"], dict) or not capture["surface"]:
         raise ValueError("invalid_host_context")
@@ -70,6 +76,10 @@ class HostContextStore:
         self.assets, self.store, self.blobs = assets, assets.store, assets.blobs
         self.context_capture, self.selected_engine, self.target_observer = context_capture, selected_engine, target_observer
         self.fixture_observer = fixture_observer
+        revalidate = getattr(context_capture, "revalidate", None)
+        if revalidate is not None and (not callable(revalidate) or inspect.iscoroutinefunction(revalidate)
+                or inspect.iscoroutinefunction(getattr(revalidate, "__call__", None))):
+            raise ValueError("host_trial_dependencies_required")
 
     @staticmethod
     def _row(connection, brain, experiment):
@@ -138,7 +148,7 @@ class HostContextStore:
             return self._public(connection, row)
         return None
 
-    def _observe(self, principal, surface, expected_targets, source_refs, frozen_inventory=None):
+    def _observe(self, principal, surface, expected_targets, source_refs, frozen_inventory=None, frozen_capture=None):
         from improvement_trial_sources import validate_inventory
         identifiers = [target["id"] for target in expected_targets]
         targets = IC._frozen(self.target_observer(principal, identifiers))
@@ -153,19 +163,36 @@ class HostContextStore:
         ClaudeTrialAdapter(engine)  # Shape only; no subprocess, authentication or inference.
         if engine["provider"] != "anthropic-cli" or engine["engine_id"] != "claude-sdk":
             raise ValueError("unsupported_trial_configuration")
-        capture = _capture(self.context_capture(principal, IC._frozen(surface), IC._frozen(targets)))
+        revalidate = getattr(self.context_capture, "revalidate", None)
+        if frozen_capture is not None and revalidate is not None:
+            capture = _capture(revalidate(principal, IC._frozen(surface), IC._frozen(targets),
+                                         frozen_capture=IC._frozen(frozen_capture)))
+        else:
+            capture = _capture(self.context_capture(principal, IC._frozen(surface), IC._frozen(targets)))
         inventory = validate_inventory(self.fixture_observer(principal, list(source_refs),
             frozen_inventory=IC._frozen(frozen_inventory) if frozen_inventory is not None else None))
         if {entry["source_ref"] for entry in inventory} != set(source_refs):
             raise PermissionError("trial_fixture_scope_unavailable")
         fixture_hashes = {entry[key] for entry in inventory for key in ("source_hash", "fixture_hash")}
-        if any(source["hash"] in fixture_hashes for source in capture["sources"] if source["present"]):
+        context_hashes = {source["hash"] for source in capture["sources"] if source["present"]}
+        # SQL projections use canonical JSON source hashes. Detect exact fixture
+        # text aliases independently of that representation, just as for files.
+        context_hashes.update(hashlib.sha256(source["projection"].encode("utf-8")).hexdigest()
+            for source in capture["sources"] if source["present"] and source.get("role") == "protected"
+            and isinstance(source.get("projection"), str))
+        if context_hashes & fixture_hashes:
             raise ValueError("trial_case_context_overlap")
         if frozen_inventory is not None and inventory != frozen_inventory:
             raise IM.ConflictError("trial_fixture_permission_changed")
         # A target body belongs in the variant bundle, never the immutable common baseline.
-        if any(source["relative"] in {target["canonical_ref"] for target in targets} for source in capture["sources"]):
+        target_refs = {target["canonical_ref"].casefold() for target in targets}
+        if any((source.get("relative") or source.get("locator", {}).get("relative", "")).casefold() in target_refs
+               and source.get("role") != "discovery" for source in capture["sources"]):
             raise ValueError("trial_target_context_overlap")
+        for target in targets:
+            raw = self.blobs.read(_brain(principal), target["source_hash"]).decode("utf-8", errors="strict")
+            if raw and raw in capture["baseline_context"]["content"]:
+                raise ValueError("trial_target_context_overlap")
         if (IC._frozen(self.target_observer(principal, identifiers)) != targets
                 or IC._frozen(self.selected_engine()) != engine):
             raise IM.ConflictError("trial_host_authority_changed")
@@ -210,7 +237,8 @@ class HostContextStore:
                 raise PermissionError("improvement_disabled")
             if current_policy != policy or self._targets(connection, brain, payload["target_ids"]) != targets:
                 raise IM.ConflictError("trial_host_authority_changed")
-            if self._observe(principal, capture["surface"], targets, payload["source_refs"], observed["fixture_inventory"]) != observed:
+            if self._observe(principal, capture["surface"], targets, payload["source_refs"],
+                             observed["fixture_inventory"], observed["capture"]) != observed:
                 raise IM.ConflictError("trial_host_authority_changed")
             scope = {"version": 1, "brain_id": brain, "experiment_id": experiment_id, "surface": capture["surface"],
                      "target_ids": payload["target_ids"], "source_plan_hash": capture["plan_hash"], "source_refs": payload["source_refs"]}
@@ -264,7 +292,7 @@ class HostContextStore:
             row, binding = self._bound(connection, principal, request)
             targets = self._targets(connection, row["brain_id"], sorted(request["target_generations"]))
         if targets != binding["targets"] or self._observe(principal, binding["capture"]["surface"], targets,
-                binding["scope"]["source_refs"], binding["fixture_inventory"]) != {
+                binding["scope"]["source_refs"], binding["fixture_inventory"], binding["capture"]) != {
                 key: binding[key] for key in ("capture", "engine_config", "targets", "fixture_inventory")}:
             raise IM.ConflictError("trial_host_authority_changed")
         # Recheck revocation/policy after potentially slow source/config I/O.
