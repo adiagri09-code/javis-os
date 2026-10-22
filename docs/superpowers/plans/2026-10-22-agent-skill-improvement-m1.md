@@ -10,12 +10,11 @@ worker with a strict Claude SDK profile, host-only evaluators and shared ledger/
 **Spec:** docs/superpowers/specs/2026-10-22-agent-skill-evidence-improvement-design.md,
 sections7/10/12/22/M1; docs/dev/agent-skill-trial-contract-v1.md.
 
-Engineering-only implementation starts while M0 PR #794 awaits CI on bfc33ee6, which only
-stabilizes an unchanged Team timing test. The complete M0 implementation passed its Linux
-behavioral checks and fresh review; the remaining integration gate stays open. This is the
-sole dependent draft, #795, reserved as 0.288.0 at 884bfbca before feature code. Rebase and
-retarget to integrated/published M0 main before final review or merge; never merge M1 ahead
-of M0. Production trial support and business/rollout evidence remain separate gates.
+Engineering-only implementation began while M0 PR #794 awaited final CI. M0 subsequently
+passed final-head CI39793439501, merged as09903315 and published0.287.0 through39797072172.
+M1 is now rebased onto that published baseline. This is the sole draft, #795, originally
+reserved as0.288.0 at884bfbca before feature code. Retarget it to main and retain draft status
+until all M1 tasks/review/CI pass. Trial support and business/rollout evidence remain separate.
 
 ## Outcome and constraints
 
@@ -179,6 +178,11 @@ observation must bypass the generic mapper's missing-usage-to-zero conversion fo
 `async execute(request:dict,workspace:dict)->AsyncIterator[dict]` with text/artifact,
 receipt, usage, tool-denied and terminal host events. Execution never accepts an arbitrary
 engine instance from untrusted input. Adapter capability hash binds the verified profile.
+The adapter may receive host-only `workspace_root` and `before_engine_start` dependencies;
+the callback must persist the shared ledger marker before the parent sends its IPC ACK.
+Neither is accepted from request JSON. Unbound callbacks cannot launch a worker. The
+execution request is closed `{version,trial_id,attempt,deadline_at,engine_config_hash,
+capability_hash}`; worker packets pin trial/attempt/input hash and a monotonic sequence.
 
 Tests: malicious source/output asking for shell, network, sending, live reads, traversal,
 symlink/junction escape, stale mirror, answer access, other arm output, inherited config,

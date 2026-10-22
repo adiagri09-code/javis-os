@@ -14,14 +14,15 @@
 - Current engineering branch: `codex/agent-skill-improvement-m1`; 0.288.0 reservation
   `884bfbca`, dependent draft https://github.com/blogminhquy/javis-os/pull/795 (attached).
   M0 merged as `0990331574e617fa1a79cd69fcd7b87d465448c5` after final-head CI passed;
-  publication run39797072172 succeeded. Rebase M1 onto published M0 before its final review.
+  publication run39797072172 succeeded. M1 is now rebased onto published M0; current feature
+  checkpointac27a182 before this progress update. PR795 remains draft pending the full M1 scope.
 
 ## Milestones
 
 | Milestone | Engineering | Business evidence | Rollout |
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
-| M1 | Engineering-only Task1 complete; isolated workspace/profile/native enforcement verified, worker/verify in progress | No real-engine smoke yet | Not enabled; rebase/publication gate pending |
+| M1 | Engineering-only Task1 complete; isolated workspace/profile/native/worker foundation verified; receipts/runner/usage/API pending | No real-engine smoke yet | Not enabled; base M0 integrated and published |
 | M2 | Pending | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
@@ -60,8 +61,8 @@
 
 ## Next action
 
-Preserve M1 work and rebase onto published main09903315. Finish M1 installation receipts,
-public-contract materialization, shared ledger/usage, lifecycle/evaluation and owner service.
+Finish M1 installation receipts/public-contract materialization, shared ledger/usage,
+lifecycle/evaluation and owner service. PR795 stays draft on published main09903315.
 Full M0–M8 Goal remains active; no business or live rollout gate is closed by a code merge.
 
 ## M0 implementation evidence
@@ -176,3 +177,6 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
 - Historical coding catalog:18 provisional families plus2 reserves, no parent-fail/fix-pass
   validation yet;44-family pilot not established. Details and independent-checker isolation
   gate are in `docs/dev/agent-skill-python-pilot-catalog.md`. No system skill is a writable target.
+- Rebased M1 onto published09903315. Resolved the shared migration by preserving schema2
+  and its backup under the transactional schema recheck; retained M0's new first-writer test
+  and progress evidence. Post-rebase cases/store PASS2/2 in20s; diff whitespace check passed.
