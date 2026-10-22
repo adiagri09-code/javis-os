@@ -17,7 +17,7 @@ from pathlib import Path
 
 from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES, RevisionBlobs  # noqa: F401
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 _SOURCE = re.compile(r"(?:skills/[a-z0-9][a-z0-9_-]*/SKILL\.md|agents/[a-z0-9][a-z0-9_-]*\.md)")
 _SCHEMA = (
     "CREATE TABLE improvement_schema(id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL)",
@@ -85,15 +85,19 @@ def _brain(principal) -> str:
     return str(principal.brain_id)
 
 
-def has_schema(store) -> bool:
+def _schema_version(store) -> int:
     with closing(store._conn()) as connection:
         row = connection.execute("SELECT name FROM sqlite_master WHERE name='improvement_schema'").fetchone()
         if not row:
-            return False
+            return 0
         version = connection.execute("SELECT version FROM improvement_schema WHERE id=1").fetchone()
-        if not version or version["version"] != SCHEMA_VERSION:
+        if not version or version["version"] not in (1, SCHEMA_VERSION):
             raise SchemaError("unsupported_improvement_schema")
-        return True
+        return version["version"]
+
+
+def has_schema(store) -> bool:
+    return bool(_schema_version(store))
 
 
 class _ReadDatabase:
@@ -117,23 +121,39 @@ def read_existing(path: Path, blobs: RevisionBlobs):
 
 
 def ensure(store) -> None:
-    if has_schema(store):
+    installed = _schema_version(store)
+    if installed == SCHEMA_VERSION:
         return
     with store._Tx(store) as connection:
-        if connection.execute("SELECT name FROM sqlite_master WHERE name='improvement_schema'").fetchone():
-            version = connection.execute("SELECT version FROM improvement_schema WHERE id=1").fetchone()
-            if not version or version["version"] != SCHEMA_VERSION:
-                raise SchemaError("unsupported_improvement_schema")
+        exists = connection.execute("SELECT name FROM sqlite_master WHERE name='improvement_schema'").fetchone()
+        installed = connection.execute("SELECT version FROM improvement_schema WHERE id=1").fetchone() if exists else None
+        if exists and (not installed or installed["version"] not in (1, SCHEMA_VERSION)):
+            raise SchemaError("unsupported_improvement_schema")
+        if installed and installed["version"] == SCHEMA_VERSION:
             return
-        # Serialize the backup with first migration; concurrent writers share its temporary path.
-        store._backup_before("improvement_schema", ".pre-improvement-m0.bak")
-        for statement in _SCHEMA:
+        # Serialize the backup with the migration; two first writers otherwise race on its .tmp file.
+        store._backup_before("improvement_case_sets" if exists else "improvement_schema",
+                             ".pre-improvement-m1.bak" if exists else ".pre-improvement-m0.bak")
+        if not exists:
+            for statement in _SCHEMA:
+                connection.execute(statement)
+            _immutable_triggers(connection, ("improvement_revisions", "improvement_bundles",
+                                              "improvement_bundle_assets", "improvement_events"))
+        from improvement_case_schema import SCHEMA, IMMUTABLE
+        for statement in SCHEMA:
             connection.execute(statement)
-        for table in ("improvement_revisions", "improvement_bundles", "improvement_bundle_assets", "improvement_events"):
-            for action in ("UPDATE", "DELETE"):
-                connection.execute(f"CREATE TRIGGER {table}_{action.lower()} BEFORE {action} ON {table} "
-                                   "BEGIN SELECT RAISE(ABORT,'immutable_improvement_history'); END")
-        connection.execute("INSERT INTO improvement_schema(id,version) VALUES(1,?)", (SCHEMA_VERSION,))
+        _immutable_triggers(connection, IMMUTABLE)
+        if exists:
+            connection.execute("UPDATE improvement_schema SET version=? WHERE id=1", (SCHEMA_VERSION,))
+        else:
+            connection.execute("INSERT INTO improvement_schema(id,version) VALUES(1,?)", (SCHEMA_VERSION,))
+
+
+def _immutable_triggers(connection, tables):
+    for table in tables:
+        for action in ("UPDATE", "DELETE"):
+            connection.execute(f"CREATE TRIGGER {table}_{action.lower()} BEFORE {action} ON {table} "
+                               "BEGIN SELECT RAISE(ABORT,'immutable_improvement_history'); END")
 
 
 class ImprovementStore:

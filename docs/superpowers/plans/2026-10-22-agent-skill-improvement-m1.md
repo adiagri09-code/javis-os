@@ -107,6 +107,7 @@ contract/config. Resume matches all pins; a new candidate cannot consume the old
 
 **Interfaces produced:** `CaseStore(improvement_store)`, `put_contract(p,contract,event_key)->dict`,
 `put_snapshot(p,manifest,raw:bytes,fixture:bytes,event_key)->dict`,
+`get_contract(p,contract_id)->dict`, `get_snapshot(p,snapshot_id)->dict` (metadata only),
 `put_case_set(p,cases:list[dict],seed:int,event_key)->dict`,
 `reserve_qualification(p,case_set_id,pins:dict,event_key)->dict`,
 `consume_qualification(p,reservation_id,pins:dict,event_key)->dict`,
@@ -142,14 +143,14 @@ RED-to-GREEN tests: C01–C05, cross-brain access, raw bytes, timezone/period di
 duplicates/paraphrases, secret removal with insufficient source, concurrent qualification
 reservation, replay/resume versus new candidate, interrupted migration/restart.
 
-- [ ] Add `test_qualification_clone_cannot_reset_consumed_family` and assert the clone
+- [x] Add `test_qualification_clone_cannot_reset_consumed_family` and assert the clone
   reservation raises ConflictError; unchanged pinned reservation replays exactly.
-- [ ] Run `python tests/run.py --py improvement_cases -v`; confirm behavioral RED.
-- [ ] Implement the interfaces and atomic schema extension, preserving M0 tables/triggers.
+- [x] Run `python tests/run.py --py improvement_cases -v`; confirm behavioral RED.
+- [x] Implement the interfaces and atomic schema extension, preserving M0 tables/triggers.
   Read old M0 schema1 compatibly; atomically migrate explicit writes to schema2 and reject
   future schemas. Never recreate or mutate immutable M0 rows while extending the schema.
-- [ ] Run cases plus improvement_store scripts; confirm GREEN and migration rollback.
-- [ ] Commit the tested records as an independently usable host-only service.
+- [x] Run cases plus improvement_store scripts; confirm GREEN and migration rollback.
+- [x] Commit the tested records as an independently usable host-only service.
 
 ## Task 2: hermetic trial worker and selected Claude adapter
 
@@ -187,6 +188,10 @@ demonstrate actual host tool denial. Run real selected-model smoke only after th
   fixture_miss with zero live-dispatch calls, no answer/config in worker request/env.
 - [ ] Run sandbox/Claude scripts; observe RED before adding the dedicated profile.
 - [ ] Implement hermetic worker, explicit native options, fixture broker and receipt.
+  Set ENABLE_TOOL_SEARCH=false in the explicit worker environment: the verified profile
+  has exactly the fixture MCP tool and no inert deferred placeholder. Persist broker errors
+  independently of protocol formatting. Native research confirmed the SDK handler key is
+  is_error; pre-query empty MCP status is not installation proof.
 - [ ] Run synthetic local provider/native integration and M0 source tests; require GREEN.
 - [ ] Commit profile and isolation tests; real engine support remains gated by verify().
 

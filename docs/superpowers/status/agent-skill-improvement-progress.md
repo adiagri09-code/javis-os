@@ -13,14 +13,14 @@
 - Original checkout remains untouched by implementation; only the three relevant source documents were copied.
 - Current engineering branch: `codex/agent-skill-improvement-m1`; 0.288.0 reservation
   `884bfbca`, dependent draft https://github.com/blogminhquy/javis-os/pull/795 (attached).
-  M0 is still awaiting CI/integration on `bfc33ee6`; M1 cannot merge ahead of it.
+  M0 is still awaiting CI/integration on `e6637d33`; M1 cannot merge ahead of it.
 
 ## Milestones
 
 | Milestone | Engineering | Business evidence | Rollout |
 |---|---|---|---|
-| M0 | Implementation and fresh review fixes verified; PR #794 awaiting final-head CI/integration | Not applicable to foundation | Off/suggest only; no live activation |
-| M1 | Engineering-only Task 1 starts on verified M0 code; plan/audits/native synthetic probes ready | No real-engine smoke yet | Not enabled; M0 integration gate remains open |
+| M0 | Review fixes and migration backup race verified; PR #794 awaiting final-head CI/integration | Not applicable to foundation | Off/suggest only; no live activation |
+| M1 | Engineering-only Task 1 implemented/tested: pinned contract/snapshot/private cases/qualification; worker/runtime still pending | No real-engine smoke yet | Not enabled; M0 integration gate remains open |
 | M2 | Pending | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
@@ -109,3 +109,29 @@ continue its implementation on the integrated baseline. Full M0–M8 Goal remain
   M0 regression passed **3/3 files, 40 tests, 19 seconds** (21 store + 10 assets + 9 API).
   This fix is isolated in the temporary `agent-skill-improvement-m0-race` managed worktree;
   the original implementation worktree is now used by the engineering-only M1 branch.
+
+## M1 engineering evidence
+
+- 0.288.0 was reserved in dependent draft #795 before code. One dependent draft only;
+  final review/merge waits for integrated/published M0. The source checkout stays untouched.
+- Task 1: immutable acceptance contracts with mandatory/business distinction; exact raw and
+  redacted fixture hashes; encrypted raw inputs and private answers; pinned source periods,
+  timezone/version; case family/content split guards; transactional qualification claim,
+  consumption, clone/exposure prevention and same-candidate resumption. No engine executed.
+- Schema2 reads schema1 M0 metadata without migration; explicit writes upgrade atomically,
+  preserving M0 policy/history and backup. A failed upgrade rolls back all M1 tables.
+  The two-writer backup race was reproduced and fixed under BEGIN IMMEDIATE; the same fix
+  was backported to M0 in e6637d33 through its own managed worktree.
+- New case tests cover 25 behaviors, including malformed nested JSON, caller mutation after
+  hashing, business criteria versus structural keywords, raw loss with surviving fixture,
+  concurrent migration/qualification, old-schema rollback and answer/checker privacy.
+  Latest cases/store scripts PASS 2/2 (15s) after input freezing; earlier full improvement
+  run PASS 4/4 (29s). Additional final Task 1 regression is recorded in the local ledger.
+- Native research used SDK0.2.116/CLI2.1.304 and localhost dummy auth/provider only. Bash,
+  Read, WebFetch, ToolSearch and unregistered MCP were rejected; exact fixture hit/miss
+  worked, with no ambient hooks/MCP/memory or outside canary effects. Disabling tool search
+  yielded exactly one declared fixture tool. This is synthetic enforcement research, not
+  OAuth execution, business evidence, billing coverage or an OS sandbox.
+- Actual host selection was read through non-secret fields only: anthropic-cli,
+  claude-opus-5-5, medium. CLI auth status reports logged in; no account tokens were copied
+  or output. Production adapter capability remains false until released-path verification.
