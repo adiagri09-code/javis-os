@@ -4006,20 +4006,11 @@ chatInput.addEventListener("input", () => {
     ? Math.round(window.innerHeight * 0.4) : 200;
   chatInput.style.height = Math.min(chatInput.scrollHeight, _cap) + "px";
 });
-// Bộ gõ tiếng Việt/IME có thể phát keydown Enter trước compositionend. Nếu gửi và xoá
-// textarea ở thời điểm đó, trình duyệt sẽ chốt phần chữ đang ghép vào ô vừa xoá, làm sót
-// lại ký tự hoặc từ cuối. Giữ cờ riêng cho các trình duyệt báo isComposing không ổn định.
-let chatInputComposing = false;
-chatInput.addEventListener("compositionstart", () => { chatInputComposing = true; });
-chatInput.addEventListener("compositionend", () => { chatInputComposing = false; });
+// Enter sends on a computer; an IME composition and a touch screen (Enter = new line) never send. The rules live in
+// chat-acts.js (JavisActs.enterSends) so the Team chat follows the same ones.
+const chatInputComposing = window.JavisActs.trackComposition(chatInput);
 chatInput.addEventListener("keydown", (e) => {
-  if (chatInputComposing || e.isComposing || e.keyCode === 229) return;
-  // Máy chạm (điện thoại/tablet): Enter là XUỐNG DÒNG như mọi app nhắn tin, gửi bằng nút
-  // Gửi. Bàn phím ảo không có Shift+Enter nên giữ lối desktop là user không cách nào viết
-  // tin nhiều dòng. Đo bằng pointer: coarse (con trỏ CHÍNH là ngón tay) chứ không đo bề
-  // rộng màn hình - laptop cảm ứng có chuột vẫn giữ Enter-gửi như cũ.
-  if (window.matchMedia("(pointer: coarse)").matches) return;
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  if (window.JavisActs.enterSends(e, chatInputComposing())) { e.preventDefault(); sendMessage(); }
 });
 sendBtn.addEventListener("click", () => sendMessage());
 

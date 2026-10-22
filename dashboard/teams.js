@@ -4010,8 +4010,10 @@
       return;
     }
     if (e.key === "Escape" && S.side) { closeSide(); return; }
-    if (e.target.classList && e.target.classList.contains("tm-input") && e.key === "Enter" && !e.shiftKey && !e.isComposing &&
-        e.keyCode !== 229) {
+    // Same Enter rules as the main chat (chat-acts.js): never while an IME is composing, and a touch screen keeps Enter
+    // as a new line (the Send button sends).
+    var A = actsApi();
+    if (e.target.classList && e.target.classList.contains("tm-input") && A && A.enterSends(e, S.composing && S.composing())) {
       e.preventDefault();
       send();
     }
@@ -4171,6 +4173,8 @@
     el.addEventListener("change", onChange);
     el.addEventListener("input", onInput);
     el.addEventListener("keydown", onKey);
+    var AC = actsApi();
+    S.composing = AC && AC.trackComposition ? AC.trackComposition(el) : null;
     // 0.192.0: paste and drop land in this team, not in the hidden main chat (see onPaste).
     el.setAttribute("data-localdrop", "");
     el.addEventListener("paste", onPaste);

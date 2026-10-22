@@ -121,8 +121,39 @@
     return Promise.resolve().then(fallback);
   }
 
+  // Enter in a chat composer, shared by the main chat and the Team chat.
+  //  - A Vietnamese IME (or any IME) can fire keydown Enter before compositionend; sending and clearing the box then
+  //    lets the browser commit the composed letters into the cleared box. Some browsers report isComposing unreliably,
+  //    so the caller also tracks compositionstart/compositionend itself (trackComposition) and passes that flag.
+  //  - A touch screen (the MAIN pointer is a finger) keeps Enter as a new line like every messaging app: an on-screen
+  //    keyboard has no Shift+Enter, so sending on Enter would make a multi-line message impossible. Measured with
+  //    pointer: coarse, not screen width, so a touch laptop with a mouse still sends on Enter.
+  //  - Shift+Enter is a new line on a computer.
+  // `win` is for tests only.
+  function touchMain(win) {
+    win = win || (typeof window !== "undefined" ? window : null);
+    try { return !!(win && win.matchMedia && win.matchMedia("(pointer: coarse)").matches); } catch (e) { return false; }
+  }
+  function enterSends(e, composing, win) {
+    if (!e || composing || e.isComposing || e.keyCode === 229) return false;
+    if (e.key !== "Enter" || e.shiftKey) return false;
+    return !touchMain(win);
+  }
+  // Watch compositionstart/compositionend on `root` (the input itself, or a container whose inputs get redrawn: the
+  // events bubble). Returns a function that says whether an IME composition is running now.
+  function trackComposition(root) {
+    var on = false;
+    if (root && root.addEventListener) {
+      root.addEventListener("compositionstart", function () { on = true; });
+      root.addEventListener("compositionend", function () { on = false; });
+    }
+    return function () { return on; };
+  }
+
   var API = {
     copy: copy,
+    enterSends: enterSends,
+    trackComposition: trackComposition,
     fmtTime: fmtTime,
     fmtTimeFull: fmtTimeFull,
     actsHtml: actsHtml,
