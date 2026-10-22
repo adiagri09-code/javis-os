@@ -2841,6 +2841,16 @@ body.on-teams .cview-head { display: none; }
 /* Keyboard open on a phone (mobile-chat.js sets body.kb-open from visualViewport): the Home bar sits under the keyboard,
    so the safe-area gap under the input is dropped, like the main composer. */
 body.kb-open .tm-composer { padding-bottom: 8px; }
+/* The owner's message on its way (shown at once, replaced by the server's copy): a little faded with "Sending...";
+   "Not sent" in red with Try again and Remove when the POST failed. */
+.tm-msg-pending .tm-bubble { opacity: .72; }
+.tm-msg-pending.is-failed .tm-bubble { opacity: 1; border-color: var(--red, #d64545); }
+.tm-pending-st { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 26px; margin-top: 2px;
+  color: var(--text3); font-size: 12px; }
+.tm-msg-pending.is-failed .tm-pending-st { color: var(--red, #d64545); }
+.tm-pending-st svg { width: 14px; height: 14px; }
+.tm-pending-st .ws-btn { white-space: nowrap; }
+@media (pointer: coarse) { .tm-pending-st { font-size: 16px; } }
 .tm-row { display: flex; align-items: flex-end; gap: 6px; }
 .tm-row[hidden] { display: none; }
 /* 0.176.0 composer, the same shape as the main chat: "+" (menu: Assign job, Mention, Search), the input, mic, send. */

@@ -4438,6 +4438,8 @@
   "teams.unpin_team": "Bỏ ghim",
   "teams.row_menu": "Tuỳ chọn team",
   "teams.retry_action": "Thử lại",
+  "teams.send_failed": "Chưa gửi được",
+  "teams.send_remove": "Bỏ tin này",
   "teams.badge_running": "Đang làm",
   "teams.you": "Bạn",
   "teams.no_messages": "Chưa có tin nào",

@@ -4438,6 +4438,8 @@
   "teams.unpin_team": "Unpin",
   "teams.row_menu": "Team options",
   "teams.retry_action": "Try again",
+  "teams.send_failed": "Not sent",
+  "teams.send_remove": "Remove this message",
   "teams.badge_running": "Working",
   "teams.you": "You",
   "teams.no_messages": "No messages yet",

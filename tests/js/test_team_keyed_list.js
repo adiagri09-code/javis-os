@@ -103,7 +103,7 @@ check("400 random updates: always the same as a full rebuild, unchanged items ne
 
 check("drawMsgs reconciles by key and rebuilds only for a new team or a page it does not own",
   /S\.listCache = \{ team: S\.team\.team_id, box: box, items: listSync\(box, built\.items, prev, htmlNodes\) \};/.test(teamsJs)
-  && /S\.listCache = null; stopReveal\(\);/.test(teamsJs) && !/box\.innerHTML = \(S\.jumped/.test(teamsJs));
+  && /S\.listCache = null;/.test(teamsJs) && !/box\.innerHTML = \(S\.jumped/.test(teamsJs));
 check("the latest answer's Like corner is marked on the nodes, not baked into the HTML (a new answer would replace the old one)",
   /var c = ctx\(null\);/.test(teamsJs) && /lastRx\.classList\.add\("is-last"\)/.test(teamsJs));
 check("an owner's reply status rows are an item of their own (a status change leaves the bubble and its selection alone)",

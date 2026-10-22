@@ -1766,7 +1766,7 @@
       picked: [], retrying: {}, pickSt: null, pickOpener: null, pickHost: null, roster: [],
       renaming: "", renamingHead: false, replyTo: null, plusOpen: false, dict: null, dictBase: "", dictState: "idle",
       atts: [], folder: null, info: null, typing: [], pinned: [], pinsOpen: false, tagFilter: readTagFilter(),
-      autoOpened: false, unclamped: {} };
+      autoOpened: false, unclamped: {}, outbox: [] };
   }
 
   function teamUrl(path) { return "/teams/" + q(S.activeId) + (path || ""); }
@@ -2064,6 +2064,8 @@
         items.push({ key: "r" + m.id, html: rs });
       } else items.push({ key: "m" + m.id, html: h });
     });
+    // The owner's messages still on their way, at the bottom (11: shown at once, replaced by the server's copy).
+    pendingEntries().forEach(function (p) { items.push({ key: "p" + p.cid, html: pendingHtml(p) }); });
     return { items: items, list: list };
   }
 
@@ -2799,7 +2801,7 @@
     S.team = null; S.queue = null; S.msgs = []; S.taskTitles = {}; S.side = false; S.openMember = null; S.turns = [];
     S.picker = null; S.draft = null; S.picked = []; S.retrying = {};
     S.replyTo = null; S.plusOpen = false; S.renamingHead = false; forgetAtts(S.atts); S.atts = []; S.folder = null; S.info = null;
-    S.typing = []; S.pinned = []; S.pinsOpen = false; S.unclamped = {}; S.listCache = null; stopReveal();
+    S.typing = []; S.pinned = []; S.pinsOpen = false; S.unclamped = {}; S.listCache = null; S.outbox = []; stopReveal();
     closeFolderPanel();
     stopMic();
     var input = S.el.querySelector(".tm-input");
@@ -3230,29 +3232,94 @@
     var Q = quoteApi();
     var text = S.replyTo && Q ? Q.ghep(S.replyTo.quote, typed) : typed;
     if (S.replyTo && S.replyTo.key && !mentions.length) mentions = [S.replyTo.key];
-    // Gửi lại sau rớt mạng: cùng chữ thì giữ ĐÚNG mã cũ để server trả tin cũ, không thêm lượt.
-    if (!S.pending || S.pending.text !== text) S.pending = { text: text, typed: typed, id: newClientId() };
-    var body = { text: text, mentions: mentions, as_job: S.asJob, client_msg_id: S.pending.id };
+    // The message shows at once as a pending bubble keyed by its client id; the server's copy replaces it when it
+    // arrives. A retry after a dropped connection sends the SAME client id, so the server returns the message it may
+    // already have stored instead of adding a turn.
+    var entry = { cid: newClientId(), text: text, typed: typed, atts: atts, replyTo: S.replyTo, asJob: S.asJob, picked: S.picked,
+      ts: Date.now() / 1000, state: "sending", err: "" };
+    var body = { text: text, mentions: mentions, as_job: S.asJob, client_msg_id: entry.cid };
     if (scan.all) body.mention_all = true;
     if (atts.length) body.attachments = atts.map(function (a) { return { path: a.path, name: a.name, kind: a.kind }; });
-    var btn = S.el.querySelector(".tm-send");
-    if (btn) btn.disabled = true;
+    entry.body = body;
+    S.outbox.push(entry);
+    // The composer is free again right away, like any messaging app.
+    S.pending = null; S.asJob = false; S.picked = []; S.replyTo = null; S.plusOpen = false; input.value = ""; S.atts = [];
+    drawComposer();
+    var again = S.el.querySelector(".tm-input");
+    if (again) again.focus();
+    drawMsgs(true);
+    postEntry(entry);
+  }
+
+  // POST one outbox message. 200: kept as "sent" until the server's copy is on screen. Refused (4xx) while the composer
+  // is still empty: the draft goes back into the composer with the error, as before. Network error, timeout or 5xx: the
+  // bubble turns "Not sent" with Try again.
+  function postEntry(entry) {
     var forTeam = S.activeId;
-    call("POST", teamUrl("/messages"), body).then(function (r) {
-      if (S.activeId !== forTeam) return;
-      if (r.code !== 200) { fail(r); drawHint(); return; }
-      S.pending = null; S.asJob = false; S.picked = []; S.replyTo = null; S.plusOpen = false; input.value = ""; forgetAtts(S.atts); S.atts = [];
-      if (atts.length && S.side && S.tab === "info") loadInfo();
-      setNote(r.j.notes && r.j.notes.length ? r.j.notes.filter(function (n) { return !/^[a-z_]+$/.test(n); }).join(" · ") : "");
-      if ((r.j.notes || []).indexOf("daily_cap") >= 0) setNote(tw("teams.daily_cap"));
-      drawComposer();
-      var again = S.el.querySelector(".tm-input");
-      if (again) again.focus();
-      loadMsgs(false); loadQueue();
-    }).catch(function () {
-      setNote(tw("teams.err_network"));
-      drawHint();
-    });
+    entry.state = "sending"; entry.err = "";
+    var failed = function (why) {
+      if (S.activeId !== forTeam || S.outbox.indexOf(entry) < 0) return;
+      entry.state = "failed"; entry.err = why;
+      drawMsgs(false);
+    };
+    call("POST", teamUrl("/messages"), entry.body).then(function (r) {
+      if (S.activeId !== forTeam || S.outbox.indexOf(entry) < 0) return;
+      if (r.code === 200) {
+        entry.state = "sent";
+        entry.mid = r.j.message_id;
+        if (entry.atts.length && S.side && S.tab === "info") loadInfo();
+        setNote(r.j.notes && r.j.notes.length ? r.j.notes.filter(function (n) { return !/^[a-z_]+$/.test(n); }).join(" · ") : "");
+        if ((r.j.notes || []).indexOf("daily_cap") >= 0) setNote(tw("teams.daily_cap"));
+        loadMsgs(false).then(function () { dropEntry(entry, true); drawMsgs(false); });
+        loadQueue();
+        return;
+      }
+      var inp = S.el.querySelector(".tm-input");
+      if (r.code >= 400 && r.code < 500 && inp && !inp.value.trim() && !S.atts.length && !S.replyTo) {
+        dropEntry(entry, false);
+        inp.value = entry.typed;
+        S.atts = entry.atts; S.replyTo = entry.replyTo; S.asJob = entry.asJob; S.picked = entry.picked;
+        drawComposer(); drawMsgs(false);
+        fail(r); drawHint();
+        return;
+      }
+      failed(tw("teams.err", { e: (r.j && r.j.error) || r.code || "?" }));
+    }).catch(function () { failed(tw("teams.err_network")); });
+  }
+
+  // Take a message out of the outbox. `done`: delivered, so its picture previews are released.
+  function dropEntry(entry, done) {
+    var i = S.outbox.indexOf(entry);
+    if (i >= 0) S.outbox.splice(i, 1);
+    if (done) forgetAtts(entry.atts);
+  }
+
+  // Outbox messages the server's copy has not replaced yet (it can arrive over the socket before the POST answers).
+  function pendingEntries() {
+    var have = {}, ids = {};
+    S.msgs.forEach(function (m) { if (m.client_msg_id) have[m.client_msg_id] = true; ids[Number(m.id)] = true; });
+    return S.outbox.filter(function (p) { return !have[p.cid] && !(p.mid && ids[Number(p.mid)]); });
+  }
+
+  // The owner's message while it is on its way: same bubble as a sent one, a quiet "Sending..." under it, or "Not sent"
+  // with Try again and Remove.
+  function pendingHtml(p) {
+    var failed = p.state === "failed";
+    var fake = { id: "", ts: p.ts, author_kind: "owner", content: p.text, meta: {} };
+    var files = (p.atts || []).map(function (a) {
+      return '<span class="tm-file' + (a.url ? " is-img" : "") + '">' + (a.url ? '<img src="' + esc(a.url) + '" alt="">' : ic("file-text")) +
+        "<span>" + esc(a.name) + "</span></span>";
+    }).join("");
+    var st = failed
+      // Short on screen ("Not sent"); the reason (no network, the server's error) in the tooltip.
+      ? ic("triangle-alert") + '<span class="tm-pending-why" title="' + esc(p.err || "") + '">' + esc(tw("teams.send_failed")) + "</span>" +
+        '<button type="button" class="ws-btn tm-pending-retry" data-out-retry="' + esc(p.cid) + '">' + esc(tw("teams.retry_action")) +
+        '</button><button type="button" class="tm-bar-x" data-out-drop="' + esc(p.cid) + '" aria-label="' + esc(tw("teams.send_remove")) +
+        '" title="' + esc(tw("teams.send_remove")) + '">' + ic("x") + "</button>"
+      : "<span>" + esc(tw("app.sending")) + "</span>";
+    return '<div class="tm-msg tm-msg-owner tm-msg-pending' + (failed ? " is-failed" : "") + '" data-cid="' + esc(p.cid) + '">' +
+      '<div class="tm-col"><div class="tm-bubble">' + bodyHtml(fake, true) + (files ? '<div class="tm-files">' + files + "</div>" : "") +
+      '</div><div class="tm-pending-st" role="status">' + st + "</div></div></div>";
   }
 
   // "@" đứng sau một chữ/số là địa chỉ email ("ho@lan.vn"), không mở gợi ý và không gọi ai.
@@ -3722,6 +3789,24 @@
     if (d.plusFolder || d.folderOpen) { setPlus(false); return openFolderPanel(); }
     if (d.folderUnpin) return pinTeamFolder("");
     if (d.attX !== undefined) { forgetAtts(S.atts.splice(+d.attX, 1)); drawComposer(); return; }
+    if (d.outRetry) {
+      var oe = S.outbox.filter(function (p) { return p.cid === d.outRetry; })[0];
+      if (oe && oe.state === "failed") { postEntry(oe); drawMsgs(false); }
+      return;
+    }
+    if (d.outDrop) {
+      // Remove a message that could not be sent: its words go back into an empty composer, so nothing typed is lost.
+      var od = S.outbox.filter(function (p) { return p.cid === d.outDrop; })[0];
+      if (!od) return;
+      dropEntry(od, false);
+      var oi = S.el.querySelector(".tm-input");
+      if (oi && !oi.value.trim() && !S.atts.length && !S.replyTo) {
+        oi.value = od.typed; S.atts = od.atts; S.replyTo = od.replyTo; S.asJob = od.asJob; S.picked = od.picked;
+        drawComposer();
+      } else forgetAtts(od.atts);
+      drawMsgs(false);
+      return;
+    }
     if (d.attRetry !== undefined) {
       var ra = S.atts[+d.attRetry];
       if (ra && ra.file && !ra.busy) { startUpload(ra); drawComposer(); }
@@ -4469,7 +4554,7 @@
       S.unswipe = SW.bind(el, {
         selector: ".tm-msg",
         bubble: ".tm-bubble",
-        can: function (m) { return !m.classList.contains("is-sheet"); },
+        can: function (m) { return !m.classList.contains("is-sheet") && !m.classList.contains("tm-msg-pending"); },
         run: function (m) { startReply(m.getAttribute("data-mid")); }
       });
     }
@@ -4536,7 +4621,7 @@
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, capsPayload: capsPayload, saveCapsFlow: saveCapsFlow, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
     levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml,
     bannersHtml: bannersHtml, reactCornerHtml: reactCornerHtml, reactBarHtml: reactBarHtml, sheetHtml: sheetHtml,
-    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, listSync: listSync, copyTextOf: copyTextOf, fileChipHtml: fileChipHtml, uploadError: uploadError, plainPreview: plainPreview, previewText: previewText,
+    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, listSync: listSync, pendingHtml: pendingHtml, copyTextOf: copyTextOf, fileChipHtml: fileChipHtml, uploadError: uploadError, plainPreview: plainPreview, previewText: previewText,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
     searchResultsHtml: searchResultsHtml, replyStatusHtml: replyStatusHtml, headLine: headLine,
     typingHtml: typingHtml, pinsHtml: pinsHtml, markMentions: markMentions, replyRefHtml: replyRefHtml,
