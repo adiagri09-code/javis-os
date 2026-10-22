@@ -394,6 +394,15 @@ isolate all runtime roots and avoid main startup background tasks.
 - [ ] Update intentional route snapshot; run API/security/i18n tests GREEN.
 - [ ] Commit operator/API surface with capability=false for any unverified adapter.
 
+Task5 service/route request fields are now frozen in
+docs/dev/agent-skill-owner-trial-api-v1.md from the actual service/source audit. Browser
+owner policy, private bound snapshot capture, immutable case-set/contract/experiment
+association, current ordinary SDK CLI resolution and lifespan wiring are required before
+enablement. The process-owned TrialTasks component is committed07891922 after independent
+foreign-lease/cleanup-error reproduction verification and15 task/24 Runner checks.
+Concrete Dashboard composition is implemented but still under independent review; its
+closed unsupported profiles cannot be advertised as universally complete.
+
 ## Task 6: complete M1 verification and integration
 
 Run M0 regression plus M1 C/E/U/S matrix, learning/owner/ledger/usage/cancellation/i18n/
@@ -405,7 +414,17 @@ final-head CI, PR integration, published build verification and progress update.
 M2 engineering where prerequisites pass; keep business/rollout gates separate.
 
 - [ ] Self-review full M1 matrix and exact interface signatures; fix gaps before execution.
-- [ ] Run selected-model technical smoke only when verified, recording actual usage and
+- [x] Run selected-model technical smoke only when verified, recording actual usage and
   sources; otherwise preserve unsupported status and continue independent engineering.
 - [ ] Fresh whole-branch review; one fixes pass with behavioral RED-to-GREEN evidence.
 - [ ] Final-head CI GREEN, merge/new-version publication verified, progress recorded.
+
+Selected-engine feasibility: exact qualified Windows CLI2.1.308/SDK0.2.116, persisted
+anthropic-cli/claude-opus-5-5/medium/subscription/fastfalse. First deep-output attempt verified
+runtime/auth but failed before reservation on Windows path length; it made no query. A
+fresh explicit shallow output then completed one synthetic tuning baseline. Actual model
+and fixture-read/checker pass are observed; aggregate remains unknown (reasoning/asset use
+and native event/tool outcome coverage). Known token totals4362/158 have partial request
+attribution; requests is null. No provider/model/reasoning fallback or second model query.
+Evidence export is docs/dev/agent-skill-selected-engine-feasibility-2026-10-23.json. This
+checks the feasibility execution item, not Task6/M1/Goal completion or business acceptance.

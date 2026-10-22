@@ -398,3 +398,21 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   cleanup failure variants; all original reproductions now pass independently. Parent's
   fresh15 task/24 Runner checks passed2/2 scripts in38s; independent rerun passed in36s.
   Unknown cleanup remains a visible shutdown failure. HTTP/lifespan integration is pending.
+- The explicit shallow-root selected-engine feasibility query completed. Requested and
+  observed model is claude-opus-5-5; configured effort is medium. Authorized fixture read
+  and the JSON product checker passed; one baseline/repeat and one existing marked call
+  settled ok. Aggregate verdict remains unknown for actual reasoning/internal skill use
+  and incomplete native event/tool outcome coverage. Tokens4362/158 are observed with
+  partial request attribution; request count is null. USD0.0226818 is a subscription
+  equivalent reference, not a cash charge. No candidate, qualification execution or live
+  activation occurred. Sanitized evidence is in
+  docs/dev/agent-skill-selected-engine-feasibility-2026-10-23.json; private encrypted history
+  and key remain under ignored .superpowers/live-a. The failed deep-path attempt had no query.
+- Smoke13 checks cover real encrypted storage with synthetic adapters, cancellation report
+  survival, durable marker recovery despite usage failure, Windows UTF-16 path budget and
+  separate evaluator/execution summaries. Independent originals passed after two report
+  fixes. Parent's fresh smoke/adapter/Host/results/Runner/tasks/storage/usage/worker/console
+  regression passed10/10 scripts in91s. This does not establish business benefit or enable
+  production trials. Task5 owner API contract is frozen in
+  docs/dev/agent-skill-owner-trial-api-v1.md; concrete Dashboard review/fixes, current SDK
+  CLI resolution, service/route/lifespan wiring and whole-branch review/CI remain.

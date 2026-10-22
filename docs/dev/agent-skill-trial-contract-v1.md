@@ -347,3 +347,29 @@ read failures attempt a refund; failures to settle a committed/owned operation r
 visible `trial_shutdown_incomplete`, including after its task leaves the live registry.
 The application lifespan must await close before closing source/store lifetimes. This
 component is not yet HTTP/lifespan wiring, a recovery scheduler or an enabled trial API.
+
+### Controlled selected-engine feasibility
+
+`tools/run_agent_skill_trial_smoke.py` requires explicit absolute settings, native binary
+and fresh private output paths. Default operation only captures selection/pin metadata;
+it performs no native auth or query. Explicit --live verifies the selected native runtime
+and account profile before reservation, then runs one tuning baseline through real
+encrypted stores, TrialRunner, the existing ledger and NativeUsageRecorder. It creates
+no Goal/Team identity, candidate, promotion or activation. Windows output paths are checked
+in UTF-16 units before root/key creation or native preflight; choose an explicit shallow
+output directory rather than relying on unqualified extended paths.
+
+The retained output contains a sanitized report, encrypted evidence and its private
+disposable Fernet key. Key loss prevents historical decryption. The final report survives
+cancelled marked calls and returns exit130 for cancellation; optional usage recovery cannot
+erase a durable start marker. Product evaluation, execution checks and aggregate verdict
+are separate. A successful query/JSON checker is insufficient to promote a revision.
+
+The 2026-10-23 selected-engine evidence export records one actual subscription query with
+requested/observed claude-opus-5-5 and configured medium effort. Fixture read and the JSON
+product checker passed. Aggregate verdict remains unknown: actual reasoning/internal skill
+use and some native event/tool outcomes are unobserved. Observed token totals4362/158 have
+partial request attribution; requests remains null. The USD0.0226818 subscription equivalent
+is a reference value, not an additional cash bill. No repeat query was run to improve that
+result. This is synthetic technical evidence, not ordinary Dashboard context or business
+value. Full owner API wiring follows agent-skill-owner-trial-api-v1.md and remains disabled.
