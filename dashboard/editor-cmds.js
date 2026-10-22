@@ -261,11 +261,10 @@
         if (c.mode() === "wys") exec(c, "createLink", u); else wrapTa(c, "[", "](" + u + ")", dich("ecmd.ph_text"));
       } },
 
-    // Chen anh (note-images.js lo nen, tai len images/ va nhung ![[..]]). Phim Ctrl+Alt+I chu
-    // KHONG phai Ctrl+Shift+I: to hop do la mo devtools tren moi trinh duyet. Dung e.code vi
-    // giu Alt tren Mac thi e.key cua phim I thanh ky tu khac.
+    // Chen anh (note-images.js lo nen, tai len images/ va nhung ![[..]]). No keyboard shortcut:
+    // Ctrl+Shift+I opens devtools everywhere and Cmd+Option+I does on macOS. Toolbar button,
+    // "/image" and paste cover it.
     { id: "image", label: "ecmd.image", kw: "chen anh hinh image picture photo", btn: { icon: "image" },
-      key: { alt: true, code: "KeyI", show: "I" },
       run: function (c) {
         var NI = (typeof window !== "undefined") && window.JavisNoteImages;
         if (NI && NI.chonTep) NI.chonTep(c);

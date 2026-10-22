@@ -181,8 +181,13 @@ check("thanh công cụ có nút chèn ảnh", !!nutAnh && nutAnh.btn.icon === "
 check("nút ảnh chạy được ở CẢ hai chế độ (dùng run, không phải wys/src riêng)", !!(nutAnh && nutAnh.run));
 check("nút ảnh có mặt trong menu gõ '/'", EC.menuCmds().some((c) => c.id === "image"));
 check("lọc menu '/' theo chữ 'anh' ra nút ảnh", EC.filterCmds("chen anh").map((c) => c.id).join() === "image");
-check("CANARY: phím tắt ảnh KHÔNG cướp Ctrl+Shift+I của devtools",
-      EC.keyLabel(nutAnh) === "Ctrl+Alt+I");
+// Cmd+Option+I opens devtools on macOS and Ctrl+Shift+I everywhere: the image command has no
+// shortcut at all (toolbar button, "/image" and paste cover it).
+check("CANARY: the image command has no keyboard shortcut", !!nutAnh && !nutAnh.key && EC.keyLabel(nutAnh) === "");
+check("Ctrl/Cmd+Alt+I and Ctrl+Shift+I trigger no editor command",
+      EC.matchCmd({ ctrlKey: true, altKey: true, code: "KeyI", key: "i" }) === null &&
+      EC.matchCmd({ metaKey: true, altKey: true, code: "KeyI", key: "\u02c6" }) === null &&
+      EC.matchCmd({ ctrlKey: true, shiftKey: true, code: "KeyI", key: "I" }) === null);
 
 ["ecmd.image", "nimg.dang_xu_ly", "nimg.xong", "nimg.qua_lon", "nimg.loi", "nimg.tay_keo", "nimg.unsupported"].forEach((k) => {
   check("có khoá dịch " + k + " ở cả vi và en", !!VI[k] && !!EN[k] && VI[k] !== EN[k]);
