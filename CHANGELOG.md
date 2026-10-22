@@ -6,10 +6,16 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
-## [0.279.0] - 2026-10-22
+## [0.281.0] - 2026-10-22
 ### Cải thiện
 - **Chạy bộ test không còn làm đầy ổ C.** Trước đây mỗi lượt chạy để lại hơn 1000 thư mục rác trong thư mục Temp của Windows, dồn lại có lúc tới 50.000 thư mục, khoảng 30 GB. Giờ mỗi file test dùng một thư mục tạm riêng và tự xoá khi chạy xong.
 - **Lần chạy bị dừng ngang cũng không để lại rác lâu.** Thư mục của lượt bị tắt giữa chừng được dọn ở lần chạy test kế tiếp.
+
+## [0.280.0] - 2026-10-22
+### Cải thiện
+- **Tin nhắn riêng 1-1: bot được im và báo bạn khi gặp câu khó.** Ở chế độ Tự đánh giá, tin nhắn riêng giờ có thêm lựa chọn thứ ba ngoài trả lời và im: câu mà tài liệu và Agent không đủ căn cứ, hoặc việc bạn phải tự quyết (giảm giá, khiếu nại, hoàn tiền, hẹn lịch), bot không đoán nữa mà im và báo bạn ở chuông Javis.
+- **Thư báo ghi rõ khách nhắn gì và bot ghi chú vì sao không tự trả lời.** Tin khách vẫn nằm trong Hòm thư bot để bạn trả lời tay. Một khách hỏi dồn nhiều câu khó thì chuông chỉ kêu một lần mỗi 10 phút, nhật ký bot vẫn ghi đủ từng câu.
+- **Nút Thử bot hiện "Bot sẽ im và báo bạn ở chuông"** kèm ghi chú của bot, để bạn thử trước khi bật thật. Hướng dẫn trong Agent của bạn vẫn luôn thắng: Agent đã dặn cách xử lý loại tin nào thì bot làm đúng như vậy.
 
 ## [0.278.0] - 2026-10-22
 ### Cải thiện

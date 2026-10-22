@@ -8,10 +8,16 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
-## [0.279.0] - 2026-10-22
+## [0.281.0] - 2026-10-22
 ### Improved
 - **Running the test suite no longer fills drive C.** Each run used to leave over 1,000 leftover folders in the Windows Temp folder, at one point piling up to 50,000 folders and about 30 GB. Each test file now gets its own temporary folder, deleted when it finishes.
 - **An interrupted run doesn't leave junk for long.** Folders from a run that was stopped halfway are cleared on the next test run.
+
+## [0.280.0] - 2026-10-22
+### Improved
+- **Private 1-1 chats: the bot can stay silent and alert you on a hard question.** In Auto-judge mode a private message now has a third outcome besides reply and silence: when the documents and the Agent cannot settle it, or you must decide yourself (a discount, a complaint, a refund, a booking), the bot no longer guesses. It stays silent and alerts you in the Javis bell.
+- **The alert says what the customer wrote and the bot's note on why it did not answer.** The message stays in the Bot inbox for you to reply by hand. A customer firing several hard questions rings the bell once per 10 minutes; the bot log still records each one.
+- **Try bot shows "The bot would stay silent and alert you in the bell"** with the bot's note, so you can test before going live. Your Agent's instructions still win: if the Agent says how to handle a kind of message, the bot does exactly that.
 
 ## [0.278.0] - 2026-10-22
 ### Improved
