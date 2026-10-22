@@ -10,7 +10,7 @@ SCHEMA = (
     "base_revision_id TEXT NOT NULL,base_hash TEXT NOT NULL,base_generation INTEGER NOT NULL CHECK(base_generation>0),"
     "context_generation INTEGER NOT NULL CHECK(context_generation>0),"
     "kind TEXT NOT NULL CHECK(kind IN ('editable_region','exact_diff')),start INTEGER,end INTEGER,"
-    "before_hash TEXT NOT NULL,after_hash TEXT,candidate_id TEXT,actor TEXT NOT NULL,created_at REAL NOT NULL,"
+    "before_hash TEXT NOT NULL,after_hash TEXT,candidate_id TEXT,source_authority_hash TEXT NOT NULL,actor TEXT NOT NULL,created_at REAL NOT NULL,"
     "UNIQUE(id,brain_id),CHECK(before_hash=base_hash),"
     "CHECK((kind='editable_region' AND start IS NOT NULL AND end IS NOT NULL AND start>=0 AND end>=start "
     "AND after_hash IS NULL AND candidate_id IS NULL) OR (kind='exact_diff' AND start IS NULL AND end IS NULL "

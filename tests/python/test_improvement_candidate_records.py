@@ -135,11 +135,11 @@ class CandidateRecordTests(unittest.TestCase):
         with self.rs._Tx(self.rs) as connection:
             connection.execute("INSERT INTO improvement_candidate_authorities "
                 "(id,brain_id,context_id,target_id,base_revision_id,base_hash,base_generation,context_generation,"
-                "kind,start,end,before_hash,after_hash,candidate_id,actor,created_at) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
+                "kind,start,end,before_hash,after_hash,candidate_id,source_authority_hash,actor,created_at) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
                     "ica-test-region", self.owner.brain_id, self.context["context_id"], target["id"],
                     target["current_revision_id"], target["source_hash"], target["generation"], 1,
-                    "editable_region", 0, 1, target["source_hash"], None, None, self.owner.by, 1.0))
+                    "editable_region", 0, 1, target["source_hash"], None, None, "d" * 64, self.owner.by, 1.0))
             connection.execute("INSERT INTO improvement_candidate_authority_grants VALUES(?,?,1,'active',NULL)",
                                ("ica-test-region", self.owner.brain_id))
             connection.execute("INSERT INTO improvement_skill_candidates "

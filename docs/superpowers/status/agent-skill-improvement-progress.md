@@ -32,8 +32,11 @@
   M2A targets the M1 branch temporarily and must rebase/retarget onto published
   main before integration. The original checkout remains untouched.
 - Plan: `../plans/2026-10-23-agent-skill-improvement-m2a.md`, reviewed/self-reviewed.
-  Task1 adds schema4 owner-authority and immutable candidate metadata; staging,
-  private review and UI remain later tasks. Trial/activation flags stay false.
+  Tasks1–2 add schema4 owner-authority/immutable candidate metadata and byte-exact
+  owner staging. Their new suites pass12/11/14 tests; relevant assets, Host,
+  store/case/trial/admission regressions pass. Private review and UI remain later
+  tasks. Whole-branch independent review is still pending. Trial/activation flags
+  stay false; no actual engine calls in M2A.
 - Owner delegated pilot choice. An objective Python bug-fix/test pilot is selected
   for reproducibility alongside the spec's required business pilots. This choice
   does not supply an accepted business dataset or owner acceptance evidence.

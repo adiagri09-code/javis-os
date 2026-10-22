@@ -34,8 +34,49 @@ Viewing metadata creates no private-content authority.
 ledger. It validates expected generation and event-key payload, records revocation
 and its event atomically, and replays historical results without restoring a grant.
 Revocation is allowed even when the improvement policy is off. Private exact-text
-reads and owner staging are later M2A units and must revalidate current source and
-permission before returning content or committing changes.
+reads are a later M2A unit and must revalidate current source and permission before
+returning content. The owner staging service below observes that authority before
+every new authoring write.
+
+## Explicit owner staging
+
+`SkillCandidates(assets, pack_state_dir=...)` uses the actual canonical source
+observer and native file/ancestor permission projection. It checks enabled state,
+ownership, current revision/generation and immutable source bytes, and rechecks
+after encrypted publication before committing. Candidate bodies, patches and
+provenance remain encrypted outside the canonical source; source files, mirrors
+and current asset revision pointers do not change.
+
+- `declare_region` records one explicit UTF-8 byte interval, tied to the current
+  base and source-authority hash. The interval excludes protected metadata and
+  the implicit routing description when the skill lacks an explicit description.
+- `stage` creates at most two candidate slots per experiment and one primary
+  component/base. Without an active matching region it creates only a diff
+  proposal. The host adds its own same-context owner-request event atomically;
+  caller evidence refs must resolve to that event type or a completed, associated
+  tuning trial. Qualification/regression and arbitrary paths are not evidence.
+- `authorize_diff` binds a fresh explicit owner decision to complete before/after
+  hashes. Its `expected_generation` is the baseline target generation, distinct
+  from an edit grant's revocation generation. It verifies encrypted provenance,
+  patch and exact bytes, and requires the original source-authority hash. A valid
+  edit decision leaves semantic status `unreviewed` and dependency status
+  `unresolved`.
+
+Historical idempotent replay returns its original decision without source/blob
+reads, even after revocation or policy-off. Always refresh current cold metadata
+after replay: that historical response does not reactivate an edit/context grant.
+New writes fail when their context grant, policy version, source identity or
+permission no longer matches.
+
+The pure `body_layout/validate_body_patch` validator preserves exact UTF-8 bytes,
+CRLF and all untouched prefix/suffix bytes. It freezes YAML metadata and the first
+body line used by discovery as an implicit description. BOM plain text is retained;
+BOM followed by YAML is rejected because current discovery does not recognize
+that header consistently. Ambiguous YAML, split code points and over-limit bodies
+are rejected. Lexical helper/script references cannot change, including Windows
+path separators; that inventory is explicitly incomplete and does not certify
+dependency semantics or obedience to owner rules. M2A never turns these structural
+checks into executable admission or activation authority.
 
 ## Upgrade and recovery
 
