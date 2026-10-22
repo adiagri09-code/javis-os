@@ -1,8 +1,9 @@
 # M1 verification map
 
 This maps the design's M1 acceptance IDs to executable checks. It is not a claim that
-every engine, production scope or business pilot is qualified. Release integration is
-pending final frozen-tree regression, independent review and green final-head CI.
+every engine, production scope or business pilot is qualified. Focused final regression
+and independent whole-M1 review have passed. Release integration remains pending green
+final-head CI, merge and verified publication.
 
 Run scripts with the repository interpreter via `tests/run.py --py <selector> -v`.
 Runtime state roots must be isolated before server imports. The native qualification

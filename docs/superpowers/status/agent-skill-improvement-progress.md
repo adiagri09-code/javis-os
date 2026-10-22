@@ -8,22 +8,22 @@
 - Team dependency spec SHA-256: `e01014f05bf3e090cc63a52e581049833b292dfe5e77a094bd75d8941504f2ff`.
 - Authoritative baseline: `a9ee52ff0d3a1ce0eaa61d18c1b9c83081e21b26`, main 0.286.0.
 - Worktree: `C:/Users/admin/.codex/worktrees/agent-skill-improvement-m0/Javis-OS`.
-- Branch: `codex/agent-skill-improvement-m0`; release reservation: 0.287.0, commit `74ad991e`.
-- Draft PR: https://github.com/blogminhquy/javis-os/pull/794 (attached to this chat).
+- M0 branch: `codex/agent-skill-improvement-m0`; release0.287.0, PR #794 merged
+  `0990331574e617fa1a79cd69fcd7b87d465448c5`; publication39797072172 succeeded.
 - Original checkout remains untouched by implementation; only the three relevant source documents were copied.
-- Current engineering branch: `codex/agent-skill-improvement-m1`; 0.288.0 reservation
-  `884bfbca`, dependent draft https://github.com/blogminhquy/javis-os/pull/795 (attached).
-  M0 merged as `0990331574e617fa1a79cd69fcd7b87d465448c5` after final-head CI passed;
-  publication run39797072172 succeeded. M1 is rebased onto published M0; foundation/evidence
-  checkpoint299f44d4 is pushed, followed by the tested runner integration. PR795 remains draft
-  pending the full M1 scope and fresh final-main/version/CI checks.
+- Current engineering branch: `codex/agent-skill-improvement-m1`, release0.291.0 reserved
+  on https://github.com/blogminhquy/javis-os/pull/795 (attached, ready for review).
+  Rebased onto main046ea863/0.290.0; latest code checkpoint4c75c379 includes reviewed
+  lifetime/capacity fixes. Independent whole-M1 review has no open Important findings.
+  Final-head CI, merge and publication remain pending. Earlier reservations/checkpoints
+  below are historical; they do not supersede this current state.
 
 ## Milestones
 
 | Milestone | Engineering | Business evidence | Rollout |
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
-| M1 | Tasks1–4 complete; Task5 bindings, shared rendering, current-file provider, typed captures and catalog tested; full production composition/SQL/API and final integration pending | Synthetic checks only; no real-engine smoke; newly installed CLI2.1.308 requires qualification | Not enabled; base M0 integrated and published |
+| M1 | Tasks1–5 implemented and independently reviewed; Task6 final-head CI/integration pending | One historical real-engine synthetic baseline; aggregate unknown; no business pilot | Trial/activation flags false; not enabled |
 | M2 | Pending | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
@@ -62,11 +62,12 @@
 
 ## Next action
 
-Implement M1 Task5's trusted experiment context/source grant and owner service, then Task6
-selected-engine smoke and complete verification. Do not reuse live prompt builders or
-fallback engine selection as a heartbeat guard. Tasks1–4 are tested components; full M1
-remains open and the owner run capability stays false.
-PR795 stays draft on published main09903315; full M0–M8 Goal remains active.
+Finish final-head CI for ready PR795, recheck main/version, merge when all required gates
+pass, then verify0.291.0 publication. Continue M2's validated skill authoring/comparison/
+scoped manual apply/revert and operator review from the integrated foundation. M2 source
+gap analysis may proceed during CI; its code must retain all M1 isolation/ownership gates.
+Do not use live prompt builders or fallback engine selection as a heartbeat guard.
+The owner run and activation capabilities remain false pending their actual release gates.
 Full M0–M8 Goal remains active; no business or live rollout gate is closed by a code merge.
 
 ## M0 implementation evidence
