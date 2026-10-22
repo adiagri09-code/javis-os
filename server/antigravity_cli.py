@@ -1513,6 +1513,10 @@ class AntigravityCLI:
         reader_finished = threading.Event()
         deadline_expired = threading.Event()
 
+        # agy stops itself at --print-timeout and still prints a partial answer; the watchdog only steps in after
+        # that, so it does not win the race and lose the partial output (its clock starts earlier, at Popen).
+        deadline = self.timeout + (60 if co_co("--print-timeout") else 0)
+
         def publish(event):
             # Cancellation can close the consumer's loop before the reader exits.
             try:
@@ -1536,7 +1540,7 @@ class AntigravityCLI:
                     # a cancellation that arrives before Popen returns.
                     # The deadline must run while stdout.readline or stdin.write is
                     # blocked, rather than only after stdout has reached EOF.
-                    if not stop_requested.wait(self.timeout):
+                    if not stop_requested.wait(deadline):
                         deadline_expired.set()
                     if proc.poll() is None:
                         _kill_tree(proc)

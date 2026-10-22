@@ -210,5 +210,61 @@ def test_cancel_kills_a_real_windows_child(tmp_path, processes):
         asyncio.run(run())
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process groups")
+def test_stop_order_kills_grandchildren(tmp_path):
+    """The real Stop order: /stop runs cancel_all(tag) before the cancelled turn unwinds. cancel_all signals the
+    whole process group, so a grandchild the CLI spawned does not outlive Stop."""
+    marker = tmp_path / "grandchild.pid"
+    code = ("import subprocess, sys, time; "
+            "c = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+            f"open({str(marker)!r}, 'w').write(str(c.pid)); time.sleep(60)")
+    parent = subprocess.Popen([sys.executable, "-c", code], start_new_session=True)
+    with claude_cli._PROC_LOCK:
+        claude_cli._ACTIVE_PROCS[parent] = "chat:grand-test"
+    try:
+        deadline = time.monotonic() + 5
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        grandchild = int(marker.read_text())
+        claude_cli.cancel_all("chat:grand-test")
+        parent.wait(timeout=5)
+        gone = time.monotonic() + 3
+        alive = True
+        while time.monotonic() < gone:
+            try:
+                os.kill(grandchild, 0)
+            except OSError:
+                alive = False
+                break
+            time.sleep(0.05)
+        assert not alive, "the grandchild survived Stop"
+    finally:
+        with claude_cli._PROC_LOCK:
+            claude_cli._ACTIVE_PROCS.pop(parent, None)
+        if parent.poll() is None:
+            claude_cli._kill_tree(parent, grace_s=0.1)
+
+
+def test_cancel_all_never_signals_a_shared_group(tmp_path):
+    """A child that did not start its own session shares Javis's process group: it gets a plain terminate."""
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    with claude_cli._PROC_LOCK:
+        claude_cli._ACTIVE_PROCS[child] = "chat:shared-group-test"
+    try:
+        with patch.object(claude_cli.os, "killpg", side_effect=AssertionError("killpg on a shared group")):
+            claude_cli.cancel_all("chat:shared-group-test")
+        child.wait(timeout=5)
+    finally:
+        with claude_cli._PROC_LOCK:
+            claude_cli._ACTIVE_PROCS.pop(child, None)
+
+
+def test_watchdog_leaves_room_for_agys_own_print_timeout():
+    """With --print-timeout agy stops itself and prints a partial answer; Javis's watchdog must fire later."""
+    src = (SERVER / "antigravity_cli.py").read_text(encoding="utf-8")
+    assert 'deadline = self.timeout + (60 if co_co("--print-timeout") else 0)' in src
+    assert "stop_requested.wait(deadline)" in src
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
