@@ -16,6 +16,9 @@
   Rebased onto main046ea863/0.290.0; code checkpoints4c75c379 and0ea1e134 include reviewed
   lifetime/capacity and POSIX semantic-identity fixes. Independent review has no open
   Important findings after the reproduced CI corrections described below.
+  CI39847154134 on23e546b9 passed the earlier six failing scripts except for a
+  separate end-to-end directory-stat race. The final repair and deterministic
+  negative guards below are independently reviewed; fresh final-head CI is required.
   Final-head CI, merge and publication remain pending. Earlier reservations/checkpoints
   below are historical; they do not supersede this current state.
 
@@ -554,3 +557,21 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   and actual authority remain guarded. The native profile remains exactlyc3b4, matching its
   qualification evidence; no redundant native/model query was run. Actual final-head Linux
   CI remains required, and prior failed heads cannot satisfy integration.
+
+- Final Linux CI39847154134 on23e546b9 failed only the actual-main E2E, with
+  not_run/authority_changed before the engine marker. A portable actual E2E using
+  Windows FILE_BASIC_INFO.ChangeTime as POSIX ctime reproduced the same failure
+  in77.636s. A deterministic journal create/unlink between authority capture and
+  its follow-up stat isolated an intermediate comparison that still treated an
+  ancestor directory's fallback ctime as creation identity.
+- The final narrow Dashboard repair ignores fallback ctime only for those ancestor
+  comparisons; device/inode/kind/true birthtime, mode/uid/gid/attributes, original
+  native ACL projection and exact protected-file incarnation/read guards remain.
+  Actual fixture authority is unchanged. Six focused author checks pass46.475s;
+  parent two deterministic tests pass9.907s; independent five checks pass38.578s
+  plus actual intermediate chmod and true-birth mismatch rejection. The same
+  true-ChangeTime actual-main E2E now passes146.543s, with one synthetic execution
+  and unchanged unknown verdicts. Parent Admission/AdmissionTx/Service regression
+  passes3/3 in61s. No actual model/native-auth query or runtime
+  profile change occurred. Fresh final-head Linux CI, merge and publication remain
+  mandatory; this technical correction supplies no business or rollout evidence.

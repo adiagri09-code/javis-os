@@ -43,3 +43,12 @@ The product check passed; aggregate execution evidence remains unknown. This his
 must not be relabelled as execution on a later profile. A later profile's isolated
 native qualification is a separate technical result. No business pilot, candidate
 victory, qualification-set experiment, activation or live canary is established by it.
+
+The final POSIX directory-stat race has a deterministic regression in
+`test_improvement_trial_dashboard.py`: a sibling journal appears/disappears after
+authority capture but before follow-up stat. Only fallback directory ctime may
+change. Intermediate directory replacement, chmod, native ACL, actual birthtime
+and protected-file content changes remain rejected. An actual-main E2E with true
+filesystem ChangeTime projected as POSIX ctime reproduced the previous pre-engine
+abort and passes after the narrow Dashboard correction. This is synthetic protocol
+evidence; the final-head Linux workflow is still the integration gate.

@@ -424,6 +424,36 @@ class DashboardTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "changed"):
                     self.capture(frozen=first)
 
+    def test_posix_sibling_journal_during_authority_stat_preserves_protected_context(self):
+        with _posix_change_time_stats():
+            first = self.capture()
+            original = D._authority
+            mutations = []
+            def journal_after_authority(root, relative):
+                observed = original(root, relative)
+                if root == self.state and relative == "user_profile.md":
+                    journal = root / "unrelated-sqlite-journal"
+                    journal.write_bytes(b"host bookkeeping")
+                    journal.unlink()
+                    mutations.append(True)
+                return observed
+            with patch.object(D, "_authority", journal_after_authority):
+                self.assertEqual(first, self.capture(frozen=first))
+            self.assertTrue(mutations)
+
+    def test_posix_protected_authority_rejects_directory_replacement_during_stat(self):
+        root = self.root / "owner-rules"
+        self.write(root, "owner.md", "Keep this owner instruction")
+        original = D._authority
+        def replace_after_authority(selected_root, relative):
+            observed = original(selected_root, relative)
+            root.rename(self.root / "old-owner-rules")
+            self.write(root, "owner.md", "Keep this owner instruction")
+            return observed
+        with _posix_change_time_stats(), patch.object(D, "_authority", replace_after_authority):
+            with self.assertRaisesRegex(ValueError, "protected_authority_changed"):
+                D._protected_authority(root, "owner.md")
+
     def test_replaced_pure_renderer_is_rejected_before_calling_it(self):
         called = []
         original = H.main_prompt_rendering.render_memory_block

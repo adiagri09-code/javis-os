@@ -27,7 +27,7 @@ from improvement_cases import output_path
 from improvement_store import _hash
 from improvement_trial_catalog import capture_catalog, _directory
 from improvement_trial_context import ContextSource, _read, _root, _check_path
-from improvement_trial_file_sources import _root as _owner_root, _authority, _incarnation, _acl_hash
+from improvement_trial_file_sources import _root as _owner_root, _authority, _acl_hash
 from improvement_trial_plugins import PluginCapabilityProjection
 from improvement_trial_selection import _read_stable, MAX_SETTINGS_BYTES
 from improvement_trial_semantics import capture_semantics, validate_capture
@@ -59,12 +59,16 @@ def _protected_authority(root, relative):
         if index:
             path /= relative.split("/")[index - 1]
         info = path.lstat()
-        if _incarnation(info) != entry["incarnation"]:
+        expected = {**entry["incarnation"],
+            "birth": entry["incarnation"]["birth"] if hasattr(info, "st_birthtime_ns") else None,
+            **{key: entry[key] for key in ("mode", "uid", "gid", "attributes")}}
+        observed = _semantic_incarnation(info)
+        if observed != expected:
             raise ValueError("dashboard_protected_authority_changed")
         # Keep native ACL, mode/uid/gid/attributes and real directory identity.
         # A sibling SQL journal is not a change to this protected file's authority.
         # The protected file itself retains the original exact incarnation guard.
-        entry["incarnation"] = _semantic_incarnation(info)
+        entry["incarnation"] = observed
     return authority
 
 
