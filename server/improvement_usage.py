@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 
-import team_usage
+from usage_execution import _aggregate
 import usage_index
 import usage_store
 
@@ -34,10 +34,10 @@ def _execution_references(experiment_id, trial_id=None):
 def trial_usage(experiment_id, trial_id=None):
     try:
         events, details = usage_index.improvement_events(experiment_id, trial_id)
-        result = team_usage._aggregate(events, details, usage_store.improvement_telemetry_errors(experiment_id, trial_id))
+        result = _aggregate(events, details, usage_store.improvement_telemetry_errors(experiment_id, trial_id))
     except Exception:
         events = []
-        result = team_usage._aggregate([], telemetry_errors=1)
+        result = _aggregate([], telemetry_errors=1)
     references, sources, errors = _execution_references(experiment_id, trial_id)
     observed = {(event.get("execution", {}).get("trial_id"), event.get("execution", {}).get("attempt")) for event in events}
     missing = references - observed

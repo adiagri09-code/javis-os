@@ -216,3 +216,19 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
 - New usage suite8 checks and existing Team usage PASS2/2 files in6s; core ledger/index/turn
   regressions PASS4/4 in20s. Task3 remains open: host telemetry collector, global daily/TPM
   consistency, additional missing/late/conflicting coverage and durable runner binding.
+- Global usage correction: unrelated raw chat previously erased trial usage for the whole
+  provider/day. Improvement contributions now rebuild inside the existing daily/hourly
+  index with exact fresh-session/request attribution and cache-component residuals. Late
+  partial/full raw logs and repeated refresh preserve totals; cross-experiment session
+  collisions remain partial rather than being allocated to either trial.
+- Known request usage from an interrupted CLI run now reaches the existing legacy and TPM
+  projections before a summary. Later summaries replace that attempt's snapshot, preserving
+  timestamps and request identity. Unknown summaries retain observed request lower bounds;
+  nullable usage and unpriced money remain incomplete in the trial view.
+- Focused independent review identified partial-summary TPM loss, index timestamp drift and
+  lifetime replay after daily retention. All three were reproduced RED and fixed GREEN.
+  Improvement idempotency metadata is retained with lifetime totals; dropping it during a
+  future compaction would be unsafe. Latest usage suite21 checks plus Team/index/quota
+  passed4/4 files in8s. Expanded ledger/context regression passed7/7 in28s before the final
+  retention-only fix. Host native recorder and durable runner binding remain next; no real
+  model call, owner run endpoint or production activation has occurred.

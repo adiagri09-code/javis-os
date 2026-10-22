@@ -3,12 +3,14 @@ from _paths import ROOT, SERVER  # noqa: F401
 
 import asyncio
 import importlib.util
+import json
 import sqlite3
 import os
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="improvement-usage-"))
@@ -21,6 +23,7 @@ import turn_context as TC
 import usage_store as US
 import usage_index as UI
 import resonance_store as RS
+import quota_scheduler as QS
 from agent_ledger import CallLedger
 
 if importlib.util.find_spec("improvement_usage"):
@@ -67,10 +70,14 @@ class ImprovementUsageTests(unittest.TestCase):
                         patch.object(US, "_EVENTS_PATH", self.root / "events.jsonl"),
                         patch.object(US, "_TELEMETRY_ERRORS", {}),
                         patch.object(UI, "_EVENTS_PATH", self.root / "events.jsonl"),
-                        patch.object(UI, "DB_PATH", self.root / "usage-index.db")]
+                        patch.object(UI, "DB_PATH", self.root / "usage-index.db"),
+                        patch.object(UI, "_claude_dir", return_value=str(self.root / "raw-claude")),
+                        patch.object(UI, "_codex_dir", return_value=str(self.root / "empty-codex"))]
         for item in self.patches:
             item.start()
         self.addCleanup(lambda: [item.stop() for item in reversed(self.patches)])
+        QS.reset()
+        self.addCleanup(QS.reset)
 
     def record(self, tin=100, tout=15, **changes):
         US.record("anthropic-cli", "unpriced-selected-model", tin, tout, cost=changes.pop("cost", None),
@@ -78,6 +85,17 @@ class ImprovementUsageTests(unittest.TestCase):
 
     def summary(self, trial="trial-1"):
         return IU.trial_usage("experiment-1", trial)
+
+    def raw_request(self, sid, rid, tin, tout, read=0, create=0):
+        raw = self.root / "raw-claude" / "project" / (sid + ".jsonl")
+        raw.parent.mkdir(parents=True, exist_ok=True)
+        with raw.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"type": "assistant", "entrypoint": "sdk-cli", "isSidechain": False,
+                "sessionId": sid, "cwd": str(raw.parent), "timestamp": datetime.now(timezone.utc).isoformat(),
+                "message": {"id": rid, "model": "unpriced-selected-model", "usage": {
+                    "input_tokens": tin, "output_tokens": tout, "cache_read_input_tokens": read,
+                    "cache_creation_input_tokens": create}}}) + "\n")
+        return raw
 
     def test_summary_and_late_requests_count_once_and_keep_missing_money_unknown(self):
         self.record(300, 30, event_kind="cli_fallback", event_id="summary")
@@ -118,6 +136,171 @@ class ImprovementUsageTests(unittest.TestCase):
         self.assertEqual(self.summary("zero")["tokens_in"], 0)
         self.assertEqual(self.summary("zero")["money"]["subscription_equivalent_usd"], 0.0)
 
+    def test_missing_summary_still_deduplicates_late_raw_requests(self):
+        ex = execution(cli_session_id="interrupted-session", cli_session_new=True)
+        self.record(100, 10, execution=ex, event_kind="cli_detail", event_id="sdk", request_id="msg-1")
+        connection = UI._connect()
+        try:
+            UI._insert_events(connection, "synthetic-interrupted-raw", [{"provider": "claude", "source": "synthetic",
+                "activity": "background", "model": "unpriced-selected-model", "project": "synthetic-trial",
+                "day": US._today(), "ts": int(time.time()), "input": 100, "output": 10, "cache_read": 0,
+                "cache_create": 0, "turns": 1, "request_id": "msg-1", "session_id": "interrupted-session"},
+                {"provider": "claude", "source": "synthetic", "activity": "background",
+                 "model": "unpriced-selected-model", "project": "synthetic-trial", "day": US._today(),
+                 "ts": int(time.time()), "input": 200, "output": 20, "cache_read": 0,
+                 "cache_create": 0, "turns": 1, "request_id": "msg-2", "session_id": "interrupted-session"}])
+            connection.commit()
+        finally:
+            connection.close()
+        result = self.summary()
+        self.assertEqual((result["tokens_in"], result["tokens_out"], result["requests"]), (300, 30, 2))
+
+    def test_unknown_request_does_not_disappear_when_known_requests_match_summary(self):
+        self.record(100, 10, event_kind="cli_fallback", event_id="summary")
+        self.record(100, 10, event_kind="cli_detail", event_id="known", request_id="known")
+        self.record(None, None, event_kind="cli_detail", event_id="unknown", request_id="unknown")
+        result = self.summary()
+        self.assertIsNone(result["requests"])
+        self.assertFalse(result["coverage"]["tokens_complete"])
+
+    def test_unknown_summary_preserves_known_request_usage(self):
+        self.record(100, 10, event_kind="cli_detail", event_id="known", request_id="known")
+        self.record(None, None, event_kind="cli_fallback", event_id="unknown-summary")
+        result = self.summary()
+        self.assertEqual((result["tokens_in"], result["tokens_out"]), (100, 10))
+        self.assertFalse(result["coverage"]["tokens_complete"])
+        UI.refresh()
+        self.assertEqual(UI.summary("today", provider="claude")["kpi"]["input"], 100)
+        self.assertEqual(UI.summary("today")["coverage"]["improvement"]["status"], "partial")
+
+    def test_late_partial_and_full_raw_cache_details_replace_only_matching_trial_usage(self):
+        UI.refresh()
+        ex = execution(cli_session_id="cache-session", cli_session_new=True)
+        self.record(300, 30, execution=ex, cache_read=60, cache_create=20,
+                    event_kind="cli_fallback", event_id="summary")
+        self.raw_request("unrelated-session", "chat", 50, 5)
+        for raw in (None, ("msg-1", 60, 15, 30, 10), ("msg-2", 160, 15, 30, 10)):
+            if raw:
+                self.raw_request("cache-session", *raw)
+            for _ in range(2):
+                UI.refresh()
+                kpi = UI.summary("today", provider="claude")["kpi"]
+                self.assertEqual((kpi["input"], kpi["output"], kpi["cache_read"], kpi["cache_create"]),
+                                 (270, 35, 60, 20))
+                connection = UI._connect()
+                try:
+                    self.assertEqual(connection.execute("SELECT SUM(tokens) FROM file_hourly").fetchone()[0], 385)
+                finally:
+                    connection.close()
+
+    def test_detail_only_usage_remains_in_global_index_before_and_after_raw_arrival(self):
+        UI.refresh()
+        ex = execution(cli_session_id="detail-session", cli_session_new=True)
+        self.record(100, 10, execution=ex, event_kind="cli_detail", event_id="sdk-a", request_id="request-a")
+        self.record(100, 10, execution=ex, event_kind="cli_detail", event_id="sdk-replay", request_id="request-a")
+        for raw in (False, True):
+            if raw:
+                self.raw_request("detail-session", "request-a", 100, 10)
+            UI.refresh()
+            self.assertEqual(UI.summary("today", provider="claude")["kpi"]["input"], 100)
+
+    def test_conflicting_cache_summary_is_partial_without_negative_projection(self):
+        UI.refresh()
+        ex = execution(cli_session_id="conflict-session", cli_session_new=True)
+        self.record(100, 10, execution=ex, event_kind="cli_fallback", event_id="summary")
+        self.raw_request("conflict-session", "request-a", 20, 10, 80, 0)
+        UI.refresh()
+        result = UI.summary("today", provider="claude")
+        self.assertEqual(result["kpi"]["input"], 20)
+        self.assertEqual(result["coverage"]["improvement"]["status"], "partial")
+
+    def test_raw_session_collision_across_experiments_is_not_attributed_to_either_trial(self):
+        ex = execution(cli_session_id="colliding-session", cli_session_new=True)
+        self.record(300, 30, execution=ex, event_kind="cli_fallback", event_id="summary")
+        self.record(300, 30, execution=execution("other-trial", experiment_id="other-experiment",
+                    cli_session_id="colliding-session", cli_session_new=True),
+                    event_kind="cli_fallback", event_id="summary")
+        self.raw_request("colliding-session", "one-request", 300, 30)
+        UI.refresh()
+        result = self.summary()
+        self.assertIsNone(result["requests"])
+        self.assertFalse(result["coverage"]["requests_complete"])
+        self.assertEqual(UI.summary("today")["coverage"]["improvement"]["status"], "partial")
+
+    def test_detail_then_summary_replay_and_correction_update_legacy_and_tpm_once(self):
+        with patch("time.time", return_value=1000):
+            self.record(100, 10, event_kind="cli_detail", event_id="sdk", request_id="request-a")
+            self.record(100, 10, event_kind="cli_detail", event_id="sdk-replay", request_id="request-a")
+        self.assertEqual(US.summary()["today"]["total"]["in"], 100)
+        self.assertEqual(QS.used("anthropic-cli", "unpriced-selected-model", now=1001), 110)
+        with patch("time.time", return_value=1010):
+            self.record(300, 30, event_kind="cli_fallback", event_id="summary")
+            self.record(300, 30, event_kind="cli_fallback", event_id="summary")
+        self.assertEqual(US.summary()["today"]["total"]["in"], 300)
+        self.assertEqual(QS.used("anthropic-cli", "unpriced-selected-model", now=1011), 330)
+        with patch("time.time", return_value=1020):
+            self.record(200, 20, event_kind="cli_detail", event_id="second-sdk", request_id="request-b")
+        self.assertEqual(US.summary()["today"]["total"]["in"], 300)
+        self.assertEqual(QS.used("anthropic-cli", "unpriced-selected-model", now=1021), 330)
+
+    def test_summary_correction_does_not_rejuvenate_old_tpm_usage(self):
+        with patch("time.time", return_value=1000):
+            self.record(300, 30, event_kind="cli_fallback", event_id="summary")
+        with patch("time.time", return_value=1050):
+            self.record(250, 25, event_kind="cli_fallback", event_id="summary")
+        self.assertEqual(US.summary()["today"]["total"]["in"], 250)
+        self.assertEqual(QS.used("anthropic-cli", "unpriced-selected-model", now=1051), 275)
+        self.assertEqual(QS.used("anthropic-cli", "unpriced-selected-model", now=1061), 0)
+
+    def test_partial_summary_keeps_known_directions_in_shared_tpm_without_request_overlap(self):
+        for tin, tout, expected in ((100, None, 100), (None, 20, 20)):
+            with self.subTest(tin=tin, tout=tout):
+                trial = "partial-input" if tin else "partial-output"
+                with patch("time.time", return_value=1000):
+                    self.record(tin, tout, execution=execution(trial), event_kind="cli_fallback", event_id="summary")
+                self.assertFalse(self.summary(trial)["coverage"]["tokens_complete"])
+        self.assertEqual(QS.used("anthropic-cli", "unpriced-selected-model", now=1001), 120)
+
+    def test_replayed_summary_and_request_corrections_keep_original_daily_and_hourly_bucket(self):
+        UI.refresh()
+        self.record(100, 10, event_kind="cli_fallback", event_id="summary")
+        self.record(100, 10, execution=execution("request-only"), event_kind="cli_detail",
+                    event_id="sdk-event-a", request_id="same-provider-request")
+        events = [json.loads(line) for line in UI._EVENTS_PATH.read_text().splitlines()]
+        first_ts = datetime(2026, 10, 20, 18, tzinfo=timezone.utc).timestamp()
+        for event in events:
+            event.update(day="2026-10-21", ts=first_ts)
+        UI._EVENTS_PATH.write_text("".join(json.dumps(event) + "\n" for event in events))
+        UI.refresh()
+        with UI._EVENTS_PATH.open("a") as stream:
+            for event in events:
+                event.update(day="2026-10-22", ts=first_ts + 86400, **{"in": 120, "out": 12})
+                if event["event_kind"] == "cli_detail":
+                    event["event_id"] = "sdk-event-b"
+                stream.write(json.dumps(event) + "\n")
+        UI.refresh()
+        self.assertEqual(UI.summary("today", today=datetime(2026, 10, 21).date())["kpi"]["input"], 240)
+        self.assertEqual(UI.summary("today", today=datetime(2026, 10, 22).date())["kpi"]["input"], 0)
+        connection = UI._connect()
+        try:
+            hours = connection.execute("SELECT DISTINCT substr(hour,1,10) FROM file_hourly").fetchall()
+            self.assertEqual(hours, [("2026-10-21",)])
+        finally:
+            connection.close()
+
+    def test_old_attempt_replay_survives_retention_and_does_not_refresh_tpm(self):
+        old = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        recent = datetime(2026, 2, 3, tzinfo=timezone.utc)
+        with patch.object(US.localefmt, "now", return_value=old), patch("time.time", return_value=old.timestamp()):
+            self.record(100, 10, event_kind="cli_fallback", event_id="old-summary")
+        with patch.object(US.localefmt, "now", return_value=recent), patch("time.time", return_value=recent.timestamp()):
+            self.record(100, 10, execution=execution("recent-trial"), event_kind="cli_fallback", event_id="recent-summary")
+            US.record("deepseek", "unknown", 5, 0, execution={"team_id": "team", "turn_id": "turn", "attempt": 1},
+                      event_id="other-team")
+            self.record(120, 12, event_kind="cli_fallback", event_id="old-summary")
+            self.assertEqual(US.summary()["all_time"]["total"]["in"], 225)
+            self.assertEqual(QS.used("anthropic-cli", "unpriced-selected-model", now=recent.timestamp()), 110)
+
     def test_old_projection_cursor_backfills_improvement_ids_without_cross_scope_rows(self):
         self.record(100, 15, event_kind="cli_detail", event_id="first-request")
         connection = sqlite3.connect(UI.DB_PATH)
@@ -146,6 +329,25 @@ class ImprovementUsageTests(unittest.TestCase):
         result = self.summary()
         self.assertIsNone(result["tokens_in"])
         self.assertEqual(result["coverage"]["telemetry_errors"], 1)
+
+    def test_trial_summary_remains_in_daily_and_hourly_usage_beside_other_chat_logs(self):
+        UI.refresh()
+        self.record(300, 30, execution=execution(cli_session_id="trial-session", cli_session_new=True),
+                    event_kind="cli_fallback", event_id="trial-summary")
+        raw = self.root / "raw-claude" / "project" / "chat.jsonl"
+        raw.parent.mkdir(parents=True)
+        raw.write_text(json.dumps({"type": "assistant", "entrypoint": "sdk-cli", "isSidechain": False,
+            "sessionId": "unrelated-chat", "cwd": str(raw.parent), "timestamp": datetime.now(timezone.utc).isoformat(),
+            "message": {"id": "chat-request", "model": "unpriced-selected-model", "usage": {
+                "input_tokens": 50, "output_tokens": 5, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}}}) + "\n")
+        UI.refresh()
+        self.assertEqual(self.summary()["tokens_in"], 300)
+        self.assertEqual(UI.summary("today", provider="claude")["kpi"]["input"], 350)
+        connection = UI._connect()
+        try:
+            self.assertEqual(connection.execute("SELECT SUM(tokens) FROM file_hourly WHERE provider='claude'").fetchone()[0], 385)
+        finally:
+            connection.close()
 
     def test_shared_call_mirror_survives_generic_reconciliation_and_no_usage_is_unknown(self):
         store = RS.GoalStore(self.root / "resonance.sqlite3")

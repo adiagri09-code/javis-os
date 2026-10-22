@@ -21,6 +21,8 @@ import os
 import threading
 import uuid
 import math
+import hashlib
+import time
 from datetime import datetime, timezone, timedelta
 
 import quota_scheduler          # sổ cái TPM dùng chung (không phụ thuộc ngược, xem module đó)
@@ -141,6 +143,48 @@ def _save(d: dict) -> None:
         pass
 
 
+def _project_improvement(provider, model, metadata):
+    """Replace the existing legacy/TPM cache from request observations, including interrupted CLI runs."""
+    from usage_execution import _aggregate, _attempt_key, quota_points
+    identity = json.dumps([provider, model, *_attempt_key(metadata)], separators=(",", ":"))
+    snapshot_key = "improvement:" + hashlib.sha256(identity.encode()).hexdigest()
+    event = {"provider": provider, "model": model, "ts": time.time(), "day": _today(), **metadata}
+    event_key = ("summary" if event["event_kind"] == "cli_fallback" else
+                 "request:" + event["request_id"] if event.get("request_id") else usage_parsers.observation_key(event))
+    with _LOCK:
+        data = _load()
+        snapshots = data.setdefault("event_snapshots", {})
+        prior = snapshots.get(snapshot_key) or {}
+        observations = prior.get("observations") or {}
+        previous = observations.get(event_key)
+        if previous:
+            event["ts"], event["day"] = previous["ts"], previous["day"]
+        observations[event_key] = event
+        events = list(observations.values())
+        result = _aggregate(events)
+        money = result["money"]
+        current = {"in": result["tokens_in"] or 0, "out": result["tokens_out"] or 0,
+                   "cost": sum(money.get(field) or 0 for field in
+                               ("reported_usd", "estimated_usd", "subscription_equivalent_usd")),
+                   "turns": result["requests"] if result["requests"] is not None else
+                            int(any(e.get("tokens_known") for e in events))}
+        day = prior.get("day") or event["day"]
+        for bucket in (data["days"].setdefault(day, {}), data["total"]):
+            aggregate = bucket.setdefault(provider + "|" + model, {"in": 0, "out": 0, "cost": 0.0, "turns": 0})
+            for field, value in current.items():
+                aggregate[field] += value - prior.get(field, 0)
+        snapshots[snapshot_key] = {"day": day, **current, "observations": observations}
+        cutoff = (localefmt.now() - timedelta(days=_KEEP_DAYS)).strftime("%Y-%m-%d")
+        # Lifetime totals outlive daily retention. Retain improvement idempotency evidence
+        # too, or a late provider correction becomes a new bill and a new TPM observation.
+        data["event_snapshots"] = {key: value for key, value in snapshots.items()
+                                   if key.startswith("improvement:") or value["day"] >= cutoff}
+        for old in sorted(data["days"])[:-_KEEP_DAYS]:
+            data["days"].pop(old, None)
+        _save(data)
+        quota_scheduler.observe_snapshot(provider, model, snapshot_key, quota_points(events))
+
+
 def record(provider: str, model: str, tin=0, tout=0, cost=None, *, execution=None,
            event_id=None, request_id=None, source_id=None, event_kind="request", status=None,
            billing_mode=None, price_version=None, cache_read=0, cache_create=0,
@@ -193,6 +237,13 @@ def record(provider: str, model: str, tin=0, tout=0, cost=None, *, execution=Non
                               if provenance == "estimated" or (provenance == "subscription_equivalent" and reported is None)
                               else None}}
     key = f"{provider or '?'}|{model or '?'}"
+    if ex and ex.get("experiment_id") and provider in {"anthropic-cli", "cli", "claude"}:
+        try:
+            _append_event(provider, model, tin, tout, cost_ev, **metadata)
+            _project_improvement(provider, model, metadata)
+        except Exception:
+            note_telemetry_error(ex)
+        return
     if ex and (not tokens_known or event_kind == "cli_detail"):
         try:
             _append_event(provider, model, tin, tout, cost_ev, **metadata)
@@ -217,7 +268,8 @@ def record(provider: str, model: str, tin=0, tout=0, cost=None, *, execution=Non
                 delta_turns = 0
             snapshots[snapshot_key] = {"day": day, "in": tin, "out": tout, "cost": cost}
             cutoff = (localefmt.now() - timedelta(days=_KEEP_DAYS)).strftime("%Y-%m-%d")
-            d["event_snapshots"] = {k: v for k, v in snapshots.items() if v["day"] >= cutoff}
+            d["event_snapshots"] = {k: v for k, v in snapshots.items()
+                                    if k.startswith("improvement:") or v["day"] >= cutoff}
         for bucket in (d["days"].setdefault(day, {}), d["total"]):
             e = bucket.setdefault(key, {"in": 0, "out": 0, "turns": 0, "cost": 0.0})
             e["in"] += delta_in

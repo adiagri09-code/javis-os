@@ -10,6 +10,7 @@ import sqlite3
 
 import usage_index
 import usage_store
+from usage_execution import _aggregate
 
 
 def _execution_references(team_id, task_id=None):
@@ -77,125 +78,6 @@ def _counts(values):
     for value in values:
         result[value] += 1
     return result
-
-
-def _attempt_key(event):
-    ex = event.get("execution") or {}
-    return (ex.get("execution_id") or ex.get("turn_id") or event.get("event_id"), ex.get("attempt"))
-
-
-def _money(events):
-    result = {"currency": "USD", "reported_usd": None, "estimated_usd": None,
-              "subscription_equivalent_usd": None, "unknown_requests": 0,
-              "subscription_requests": 0, "local_requests": 0}
-    keys = {"provider_reported": "reported_usd", "estimated": "estimated_usd",
-            "subscription_equivalent": "subscription_equivalent_usd"}
-    for event in events:
-        money = event.get("money") or {}
-        key = keys.get(money.get("provenance"))
-        amount = money.get("amount")
-        if money.get("billing_mode") == "subscription":
-            result["subscription_requests"] += 1
-        if money.get("billing_mode") == "local":
-            result["local_requests"] += 1
-        if key and amount is not None and money.get("currency") == "USD":
-            result[key] = round((result[key] or 0) + amount, 8)
-        elif money.get("provenance") != "local":
-            result["unknown_requests"] += 1
-    return result
-
-
-def _aggregate(events, details=(), telemetry_errors=0):
-    groups = defaultdict(list)
-    for event in events:
-        groups[_attempt_key(event)].append(event)
-    observed = []
-    money_events = []
-    unresolved = missing = missing_requests = persisted_errors = 0
-    request_count = 0
-    requests_complete = True
-    statuses = defaultdict(int)
-    for group in groups.values():
-        lifecycle = [e for e in group if e.get("event_kind") == "execution"]
-        fallback = [e for e in group if e.get("event_kind") == "cli_fallback"]
-        requests = [e for e in group if e.get("event_kind") in ("request", "cli_detail")]
-        expected = max((e.get("expected_requests") or 0 for e in lifecycle), default=0)
-        persisted_errors += max((e.get("telemetry_errors") or 0 for e in group), default=0)
-        if expected > len(requests):
-            missing_requests += expected - len(requests)
-            requests_complete = False
-        for event in lifecycle + fallback:
-            statuses[event.get("status") or "unknown"] += 1
-        if fallback:
-            # A new CLI session is safely attributable only to one host execution. Resumed
-            # sessions have no request boundary, so their raw records stay unresolved.
-            latest = fallback[-1]
-            ex = latest.get("execution") or {}
-            sid = ex.get("cli_session_id")
-            same_session = {_attempt_key(e) for e in events
-                            if e.get("execution", {}).get("cli_session_id") == sid}
-            raw = [d for d in details if d.get("session_id") == sid] if (
-                sid and ex.get("cli_session_new") and len(same_session) == 1) else []
-            for d in raw:
-                requests.append({"event_kind": "cli_detail", "execution": ex,
-                                 "provider": latest.get("provider"), "request_id": d.get("request_id"),
-                                 "in": d["input"] + d["cache_read"] + d["cache_create"],
-                                 "out": d["output"], "tokens_known": True})
-            # SDK observations and later CLI records can describe the same provider request.
-            # Raw detail supersedes its earlier observation; never infer identity from totals.
-            identified, anonymous = {}, []
-            for request in requests:
-                if request.get("request_id"):
-                    key = (request.get("provider"), (request.get("execution") or {}).get("cli_session_id") or sid,
-                           request["request_id"])
-                    identified[key] = request
-                else:
-                    anonymous.append(request)
-            requests = anonymous + list(identified.values())
-            known = [e for e in requests if e.get("tokens_known")]
-            reconciled = bool(known) and latest.get("tokens_known") and (
-                sum(e.get("in") or 0 for e in known) == latest.get("in") and
-                sum(e.get("out") or 0 for e in known) == latest.get("out"))
-            if reconciled:
-                observed.extend(known)
-                request_count += len(known)
-                # Provider summary owns its API-equivalent amount. Detail replaces tokens
-                # and request count, never adds the same monetary observation again.
-                money_events.append(latest)
-            else:
-                observed.append(latest)
-                money_events.append(latest)
-                requests_complete = False
-                unresolved += len(requests)
-                if not latest.get("tokens_known"):
-                    missing += 1
-        elif requests:
-            observed.extend(requests)
-            money_events.extend(requests)
-            request_count += len(requests)
-        else:
-            missing += 1
-            requests_complete = False
-    known = [e for e in observed if e.get("tokens_known")]
-    telemetry_errors = max(telemetry_errors, persisted_errors)
-    tokens_complete = len(known) == len(observed) and missing == 0 and missing_requests == 0
-    money = _money(money_events)
-    coverage = {"status": "observed" if events and tokens_complete and requests_complete and not telemetry_errors
-                and not money["unknown_requests"] else
-                "partial" if events else "unknown", "observed_requests": request_count,
-                "unobserved_attempts": missing, "unresolved_events": unresolved,
-                "missing_requests": missing_requests,
-                "telemetry_errors": telemetry_errors, "tokens_complete": bool(events) and tokens_complete,
-                "money_complete": bool(events) and not missing and not missing_requests
-                                  and money["unknown_requests"] == 0 and not telemetry_errors,
-                "requests_complete": bool(events) and requests_complete,
-                "scope": "instrumented_executions", "cli_detail": "linked_and_reconciled_only"}
-    return {"attempts": len(groups), "requests": request_count if requests_complete and events else None,
-            "tokens_in": sum(e["in"] for e in observed if e.get("in") is not None)
-                         if any(e.get("in") is not None for e in observed) else None,
-            "tokens_out": sum(e["out"] for e in observed if e.get("out") is not None)
-                          if any(e.get("out") is not None for e in observed) else None,
-            "money": money, "coverage": coverage, "statuses": dict(statuses), "cost_behavior": "observe_only"}
 
 
 def _view(team_id, task_id=None):
