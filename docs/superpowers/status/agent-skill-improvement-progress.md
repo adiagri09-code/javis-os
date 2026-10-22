@@ -22,13 +22,29 @@
   Final-head CI, merge and publication remain pending. Earlier reservations/checkpoints
   below are historical; they do not supersede this current state.
 
+## M2A engineering continuation
+
+- Worktree: `C:/Users/admin/.codex/worktrees/agent-skill-improvement-m2a/Javis-OS`;
+  branch `codex/agent-skill-improvement-m2a`, release0.292.0 reservationf6d8d356,
+  attached draft PR799: https://github.com/blogminhquy/javis-os/pull/799.
+- Dependency: independently reviewed M1 head23e546b9/PR795. Final-head Linux
+  CI39847154134 is still pending; no M1 merge/publication or M2 integration claim.
+  M2A targets the M1 branch temporarily and must rebase/retarget onto published
+  main before integration. The original checkout remains untouched.
+- Plan: `../plans/2026-10-23-agent-skill-improvement-m2a.md`, reviewed/self-reviewed.
+  Task1 adds schema4 owner-authority and immutable candidate metadata; staging,
+  private review and UI remain later tasks. Trial/activation flags stay false.
+- Owner delegated pilot choice. An objective Python bug-fix/test pilot is selected
+  for reproducibility alongside the spec's required business pilots. This choice
+  does not supply an accepted business dataset or owner acceptance evidence.
+
 ## Milestones
 
 | Milestone | Engineering | Business evidence | Rollout |
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
 | M1 | Tasks1–5 implemented and independently reviewed; Task6 final-head CI/integration pending | One historical real-engine synthetic baseline; aggregate unknown; no business pilot | Trial/activation flags false; not enabled |
-| M2 | Pending | No skill feasibility yet | Not enabled |
+| M2 | M2A schema/metadata engineering in progress; later A tasks and B–F open | No skill feasibility yet | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
 | M5 | Pending | No agent pilot | Not enabled |

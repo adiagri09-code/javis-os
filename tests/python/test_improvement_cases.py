@@ -294,7 +294,7 @@ class ImprovementCaseTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT version FROM improvement_schema").fetchone()[0], 1)
         IM.ensure(self.rs)
         self.assertEqual(self.assets.get_policy(self.owner), {"mode": "off", "version": 4})
-        backup = self.root / "resonance.sqlite3.pre-improvement-m1.bak"
+        backup = self.root / "resonance.sqlite3.pre-improvement-m2-candidates.bak"
         self.assertTrue(backup.is_file())
         with sqlite3.connect(backup) as connection:
             self.assertEqual(connection.execute("SELECT version FROM improvement_schema").fetchone()[0], 1)

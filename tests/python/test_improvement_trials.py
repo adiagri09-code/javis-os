@@ -267,7 +267,8 @@ class TrialStoreTests(unittest.TestCase):
         self.assets.set_policy(self.owner, "off", expected_version=0, event_key="off-before-upgrade")
         with self.rs._conn() as connection:
             contract = connection.execute("SELECT id FROM improvement_contracts").fetchone()[0]
-            for table in ("improvement_trial_context_grants", "improvement_trial_contexts", "improvement_trial_results", "improvement_trial_owner_decisions", "improvement_trial_artifacts", "improvement_trial_receipts", "improvement_trial_observations",
+            for table in ("improvement_skill_candidates", "improvement_candidate_authority_grants", "improvement_candidate_authorities",
+                          "improvement_trial_context_grants", "improvement_trial_contexts", "improvement_trial_results", "improvement_trial_owner_decisions", "improvement_trial_artifacts", "improvement_trial_receipts", "improvement_trial_observations",
                           "improvement_trial_attempts", "improvement_trials"):
                 connection.execute("DROP TABLE " + table)
             connection.execute("UPDATE improvement_schema SET version=2")
@@ -281,7 +282,7 @@ class TrialStoreTests(unittest.TestCase):
         with self.rs._conn() as connection:
             self.assertIsNone(connection.execute("SELECT name FROM sqlite_master WHERE name='improvement_trials'").fetchone())
         IM.ensure(self.rs)
-        self.assertEqual(IM._schema_version(self.rs), 3)
+        self.assertEqual(IM._schema_version(self.rs), IM.SCHEMA_VERSION)
         self.assertEqual(self.assets.get_policy(self.owner), {"mode": "off", "version": 1})
 
     def test_preparation_requires_committed_exposure_before_the_input_can_be_used(self):
