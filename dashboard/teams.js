@@ -240,22 +240,37 @@
       var files = ((m.meta || {}).files || []).filter(function (f) { return f && f.path; });
       var rest = files.length ? t.rest.replace(/(?:\n\n)?\uD83D\uDCCE [^\n]*$/, "") : t.rest;
       return (t.quote ? quoteHtml(t.quote) : "") + (rest ? '<div class="tm-text">' + esc(rest).replace(/\n/g, "<br>") + "</div>" : "") +
-        (files.length ? '<div class="tm-files">' + files.map(fileChipHtml).join("") + "</div>" : "");
+        (files.length ? '<div class="tm-files">' + files.map(function (f) { return fileChipHtml(f, m.ts); }).join("") + "</div>" : "");
     }
     var md = typeof window !== "undefined" && window.mdToHtml;
     if (md) {
-      try { return '<div class="tm-text msg-javis tm-mdwrap"><div class="bubble">' + md(text, brain()) + "</div></div>"; }
+      // anhV: the message's own time is the version of the pictures it shows, like the main chat, so a picture the AI
+      // overwrote under the same name shows the new one in a newer message instead of the browser's cached copy.
+      try {
+        return '<div class="tm-text msg-javis tm-mdwrap"><div class="bubble">' + md(text, brain(), m.ts ? { anhV: String(m.ts) } : undefined) +
+          "</div></div>";
+      }
       catch (e) { /* fall through to plain text */ }
     }
     return '<div class="tm-text">' + esc(text).replace(/\n/g, "<br>") + "</div>";
   }
 
   function rawUrl(path) { return "/files/raw?brain=" + q(brain()) + "&path=" + q(path); }
-  function fileChipHtml(f) {
+  // A file sent with an owner's message. A picture opens in the in-app viewer (chat-render.js lightbox, a.jv-img-link,
+  // named by data-img-ten) like every other picture in the chats, and a picture that cannot load any more becomes the
+  // main chat's "not available" box (jvImgGone) instead of a broken icon. `ver` (the message time) is the picture's
+  // version, so a file overwritten under the same name is not served from the browser cache.
+  function fileChipHtml(f, ver) {
     var img = !!f.image || /\.(png|jpe?g|gif|webp)$/i.test(String(f.path || ""));
-    return '<a class="tm-file' + (img ? " is-img" : "") + '" href="' + esc(rawUrl(f.path)) + '" target="_blank" rel="noopener" title="' +
-      esc(f.name || f.path) + '">' + (img ? '<img src="' + esc(rawUrl(f.path)) + '" alt="" loading="lazy">' : ic("file-text")) +
-      "<span>" + esc(f.name || f.path) + "</span></a>";
+    var url = rawUrl(f.path) + (ver ? "&v=" + q(String(ver)) : "");
+    var name = f.name || f.path;
+    if (img) {
+      return '<a class="tm-file is-img jv-img-link" href="' + esc(url) + '" data-img-ten="' + esc(name) +
+        '" target="_blank" rel="noopener" title="' + esc(tw("chat.att_zoom")) + '"><img src="' + esc(url) + '" alt="' + esc(name) +
+        '" loading="lazy" onerror="jvImgGone(this)"><span>' + esc(name) + "</span></a>";
+    }
+    return '<a class="tm-file" href="' + esc(url) + '" target="_blank" rel="noopener" title="' + esc(name) + '">' + ic("file-text") +
+      "<span>" + esc(name) + "</span></a>";
   }
 
   // One-line plain preview of a message for the reply bar and the quote: markdown marks and an earlier quote dropped.
@@ -2986,8 +3001,9 @@
     if (imgs.length) {
       h += '<section class="tm-info-sec"><h4>' + esc(tw("teams.info_images", { n: imgs.length })) + '</h4><div class="tm-info-imgs">' +
         imgs.slice(0, 12).map(function (f) {
-          return '<a href="' + esc(rawUrl(f.brain_path || f.path)) + '" target="_blank" rel="noopener" title="' + esc(f.name) + '"><img src="' +
-            esc(rawUrl(f.brain_path || f.path)) + '" alt="" loading="lazy"></a>';
+          return '<a class="jv-img-link" href="' + esc(rawUrl(f.brain_path || f.path)) + '" data-img-ten="' + esc(f.name) +
+            '" target="_blank" rel="noopener" title="' + esc(f.name) + '"><img src="' +
+            esc(rawUrl(f.brain_path || f.path)) + '" alt="" loading="lazy" onerror="jvImgGone(this)"></a>';
         }).join("") + "</div></section>";
     }
     h += '<section class="tm-info-sec"><div class="tm-info-sechead"><h4>' + esc(tw("teams.info_files", { n: docs.length })) + "</h4>" +
@@ -4302,7 +4318,7 @@
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, capsPayload: capsPayload, saveCapsFlow: saveCapsFlow, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
     levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml,
     bannersHtml: bannersHtml, reactCornerHtml: reactCornerHtml, reactBarHtml: reactBarHtml, sheetHtml: sheetHtml,
-    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, copyTextOf: copyTextOf, plainPreview: plainPreview, previewText: previewText,
+    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, copyTextOf: copyTextOf, fileChipHtml: fileChipHtml, plainPreview: plainPreview, previewText: previewText,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
     searchResultsHtml: searchResultsHtml, replyStatusHtml: replyStatusHtml, headLine: headLine,
     typingHtml: typingHtml, pinsHtml: pinsHtml, markMentions: markMentions, replyRefHtml: replyRefHtml,
