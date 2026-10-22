@@ -353,3 +353,11 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   SDK0.2.116. Strict pin creation rejected the unverified runtime before native execution.
   Controlled dummy-provider qualification is separate pending engineering; no real auth,
   model call, implicit older-binary fallback or user configuration change occurred.
+- SQL dependency component now has35 checks and independent final review. Reproductions
+  caught readonly-native creation of missing sidecars and a DELETE-to-WAL mode transition.
+  Every source now requires the production connection/close lock; this module never opens
+  a source connection. Exact main-qualified SELECT/schema queries, owned read transactions,
+  path/journal checks and lock ordering preserve logical source data and host connection
+  settings. New source artifacts and hot-journal recovery are blocked; existing SHM read
+  coordination is allowed. Parent's fresh SQL/context/Host/renderer/prefix regression
+  passed5/5 scripts in19s. Full production composition and API remain unfinished.

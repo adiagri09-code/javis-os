@@ -266,3 +266,27 @@ dependencies while retaining the original clock/usage render. Returned captures 
 closed validation and exact binding comparison. Deterministic legacy collectors continue
 to be called normally. This protocol does not expose a client-selected frozen clock or make
 a partial collector a supported production surface.
+
+### Existing SQL source lifetime
+
+`SQLiteContextProjection(session_db, workflow_db=None, existing_sources=..., principal_type=...,
+redactor=...)` captures only a specifically authorized ordinary web session, its matching
+project, ordered file/link memberships and latest workflow metadata. It excludes messages,
+workflow inputs/outputs and private evaluation content. Explicit legacy brain aliases must
+resolve to the same authenticated canonical root. It records semantic rows, not volatile
+database or shared-memory hashes; unrelated message inserts do not invalidate the context.
+
+Every declared source requires `ExistingSQLiteSource(path, connection, lock)` using the
+production store's already initialized native SQLite connection and its actual mutation/
+close lock. Capture does not open source connections, construct stores, migrate schemas,
+change host query-only/authorizer/row-factory/progress settings, or copy other brains' data.
+Closed main-qualified read statements run within an owned read transaction; preexisting
+transactions, wrong/closed connections, linked paths, missing WAL sidecars and nonempty
+rollback journals are unavailable. Locks are ordered/deduplicated and retained through
+rollback and source checks. Native existing SHM reader coordination is permitted; logical
+DB/WAL writes and new source artifacts are excluded.
+
+Each source has one consistent read transaction; separate databases still require outer
+double observation/CAS. An omitted workflow source is a host declaration, not proof that
+the corresponding production dependency is absent. Coding/pinned-folder, adaptive routing,
+plugins, source document contents and complete rendering remain composer responsibilities.
