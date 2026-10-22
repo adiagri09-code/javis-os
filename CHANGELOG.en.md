@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.278.0] - 2026-10-22
+### Improved
+- **The Team chat inherits the main chat's improvements.**
+
 ## [0.276.0] - 2026-10-22
 ### Security
 - **Webhooks also mask staff account ids.** The masked event view and exported fixtures used to keep the id of whoever created, edited or sold an order, because the key was `id`. Every value under a creator, editor, seller or care block is now masked like customer data.

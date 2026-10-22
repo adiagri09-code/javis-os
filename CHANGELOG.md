@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.278.0] - 2026-10-22
+### Cải thiện
+- **Khung chat Team được thừa hưởng các cải tiến của khung Trò chuyện.**
+
 ## [0.276.0] - 2026-10-22
 ### Bảo mật
 - **Webhook che luôn mã tài khoản nhân viên.** Trước đây ô xem sự kiện (đã che) và file mẫu xuất ra vẫn giữ mã của người tạo đơn, người sửa, người bán vì đó là trường "id". Giờ mọi giá trị nằm dưới người tạo, người sửa, người bán, người chăm sóc đều bị che như thông tin khách.
