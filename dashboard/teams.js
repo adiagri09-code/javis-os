@@ -1997,7 +1997,6 @@
       box.innerHTML = S.teams.length ? '<div class="tm-empty tm-empty-chat">' + esc(tw("teams.pick_team")) + "</div>" : "";
       return;
     }
-    var atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     var list = S.msgs.filter(function (m) { return !S.skipped[m.id]; });
     // The latest assistant message keeps its Like button visible (like Zalo); older ones show it on hover.
     var lastAgent = null;
@@ -2012,10 +2011,17 @@
         if (S.skipped["p" + m.id] && m.meta && m.meta.proposal) mm = Object.assign({}, m, { meta: Object.assign({}, m.meta, { proposal: null }) });
         return messageHtml(mm, c);
       }).join("");
+    // The jump-to-latest button (chat-scroll.js) is the list's last child, so `position: sticky` keeps it at the bottom.
+    if (S.scroll) { box.appendChild(S.scroll.button); S.scroll.update(); }
     applyReveal(box);
     // Bảng đang "mở" mà không vẽ ra (tin đã đổi, đã ghim): bỏ trạng thái mở, kẻo tin mới không còn tự cuộn xuống.
     if (S.picker !== null && !box.querySelector('[data-panel="' + S.picker + '"]')) S.picker = null;
-    if ((stick || atEnd) && S.picker === null) box.scrollTop = box.scrollHeight;
+    // Stick to the latest message like the main chat: `stick` (team opened, own message sent) jumps there; otherwise the
+    // list follows only when the owner is already at the end, and holds while the mouse is on a message's buttons.
+    if (S.picker === null) {
+      if (stick) toLatest(true);
+      else if (!S.scroll || S.scroll.stuck()) toLatest(false);
+    }
     if (S.focusPicker) {
       // Mở bộ chọn: focus vào nút đầu của bảng (bàn phím và trình đọc màn hình vào được bảng, Escape đóng được).
       S.focusPicker = false;
@@ -2028,6 +2034,15 @@
       S.focusBack = null;
       if (back) back.focus();
     }
+  }
+
+  // Scroll the message list to the latest message (chat-scroll.js; a plain jump when it is missing). Not forced: only when
+  // the owner is at the end, and a message arriving while they read higher up turns the button into "New messages".
+  function toLatest(force) {
+    var box = S.el && S.el.querySelector(".tm-msgs");
+    if (!box) return;
+    if (S.scroll) S.scroll.toBottom(force);
+    else box.scrollTop = box.scrollHeight;
   }
 
   function drawJobs() {
@@ -2206,12 +2221,10 @@
     if (!S.replyTo) return;
     S.picker = null;
     S.pending = null;
-    var box = S.el.querySelector(".tm-msgs");
-    var atEnd = box && box.scrollHeight - box.scrollTop - box.clientHeight < 120;
     drawMsgs(false);
     drawComposer();
     // The reply bar makes the composer taller: keep the latest message in view when the owner was reading it.
-    if (box && atEnd) box.scrollTop = box.scrollHeight;
+    if (!S.scroll || S.scroll.stuck()) toLatest(false);
     var inp = S.el.querySelector(".tm-input");
     if (inp) { try { inp.focus(); } catch (e) {} }
   }
@@ -2368,9 +2381,9 @@
           return;
         }
         var msgs = S.el && S.el.querySelector(".tm-msgs");
-        var atEnd = msgs && msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 120;
+        var atEnd = !S.scroll || S.scroll.stuck();
         applyReveal(msgs);
-        if (atEnd) msgs.scrollTop = msgs.scrollHeight;
+        if (atEnd) toLatest(false);
       }, REVEAL_STEP_MS);
     }
   }
@@ -2384,11 +2397,11 @@
     if (!msgs) return;
     // Follow the next answer down only when the owner is at the latest message: reading higher up in the history, the
     // view stays where it is (it used to jump to the bottom at the end of every revealed answer).
-    var atEnd = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 120;
+    var atEnd = !S.scroll || S.scroll.stuck();
     var w = rv.active !== null ? msgs.querySelector('[data-mid="' + rv.active + '"]') : null;
     if (w) w.classList.remove("tm-rv-wait");
     if (rv.active !== null) applyReveal(msgs);
-    if (atEnd) msgs.scrollTop = msgs.scrollHeight;
+    if (atEnd) toLatest(false);
   }
   function stopReveal() {
     if (S && S.rv && S.rv.timer) clearTimeout(S.rv.timer);
@@ -2689,7 +2702,9 @@
       }
       S.msgs = older ? got.concat(S.msgs) : got;
       S.hasMore = !S.filterTask && !!r.j.has_more;
-      drawMsgs(!older);
+      // Older messages go in above what the owner is reading: keep them on the same message (the main chat does too).
+      if (older && S.scroll) S.scroll.keep(function () { drawMsgs(false); });
+      else drawMsgs(!older);
     });
   }
 
@@ -4211,6 +4226,8 @@
       if (i >= 0) S.msgs[i] = S.filterTask ? Object.assign({}, S.msgs[i], nm) : nm;
       else if (!S.filterTask && (S.jumped === null || S.jumped === undefined)) { S.msgs.push(nm); queueReveal(nm); }
       if (i >= 0 || !S.filterTask) drawMsgs(false);
+      // A new message while the owner reads higher up: the jump button becomes "New messages" (at the end it follows).
+      if (i < 0 && S.scroll && !S.scroll.stuck()) toLatest(false);
     }
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(function () {
@@ -4291,8 +4308,13 @@
   }
 
   function render(el) {
+    if (S && S.scroll) S.scroll.detach();
     S = fresh(el);
     shell();
+    var CS = typeof window !== "undefined" && window.JavisChatScroll;
+    var msgsBox = el.querySelector(".tm-msgs");
+    S.scroll = CS && msgsBox ? CS.attach(msgsBox, { buttonClass: "jv-new-msg tm-new-msg", msg: ".tm-msg",
+      hold: ".tm-hacts:hover, .tm-rx:hover", key: "data-mid", followLoads: true }) : null;
     attachListResize();
     el.addEventListener("mouseover", function (e) {
       var row = e.target.closest && e.target.closest(".tm-team");

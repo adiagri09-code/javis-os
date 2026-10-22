@@ -2626,27 +2626,11 @@ try { updateStopBtn(); } catch (e) {}   // first paint: an empty box shows voice
 // Cuộn thông minh: chỉ tự cuộn khi user đang ở đáy; đang đọc lại phía trên thì
 // KHÔNG giật xuống - hiện nút "↓ Tin mới" (sticky trong khung chat) để nhảy xuống.
 // Nút được chèn lazy khi có tin đầu tiên → .transcript:empty::after vẫn hoạt động.
+// The logic (follow only at the end, the jump button and its "New messages" look, holding the follow while the mouse
+// is on a message) lives in chat-scroll.js, shared with the Team chat.
 // ============================================
-let stickBottom = true;
 const newMsgBtn = document.createElement("button");
 newMsgBtn.id = "newMsgBtn"; newMsgBtn.type = "button";
-newMsgBtn.addEventListener("click", () => scrollBottom(true));
-
-// Nút có HAI dạng, vì hai tình huống khác nhau:
-//   - Chỉ đang cuộn lên đọc lại  -> nút tròn nhỏ chỉ có mũi tên, đủ để nhảy xuống đáy.
-//   - Có tin MỚI tới lúc đang đọc -> nở ra thành "Tin mới" để báo là có cái đáng xuống xem.
-// Trước đây chỉ có dạng thứ hai, mà nó lại chỉ hiện khi scrollBottom() được gọi (tức là khi
-// có tin mới). Cuộn lên đọc lại một hội thoại dài rồi muốn quay xuống thì KHÔNG có nút nào,
-// phải tự kéo tay hết cả khung - đúng chỗ chủ repo kêu mất thời gian.
-const XUONG_ICON = (typeof ic === "function") ? ic("chevron-down") : "↓";
-function veNutXuong(coTinMoi) {
-  newMsgBtn.classList.toggle("has-new", !!coTinMoi);
-  newMsgBtn.innerHTML = coTinMoi ? XUONG_ICON + " " + window.t("app.new_msg") : XUONG_ICON;
-  newMsgBtn.title = coTinMoi ? window.t("app.new_msg_title") : window.t("app.scroll_bottom");
-  newMsgBtn.setAttribute("aria-label", newMsgBtn.title);
-}
-veNutXuong(false);
-window.addEventListener("javis:i18n", () => veNutXuong(newMsgBtn.classList.contains("has-new")));
 
 // _neoChenCu: lúc CHÈN NGƯỢC tin cũ (cuộn lên tải tiếp), mọi bong bóng dựng ra phải nằm
 // TRƯỚC tin cũ nhất đang hiện chứ không phải cuối khung. Đặt cái neo ở đây thay vì thêm
@@ -2657,59 +2641,14 @@ function chatAppend(el) {
   if (newMsgBtn.parentNode !== chatArea) chatArea.appendChild(newMsgBtn);
   chatArea.insertBefore(el, _neoChenCu || newMsgBtn);
 }
-// Ngưỡng 90px: coi như "đang ở đáy" nên vẫn tự cuộn theo tin mới, và không hiện nút.
-function ganDay() {
-  return chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < 90;
-}
-function capNhatNutXuong() {
-  if (!newMsgBtn.parentNode) return;             // chưa có tin nào thì chưa chèn nút
-  if (stickBottom) { newMsgBtn.classList.remove("show"); veNutXuong(false); return; }
-  newMsgBtn.classList.add("show");
-}
-chatArea.addEventListener("scroll", () => {
-  stickBottom = ganDay();
-  // Rời đáy là hiện nút NGAY, không chờ tin mới nào cả.
-  capNhatNutXuong();
+// Ngưỡng 90px: coi như "đang ở đáy" nên vẫn tự cuộn theo tin mới, và không hiện nút. Đang chèn ngược tin cũ
+// (_dangChenCu): appendUserMessage/appendJavisMessage vẫn gọi scrollBottom theo thói quen, mà cuộn xuống đáy lúc này
+// là quăng người đọc khỏi chỗ họ đang đứng, nên chat-scroll.js không cuộn khi suspended() đúng.
+const chatScroll = window.JavisChatScroll.attach(chatArea, {
+  button: newMsgBtn, msg: ".msg", hold: ".msg-acts:hover, .jr-chat:hover", near: 90,
+  suspended: () => _dangChenCu,
 });
-// 0.180.0 (owner: "bấm copy mà tin cứ chạy mất"): while Javis is writing, the chat keeps scrolling to the bottom,
-// so the message under the mouse slides away right as you reach its Copy button. On a computer with a mouse, the
-// follow-along now holds while the mouse is on a message's button row or reaction, or is moving over a message
-// (moved in the last 1.2 s). A mouse just resting on the text does not hold it. When the hold ends, it catches up.
-const HOLD_MOVE_MS = 1200;
-let _diChuotLuc = 0, _treoCuon = null;
-const coChuot = () => { try { return window.matchMedia("(hover: hover) and (pointer: fine)").matches; } catch (e) { return false; } };
-chatArea.addEventListener("mousemove", (e) => {
-  if (e.target.closest && e.target.closest(".msg")) _diChuotLuc = Date.now();
-});
-chatArea.addEventListener("mouseleave", () => { _diChuotLuc = 0; });
-function dangGiuCuon() {
-  if (!coChuot()) return false;
-  if (chatArea.querySelector(".msg-acts:hover, .jr-chat:hover")) return true;
-  return Date.now() - _diChuotLuc < HOLD_MOVE_MS && !!chatArea.querySelector(".msg:hover");
-}
-function choCuonTiep() {
-  if (_treoCuon) return;
-  _treoCuon = setTimeout(function lai() {
-    if (dangGiuCuon()) { _treoCuon = setTimeout(lai, 250); return; }
-    _treoCuon = null;
-    scrollBottom();
-  }, 250);
-}
-function scrollBottom(force) {
-  // Đang chèn ngược tin cũ: appendUserMessage/appendJavisMessage vẫn gọi vào đây theo thói
-  // quen, mà cuộn xuống đáy lúc này là quăng người đọc khỏi chỗ họ đang đứng.
-  if (_dangChenCu) return;
-  if (force) stickBottom = true;
-  if (stickBottom && !force && dangGiuCuon()) { choCuonTiep(); return; }
-  if (stickBottom) {
-    chatArea.scrollTop = chatArea.scrollHeight;
-    newMsgBtn.classList.remove("show");
-    veNutXuong(false);
-  } else if (newMsgBtn.parentNode) {
-    veNutXuong(true);                            // đang đọc phía trên mà có tin mới tới
-    newMsgBtn.classList.add("show");
-  }
-}
+function scrollBottom(force) { chatScroll.toBottom(force); }
 
 // ============================================
 // Copy code block / copy tin nhắn / xem thêm tin dài - event delegation

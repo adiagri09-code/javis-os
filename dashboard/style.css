@@ -1200,18 +1200,19 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
    Hai dạng: mặc định là nút TRÒN chỉ có mũi tên (chỉ để nhảy xuống, không cần chữ);
    thêm .has-new khi có tin mới thì nở ra thành viên thuốc có chữ để nó đập vào mắt.
    flex: none BẮT BUỘC: .transcript là flex dọc, nút là flex item nên mặc định BỊ CO theo
-   chiều chính (chiều cao). Thiếu nó thì nút tròn 32px bị bóp còn 15px, méo thành bầu dục. */
-#newMsgBtn { position: sticky; bottom: 6px; align-self: center; display: none; z-index: 3;
+   chiều chính (chiều cao). Thiếu nó thì nút tròn 32px bị bóp còn 15px, méo thành bầu dục.
+   .jv-new-msg: the same button in the Team chat (chat-scroll.js). */
+#newMsgBtn, .jv-new-msg { position: sticky; bottom: 6px; align-self: center; display: none; z-index: 3;
   flex: none; align-items: center; justify-content: center; gap: 5px;
   background: var(--panel-solid); border: 1px solid var(--text3); color: var(--text);
   width: 32px; height: 32px; padding: 0; border-radius: 50%;
   /* Bóng đậm hơn --shadow-1 vì nút NỔI ĐÈ lên chữ của tin nhắn; bóng nhạt là nó chìm vào nền chữ. */
   font-size: 13px; cursor: pointer; box-shadow: var(--shadow-2);
   transition: color 0.15s, border-color 0.15s, background 0.15s; }
-#newMsgBtn.has-new { width: auto; height: auto; padding: 5px 14px; border-radius: 16px;
+#newMsgBtn.has-new, .jv-new-msg.has-new { width: auto; height: auto; padding: 5px 14px; border-radius: 16px;
   border-color: var(--accent); color: var(--accent); }
-#newMsgBtn.show { display: inline-flex; }
-#newMsgBtn:hover { background: var(--accent-wash-2); color: var(--accent); border-color: var(--accent); }
+#newMsgBtn.show, .jv-new-msg.show { display: inline-flex; }
+#newMsgBtn:hover, .jv-new-msg:hover { background: var(--accent-wash-2); color: var(--accent); border-color: var(--accent); }
 
 /* Mồi tải tin cũ ở ĐẦU khung chat (app.js). Cuộn tới đây là tự kéo khúc cũ hơn về; nút chỉ
    là đường lui khi trình duyệt không có IntersectionObserver, nên để nhạt, đừng tranh mắt

@@ -29,10 +29,9 @@ function fnBody(name) {
 
 // (a)
 const nr = fnBody("nextReveal");
-check("(a) nextReveal measures whether the reader is at the end before revealing the next answer",
-  /var atEnd = msgs\.scrollHeight - msgs\.scrollTop - msgs\.clientHeight < 120;/.test(nr)
-  && nr.indexOf("var atEnd") < nr.indexOf("applyReveal(msgs)"));
-check("(a) and scrolls only then", /if \(atEnd\) msgs\.scrollTop = msgs\.scrollHeight;/.test(nr) && !/^\s*msgs\.scrollTop = msgs\.scrollHeight;/m.test(nr));
+check("(a) nextReveal asks whether the reader is at the end (chat-scroll.js) before revealing the next answer",
+  /var atEnd = !S\.scroll \|\| S\.scroll\.stuck\(\);/.test(nr) && nr.indexOf("var atEnd") < nr.indexOf("applyReveal(msgs)"));
+check("(a) and scrolls only then", /if \(atEnd\) toLatest\(false\);/.test(nr) && !/msgs\.scrollTop = msgs\.scrollHeight;/.test(nr));
 
 // (b)
 const up = fnBody("upload");
