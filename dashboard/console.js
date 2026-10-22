@@ -9268,7 +9268,8 @@
           const alias = n.getAttribute("data-img-alias");
           if (co) return "![[" + p + "|" + co + "]]";
           if (n.getAttribute("data-img-wiki") === "1") return "![[" + p + (alias ? "|" + alias : "") + "]]";
-          return "![" + (n.getAttribute("alt") || "") + "](" + p + ")";
+          // A space ends the link target in markdown: "![a](my pic.webp)" is not an image elsewhere.
+          return "![" + (n.getAttribute("alt") || "") + "](" + p.replace(/ /g, "%20") + ")";
         } });
       // Các khối render đặc biệt của mdToHtml phải TRẢ VỀ đúng fence gốc khi lưu bản WYSIWYG,
       // nếu không nội dung note bị phá (mất truy vấn dataview, mất code). Round-trip:

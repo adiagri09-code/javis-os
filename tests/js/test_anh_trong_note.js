@@ -149,6 +149,14 @@ check("alt text được giữ qua dấu |",
       luuAnh("", node({ "data-vault-path": "images/a.webp", "data-img-wiki": "1", "data-img-alias": "ảnh bìa" })) === "![[images/a.webp|ảnh bìa]]");
 check("CANARY: ![](..) lưu lại VẪN là ![](..), không tự đổi cú pháp",
       luuAnh("", node({ "data-vault-path": "images/a.webp", alt: "anh" })) === "![anh](images/a.webp)");
+// A space ends the link target in markdown, so ![](..) saves spaces as %20 (the renderer
+// decodes them back, see the round trip below). ![[..]] keeps them as typed.
+check("CANARY: ![](..) with a space in the path saves it as %20",
+      luuAnh("", node({ "data-vault-path": "images/my pic.webp", alt: "a" })) === "![a](images/my%20pic.webp)");
+check("![[..]] keeps the space as typed",
+      luuAnh("", node({ "data-vault-path": "images/my pic.webp", "data-img-wiki": "1" })) === "![[images/my pic.webp]]");
+check("the %20 path renders back to the same vault path",
+      /data-vault-path="images\/my pic\.webp"/.test(img("![a](images/my%20pic.webp)")));
 // Cú pháp ![](..) không có chỗ ghi cỡ, nên kéo đổi cỡ một ảnh kiểu đó thì phải chuyển sang
 // ![[..|cỡ]]; giữ nguyên là im lặng bỏ mất thao tác người dùng vừa làm.
 check("![](..) bị kéo đổi cỡ thì chuyển sang ![[..|cỡ]] để giữ được cỡ",
