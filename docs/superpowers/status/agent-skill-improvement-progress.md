@@ -1,5 +1,33 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — preparation heartbeat, 24 October
+
+The new actual account attempt on01717332 is terminal: two marked calls, baseline
+shapeFAIL/ownerUNKNOWN, valid semantic meaning/dependenciesPASS/nativeUNKNOWN.
+First scheduled v4 cell was BASELINE; it materialized/prepared, then stopped
+not_run/authority_changed before an engine marker. Its reservation was refunded;
+no second cell, genuine pair, selection or final exists.234.0495s scope-ready to
+final;8673in/822out,USD0.0658008 subscription-equivalent partial; cash/requests
+unknown. Canonical unchanged and all plaintext cleaned. Public evidence5eede64f.
+
+One read-only current host.live_guard + result _guard subsequentlyPASS9.141s.
+The exact historical exception is unavailable. Controlled reproduction confirms
+a separate concrete scheduling bug: workspace preparation can monopolize the
+runner mutex past its lease and block its validating heartbeat. New3 tests on
+old source:1FAIL/2PASS8.029s; four-line scheduling fix:3PASS8.786s. Preparation
+now releases only that mutex during owned filesystem work; authority checks,
+serialized SQL generation changes, execution lifetimes, cancellation drain,
+60s lease/20s heartbeat and180s request deadline remain unchanged.
+
+Scoped independent review APPROVED exact runner6c708940/test31cf3f60:3PASS8.917s.
+Sequential affected regression36PASS151.454s on frozen full source maps: runner24,
+actual synthetic-adapter v4 pair1, owner-service11. Public scheduling evidence
+`../evidence/2026-10-24-m2d1-preparation-heartbeat.json`. Changed native footprint
+is not registered: historicalbe4 cannot authorize the working source. No new account attempt or unchanged retry.
+Native observations remain a later engineering unit; actual success tool_result
+is_error=null additionally leaves event/side-effect coverageUNKNOWN. No telemetry
+default or all18 gate has been weakened.
+
 ## Current continuation — bounded CLI observation, 24 October
 
 Working delta on29f5bdd5 addresses repeated CLI hashing in current view reads.
@@ -23,7 +51,8 @@ Product delta committed a8155c63; exact new81-source profilebe4a5866 has native
 20PASS94.516s on WindowsCLI309/hash5441781f/SDK116. Public qualificationfd52de7a.
 Only one registry entry is added; all four prior entries remain. Metadata5RED
 (missing new registration) then5GREEN0.085s. Scoped registration verification is
-pending; no new account attempt yet. Historicale7 cannot authorize changed source.
+approved at01717332,5metadataPASS0.119s; subsequent actual attempt is above.
+Historicale7 cannot authorize changed source.
 No unchanged account retry or deadline increase. Plan:
 `../plans/2026-10-24-agent-skill-improvement-m2d1-view-observation.md`.
 

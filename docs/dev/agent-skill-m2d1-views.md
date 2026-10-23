@@ -187,5 +187,13 @@ reads to2), returning identical pins. This does not establish whole-pipeline
 latency, a genuine account pair or business gain. Changed source requires its
 own exact native qualification; historical e7 proof is insufficient. Profile
 be4a5866 now has20 native enforcement checks94.516s on exact CLI309/SDK116 and
-is registered separately; this qualification uses dummy local providers. A new
-bounded account attempt has not yet run at this checkpoint.
+is registered separately; this qualification uses dummy local providers. Its
+fresh account attempt made two calls and prepared the first v4 baseline cell,
+then recorded authority_changed before an engine marker. The reservation was
+refunded; no genuine pair or selection exists. Evidence is preserved in the
+[preparation run](../superpowers/evidence/2026-10-24-m2d1-real-observation-feasibility.json).
+The current guard subsequently passes read-only; a controlled short-lease test
+separately reproduces heartbeat starvation during filesystem preparation. A
+scheduling fix passes3 new checks,36 affected regression checks and independent
+scoped review (3 checks). It does not lengthen leases/deadlines or relax source
+authority. Changed source needs its own native qualification.

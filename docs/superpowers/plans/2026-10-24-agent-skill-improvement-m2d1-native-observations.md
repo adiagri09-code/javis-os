@@ -51,6 +51,24 @@ actual source and SDK116; no implementation or runtime proof exists yet.
 
 ## Unit A — prove the launch boundary before adopting it
 
+Candidate ownership refinement (not yet implemented): the existing guardian can
+own the exact selected CLI read guard before releasing the Python worker, hash
+that same handle, and retain it through the whole job drain. Only runtime path/
+hash/policy enter the supervisor, never model input, auth or account config.
+This avoids relying on the worker to retain a guard after host/worker death or
+adding cross-process duplicated file handles. The host validates query-child
+incarnation/image/exact job through this guardian, then resumes its suspended
+initial thread. No guard is released early merely because spawn succeeded.
+Probe filesystem/ancestor semantics and SDK suspended-spawn compatibility first.
+
+Primary references distinguish documented guarantees from pending experiments:
+[CreateFileW](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)
+documents rejection of existing writable mappings without FILE_SHARE_WRITE;
+[NTFS rename algorithm](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsa/87f86c9b-6c2a-4803-84b7-131a74a434fa)
+and [product behavior186](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsa/4e3695bd-7574-4f24-a223-b4679c065b63)
+cover ordinary open-descendant rename checks. Extended/POSIX rename and reparse
+mutation still require actual negative probes on the configured filesystem.
+
 - [ ] Inspect exact Windows process/job APIs and actual SDK116 command. Write
   inert, hidden owned-process probes using workspace-only test executables and
   isolated config; no account/auth/model access or installed-runtime mutation.
@@ -98,6 +116,12 @@ internal_reasoning=unknown explicitly. Missing proof UNKNOWN; contradiction FAIL
   operation input-read coverage remains UNKNOWN until independently implemented.
 
 ## Unit C — versioned checks, native qualification and actual pipeline
+
+New actual trace diagnostic5eede64f also found a successful native tool_result
+with is_error=null. Current strict event checks leave event/side-effect coverage
+UNKNOWN. Verify the documented native/SDK optional-error semantics before
+projecting any default; do not fill arbitrary missing telemetry as false. Include
+actual native success/error/omission cases in this unit's coverage tests.
 
 - [ ] Add receipt v3 and independent pure validators for both proofs. Keep old
   receipt acceptance and UNKNOWN behavior; reject malformed/mismatched new
