@@ -512,6 +512,49 @@ Profile79/2192bf86b6a49e0fa2d524324db79c4a52493d91f37c56b9f183a4fa8b922e4d
 is UNREGISTERED. Final registry, exact native qualification and public controls
 remain OPEN; neither Task3 nor Task4 is complete.
 
+Final-registry prerequisite audit: the existing improver builder rejects tuning
+families aliased to qualification/regression or any claim, without a consumed
+exception. Effective-view current capture did not call this common SQL guard.
+Before opening final consumption, share that existing rule and apply it before
+any current view plaintext read. Test with genuine owner-created case sets that
+relabel an actual tuning snapshot, before freeze and after publication; current
+work must reject while immutable cold history remains readable. Affected sources:
+experiment_qualification, improver_inputs and view_sources (all already native
+footprint members). Tests: new view holdout boundary, existing improver input,
+view source/reservation and native footprint; no fabricated claims/eligible data.
+
+Alias boundary checkpoint:3 genuine owner-API cases plus improver_inputs10,
+view_sources16 and actual pair reservation/native-footprint2 passed31 checks,
+262.843s recorded with timing basis per row. New/current capture rejects before
+plaintext; cold metadata remains exact. AST extraction confirms both original
+improver SQL statements remain identical after sharing. Evidence
+`../evidence/2026-10-23-m2d1-task3-view-holdout.json`, SHA256
+07ef50951c43236be3128be3e9740bed1521e94e1e31c1a0bf178c88517cf6fc.
+Source79/b46e2cc3744067a9d367781b544df8b036de760c385319d7f5a4d4621459b771
+remains unregistered. No final claim/eligible evidence fabricated; Task3 OPEN.
+
+Final-registry contract before its SQL implementation:
+`improvement_view_qualification_links` has columns `comparison_id,brain_id,
+experiment_id,reservation_id,case_set_id,candidate_id,selection_event_key,
+reservation_event_key,selection_hash,binding_hash,pins_hash,family_hash,created_at`.
+PK is comparison/brain; reservation/brain and experiment/brain are independently
+unique. Composite FKs bind actual comparison-view binding, experiment, existing
+CaseStore qualification, case set, A candidate and both immutable events (reserve
+event FK deferred to its same transaction). Scope trigger requires final kind,
+the actual selected ordinal/candidate/definition and nine matching actual pins.
+Code authenticates selected report publication/full18/current policy and exact
+view/semantic/source; an unqualified or inconclusive selection cannot reserve.
+One existing global claim covers qualification fingerprints, preserving spec7.3
+and the actual CaseStore distinction from reusable regression checks. First
+qualification materialization consumes it before input is returned; baseline,
+candidate and repeats share it. Regression cells carry no qualification_id and
+record their normal exposure, but still require the exact owned final binding;
+a qualification family cannot be relabelled as regression, even after consumption.
+No release, foreign/consumed-pool adoption, holdout alias reuse or new registry. A genuine
+selected final comparison/view is required; no fabricated eligible/report/final
+Trial may be used to claim an exercised positive path. Historical link proof is
+immutable/cold; current admission separately revalidates policy/source/meaning.
+
 **Files:** new `server/improvement_view_materialization.py`; extend actual
 TrialStore.materialize, sandbox/worker/TrialProfile, receipts/checks/results/
 views/products/comparison projection. Add all new native-path sources to the

@@ -124,6 +124,9 @@ def capture_sources(plans, semantic, principal, comparison_id, generation, *, co
         (comparison['experiment_id'], brain, comparison['ordinal'])).fetchone()
     if arm is None:
         raise PermissionError('experiment_arm_unavailable')
+    from improvement_experiment_qualification import require_tuning_families
+    experiment = plans.records._row(connection, brain, comparison['experiment_id'])
+    require_tuning_families(connection, brain, json.loads(experiment['definition_json'])['case_set_id'])
     candidate = plans.authoring.records._row(connection, brain, arm['candidate_id'])
     # Grant/policy/source scope must be checked before any encrypted context read.
     state = plans.authoring._state(connection, principal, comparison['experiment_id'], candidate['target_id'],

@@ -205,6 +205,17 @@ Linux39959675109 SUCCESS254a90ca; Linux39965159570 in progressc811b9d6.
 Current result code still requires its own CI/review. Final holdout ownership,
 native scenarios on final exact source and public controls remain open.
 
+Before final consumption, an audit found current effective-view capture did not
+reuse the improver's global holdout-alias rule. Genuine owner-created case sets
+reproduced private reads despite qualification/regression aliases. The shared
+unchanged SQL guard now runs before any current view plaintext; existing frozen
+metadata remains readable.31 checks passed262.843s recorded: new boundary3,
+improver inputs10, view sources16, real paired reservations/native-footprint2.
+Evidence `../evidence/2026-10-23-m2d1-task3-view-holdout.json`, SHA256
+07ef50951c43236be3128be3e9740bed1521e94e1e31c1a0bf178c88517cf6fc.
+Current79-source b46e2cc3 is unregistered. This is a current-authority repair,
+not a final holdout claim/native/business acceptance. Task3 remains OPEN.
+
 - Final affected regression21/21 GREEN,663.451s, qualified across two frozen
   segments: first15 passed scripts retain identical product/helper/test bytes;
   only the failed standalone task-drain test changed from a30ms scheduler sample
