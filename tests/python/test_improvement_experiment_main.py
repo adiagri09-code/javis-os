@@ -25,30 +25,37 @@ class MainExperimentTests(unittest.TestCase):
 
     def test_all_experiment_routes_deny_token_before_factories_and_preserve_csrf(self):
         routes = [(route.path, sorted(route.methods)[0]) for route in self.main.app.routes
-                  if getattr(route, "path", "").startswith(("/improvement-experiments", "/improvement-comparison-reports"))]
-        self.assertEqual(len(routes), 12)
+                  if getattr(route, "path", "").startswith(("/improvement-experiments", "/improvement-comparison-reports", '/improvement-operations'))
+                  or getattr(route, 'path', '').endswith('/semantic-history')]
+        self.assertEqual(len(routes), 23)
         with patch.object(self.main.cfgmod, "gate_active", return_value=True), \
              patch.object(self.main.cfgmod, "valid_session", return_value=False), \
              patch.object(self.main, "_token_ok", return_value=True), \
              patch.object(self.main, "_resonance_store", side_effect=AssertionError("Denied before store")):
             for path, method in routes:
-                path = path.replace("{experiment_id}", "invalid").replace("{report_id}", "invalid")
+                path = path.replace("{experiment_id}", "invalid").replace("{report_id}", "invalid").replace('{candidate_id}', 'invalid').replace('{operation_id}', 'invalid')
                 response = self.client.request(method, path, headers={"Authorization": "Bearer synthetic-token"}, content=b"invalid")
                 self.assertEqual(response.status_code, 403, (path, response.text))
         with patch.object(self.main.cfgmod, "gate_active", return_value=True), \
              patch.object(self.main.cfgmod, "valid_session", side_effect=lambda cookie: cookie == "owner-cookie"), \
              patch.object(self.main, "_token_ok", return_value=False):
             self.assertEqual(self.client.get("/improvement-experiments").status_code, 401)
-            response = self.client.post("/improvement-experiments", cookies={"javis_session": "owner-cookie"},
-                headers={"Origin": "https://foreign.example"}, json={"event_key": "csrf-denied-event"})
-            self.assertEqual(response.status_code, 403)
-            self.assertEqual(response.json()["blocked"], "web_security")
+            for path, method in routes:
+                if method != 'POST':
+                    continue
+                path = path.replace('{experiment_id}', 'invalid').replace('{candidate_id}', 'invalid').replace('{operation_id}', 'invalid')
+                response = self.client.post(path, cookies={"javis_session": "owner-cookie"},
+                    headers={"Origin": "https://foreign.example"}, json={"event_key": "csrf-denied-event"})
+                self.assertEqual(response.status_code, 403, path)
+                self.assertEqual(response.json()["blocked"], "web_security", path)
         self.assertIsNone(self.main._IMPROVEMENT_EXPERIMENT_SERVICE)
 
     def test_cold_metadata_does_not_construct_experiment_or_trial_service(self):
         with patch.object(self.main.cfgmod, "gate_active", return_value=False), \
              patch.object(self.main, "_resonance_store", side_effect=AssertionError("Cold GET cannot initialize store")):
-            for path in ("/improvement-experiments", "/improvement-experiments/missing", "/improvement-comparison-reports/missing"):
+            for path in ("/improvement-experiments", "/improvement-experiments/missing", "/improvement-comparison-reports/missing",
+                    '/improvement-experiments/missing/preparation', '/improvement-experiments/missing/operations',
+                    '/improvement-operations/missing', '/improvement-candidates/missing/semantic-history'):
                 response = self.client.get(path, params={"brain": str(self.f.f.brain)})
                 self.assertIn(response.status_code, (200, 403, 503), response.text)
                 self.assertNotIn("cli_path", response.text)
@@ -59,6 +66,10 @@ class MainExperimentTests(unittest.TestCase):
         service = self.main._improvement_experiment_service()
         self.assertIs(service.trial_service, self.main._improvement_trial_service())
         self.assertIs(service.tasks, self.main._improvement_trial_service().tasks)
+        self.assertIs(service.execution.trial_service, service.trial_service)
+        self.assertIs(service.execution.workspace.brain_barrier, service.trials.workspace)
+        self.assertIs(service.proposals.tasks, service.operation_tasks)
+        self.assertIs(service.semantic.tasks, service.operation_tasks)
         observed = []
         experiment_close, trial_close = service.close, service.trial_service.close
 
@@ -75,6 +86,9 @@ class MainExperimentTests(unittest.TestCase):
             asyncio.run(self.main._shutdown_improvement_trials())
         self.assertEqual(observed, ["experiments", "trials"])
         self.assertTrue(service._closed)
+        self.assertTrue(service.proposals._closed)
+        self.assertTrue(service.semantic._closed)
+        self.assertTrue(service.operation_tasks._closed)
         with self.assertRaises(RuntimeError):
             self.main._improvement_experiment_service()
 

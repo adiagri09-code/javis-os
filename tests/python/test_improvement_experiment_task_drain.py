@@ -128,6 +128,31 @@ class ExperimentTaskDrainTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.tasks._tasks, {})
         self.assertTrue(self.f.closed.is_set())
 
+    async def test_empty_scope_never_joins_an_unrelated_same_brain_reservation(self):
+        entered, release = threading.Event(), threading.Event()
+        original = self.trials.reserve
+
+        def delayed(*args, **kwargs):
+            row = original(*args, **kwargs)
+            entered.set()
+            if not release.wait(10):
+                raise AssertionError('Unrelated reservation was not released')
+            return row
+
+        with patch.object(self.trials, 'reserve', side_effect=delayed):
+            start = asyncio.create_task(self.tasks.start(self.owner, self.request, event_key='unrelated-same-brain-reservation'))
+            closing = None
+            try:
+                self.assertTrue(await asyncio.to_thread(entered.wait, 10))
+                closing = asyncio.create_task(self.tasks.drain_owned(self.owner, []))
+                await asyncio.sleep(.03)
+                self.assertTrue(closing.done(), 'An empty experiment scope waited for unrelated admission')
+                await closing
+                self.assertFalse(start.done())
+            finally:
+                release.set()
+                await asyncio.gather(start, *([] if closing is None else [closing]), return_exceptions=True)
+
 
 if __name__ == "__main__":
     unittest.main()

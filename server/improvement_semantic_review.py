@@ -208,12 +208,16 @@ class SemanticReview(RoleWorkflow):
         return await self._run_owned(principal, candidate['experiment_id'], event_key, payload,
                                      lambda: self._review(principal, payload, event_key))
 
-    def current_evidence(self, principal, candidate_id, receipt_id=None):
+    def current_evidence(self, principal, candidate_id, receipt_id=None, *, expected_generation=None):
         with closing(self.store._conn()) as connection:
             self.records.row(connection, principal, candidate_id, receipt_id)
             candidate = self.plans.authoring.records._row(connection, _brain(principal), candidate_id)
             experiment = self.plans.records._row(connection, _brain(principal), candidate['experiment_id'])
             generation = experiment['generation']
+            if expected_generation is not None:
+                _generation(expected_generation)
+                if generation != expected_generation:
+                    raise IM.ConflictError('experiment_state_stale')
         snapshot = self._snapshot(principal, candidate_id, generation, unsealed=False)
         metadata, evidence = self.records.read(principal, candidate_id, receipt_id)
         if snapshot['binding'] != evidence['binding'] or snapshot['dependencies'] != evidence['dependencies']:
@@ -244,7 +248,7 @@ class SemanticReview(RoleWorkflow):
             'verdict': combined_verdict(evidence['assessment']['verdict'], evidence['dependencies']['verdict'],
                                         evidence['native_verdict'], owner['verdict'] if owner else None)}
 
-    def arbitrate(self, principal, candidate_id, receipt_id, *, verdict, reason, expected_binding_hash, event_key):
+    def arbitrate(self, principal, candidate_id, receipt_id, *, verdict, reason, expected_binding_hash, event_key, expected_generation=None):
         from improvement_cases import _text, _digest
         brain = _brain(principal)
         _identifier(candidate_id)
@@ -255,16 +259,21 @@ class SemanticReview(RoleWorkflow):
             raise ValueError('invalid_semantic_owner_verdict')
         payload = {'candidate_id': candidate_id, 'receipt_id': receipt_id, 'verdict': verdict,
                    'reason': reason, 'binding_hash': expected_binding_hash}
+        if expected_generation is not None:
+            _generation(expected_generation)
+            payload['expected_generation'] = expected_generation
         with closing(self.store._conn()) as connection:
             replay = self.assets._replay(connection, brain, event_key, 'semantic_owner_arbitration', payload)
             if replay is not None:
                 return replay
-        current = self.current_evidence(principal, candidate_id, receipt_id)
+        current = self.current_evidence(principal, candidate_id, receipt_id, expected_generation=expected_generation)
         if current['binding_hash'] != expected_binding_hash:
             raise IM.ConflictError('semantic_arbitration_binding_changed')
         with closing(self.store._conn()) as connection:
             row = self.plans.records._row(connection, brain, current['binding']['experiment_id'])
             generation = row['generation']
+            if expected_generation is not None and generation != expected_generation:
+                raise IM.ConflictError('experiment_state_stale')
         snapshot = self._snapshot(principal, candidate_id, generation)
         if snapshot['binding'] != current['binding']:
             raise IM.ConflictError('semantic_arbitration_binding_changed')

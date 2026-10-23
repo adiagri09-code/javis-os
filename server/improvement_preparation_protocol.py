@@ -4,6 +4,7 @@ import math
 from improvement_experiment_protocol import definition, _id, _digest, _freeze
 from improvement_store import _hash
 from improvement_store import _json
+from improvement_execution_limits import MAX_PREPARATION_TRIALS
 
 PINS = {"experiment_id", "base_bundle_hash", "contract_hash", "case_set_hash", "engine_config_hash",
         "grant_hash", "scope_hash", "policy_version"}
@@ -52,7 +53,7 @@ def validate_preparation_request_v3(value):
             "version", "context_id", "definition_hash", "preparation_id", "schedule_hash", "cell_position"}:
         raise ValueError("invalid_preparation_lineage")
     if (type(lineage["version"]) is not int or lineage["version"] != 1
-            or type(lineage["cell_position"]) is not int or not 0 <= lineage["cell_position"] < 2000):
+            or type(lineage["cell_position"]) is not int or not 0 <= lineage["cell_position"] < MAX_PREPARATION_TRIALS):
         raise ValueError("invalid_preparation_lineage")
     for key in ("context_id", "preparation_id"):
         _id(lineage[key])

@@ -520,7 +520,8 @@ class TrialStore:
         self.cases._own_transaction(connection)
         brain = IM._brain(principal)
         if trial_ids is not None:
-            if (type(trial_ids) is not list or len(trial_ids) > 12000
+            from improvement_execution_limits import MAX_TRIALS
+            if (type(trial_ids) is not list or len(trial_ids) > MAX_TRIALS
                     or any(type(identifier) is not str or not IC._ID.fullmatch(identifier) for identifier in trial_ids)
                     or len(set(trial_ids)) != len(trial_ids)):
                 raise ValueError("invalid_trial_recovery_selection")

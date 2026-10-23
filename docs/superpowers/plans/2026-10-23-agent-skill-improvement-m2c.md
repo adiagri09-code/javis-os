@@ -425,21 +425,41 @@ Interfaces: concrete owner preparation/proposal/semantic operations, cold lists/
 history and current metadata; existing ExperimentService integrates all actual
 preparation Trial links and native operation lifetimes in its final stop snapshot.
 
-- [ ] RED owner/token/CSRF/bounds/cross-brain/CAS/event tests for every new route.
-- [ ] Lazy main factories share existing TrialService and close operation services
+- [x] RED owner/token/CSRF/bounds/cross-brain/CAS/event tests for every new route.
+- [x] Lazy main factories share existing TrialService and close operation services
   before underlying stores/sources. Ordinary GET does not capture/probe/recover.
-- [ ] Commit stopping first, join all admission/handoff operations, cancel linked
+- [x] Commit stopping first, join all admission/handoff operations, cancel linked
   real Trials and owned role operations outside writer, drain DB-terminal live
   tasks/checkers, take actual brain lock, prove exact scoped cleanup, final CAS.
-- [ ] No unrelated journal/reservation/role operation cleanup or settlement.
+- [x] No unrelated journal/reservation/role operation cleanup or settlement.
   Preserve B P2 regression, original acknowledgments and current metadata split.
-- [ ] Derive combined limits: B12000 comparison cells + up to2000 preparation
+- [x] Derive combined limits: B12000 comparison cells + up to2000 preparation
   cells; update all drain/recovery/attempt bounds consistently and test full-bound
   valid ownership versus oversized inputs. Include real role call attempts too.
-- [ ] Resume/recover never dispatches automatically or regrants. Frozen source
+- [x] Resume/recover never dispatches automatically or regrants. Frozen source
   drift/off/revoke closes new work while cancellation and usage settlement survive.
-- [ ] Add vi/en fixed errors and operating docs; broader wizard/navigation is F.
-- [ ] GREEN actual-main/lifetime/old owner/route/startup regressions; commit.
+- [x] Add vi/en fixed errors and operating docs; broader wizard/navigation is F.
+- [x] GREEN actual-main/lifetime/old owner/route/startup regressions; commit.
+
+Task8 implementation verification:22/22 affected scripts GREEN768s sequentially,
+with64 source/test hashes unchanged from run start through final verification.
+Actual main verifies all23 experiment/operation/history routes' owner gates and
+every POST's CSRF denial; eleven new routes are seven closed controls/four cold
+history views. Genuine preparation/proposer/reviewer/owner-decision workflows,
+repeated HTTP cancellation, slow preflight/result/publication/report threads,
+all role attempts, held kernel locks, off/revoke and selected recovery pass.
+Stopped retries replay durable metadata after service reconstruction, without
+source decryption or redispatch. Trial drains match exact brain/request hashes,
+so an empty scope does not join unrelated same-brain reservations.
+
+The full14000/28000 SQL bounds test is structural, not a native/lineage claim;
+smaller genuine integrations cover actual calls/workspaces/cleanup. Intermediate
+RED logs include explicitly corrected test fixtures and are not exact-commit
+reuse evidence. The final regression's source map/log hashes are retained with
+the task ledger. Operator guide: `../../dev/agent-skill-m2c-operations.md`.
+Task7 exact LinuxCI39907956153 succeeded on e1d71a33; current Task8 needs its own
+Linux feedback. Profile33 remains unqualified with an empty registry; Task9 and
+all later native/effective-view/business/live gates remain open.
 
 ## Task 9 — current-profile qualification, whole review and publication
 

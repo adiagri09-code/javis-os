@@ -47,9 +47,25 @@
   reservation;0.294.0 is reserved before C product code with both changelogs.
 - Plan: `../plans/2026-10-23-agent-skill-improvement-m2c.md`. Concrete contracts
   canonicalized/self-reviewed; actual Task1 started from50406532e3b349c4e04c4320e73bbfa6d86a9cdc.
-  Schema6/preparation/role metadata under test; no enabled C model execution or
-  accepted semantic evidence. Draft PR801 reserves0.294.0 before product code.
-- Current checkpoint follows Goal section12: fix-loop new focused cases; Task1
+  Tasks1–8 now implement schema6, preparation, real role workflows and owner
+  transport/full stop locally. Native C qualification and accepted semantic/
+  business evidence remain open. Draft PR801 reserves0.294.0 before product code.
+- Current Task8 checkpoint:22/22 affected regression scripts GREEN768s, sequential
+  with64 source/test hashes verified unchanged from start through completion.
+  Seven closed owner POSTs/four cold history GETs reuse actual main session/CSRF
+  gates and the same OwnerTrialService/brain barrier/CallLedger. Stop includes
+  comparison+preparation links and every role attempt/call, cancels native work
+  before joining complete workflows, and owns slow decision/publication/report
+  threads. Durable stopped replay survives reconstruction without source reads
+  or redispatch. Empty scopes do not wait on unrelated same-brain reservations;
+  scoped recovery preserves unrelated corrupt journals and old acknowledgments.
+  Full14000/28000 SQL tests prove structural bounds only; real smaller integrations
+  prove calls/lineage/kernel/cleanup. Source33 native registry remains empty.
+  Task7 exact LinuxCI39907956153 SUCCESS on e1d71a33; Task8 Linux feedback and
+  Task9 qualification/whole-C independent review/exact-final CI remain required.
+  Operator guide: `../../dev/agent-skill-m2c-operations.md`. No new actual model,
+  native-auth, business acceptance, activation, deployment or restart is claimed.
+- Initial Task1 checkpoint followed Goal section12: fix-loop new focused cases; Task1
   regression operations/experiments/store, then early Linux CI for SQLite/backup/
   paths. Full required final CI and independent stable-branch review remain.
   Migration5 and metadata8 first passed together13/13 in33.041s. Additional
@@ -178,7 +194,7 @@
   engines/verifiers. Separate correction preserves all original source/log hashes;
   no rerun or real-runtime claim follows from it. Task5 LinuxCI39901547032 and
   Task6 LinuxCI39903506020 completed SUCCESS on306e0871 and07e84dc4; newer T7 code
-  still needs Linux feedback and complete exact-final-C CI.
+  passed exact LinuxCI39907956153 on e1d71a33; complete exact-final-C CI remains.
 - Generated proposals remain A-unreviewed with separately pinned semantic and
   dependency assessments. No assessment/owner product confirmation waives source,
   runtime/view, qualification, activation or real business-data gates. Candidate/

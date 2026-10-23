@@ -11,7 +11,7 @@ import improvement_store as IM
 import localefmt
 from evidence_store import redact
 from improvement_experiments import ExperimentRecords, _identifier
-from improvement_experiment_requests import validate
+from improvement_experiment_requests import validate, WORKFLOW_CONTROLS
 from improvement_trial_requests import read_json, TrialRequestError
 from improvement_trial_runner import _settled_call
 from resonance_store import Principal
@@ -106,6 +106,34 @@ def register(app, deps):
             return await _settled_call(ComparisonResults.from_existing(await assets()).read, principal, report_id)
         return await dispatch(request, brain, action, key="report", identifiers=(report_id,))
 
+    @app.get('/improvement-experiments/{experiment_id}/preparation')
+    async def preparation_history(request: Request, experiment_id: str, brain: str = 'brain'):
+        async def action(principal, data):
+            from improvement_preparation_records import PreparationRecords
+            return await _settled_call(PreparationRecords(await assets()).list, principal, experiment_id)
+        return await dispatch(request, brain, action, key='preparations', identifiers=(experiment_id,))
+
+    @app.get('/improvement-experiments/{experiment_id}/operations')
+    async def operation_history(request: Request, experiment_id: str, brain: str = 'brain'):
+        async def action(principal, data):
+            from improvement_operation_records import OperationRecords
+            return await _settled_call(OperationRecords(await assets()).list, principal, experiment_id)
+        return await dispatch(request, brain, action, key='operations', identifiers=(experiment_id,))
+
+    @app.get('/improvement-operations/{operation_id}')
+    async def operation_metadata(request: Request, operation_id: str, brain: str = 'brain'):
+        async def action(principal, data):
+            from improvement_operation_records import OperationRecords
+            return await _settled_call(OperationRecords(await assets()).get, principal, operation_id)
+        return await dispatch(request, brain, action, key='operation', identifiers=(operation_id,))
+
+    @app.get('/improvement-candidates/{candidate_id}/semantic-history')
+    async def semantic_history(request: Request, candidate_id: str, brain: str = 'brain'):
+        async def action(principal, data):
+            from improvement_semantic_records import SemanticReceipts
+            return await _settled_call(SemanticReceipts(await assets()).history, principal, candidate_id)
+        return await dispatch(request, brain, action, key='receipts', identifiers=(candidate_id,))
+
     async def control(request, brain, operation, experiment_id=None):
         async def action(principal, data):
             from improvement_experiment_service import ExperimentService
@@ -113,6 +141,8 @@ def register(app, deps):
             if type(service) is not ExperimentService:
                 raise TypeError("concrete_experiment_service_required")
             identifier = data["experiment_id"] if operation == "create" else experiment_id
+            if operation in WORKFLOW_CONTROLS:
+                return await service.workflow(principal, identifier, operation, data)
             if operation in ("cancel", "recover", "resume"):
                 return await getattr(service, operation)(principal, identifier, **data)
             if operation == "next":
@@ -133,5 +163,5 @@ def register(app, deps):
         endpoint.__name__ = "experiment_" + operation
         app.add_api_route("/improvement-experiments/{experiment_id}/" + operation, endpoint, methods=["POST"])
 
-    for operation in ("bind", "freeze", "next", "report", "select", "cancel", "resume", "recover"):
+    for operation in ("bind", "freeze", "next", "report", "select", "cancel", "resume", "recover", *sorted(WORKFLOW_CONTROLS)):
         register_control(operation)

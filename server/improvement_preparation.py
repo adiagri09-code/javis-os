@@ -16,6 +16,7 @@ from improvement_preparation_records import PreparationRecords
 from improvement_trial_admission import AdmittedTrial
 from improvement_trial_records import _brain
 from improvement_trials import _request, TERMINAL
+from improvement_execution_limits import MAX_PREPARATION_TRIALS, MAX_ATTEMPTS_PER_TRIAL
 
 
 class PreparationService:
@@ -153,13 +154,15 @@ class PreparationService:
             "t.generation AS trial_generation,t.attempt AS current_attempt,a.status AS attempt_status,a.result_json "
             "FROM improvement_preparation_trial_links l JOIN improvement_trials t ON t.id=l.trial_id AND t.brain_id=l.brain_id "
             "JOIN improvement_trial_attempts a ON a.trial_id=t.id AND a.brain_id=t.brain_id AND a.attempt=t.attempt "
-            "WHERE l.preparation_id=? AND l.brain_id=? ORDER BY l.cell_position LIMIT 2001", (preparation["id"], brain))]
+            "WHERE l.preparation_id=? AND l.brain_id=? ORDER BY l.cell_position LIMIT ?",
+            (preparation["id"], brain, MAX_PREPARATION_TRIALS + 1))]
         attempts = [dict(row) for row in connection.execute(
             "SELECT a.trial_id,a.attempt,a.status,a.call_id,a.engine_at,a.materialization_hash,a.workspace_json "
             "FROM improvement_trial_attempts a JOIN improvement_preparation_trial_links l "
             "ON l.trial_id=a.trial_id AND l.brain_id=a.brain_id WHERE l.preparation_id=? AND l.brain_id=? "
-            "ORDER BY a.trial_id,a.attempt LIMIT 4001", (preparation["id"], brain))]
-        if (len(links) != preparation["cell_count"] or len(links) > 2000 or len(attempts) > 4000
+            "ORDER BY a.trial_id,a.attempt LIMIT ?", (preparation["id"], brain, MAX_PREPARATION_TRIALS * MAX_ATTEMPTS_PER_TRIAL + 1))]
+        if (len(links) != preparation["cell_count"] or len(links) > MAX_PREPARATION_TRIALS
+                or len(attempts) > MAX_PREPARATION_TRIALS * MAX_ATTEMPTS_PER_TRIAL
                 or [row["cell_position"] for row in links] != list(range(preparation["cell_count"]))
                 or any(row["trial_status"] not in TERMINAL or row["attempt_status"] not in TERMINAL
                        or row["result_json"] is None or row["request_hash"] != row["actual_request_hash"] for row in links)
