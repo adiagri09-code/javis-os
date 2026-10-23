@@ -108,3 +108,60 @@ This unit is ready to execute: concrete mismatch, actual callers and bounded
 behavioral tests are known; no activation or native architecture decision is
 needed to repair it. Full D2 design remains open and cannot be called complete
 with baseline-only routing. E/F and M3–M8 remain mandatory under the full Goal.
+
+## Task 2 — one stable ordinary skill read for hub and lazy loader
+
+Impact before edits: skill_router gains a frozen per-read asset (not a durable task
+pin); actual mcp_hub.javis_use_skill and LazySkillSource consume the same bytes,
+source-relative reference and raw SHA256. Existing discovery remains header-only.
+No experiment/view/native/schema/activation source changes. D1 native81 proof can
+be reused only after exact source comparison. Full D2 task pins remain open.
+
+Concrete mismatch: lazy selection scores a manifest then independently reads a
+mutable path. A change in description/source between selection and body read can
+attach the old capability revision to new instructions. Hub has its own mutable
+read and can return a skill disabled while the read is in progress. Both paths
+must refuse a changed source rather than promote a stale mirror or retry.
+
+Interfaces in server/skill_router.py: frozen SkillAsset with slug, relative_path,
+content:bytes, content_hash, frontmatter_hash and normalized text property;
+read_skill_asset(root, slug, max_bytes=SKILL_ASSET_MAX_BYTES) -> SkillAsset | None.
+SKILL_ASSET_MAX_BYTES=1048576, matching immutable improvement asset capacity.
+Use source precedence/disabled resolver before and after one bounded binary read.
+Compare path/descriptor dev+inode+size+mtime; compare ctime within each stat API
+(to avoid Windows path-stat/fstat creation/change-time mismatch). Resolve inside
+brain before opening, verify resolved path and source precedence after reading.
+Inside-brain symlinks remain readable; an external target is refused. Do not add
+learning/edit eligibility restrictions to ordinary system/pack/learn-locked reads.
+No retry or writes. Unavailable/oversized sources return None. Hub retains its
+60000-character display cap and counts only successful reads. Lazy retains its
+current body limit and fallback policy, but also requires exact manifest relative
+path and frontmatter hash from the scored capability to match this read. Receipt
+source hash is exact original bytes, including CRLF, with explicit policy v2.
+
+- [ ] Add tests/python/test_skill_asset_reads.py with real files, actual hub and
+  actual warmed LazySkillSource: canonical/mirror/legacy bytes and raw CRLF hash;
+  ordinary learn_lock/system-like metadata remains readable; outside symlink
+  refused and inside symlink preserved (platform-supported fixture); disabled
+  during binary read; source rewrite during read; exact 1MiB limit and oversized
+  refusal; lazy metadata changes after scoring refuse loading; actual hub failed
+  read does not increment usage; actual hub and lazy use the shared reader.
+- [ ] Observe RED for these behavioral gaps before adding implementation.
+- [ ] Add the shared bounded stable reader; extract header parsing without
+  changing manifest-only discovery; wire hub and lazy without independent reads.
+- [ ] Run GREEN, routing-state7, affected skill_usage/caps/language/subtree and
+  Phase8 scripts sequentially. Retain source/log hashes and native81 comparison.
+- [ ] Scoped independent review of this new delta and original reproductions;
+  preserve whole-D1 and routing review. Commit/push only concrete verified result.
+  Require full CI on actual final head. No Task2/full D2 completion claim from
+  per-read stability alone.
+
+Self-review: This is a working consistency repair on ordinary paths, not an
+unused pin/activation scaffold. It preserves discovery limits, ordinary ownership
+and disabled semantics, and does not claim same bytes across an entire task.
+Oversize refusal is explicit instead of silently loading an unpinnable asset;
+header/body/source mismatch does not auto-refresh and choose a different skill.
+Native plugin design probe is separate synthetic evidence only: attempt2 FAILED
+(stale cwd Read bypassed permission callback); attempt3 A and B-only continuation
+PASS controlled Read/Skill deny-hook mechanism. No policy parity, Bash/other path,
+resumed native session or production adapter support follows from that proof.

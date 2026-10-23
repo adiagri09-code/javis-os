@@ -1,5 +1,38 @@
 # Agent and skill improvement Goal progress
 
+## Current checkpoint — 24 October, D2 prerequisite continuation
+
+- Worktree/branch remain M2D1/PR803, reserved0.299.0; main d3d7cb36/0.298.0.
+  Latest pushed source3afed521 has approved whole-D1 plus scoped lifetime,
+  runtime309, semantic-invalid-output, registry and disabled-routing reviews.
+  Exact-head LinuxCI39992114257 is still running; later local changes require
+  their own final-head CI. No merge/deploy/restart/live activation.
+- D1 exact81-source profile958527ac/CLI309/SDK116 remains registered to native
+  artifact1f3391cf,20 tests94.890s. Ordinary router/lazy/hub edits change none of
+  those81 bytes. Reuse that proof without repeating native/model calls.
+- Actual prior D1 account feasibility made2 calls; baseline shapeFAIL and strict
+  reviewer format refusal prevented any view/pair/selection/qualification claim.
+  Preserve public90ecc20b and partial usage. Genuine account pair/eligible-final,
+  full D1 acceptance and D2/E/F/M3-M8 remain open.
+- Pilot choice delegated by owner: reconciliation primary, document processing
+  secondary, Python bugfix/tests technical. This selects work types only; it
+  grants no new real dataset, owner acceptance or live activation.
+- D2 disabled-source precedence was independently approved at3afed521. New
+  ordinary read unit uses one stable bounded source for actual hub/lazy, checks
+  selected manifest path/header and records exact raw byte hashes. Seven
+  sequential local commands pass; new10-test suite9PASS plus1 Windows file-link
+  privilege skip, actual Windows outside directory-junction refusalPASS. Scoped
+  review, Linux symlink coverage and final-head CI pending. Proof:
+  `../evidence/2026-10-24-m2d2-skill-reads.json`. A per-read asset is not a task pin.
+- Separate controlled native design experiment: plugin-only permission callback
+  FAILED because direct cwd Read loaded the old skill. PreToolUse deny alternative
+  passed A and B-only continuation; initial B had0 query requests due fixture
+  setup collision, which was fixed without repeating A. Six dummy local requests,
+  zero account/model inference. Proof:
+  `../evidence/2026-10-24-m2d2-native-design-probe.json`. Owner policy parity,
+  Bash/other paths, task/session binding, cache partitions, activation selectors
+  and resume remain open; no production adapter support from this experiment.
+
 ## Identity and authority
 
 - Goal: execute the complete M0–M8 contract in `../AGENT-SKILL-IMPROVEMENT-GOAL.md`.

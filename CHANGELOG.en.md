@@ -14,7 +14,7 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 - **Stopping a trial preserves its history.** Cancelling a request retains ownership of running work, and workspace cleanup waits for execution to finish.
 - **Invalid review output has an explicit result.** Repeating the same request does not call the model again; this release supports isolated trials, with live activation still disabled.
 ### Fixed
-- **Disabled skills cannot load through stale mirrors.** Discovery and direct loading honor the disabled state of the higher-priority source.
+- **Skills cannot load from stale or changing sources.** Disabled skills stay off, and loading refuses a source that changes during reading or no longer matches the selected description.
 
 ## [0.298.0] - 2026-10-23
 ### Fixed

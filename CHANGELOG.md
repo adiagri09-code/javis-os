@@ -12,7 +12,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 - **Dừng thử vẫn giữ được lịch sử.** Hủy yêu cầu không bỏ lại tác vụ đang chạy; việc dọn thư mục chờ phần thực thi kết thúc.
 - **Báo rõ đầu ra kiểm tra không hợp lệ.** Gửi lại cùng yêu cầu không tự gọi model thêm; phạm vi hiện tại vẫn là thử cách ly, chưa bật áp dụng trên brain thật.
 ### Sửa lỗi
-- **Skill đã tắt không còn bị đọc từ bản mirror cũ.** Danh sách và lệnh nạp skill cùng tuân theo trạng thái tắt ở nguồn ưu tiên cao hơn.
+- **Không nạp skill từ bản cũ hoặc nguồn đang thay đổi.** Skill đã tắt vẫn tắt; lệnh nạp từ chối nguồn đổi trong lúc đọc hoặc không còn khớp mô tả đã chọn.
 
 ## [0.298.0] - 2026-10-23
 ### Sửa lỗi

@@ -137,3 +137,19 @@ to D2; atomic activation/rollback and the complete operator flow belong to
 later E/F work. Business pilots and live rollout require their own evidence
 and scope. No deployment, restart, live activation or business acceptance is
 implied by these controls.
+
+
+## Ordinary skill read consistency prerequisite
+
+Hub skill loading and lazy body selection now share one bounded binary reader.
+It checks enabled-source precedence before and after reading, stable file identity
+and bytes, and containment inside the brain. Lazy loading also matches the exact
+selected manifest path/header; a changed description is a fallback, not permission
+to attach a previous capability revision to new instructions. Source receipts hash
+raw bytes (including CRLF); prompt text retains ordinary newline normalization.
+Ordinary system/pack/learn-locked skill reads remain allowed: editing eligibility
+is a separate boundary. A source over1MiB is refused; the existing hub60000-char
+presentation cap and lazy body limit remain. Per-read verification does not pin a
+whole task or enable scoped production overlays. The isolated D1 native profile
+is unchanged. Full D2 task/session binding, native policy parity and E activation
+remain open; the separate synthetic plugin/hook experiment is design evidence.

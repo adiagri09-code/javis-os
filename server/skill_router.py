@@ -27,6 +27,9 @@ import unicodedata
 from pathlib import Path
 from typing import Optional
 import hashlib
+import os
+import stat
+from dataclasses import dataclass
 
 import fastyaml
 
@@ -194,6 +197,63 @@ def resolve_skill_file(root, slug: str) -> Optional[Path]:
     return None
 
 
+SKILL_ASSET_MAX_BYTES = 1024 * 1024
+
+
+@dataclass(frozen=True)
+class SkillAsset:
+    """One stable ordinary read, not an improvement grant or a whole-task pin."""
+    slug: str
+    relative_path: str
+    content: bytes
+    content_hash: str
+    frontmatter_hash: str
+
+    @property
+    def text(self) -> str:
+        # Preserve ordinary read_text(errors='replace') and universal-newline behavior.
+        return self.content.decode('utf-8', errors='replace').replace('\r\n', '\n').replace('\r', '\n')
+
+
+def _skill_stamp(info) -> tuple:
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns)
+
+
+def read_skill_asset(root, slug: str, max_bytes: int = SKILL_ASSET_MAX_BYTES) -> Optional[SkillAsset]:
+    """Read enabled source once; refuse drift, external links and unbounded content."""
+    if type(max_bytes) is not int or not 0 < max_bytes <= SKILL_ASSET_MAX_BYTES:
+        return None
+    try:
+        root = Path(root).resolve(strict=True)
+        selected = resolve_skill_file(root, slug)
+        if selected is None:
+            return None
+        path = selected.resolve(strict=True)
+        relative = path.relative_to(root).as_posix()
+        before = path.stat()
+        if not stat.S_ISREG(before.st_mode) or before.st_size > max_bytes:
+            return None
+        with path.open('rb') as handle:
+            opened = os.fstat(handle.fileno())
+            raw = handle.read(max_bytes + 1)
+            finished = os.fstat(handle.fileno())
+        after = path.stat()
+        if (len(raw) > max_bytes or len(raw) != before.st_size
+                or _skill_stamp(before) != _skill_stamp(opened)
+                or _skill_stamp(opened) != _skill_stamp(finished)
+                or _skill_stamp(finished) != _skill_stamp(after)
+                # Windows path-stat/fstat can expose different meanings of ctime.
+                or before.st_ctime_ns != after.st_ctime_ns
+                or opened.st_ctime_ns != finished.st_ctime_ns
+                or selected.resolve(strict=True) != path
+                or resolve_skill_file(root, slug) != selected):
+            return None
+        return SkillAsset(str(slug).strip(), relative, raw, hashlib.sha256(raw).hexdigest(),
+                          _frontmatter_header(raw[:16384])[1])
+    except (OSError, ValueError, RuntimeError):
+        return None
+
+
 def split_frontmatter(text: str):
     """(meta dict, body). Không có frontmatter → ({}, text). Tha lỗi YAML."""
     parts = fastyaml.split_frontmatter(text)
@@ -213,6 +273,10 @@ def read_frontmatter_only(smd: Path, max_bytes: int = 16384) -> tuple[dict, str]
             raw = fh.read(max(512, int(max_bytes)))
     except OSError:
         return {}, ""
+    return _frontmatter_header(raw)
+
+
+def _frontmatter_header(raw: bytes) -> tuple[dict, str]:
     if not raw.startswith(b"---"):
         return {}, ""
     end = raw.find(b"\n---", 3)
