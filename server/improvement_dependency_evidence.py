@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path, PurePosixPath
+from urllib.parse import unquote
 
 import improvement_store as IM
 from improvement_cases import output_path
@@ -16,26 +17,68 @@ from improvement_skill_patch import reference_inventory
 from improvement_trial_context import ContextSource
 
 _LINK = re.compile(r'\]\(([^\s)#]+)(?:#[^\s)]*)?\)')
+_MARKDOWN = re.compile(r'!?\[[^\]\r\n]*\]\(([^)\r\n]*)\)')
+_URI = re.compile(r"(?:[A-Za-z][A-Za-z0-9+.-]*://|mailto:|data:)[^\s`<>\"'()\[\]{}]+")
 _EXECUTABLE = {'.py', '.sh', '.ps1', '.exe', '.bat', '.cmd', '.js', '.mjs', '.cjs'}
 
 
 def _references(raw):
-    refs = set(reference_inventory(raw))
-    for item in _LINK.findall(raw.decode('utf-8')):
-        if '://' not in item and not item.startswith(('mailto:', 'data:')):
-            refs.add(item)
+    text = raw.decode('utf-8')
+    targets = _MARKDOWN.findall(text)
+    # Keep previously recognized links with complex labels as well. Exclude
+    # href spans from plain-reference extraction; equal spellings can denote
+    # different root-relative and document-relative identities.
+    plain = _MARKDOWN.sub('', text)
+    targets.extend(_LINK.findall(plain))
+    plain = _LINK.sub('', plain)
+    refs = {(uri, 'unsupported') for uri in _URI.findall(plain)}
+    plain = _URI.sub('', plain)
+    refs.update((ref, 'plain') for ref in reference_inventory(plain.encode('utf-8')))
+    for target in targets:
+        ref = target.strip().split('#', 1)[0]
+        if not ref:
+            continue  # An in-document anchor introduces no file dependency.
+        supported = (re.fullmatch(r'[^\s()<>]+', ref) is not None
+            and '://' not in ref and not ref.startswith(('mailto:', 'data:')))
+        refs.add((ref, 'markdown' if supported else 'unsupported'))
     return sorted(refs)
 
 
 def _key(path):
-    return os.path.normcase(str(path)).replace('\\', '/')
+    return os.path.normcase(os.path.normpath(str(path))).replace('\\', '/')
 
 
-def dependency_evidence(capture, canonical_ref, before, after):
+def _resolved_reference(ref, root, relative, kind):
+    if kind == 'unsupported':
+        return None
+    if kind == 'markdown':
+        try:
+            ref = unquote(ref, errors='strict')
+        except UnicodeError:
+            return None
+    normalized = ref.replace('\\', '/')
+    path = Path(normalized)
+    if path.is_absolute():
+        return _key(path)  # Still requires one exact pre-existing grant below.
+    parent = Path(root) / PurePosixPath(relative).parent
+    # Plain repository-qualified resource names use their declaring root.
+    # Markdown links always use the declaring document's directory.
+    if kind == 'plain' and normalized.startswith(('skills/', 'agents/', '.claude/', '.agents/')):
+        parent = Path(root)
+    resolved = _key(parent / normalized)
+    if not resolved.startswith(_key(root).rstrip('/') + '/'):
+        return None
+    return resolved
+
+
+def dependency_evidence(capture, canonical_ref, before, after, *, candidate_root):
     canonical_ref = output_path(canonical_ref)
     roots = _references(before)
     if _references(after) != roots:
         raise ValueError('semantic_dependency_inventory_changed')
+    candidate_root = Path(candidate_root)
+    if not candidate_root.is_absolute():
+        raise ValueError('semantic_dependency_root_invalid')
     granted = []
     for record in capture['sources']:
         if capture['version'] == 1:
@@ -48,16 +91,14 @@ def dependency_evidence(capture, canonical_ref, before, after):
             granted.append((record, locator))
     nodes, edges, unresolved, active = {}, [], [], set()
     executable = False
-    base = PurePosixPath(canonical_ref).parent
 
-    def visit(ref, parent, origin):
+    def visit(ref, root, relative, origin, kind):
         nonlocal executable
         if len(nodes) + len(unresolved) >= 1000:
             raise ValueError('semantic_dependency_graph_too_large')
-        normalized = ref.replace('\\', '/')
-        names = {_key(normalized), _key(base / normalized), _key(parent / normalized)}
+        identity = _resolved_reference(ref, root, relative, kind)
         matches = [(record, locator) for record, locator in granted
-            if _key(locator['relative']) in names or _key(Path(locator['root']) / locator['relative']) in names]
+            if identity is not None and _key(Path(locator['root']) / locator['relative']) == identity]
         if len(matches) != 1:
             unresolved.append({'reference': ref, 'from': origin, 'reason': 'dependency_ungranted_or_ambiguous'})
             return
@@ -85,13 +126,14 @@ def dependency_evidence(capture, canonical_ref, before, after):
             'identity': observed['identity'], 'authority_hash': IM._hash(authority), 'content': text}
         executable |= PurePosixPath(relative).suffix.lower() in _EXECUTABLE
         active.add(identifier)
-        for nested in _references(text.encode('utf-8')):
-            visit(nested, PurePosixPath(relative).parent, identifier)
+        raw = text.encode('utf-8')
+        for nested, nested_kind in _references(raw):
+            visit(nested, root, relative, identifier, nested_kind)
         active.remove(identifier)
 
-    for ref in roots:
-        visit(ref, base, 'candidate')
+    for ref, kind in roots:
+        visit(ref, candidate_root, canonical_ref, 'candidate', kind)
     return {'version': 1, 'verdict': 'unknown' if unresolved or executable else 'pass',
         'coverage': 'declared_reference_graph', 'runtime': 'unsupported_executable_dependency' if executable else 'not_qualified_by_this_check',
         'nodes': [nodes[key] for key in sorted(nodes)], 'edges': edges, 'unresolved': unresolved,
-        'references': roots, 'manifest_hash': capture['plan_hash']}
+        'references': sorted({ref for ref, _ in roots}), 'manifest_hash': capture['plan_hash']}

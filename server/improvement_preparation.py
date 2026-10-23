@@ -94,12 +94,18 @@ class PreparationService:
         manifest = json.loads(connection.execute("SELECT manifest_json FROM improvement_case_sets WHERE id=? AND brain_id=?",
             (value["case_set_id"], brain)).fetchone()[0])
         schedule = preparation_schedule(value, [case["id"] for case in manifest["cases"] if case["split"] == "tuning"], manifest["seed"])
-        positions = [item[0] for item in connection.execute("SELECT cell_position FROM improvement_preparation_trial_links "
-            "WHERE preparation_id=? AND brain_id=? ORDER BY cell_position", (preparation["id"], brain))]
+        links = list(connection.execute("SELECT l.cell_position,t.status,a.result_json FROM improvement_preparation_trial_links l "
+            "JOIN improvement_trials t ON t.id=l.trial_id AND t.brain_id=l.brain_id "
+            "LEFT JOIN improvement_trial_attempts a ON a.trial_id=t.id AND a.brain_id=t.brain_id AND a.attempt=t.attempt "
+            "WHERE l.preparation_id=? AND l.brain_id=? ORDER BY l.cell_position LIMIT ?",
+            (preparation["id"], brain, MAX_PREPARATION_TRIALS + 1)))
+        positions = [item['cell_position'] for item in links]
         if positions != list(range(len(positions))):
             raise IM.ConflictError("preparation_schedule_gap")
         if len(positions) >= len(schedule["cells"]):
             raise IM.ConflictError("preparation_all_cells_admitted")
+        if any(item['status'] not in TERMINAL or item['result_json'] is None for item in links):
+            raise IM.ConflictError('preparation_cell_pending_or_incomplete')
         cell = schedule["cells"][len(positions)]
         request = validate_preparation_request_v3({"version": 3, "pins": {key: value[key] for key in PINS},
             "case_set_id": value["case_set_id"], **cell, "variant": "baseline", "engine_config": binding["engine_config"],
@@ -120,6 +126,19 @@ class PreparationService:
             if replay is not None:
                 return replay
             prepared = self._next(connection, principal, payload)
+        # SQL completion precedes the runner's final workspace/lifetime drain.
+        # Serialize both rapid admissions and that cleanup handoff before any
+        # new immutable link/call is reserved. Replay above remains historical.
+        handle = self.trials.workspace.acquire_brain_execution(brain)
+        if handle is None:
+            raise IM.ConflictError('preparation_execution_busy')
+        try:
+            return self._admit_owned(principal, payload, event_key, prepared)
+        finally:
+            handle.close()
+
+    def _admit_owned(self, principal, payload, event_key, prepared):
+        brain = _brain(principal)
         self.host._snapshot_observe(principal, prepared[1][1])
         try:
             available = ClaudeTrialAdapter(prepared[0]["engine_config"]).verify()

@@ -23,9 +23,9 @@ from improvement_trial_views import read_trial
 
 
 class PreparationExecutionTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
+    def setUp(self, repeat_policy='feasibility'):
         self.f = fixtures.PreparationTests()
-        self.f.setUp()
+        self.f.setUp(repeat_policy=repeat_policy)
         self.addCleanup(self.f.doCleanups)
         self.owner, self.assets, self.host = self.f.owner, self.f.assets, self.f.host
         self.stack = ExitStack()

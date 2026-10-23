@@ -26,7 +26,7 @@ class DependencyTests(unittest.TestCase):
     def resolve(self, before=b'Use references/checks.md\n', after=b'Use references/checks.md\nThen check totals.\n', capture=None):
         self.assertIsNotNone(importlib.util.find_spec('improvement_dependency_evidence'), 'Actual dependency evidence is absent')
         from improvement_dependency_evidence import dependency_evidence
-        return dependency_evidence(capture or self.capture, 'skills/report/SKILL.md', before, after)
+        return dependency_evidence(capture or self.capture, 'skills/report/SKILL.md', before, after, candidate_root=self.root)
 
     def test_declared_document_reads_exact_granted_bytes_and_keeps_runtime_coverage_explicit(self):
         result = self.resolve()

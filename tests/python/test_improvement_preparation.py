@@ -4,6 +4,7 @@ from _paths import ROOT, SERVER  # noqa: F401
 import importlib.util
 import json
 import sqlite3
+import subprocess
 import threading
 import time
 import unittest
@@ -18,13 +19,19 @@ from improvement_skill_candidates import SkillCandidates
 from improvement_trials import TrialStore, _request
 from improvement_preparation_protocol import preparation_schedule
 import test_improvement_trial_associations as fixtures
+from test_improvement_experiment_execution import _acl_only, _REAL_RUN, _REAL_POPEN
 
 
 class PreparationTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self, repeat_policy='feasibility'):
         self.f = fixtures.AssociationTests()
         self.f.setUp()
         self.addCleanup(self.f.doCleanups)
+        for name, original in (('run', _REAL_RUN), ('Popen', _REAL_POPEN)):
+            guard = patch.object(subprocess, name,
+                side_effect=lambda *a, _original=original, **kw: _acl_only(_original, *a, **kw))
+            guard.start()
+            self.addCleanup(guard.stop)
         self.owner, self.host, self.store, self.assets = self.f.owner, self.f.host, self.f.store, self.f.f.assets
         self.association = self.f.create()
         base = self.assets.create_bundle(self.owner, [self.f.f.target["revision_id"]], event_key="preparation-base-bundle")
@@ -32,7 +39,7 @@ class PreparationTests(unittest.TestCase):
         self.experiment = self.plans.create(self.owner, {"experiment_id": "association-experiment",
             "contract_id": self.f.saved["contract_id"], "case_set_id": self.association["case_set_id"],
             "base_bundle_id": base["bundle_id"], "expected_context_generation": 1,
-            "repeat_policy": "feasibility", "timeout_seconds": 120}, event_key="owner-create-preparation-experiment")
+            "repeat_policy": repeat_policy, "timeout_seconds": 120}, event_key="owner-create-preparation-experiment")
 
     def service(self):
         self.assertIsNotNone(importlib.util.find_spec("improvement_preparation"), "Real host preparation admission is absent")
@@ -44,7 +51,9 @@ class PreparationTests(unittest.TestCase):
                                      event_key="owner-freeze-baseline-preparation")
 
     def admit(self, **changes):
-        with patch.object(ClaudeTrialAdapter, "verify", return_value={"supported": True, "capability_hash": "c" * 64}):
+        with patch.object(ClaudeTrialAdapter, "verify", return_value={"supported": True, "capability_hash": "c" * 64}), \
+                patch.object(subprocess, 'run', side_effect=lambda *a, **kw: _acl_only(_REAL_RUN, *a, **kw)), \
+                patch.object(subprocess, 'Popen', side_effect=lambda *a, **kw: _acl_only(_REAL_POPEN, *a, **kw)):
             return self.service().admit_next(self.owner, "association-experiment", expected_generation=2,
                 event_key=changes.pop("event_key", "owner-next-baseline-preparation"), **changes)
 
@@ -112,18 +121,16 @@ class PreparationTests(unittest.TestCase):
         gate = threading.Barrier(2)
         service = self.service()
 
-        def verify(adapter):
-            gate.wait(timeout=10)
-            return {"supported": True, "capability_hash": "c" * 64}
-
         def admit(index):
+            gate.wait(timeout=10)
             try:
                 return service.admit_next(self.owner, "association-experiment", expected_generation=2,
                                           event_key="concurrent-preparation-next-" + str(index))
             except IM.ConflictError:
                 return None
 
-        with patch.object(ClaudeTrialAdapter, "verify", verify), ThreadPoolExecutor(max_workers=2) as pool:
+        with patch.object(ClaudeTrialAdapter, "verify", return_value={"supported": True, "capability_hash": "c" * 64}), \
+                ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(admit, (1, 2)))
         self.assertEqual(sum(result is not None for result in results), 1)
         with closing(self.store._conn()) as connection:

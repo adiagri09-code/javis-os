@@ -54,7 +54,8 @@ class SemanticReview(RoleWorkflow):
         observed, before = self.plans.authoring.observe(principal, state['target'])
         with closing(self.store._conn()) as connection:
             proposal = self.plans.authoring.read_proposal(connection, principal, candidate, state, observed, before)
-        dependencies = dependency_evidence(binding['capture'], state['target']['canonical_ref'], proposal['before'], proposal['after'])
+        dependencies = dependency_evidence(binding['capture'], state['target']['canonical_ref'], proposal['before'], proposal['after'],
+            candidate_root=Path(_brain(principal)))
         pins = {'version': 1, 'validator_hash': validator_hash(), 'candidate_id': candidate_id,
             **{key: candidate[key] for key in ('experiment_id', 'context_id', 'target_id', 'base_revision_id', 'base_hash',
                 'base_generation', 'content_hash', 'patch_hash', 'provenance_hash')},

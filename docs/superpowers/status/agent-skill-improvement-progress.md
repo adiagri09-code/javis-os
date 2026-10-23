@@ -38,6 +38,41 @@
 
 ## M2C engineering continuation
 
+- Current continuation: both Important review findings are closed by the same
+  independent reviewer. Dependency identity11/11, existing dependencies6/6 and
+  actual preparation ownership4/4 passed. Full old preparation regression then
+  exposed two stale fixture assumptions (ACL metadata prohibition and a barrier
+  inside newly serialized preflight); only those fixtures were corrected and
+  preparation8/8 passed20.738s. Native/model calls remain forbidden in fixtures.
+  Checkpoint LinuxCI39922323540 SUCCESS on ddec90ad. Fresh main ed8163fb is0.295.0;
+  preserve this checkpoint, rebase and reserve0.296.0 before final qualification.
+- The real baseline result is explicitly FAIL: the pinned JSON `shape` criterion
+  failed `structural_check`; business `accuracy` is UNKNOWN pending owner
+  confirmation. All four actual calls settling ok proves pipeline execution,
+  not baseline quality. The source-bound feasibility artifact includes sanitized
+  recorded result checks; no criterion was changed and no model rerun sought a win.
+- Whole-C independent review completed for47f50f70..ddec90ad: no Critical,
+  two Important findings. Preparation could reserve a later immutable cell
+  while the previous runner was pending/closing; nested dependency resolution
+  could bind an unrelated same-name granted file. Parent reproduced both RED.
+  Pending/cleanup/concurrent admission is now serialized through the actual
+  brain barrier and final SQL check. Dependencies resolve one lexical absolute
+  identity from each declaring file and its bound root, without root/candidate
+  fallback; semantic input supplies the actual principal root. Focused tests
+  and review recheck are in progress. These dependency source changes invalidate
+  aa51b4b9 for current execution; fresh source-bound native qualification is
+  required, and no native auth/model command uses the changed unqualified source.
+- Genuine technical feasibility completed on ddec90ad/profile aa51b4b9 in
+  258.944s: actual baseline, proposer, one structural repair and semantic reviewer
+  with selected opus5-5/medium/subscription; four marked actual CallLedger calls,
+  all settled ok, two generated A candidates, and all plaintext workspaces removed.
+  A remains unreviewed; combined semantic/native verdict remains unknown. Usage
+  is partial: observed32248 input/6091 output tokens, subscription-equivalent
+  USD0.3644214, no known cash charge or request count. The sanitized source-bound
+  report is `../evidence/2026-10-23-m2c-real-feasibility.json`. It does not create
+  a current receipt after later source changes or establish business/rollout proof.
+  Preserve this worktree's ignored `.superpowers/live-c-technical` encrypted
+  history and generated private test key, alongside M1's preserved live-a files.
 - Task9 native checkpoint: current profile aa51b4b9 (34 sources), exact
   CLI2.1.308/c9796ba2 and SDK0.2.116 passed both complete native suites:
   solver5/5 in10.588s and roles5/5 in45.642s, including real host/supervisor
