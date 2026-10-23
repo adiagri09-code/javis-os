@@ -145,3 +145,16 @@ actual native success/error/omission cases in this unit's coverage tests.
 - [ ] Final-head CI/review, docs/PR/status and integration per repo. Continue
   full D2 immutable production task/session views, E/F, M3-M8; this plan does not
   declare those features supported or complete.
+
+## Component/probe checkpoint
+
+Standalone image read-sharing17 checks/review and immutable skill broker12
+checks/independent parent review now pass; neither is a native caller. Their
+metadata exclusion/loaded-image and native observed-use coverages remain UNKNOWN.
+Physical NT image-name correlation probe (held-handle hash + actual suspended
+child, positive junction alias/negative foreign identical bytes) is observed
+but not file-object identity. Candidate next primary bridge is actual process
+creation debug-event hFile, with valid file IDs and exact retained process/thread
+handles before resume. No debug proof exists yet; thread-affinity, detach/resume,
+cleanup and SDK compatibility must be demonstrated before lifecycle integration.
+The current81-source native profile972175a2 remains unchanged.

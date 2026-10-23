@@ -1,5 +1,39 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — immutable skill broker and Linux fixture repair, 24 October
+
+Standalone SkillAssetBroker now validates/fixes one materialized v2 manifest,
+trial/attempt/input and view/asset hashes, serves exact immutable bytes and
+retains unique read IDs plus exact emitted response/hash for future native
+correlation.12 author testsPASS0.030s; independent parent source review approved,
+separate12PASS0.703s subprocess on frozen full maps. No native observed_use is
+claimed before actual ToolUse/ToolResult/session correlation. No native caller
+exists yet; add this module to PROFILE_SOURCES at eventual integration.
+Public broker397a6aad; pure synthetic component, no SDK/account execution.
+
+Actual LinuxCI40002516501 at01717332 failed only the new view-observation fixture:
+its inert binary was created inside a protected skill folder after provenance
+froze, legitimately changing Linux directory ctime. Test-only staging now uses
+an independent external temp directory. Portable actual entry-clock proxy gives
+matching2RED27.959s then2GREEN29.127s; ordinary Windows2PASS29.016s and binary11
+PASS0.765s. Independent portable2PASS29.468s approves the exact fixture diff.
+All assertion ASTs and product source remain unchanged; full actual Linux CI
+on the final head is still required. No authority normalization/checker relaxation.
+
+The subsequent inert image-name probe7293fe21 binds actual held-leaf hash to
+resolved kernel NT image name in a positive junction-alias case and refuses a
+different identical-byte copied image before resume, then drains. Independent
+review keeps loaded-image identity UNKNOWN: name comparison is not file-object
+identity and guardian does not own the guard yet. Public db56a10b. Next small
+candidate proof is actual CREATE_PROCESS_DEBUG_INFO.hFile with file identity,
+then SDK thread-affinity/continue/detach/resume/death/guardian ownership checks.
+No debug-path probe has run yet. Native current81pins still972175a2.
+
+Full Goal M0–M8 remains active. Full18 observations, genuine account pair/final,
+full D2/E/F/M3–M8, business and live gates stay open. No new account retry,
+deployment/restart/live activation. PR803/reserved0.299.0; main lastd3d7cb36.
+
+
 ## Current continuation — native image read-sharing component, 24 October
 
 Current pushedf131d958/PR803/reserved0.299.0 has exact native972175a2 and
