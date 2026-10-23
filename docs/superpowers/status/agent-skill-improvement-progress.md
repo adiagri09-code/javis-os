@@ -1,6 +1,47 @@
 # Agent and skill improvement Goal progress
 
-## Current continuation — fixed root factory approved; owned verification and guardian integration
+## Current continuation — guardian component approved; host review and early Linux channel check
+
+Goal remains ACTIVE M0–M8. Owner-delegated pilot choice remains reconciliation
+primary, document processing secondary, Python bugfix/test technical control;
+no new source scope, business acceptance or activation inferred.
+
+Local8597d549 commits frozen GuardianV2 source4b9ee58c/test370474d2 with public
+guardian-v2 evidence: author25PASS14.978s and independent25PASS15.124s on imageb8.
+All66 explicit frozen ledger files were hash-verified; this is scoped engineering
+proof, not three-actor/runtime qualification. Earlier failed review remains UNKNOWN
+in the evidence; the later deterministic positive does not explain it retroactively.
+
+Host append-only V2 author source0d6263cf/testebfd0703 now has16PASS12.112s on exact
+prior channel pins. Meaningful REDs found reused stream-id ownership, indefinite
+terminal waiting, ignored short bootstrap writes, and STOP before natural drain.
+Bounded natural-drain grace does not replace actual drain/terminal proof. Historical
+ConnectionAbortedError/no-drain failure is preserved, not claimed fully diagnosed.
+Independent host STATIC review is in progress; no reviewer native run yet. SDK
+invocation author owns the sole native/app slot, new module/test only; integration
+into actual workers/client/profile/evidence is still required.
+
+Pushed4ba CI40024951291 FAILED only image-channel script:13 tests/errors3/failure1,
+cleanup still unproven after shutdown+immediate descriptor close on Linux. Root
+added a POSIX Selector pre-close wait for actual uncancelled tasks in both image
+and private endpoints; default Windows Proactor path is unchanged. Static scoped
+review approves imagefe5933c9/privateee05c29a and new POSIX fixture9638aa3e.
+Windows Selector diagnostics failed and are preserved; Windows Selector behavior
+is not claimed supported/proved by the Proactor qualification. The POSIX-only
+fixture is explicitly skipped there. Failure-only fixture drain is bounded and
+never part of its positive uncancelled-completion assertions.
+
+To check Linux early without publishing unfinished native profile changes,
+seven exact portable source/test files are on diagnostic ref
+codex/agent-skill-improvement-channel-linux-check, snapshot
+a86c716e7ae1ff222b5d66c20b9d4254e609d231 over pushed4ba. Existing full CI40029282316
+is running there. No new PR/workflow/deploy was created. It is component evidence
+only, never final Goal CI. Actual Linux result remains pending; do not call the
+Selector fix GREEN yet. Existing83-source qualification/registration stays
+historical; complete runtime freeze/new qualification still gates main PR803.
+
+The following entries preserve earlier checkpoints; newer exact pins above take
+precedence where subsequent work changed a dependency.
 
 Shared protocol/endpoint proof is committede2380bd7 locally. Guardian independent
 25 attempt stopped failfast after7tests1.328s: first6incl canceled-control fix pass,

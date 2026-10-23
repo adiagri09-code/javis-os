@@ -12,6 +12,7 @@ import math
 import re
 import socket
 import struct
+import sys
 
 _MAX_FRAME = 8192
 _RETAINED = set()
@@ -255,6 +256,12 @@ class ImageMetadataChannel:
         if pending and not self._socket_close_succeeded:
             self._poisoned = True
             self._socket.shutdown(socket.SHUT_RDWR)
+            if sys.platform != 'win32' and isinstance(self._loop, asyncio.SelectorEventLoop):
+                # Keep the descriptor registered until shutdown wakes the actual
+                # reader/writer. Closing it first removes the kernel readiness
+                # event while the selector's public sock_* future is still live.
+                _, remaining = await asyncio.wait(pending, timeout=self._close_timeout)
+                if remaining: raise ImageChannelError('image_channel_io_completion_unproven')
         if not self._socket_close_succeeded:
             if self._socket.fileno() < 0:
                 self._close_authority_lost = True

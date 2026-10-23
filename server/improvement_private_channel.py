@@ -11,6 +11,7 @@ import json
 import math
 import socket
 import struct
+import sys
 
 from improvement_native_protocol import (MAX_PRIVATE_BYTES, encode_private_packet2,
     decode_private_packet2, validate_private_packet2)
@@ -168,6 +169,14 @@ class PrivateWorkerChannelV2:
             if any(not task.done() for task in self._tasks):
                 try: self._socket.shutdown(socket.SHUT_RDWR)
                 except OSError: pass  # Wake-up hint; success is not close proof.
+                if sys.platform != 'win32' and isinstance(self._loop, asyncio.SelectorEventLoop):
+                    # Selector readiness must settle while this descriptor is
+                    # still owned/open. Proactor instead needs closesocket to
+                    # initiate completion of outstanding Windows operations.
+                    pending = [task for task in self._tasks if not task.done()]
+                    if pending:
+                        _, pending = await asyncio.wait(pending, timeout=self._close_timeout)
+                        if pending: raise PrivateChannelError('private_channel_io_unsettled')
             try:
                 self._socket.close()
             except BaseException:
