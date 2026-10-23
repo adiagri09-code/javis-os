@@ -22,6 +22,7 @@ class TrialTasks:
         self.trials, self.runner = trials, runner
         self._loop = None
         self._operations = set()
+        self._reservation_brains = {}
         self._tasks = {}
         self._started = set()
         self._leases = {}
@@ -49,12 +50,15 @@ class TrialTasks:
             raise values[0]
         return values[0]
 
-    async def _operation(self, coroutine):
+    async def _operation(self, coroutine, *, reservation_brain=None):
         task = asyncio.create_task(coroutine)
         self._operations.add(task)
+        if reservation_brain is not None:
+            self._reservation_brains[task] = reservation_brain
 
         def finished(completed):
             self._operations.discard(completed)
+            self._reservation_brains.pop(completed, None)
             self._consume(completed)
 
         task.add_done_callback(finished)
@@ -67,7 +71,7 @@ class TrialTasks:
         if self._closed:
             raise RuntimeError("trial_tasks_closed")
         request = IC._frozen(request)
-        return await self._operation(self._reserve_and_start(principal, brain, request, event_key))
+        return await self._operation(self._reserve_and_start(principal, brain, request, event_key), reservation_brain=brain)
 
     async def _reserve_and_start(self, principal, brain, request, event_key):
         row = await _settled_call(self.trials.reserve, principal, request, event_key=event_key)
@@ -159,6 +163,35 @@ class TrialTasks:
             if not task.done() and not task.cancelling():
                 task.cancel()
             await _drain(asyncio.gather(task, return_exceptions=True))
+
+    async def drain_owned(self, principal, trial_ids):
+        """Join matching reservations, then drain local tasks regardless of DB state.
+
+        The experiment service must first commit its stop fence and join its own
+        admission/handoff operations. This method never cancels a foreign worker,
+        releases database capacity, or claims that filesystem cleanup succeeded.
+        It also remains usable while this supervisor is closing.
+        """
+        self._bind()
+        brain = IM._brain(principal)
+        if (type(trial_ids) is not list or len(trial_ids) > 12000
+                or any(type(identifier) is not str or not IC._ID.fullmatch(identifier) for identifier in trial_ids)
+                or len(set(trial_ids)) != len(trial_ids)):
+            raise ValueError("invalid_trial_drain_selection")
+        identifiers = tuple(trial_ids)
+
+        async def drain():
+            # Authenticate the complete selection before cancelling any owned
+            # task; one foreign ID cannot partly drain a valid selection.
+            for identifier in identifiers:
+                await asyncio.to_thread(self.trials.get, principal, identifier)
+            pending = tuple(task for task in self._operations if self._reservation_brains.get(task) == brain)
+            if pending:
+                await _drain(asyncio.gather(*pending, return_exceptions=True))
+            for identifier in identifiers:
+                await self._cancel_owned(principal, identifier)
+
+        return await self._operation(drain())
 
     async def _stop(self, principal, identifier, *, shutdown):
         try:

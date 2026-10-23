@@ -248,7 +248,24 @@ class ComparisonResults:
         if type(plans) is not ExperimentPlans:
             raise TypeError("concrete_comparison_plans_required")
         self.plans, self.assets, self.store, self.blobs = plans, plans.assets, plans.store, plans.blobs
+        self.records = plans.records
         self.results = TrialResults(plans.admission.trials)
+
+    @classmethod
+    def from_existing(cls, assets):
+        """Cold historical reader: no Host/Plans factory, migration or recovery."""
+        import improvement_store as IM
+        from improvement_experiments import ExperimentRecords
+        from improvement_trials import TrialStore
+        from improvement_trial_results import TrialResults
+        if type(assets) is not IM.ImprovementStore:
+            raise TypeError("concrete_comparison_assets_required")
+        reader = cls.__new__(cls)
+        reader.plans = None
+        reader.assets, reader.store, reader.blobs = assets, assets.store, assets.blobs
+        reader.records = ExperimentRecords(assets)
+        reader.results = TrialResults(TrialStore(assets))
+        return reader
 
     def _metadata(self, connection, brain, comparison_id):
         import json
@@ -259,8 +276,8 @@ class ComparisonResults:
                                         (comparison_id, brain)).fetchone()
         if comparison is None:
             raise PermissionError("comparison_unavailable")
-        experiment = self.plans.records._row(connection, brain, comparison["experiment_id"])
-        self.plans.records._public(experiment)
+        experiment = self.records._row(connection, brain, comparison["experiment_id"])
+        self.records._public(experiment)
         value = definition(json.loads(experiment["definition_json"]))
         contract_row = IC.CaseStore._row(connection, "improvement_contracts", brain, value["contract_id"])
         contract = json.loads(contract_row["contract_json"])
@@ -421,6 +438,8 @@ class ComparisonResults:
             raise AssetUnavailable("comparison_artifact_changed")
 
     def create(self, principal, comparison_id, *, expected_generation, event_key):
+        if self.plans is None:
+            raise PermissionError("comparison_write_unavailable")
         import time
         from contextlib import closing
         import improvement_store as IM
@@ -428,7 +447,7 @@ class ComparisonResults:
         _identifier(comparison_id)
         _generation(expected_generation)
         brain = IM._brain(principal)
-        self.plans.records._available()
+        self.records._available()
         payload = {"comparison_id": comparison_id, "expected_generation": expected_generation}
         with closing(self.store._conn()) as connection:
             replay = self.assets._replay(connection, brain, event_key, "comparison_report", payload)
@@ -480,7 +499,7 @@ class ComparisonResults:
         from improvement_experiment_protocol import comparison_hash
         _identifier(report_id)
         brain = IM._brain(principal)
-        self.plans.records._available()
+        self.records._available()
         with closing(self.store._conn()) as connection:
             row = connection.execute("SELECT * FROM improvement_comparison_reports WHERE id=? AND brain_id=?", (report_id, brain)).fetchone()
             if row is None:

@@ -5928,5 +5928,125 @@
    "POST"
   ],
   "trong": null
+ },
+ {
+  "order": 595,
+  "type": "APIRoute",
+  "path": "/improvement-experiments",
+  "name": "experiment_list",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 596,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}",
+  "name": "experiment_get",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 597,
+  "type": "APIRoute",
+  "path": "/improvement-comparison-reports/{report_id}",
+  "name": "comparison_report_get",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 598,
+  "type": "APIRoute",
+  "path": "/improvement-experiments",
+  "name": "experiment_create",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 599,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/bind",
+  "name": "experiment_bind",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 600,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/freeze",
+  "name": "experiment_freeze",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 601,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/next",
+  "name": "experiment_next",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 602,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/report",
+  "name": "experiment_report",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 603,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/select",
+  "name": "experiment_select",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 604,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/cancel",
+  "name": "experiment_cancel",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 605,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/resume",
+  "name": "experiment_resume",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 606,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/recover",
+  "name": "experiment_recover",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
  }
 ]

@@ -26634,6 +26634,7 @@ import improvement_trial_api  # noqa: E402
 import improvement_trial_service  # noqa: E402
 
 _IMPROVEMENT_TRIAL_SERVICE = None
+_IMPROVEMENT_EXPERIMENT_SERVICE = None
 _IMPROVEMENT_TRIAL_SHUTTING_DOWN = False
 
 
@@ -26660,6 +26661,21 @@ def _improvement_trial_active_service():
         return _IMPROVEMENT_TRIAL_SERVICE
 
 
+def _improvement_experiment_service():
+    global _IMPROVEMENT_EXPERIMENT_SERVICE
+    with _LAZY_LOCK:
+        if _IMPROVEMENT_TRIAL_SHUTTING_DOWN:
+            raise RuntimeError("experiment_service_closed")
+        if _IMPROVEMENT_EXPERIMENT_SERVICE is None:
+            from improvement_comparison_plans import ExperimentPlans
+            from improvement_experiment_service import ExperimentService
+            from improvement_skill_candidates import SkillCandidates
+            trials = _improvement_trial_service()
+            authoring = SkillCandidates(trials.assets, pack_state_dir=Path(cfgmod.STATE_DIR) / "packs-state")
+            _IMPROVEMENT_EXPERIMENT_SERVICE = ExperimentService(ExperimentPlans(trials.host, authoring), trials)
+        return _IMPROVEMENT_EXPERIMENT_SERVICE
+
+
 async def _shutdown_improvement_trials():
     from improvement_trial_runner import _drain
 
@@ -26669,12 +26685,16 @@ async def _shutdown_improvement_trials():
         # Never wait for that filesystem/store lifetime on the server loop.
         with _LAZY_LOCK:
             _IMPROVEMENT_TRIAL_SHUTTING_DOWN = True
-            return _IMPROVEMENT_TRIAL_SERVICE
+            return _IMPROVEMENT_EXPERIMENT_SERVICE, _IMPROVEMENT_TRIAL_SERVICE
 
     async def finish():
-        service = await asyncio.to_thread(mark_closing)
-        if service is not None:
-            await service.close()
+        experiments, service = await asyncio.to_thread(mark_closing)
+        try:
+            if experiments is not None:
+                await experiments.close()
+        finally:
+            if service is not None:
+                await service.close()
 
     closing = asyncio.create_task(finish())
     values, cancelled = await _drain(asyncio.gather(closing, return_exceptions=True))
@@ -26743,4 +26763,17 @@ improvement_candidate_api.register(app, improvement_candidate_api.CandidateApiDe
     owner_session=_doi_phien_that,
     operations=_improvement_candidate_operations,
     pack_state_dir=lambda: Path(cfgmod.STATE_DIR) / "packs-state",
+))
+
+
+# Append to the established route order. History does not capture sources or
+# construct services; explicit writes reuse the one actual trial dispatcher.
+import improvement_experiment_api  # noqa: E402
+
+improvement_experiment_api.register(app, improvement_experiment_api.ExperimentApiDeps(
+    read_store=_improvement_read_store,
+    resolve_brain=lambda value: improvement_api.strict_brain(value,
+        default_root=Path(BRAINS_DIR) / "Brain Default", brains_root=Path(BRAINS_DIR)),
+    owner_session=_doi_phien_that,
+    service=_improvement_experiment_service,
 ))

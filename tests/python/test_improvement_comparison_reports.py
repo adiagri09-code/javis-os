@@ -123,12 +123,34 @@ class ComparisonReportTests(unittest.TestCase):
         self.assertEqual(self.h.h.count("improvement_comparison_reports"), 0)
 
 
+    def test_cold_existing_reader_needs_no_host_plans_migration_or_native_factory(self):
+        saved = self.create()
+        factory = getattr(C.ComparisonResults, "from_existing", None)
+        self.assertTrue(callable(factory), "Cold comparison history reader is absent")
+        with patch("improvement_comparison_plans.ExperimentPlans.__init__", side_effect=AssertionError("GET cannot construct plans")), \
+             patch("improvement_trial_host.HostContextStore.__init__", side_effect=AssertionError("GET cannot construct host")), \
+             patch.object(IM, "ensure", side_effect=AssertionError("GET cannot migrate")), \
+             patch.object(ClaudeTrialAdapter, "verify", side_effect=AssertionError("GET cannot probe native")):
+            reader = factory(self.assets)
+            self.assertFalse(reader.read(self.owner, saved["report_id"])["summary"]["complete"])
+            with self.assertRaisesRegex(PermissionError, "write_unavailable"):
+                reader.create(self.owner, self.h.comparison["id"], expected_generation=saved["generation"], event_key="no-cold-reader-write")
+        self.assertEqual(self.h.h.count("improvement_comparison_reports"), 1)
+
+
 class ActualResultReportTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         from test_improvement_experiment_execution import ExperimentExecutionTests
         self.f = ExperimentExecutionTests()
         self.f.setUp()
-        self.addCleanup(self.f.doCleanups)
+        # This helper case has no asyncio runner of its own. Its synchronous
+        # resources belong to the actually running outer case, so cleanup errors
+        # must fail this test rather than get swallowed by helper.doCleanups().
+        self.addCleanup(self.cleanup_fixture)
+
+    def cleanup_fixture(self):
+        self.f.stack.close()
+        self.assertTrue(self.f.h.doCleanups(), "Nested execution fixture cleanup failed")
 
     async def run_baseline(self):
         from improvement_trial_runner import TrialRunner

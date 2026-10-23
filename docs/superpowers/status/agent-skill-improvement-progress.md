@@ -109,6 +109,27 @@
   regression GREEN264s. Candidate selection opens only that metadata seal; final
   execution/allocation remains C+D gated. Task6 and whole-B acceptance remain open.
 
+- Task6 engineering checkpoint adds twelve owner-only routes, cold report/history
+  reads, strict closed bodies and lazy main wiring over the SAME OwnerTrialService
+  dispatcher. Stop fences retain capacity through pending admission/handoff,
+  terminal-row live workers, actual checker drainage and verified cleanup under
+  the real brain execution lock. All recorded linked attempts participate in the
+  final CAS. Cleaned journals are retained and validated as replay protection;
+  invalid journals cannot be relabeled clean by legacy cancellation cleanup.
+  Recovery never dispatches and works while off/revoked; owner resume events and
+  metadata transitions commit atomically. Candidate/final execution stays closed.
+  Root service13 GREEN46.655s; API5 GREEN17.123s; actual v2 Runner lifetime3
+  GREEN20.815s (synthetic native packets, real storage/workspaces/usage); five-script
+  service/API/cleanup/Tasks/Sandbox regression GREEN83s. Actual-main/old-main/light
+  startup3/3 GREEN30s. A separate Python process proves the actual OS brain lock;
+  simultaneous admissions preserve one cell/trial/call. Route snapshot now607
+  entries, with the established595-entry prefix unchanged and12 appended routes.
+  Current native profile ffe27adc5caba5249b95358245d874e99f1d59ffc9ee49684d9f0e085198e643
+  passes exact CLI2.1.308/SDK0.2.116 dummy-HOME/localhost qualification5/5 in14.845s.
+  The old real smoke remains on its original06e75 profile with aggregate unknown.
+  Full required regressions, fresh whole-B review, final exact-head Linux CI and
+  integration/publication remain pending; Task6 and full M2 are not complete.
+
 ## M2A engineering continuation
 
 - Worktree: `C:/Users/admin/.codex/worktrees/agent-skill-improvement-m2a/Javis-OS`;

@@ -181,27 +181,33 @@ class ExperimentRecords:
         _generation(expected_generation)
         IC._digest(observed_fingerprint)
         self._available()
-        payload = {"experiment_id": experiment_id, "observed_fingerprint": observed_fingerprint, "expected_generation": expected_generation}
         with self.store._Tx(self.store) as connection:
-            replay = self.assets._replay(connection, brain, event_key, "experiment_resume", payload)
-            if replay is not None:
-                return replay
-            row = self._row(connection, brain, experiment_id)
-            if row["generation"] != expected_generation or row["phase"] != "blocked":
-                raise IM.ConflictError("experiment_state_stale")
-            blocker = json.loads(row["blocker_json"])
-            if IM._hash(blocker) != row["blocker_hash"]:
-                raise IM.ConflictError("experiment_blocker_changed")
-            if observed_fingerprint == blocker["fingerprint"]:
-                raise IM.ConflictError("experiment_blocker_unchanged")
-            value = _definition(json.loads(row["definition_json"]))
-            self._bound_in(connection, brain, value, value["context_generation"])
-            connection.execute("UPDATE improvement_experiments SET phase=resume_from,generation=generation+1,"
-                "resume_from=NULL,blocker_json=NULL,blocker_hash=NULL,updated_at=? WHERE id=? AND brain_id=?",
-                (time.time(), experiment_id, brain))
-            result = self._public(self._row(connection, brain, experiment_id))
-            self.assets._event(connection, principal, event_key, "experiment_resume", payload, result)
-            return result
+            return self._resume_in(connection, principal, experiment_id, observed_fingerprint=observed_fingerprint,
+                expected_generation=expected_generation, event_key=event_key)
+
+    def _resume_in(self, connection, principal, experiment_id, *, observed_fingerprint, expected_generation, event_key):
+        IC.CaseStore(self.assets)._own_transaction(connection)
+        brain = _brain(principal)
+        payload = {"experiment_id": experiment_id, "observed_fingerprint": observed_fingerprint, "expected_generation": expected_generation}
+        replay = self.assets._replay(connection, brain, event_key, "experiment_resume", payload)
+        if replay is not None:
+            return replay
+        row = self._row(connection, brain, experiment_id)
+        if row["generation"] != expected_generation or row["phase"] != "blocked":
+            raise IM.ConflictError("experiment_state_stale")
+        blocker = json.loads(row["blocker_json"])
+        if IM._hash(blocker) != row["blocker_hash"]:
+            raise IM.ConflictError("experiment_blocker_changed")
+        if observed_fingerprint == blocker["fingerprint"]:
+            raise IM.ConflictError("experiment_blocker_unchanged")
+        value = _definition(json.loads(row["definition_json"]))
+        self._bound_in(connection, brain, value, value["context_generation"])
+        connection.execute("UPDATE improvement_experiments SET phase=resume_from,generation=generation+1,"
+            "resume_from=NULL,blocker_json=NULL,blocker_hash=NULL,updated_at=? WHERE id=? AND brain_id=?",
+            (time.time(), experiment_id, brain))
+        result = self._public(self._row(connection, brain, experiment_id))
+        self.assets._event(connection, principal, event_key, "experiment_resume", payload, result)
+        return result
 
     def begin_stop(self, principal, experiment_id, *, kind, reason, expected_generation, event_key):
         """Fence future dispatch; Task6 must drain actual ownership before finalizing."""

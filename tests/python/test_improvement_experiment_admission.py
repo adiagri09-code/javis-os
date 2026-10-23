@@ -3,7 +3,9 @@ from _paths import ROOT, SERVER  # noqa: F401
 
 import importlib.util
 import time
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 import test_improvement_experiment_lineage as fixtures
@@ -28,6 +30,26 @@ class ExperimentAdmissionTests(unittest.TestCase):
         fields = {"expected_generation": self.h.frozen["generation"], "event_key": "owner-admit-v2-slot", **changes}
         return ExperimentAdmission(self.h.h.plans()).admit(self.owner, "association-experiment", self.h.comparison["id"],
             self.h.request["lineage"]["cell_position"], **fields)
+
+    def test_concurrent_admissions_cannot_allocate_the_same_frozen_cell_twice(self):
+        before = (self.h.h.count("improvement_trials"), self.h.h.count("agent_calls"))
+        gate = threading.Barrier(2)
+
+        def verify(adapter):
+            gate.wait(timeout=10)
+            return {"supported": True, "capability_hash": "c" * 64}
+
+        with patch.object(ClaudeTrialAdapter, "verify", verify), ThreadPoolExecutor(max_workers=2) as pool:
+            pending = [pool.submit(self.admit, event_key="concurrent-frozen-cell-" + str(index)) for index in range(2)]
+            results = []
+            for future in pending:
+                try:
+                    results.append(future.result(timeout=20))
+                except IM.ConflictError as error:
+                    results.append(error)
+        self.assertEqual(sum(isinstance(result, IM.ConflictError) for result in results), 1)
+        self.assertEqual(self.h.h.count("improvement_experiment_trial_links"), 1)
+        self.assertEqual((self.h.h.count("improvement_trials"), self.h.h.count("agent_calls")), (before[0] + 1, before[1] + 1))
 
     def test_native_preflight_precedes_actual_trial_call_link_and_mints_late_deadline(self):
         before = (self.h.h.count("improvement_trials"), self.h.h.count("agent_calls"))

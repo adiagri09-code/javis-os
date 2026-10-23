@@ -112,7 +112,8 @@ source/arm/config preflight and native availability verification, then commits
 the real trial, existing CallLedger reservation, attempt, cell link and event
 atomically. The deadline starts after preflight. An owner service must choose
 the next frozen slot, never expose arbitrary cell selection or skip unavailable
-candidates; that scheduler/lifetime wiring remains Task6.
+candidates. ExperimentService now supplies that scheduler and reuses the existing
+OwnerTrialService dispatcher; it does not create a parallel worker map.
 
 Only tuning-baseline mechanics are available in this unit. Candidate slots
 reject before decryption, native probes, trial/call reservation or workspace
@@ -178,3 +179,67 @@ including explicit republication of identical report bytes; wall time is not an
 ordering authority. KEEP_BASE can still stop without spending final qualification.
 Selecting a candidate seals further editing/tuning but does not open final
 execution, allocate a holdout, activate anything or certify business eligibility.
+
+## Owner controls and stop recovery
+
+The twelve new routes retain the existing owner-session, authentication and CSRF
+gates. An API token does not replace the browser owner session. Bodies are bounded,
+reject duplicate JSON keys and accept only the named fields. Principals, native
+pins, result evidence and cell positions are never caller authority.
+
+| Route | Behavior |
+| --- | --- |
+| GET `/improvement-experiments` | Cold metadata list; optional cursor/limit |
+| GET `/improvement-experiments/{experiment_id}` | Stored state, authority not checked |
+| GET `/improvement-comparison-reports/{report_id}` | Exact immutable report references |
+| POST `/improvement-experiments` | Freeze definition from an existing authorized context |
+| POST `/improvement-experiments/{experiment_id}/bind` | Bind actual candidate and chosen authority |
+| POST `/improvement-experiments/{experiment_id}/freeze` | Freeze tuning/final matrix metadata |
+| POST `/improvement-experiments/{experiment_id}/next` | First unallocated frozen position only |
+| POST `/improvement-experiments/{experiment_id}/report` | Publish complete expected-slot accounting |
+| POST `/improvement-experiments/{experiment_id}/select` | Seal candidate or KEEP_BASE |
+| POST `/improvement-experiments/{experiment_id}/cancel` | Fence, drain and attempt terminal closure |
+| POST `/improvement-experiments/{experiment_id}/resume` | Explicit source/runtime blocker preflight |
+| POST `/improvement-experiments/{experiment_id}/recover` | Settle expired work/retry closure; never dispatch |
+
+Every write uses an event key; generation-sensitive writes also require the
+expected generation. `next` takes comparison ID, expected generation and event
+key. It rejects a pending or gapped history and never skips an unavailable
+candidate to cherry-pick a baseline. Concurrent admissions cannot allocate one
+cell twice. Exact admission replay preserves its original slot/deadline.
+
+Cancellation and KEEP_BASE first commit `stopping`, retaining the brain's active
+experiment capacity. The service joins its admission/handoff operations, cancels
+linked nonterminal trials outside the experiment writer, then drains actual
+owned tasks even when their database rows are already terminal. Repeated HTTP
+cancellation cannot abandon this work. Native launch before the engine marker
+refunds unused reservations; an observed engine start retains interrupted usage.
+No checker result can reopen a stopped experiment.
+
+Terminal closure takes the same OS-held brain execution lock as Runner. A foreign
+process holding it leaves the experiment `stopping`. Under that lock, every linked
+recorded attempt must be terminal, its workspace absent and its journal absent or
+exactly verified as cleaned. Bounded receipt checks reject wrong IDs, paths,
+hashes and malformed journals. Cleaned journals remain as replay protection.
+Filesystem cleanup occurs outside the SQL writer; the final short transaction
+rechecks the stop identity and exact link/attempt snapshot before releasing capacity.
+Cleanup/final-CAS failure leaves `stopping`; explicit recovery retries safely.
+
+To recover, refresh metadata and call `recover` with a new event key. It does not
+restart the solver, refresh a source grant or revive a stopped experiment. Stop
+acknowledgments retain their original intent/generation; `current` separately
+shows refreshed metadata. Off/revoked contexts still permit stop settlement.
+Resume currently supports host-observable source/runtime blockers after exact
+source/arm/config revalidation; other blockers remain unavailable. Its transition
+and owner event commit together. Ordinary GET performs no preflight or recovery.
+
+Main constructs experiment services lazily and drains their operations before
+closing the shared trial service and source lifetimes. Full preparation wizard,
+navigation and broader capability projections remain the later F work.
+
+The current four-file native profile is qualified separately in
+`agent-skill-runtime-2.1.308-qualification.json`: five passing technical checks,
+dummy auth HOME/config and localhost fake inference only. That result does not
+replace the historical real-smoke profile, prove actual effort/asset use, or
+establish candidate/business/activation eligibility. Whole-B review, exact-head
+Linux CI and publication are still required for this engineering continuation.

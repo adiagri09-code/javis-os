@@ -37,7 +37,7 @@ No compose, activation, eligibility from manual edit grant or alternate model.
 5. Stop retains worker/checker/process ownership through terminal cleanup.
 6. Complete expected-slot accounting: unknown never disappears or becomes win.
 
-## Task1 — schema5, records and state CAS
+## Task 1 — schema5, records and state CAS
 
 - [x] Reproduce the named behavioral RED cases.
 - [x] Implement this unit and inspect its exact source/authority boundaries.
@@ -81,7 +81,7 @@ historical git-fetch pattern in CI if needed, missing history is failure not ski
 Older fixture installers must not leave B tables behind. Latest-version assertions
 may use current constant; historical fixture/backup assertions retain literal4.
 
-## Task2 — host definition, arms, matrix and irreversible selection
+## Task 2 — host definition, arms, matrix and irreversible selection
 
 - [x] Reproduce the named behavioral RED cases.
 - [x] Implement this unit and inspect its exact source/authority boundaries.
@@ -140,7 +140,7 @@ manifest/current source/ACL drift during slow read/commit; old proposal under ne
 context; second-arm collision/third slot; duplicate freeze; max-size exact matrix;
 source/seed/order substitution; stage/authorize after seal; KEEP_BASE/replay.
 
-## Task3 — closed v2 and actual tuning-baseline execution
+## Task 3 — closed v2 and actual tuning-baseline execution
 
 - [x] Reproduce the named behavioral RED cases.
 - [x] Implement this unit and inspect its exact source/authority boundaries.
@@ -190,7 +190,7 @@ actual baseline-v2 E2E with synthetic availability/query, real workspace/Fernet/
 ledger; second challenger no identity collision; changed arm fails lower reserve
 before call/plaintext/trial evidence; historical v2 reads without native probes.
 
-## Task4 — one final qualification and both-variant readiness
+## Task 4 — one final qualification and both-variant readiness
 
 - [x] Reproduce the bare-pin/renamed-owner behavioral RED cases.
 - [ ] Implement this unit and inspect its exact source/authority boundaries.
@@ -235,7 +235,7 @@ omission bypass; drift at claim/materialization; renamed families/case sets; wro
 final arm; duplicate consumption; KEEP_BASE zero claims; consumed source drift and
 explicit recovery. Preserve owner-private artifact reads versus model projections.
 
-## Task5 — pure comparator and immutable exact-result reports
+## Task 5 — pure comparator and immutable exact-result reports
 
 - [x] Reproduce the named behavioral RED cases.
 - [x] Implement this unit and inspect its exact source/authority boundaries.
@@ -302,7 +302,7 @@ RED/GREEN: baseline win/tie/unknown/rejection/inconclusive; missing critical/reg
 repeat disagreement; wrong result attempt/arm/pair; mutable pointer races; corrupt
 refs/byte bounds; exact statistical boundary and multiple-test correction.
 
-## Task6 — owner API, stopping/recovery, qualification and release
+## Task 6 — owner API, stopping/recovery, qualification and release
 
 - [ ] Reproduce the named behavioral RED cases.
 - [ ] Implement this unit and inspect its exact source/authority boundaries.

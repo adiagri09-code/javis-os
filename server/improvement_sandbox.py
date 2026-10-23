@@ -231,8 +231,7 @@ class TrialWorkspace:
 
     def acquire_execution(self, brain_id, trial_id, attempt):
         self._paths(trial_id, attempt)
-        _text(brain_id, 1000)
-        brain = self._try_lifetime_lock(".executions", brain_id)
+        brain = self.acquire_brain_execution(brain_id)
         if brain is None:
             return None
         try:
@@ -244,6 +243,57 @@ class TrialWorkspace:
         except BaseException:
             brain.close()
             raise
+
+    def acquire_brain_execution(self, brain_id):
+        """Exclude the actual runner without inventing a workspace identity."""
+        _text(brain_id, 1000)
+        return self._try_lifetime_lock(".executions", brain_id)
+
+    def _cleanup_record(self, trial_id, attempt, path, journal, expected_receipt):
+        if not journal.exists():
+            return
+        check_ancestry(journal)
+        with journal.open("rb") as source:
+            raw = source.read(16385)
+        if len(raw) > 16384:
+            raise ValueError("trial_cleanup_journal_invalid")
+        record = json.loads(raw)
+        _fields(record, {"state", "input_hash", "receipt"})
+        receipt = record["receipt"]
+        _fields(receipt, {"trial_id", "attempt", "path", "input_path", "output_root", "input_hash", "effective_hash"})
+        _digest(receipt["input_hash"])
+        _digest(receipt["effective_hash"])
+        if (record["state"] not in ("preparing", "prepared", "cleaned")
+                or record["input_hash"] != receipt["input_hash"]
+                or type(receipt["attempt"]) is not int or receipt["attempt"] != attempt
+                or receipt["trial_id"] != trial_id or receipt["path"] != str(path)
+                or receipt["input_path"] != str(path / "input.json")
+                or receipt["output_root"] != str(path / "outputs")
+                or (expected_receipt is not None and receipt != expected_receipt)):
+            raise ValueError("trial_cleanup_journal_invalid")
+        return record
+
+    def cleanup_proven(self, trial_id, attempt, expected_receipt):
+        """Clean and verify one recorded attempt while the caller holds its brain lock.
+
+        False means a live attempt holds its lifetime. Kept cleaned journals are
+        replay protection; verify their exact bounded receipt, never erase them.
+        This method grants no database authority to release experiment capacity.
+        """
+        path, journal = self._paths(trial_id, attempt)
+        handle = self._try_lifetime_lock(".lifetimes", f"{trial_id}:{attempt}")
+        if handle is None:
+            return False
+        try:
+            with self._lock(trial_id, attempt):
+                self._cleanup_record(trial_id, attempt, path, journal, expected_receipt)
+                self._cleanup_in_lock(path, journal)
+                record = self._cleanup_record(trial_id, attempt, path, journal, expected_receipt)
+                if path.exists() or (record is not None and record["state"] != "cleaned"):
+                    raise ValueError("trial_cleanup_incomplete")
+                return True
+        finally:
+            handle.close()
 
     def try_cleanup(self, trial_id, attempt):
         """Recovery must never remove a workspace still held by a live runner."""
@@ -338,26 +388,30 @@ class TrialWorkspace:
         if not path.exists() and not journal.exists():
             return
         with self._lock(trial_id, attempt):
-            # Check the final resolved target immediately before recursive removal on Windows and Unix.
-            check_ancestry(path)
-            resolved = path.resolve()
-            if not resolved.is_relative_to(self.root.resolve()) or resolved == self.root.resolve():
-                raise ValueError("invalid_trial_cleanup_target")
+            self._cleanup_record(trial_id, attempt, path, journal, None)
+            self._cleanup_in_lock(path, journal)
 
-            def unlock(function, name, error):
-                candidate = Path(name)
-                check_ancestry(candidate)
-                if not candidate.resolve().is_relative_to(resolved):
-                    raise ValueError("invalid_trial_cleanup_child")
-                candidate.chmod(stat.S_IREAD | stat.S_IWRITE)
-                function(name)
+    def _cleanup_in_lock(self, path, journal):
+        # Check the final resolved target immediately before recursive removal on Windows and Unix.
+        check_ancestry(path)
+        resolved = path.resolve()
+        if not resolved.is_relative_to(self.root.resolve()) or resolved == self.root.resolve():
+            raise ValueError("invalid_trial_cleanup_target")
 
-            if path.exists():
-                shutil.rmtree(path, onexc=unlock)
-            if journal.exists():
-                record = json.loads(journal.read_text(encoding="utf-8"))
-                record["state"] = "cleaned"
-                _atomic(journal, _json(record).encode())
+        def unlock(function, name, error):
+            candidate = Path(name)
+            check_ancestry(candidate)
+            if not candidate.resolve().is_relative_to(resolved):
+                raise ValueError("invalid_trial_cleanup_child")
+            candidate.chmod(stat.S_IREAD | stat.S_IWRITE)
+            function(name)
+
+        if path.exists():
+            shutil.rmtree(path, onexc=unlock)
+        if journal.exists():
+            record = json.loads(journal.read_text(encoding="utf-8"))
+            record["state"] = "cleaned"
+            _atomic(journal, _json(record).encode())
 
 
 def worker_environment(workspace_root: Path, *, auth_home: Path | None = None) -> dict:
