@@ -1,5 +1,24 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — actual observation storage and static admission approved
+
+Commit8f2f5678 contains actual Trial/operation observation2 storage: independent18
+PASS28.887s after author18PASS36.286s and affected legacy9PASS. Complete encrypted
+history validates before V2 reads/appends/replay; no mixed version, no late lease
+renewal, no freeze before actual drained. Public native-observation-storage names
+exact pins, O(history) cost, missing-anchor/late gaps and unchanged V1 limitations.
+
+Static preflight admission is independently approved3PASS.039s after author3PASS
+.023s; affected observed7 .023s and legacyClaude22 1.817s pass. Current claude
+source0696aaa6/test1fbdaa53/public static-preflight-admission prove registration
+before metadata and no CLI/auth/capability. Actual isolated consumer must still
+invoke it before guarded CLI and verify_observed afterward. No route enabled.
+
+Manifest4 readonly foundation is the next independent source unit, preserving
+all old prompts/payloads/hashes and legacy-correlator UNKNOWN. Root continues
+actual profile/worker/input-delivery integration; no intermediate qualification,
+account retry, final CI or M2 milestone completion is claimed.
+
 ## Current continuation — owned environment and durable decision store approved
 
 Commit19e1890b fixes actual engine startup mutation before explicit owned client

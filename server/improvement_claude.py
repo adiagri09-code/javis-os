@@ -112,8 +112,8 @@ def _managed_policy():
     return "absent"
 
 
-def _runtime_observation(pin):
-    from improvement_sandbox import worker_environment
+def _runtime_identity(pin):
+    """Fresh static metadata only; never execute the selected binary."""
     binary = Path(pin["cli_path"])
     if not binary.is_absolute():
         raise ValueError("invalid_trial_binary")
@@ -121,11 +121,17 @@ def _runtime_observation(pin):
     with binary.open("rb") as handle:
         digest = hashlib.file_digest(handle, "sha256").hexdigest()
     managed = _managed_policy()
-    result = {"platform": sys.platform, "cli_hash": digest,
+    return {"platform": sys.platform, "cli_hash": digest,
               "sdk_version": importlib.metadata.version("claude-agent-sdk"),
-              "profile_hash": profile_hash(), "managed_policy": managed, "auth": {}}
+              "profile_hash": profile_hash(), "managed_policy": managed}
+
+
+def _runtime_observation(pin):
+    from improvement_sandbox import worker_environment
+    result = {**_runtime_identity(pin), "auth": {}}
+    binary, digest = Path(pin["cli_path"]), result['cli_hash']
     known = (sys.platform, pin["cli_version"], digest, result["sdk_version"])
-    if (managed != "absent" or digest != pin["cli_hash"] or known not in VERIFIED_NATIVE_RUNTIMES
+    if (result['managed_policy'] != "absent" or digest != pin["cli_hash"] or known not in VERIFIED_NATIVE_RUNTIMES
             or result["profile_hash"] != pin["profile_hash"] or _profile_qualification(pin, sys.platform) is None):
         return result
     with tempfile.TemporaryDirectory(prefix="improvement-verify-") as scratch:
@@ -158,6 +164,32 @@ class ClaudeTrialAdapter:
 
     def verify(self):
         return self._verify_with_observer(lambda: _runtime_observation(self.pin))
+
+    def admit_preflight(self):
+        """Permit guarded observation, never account/query or live capability.
+
+        The isolated consumer must call this before its first CLI command and
+        still authenticate actual child observations with verify_observed after
+        guarded preflight. Static admission is not auth or execution evidence.
+        """
+        def refused(reason): return {'admitted': False, 'reason': reason}
+        pin = self.pin
+        if (pin['provider'] != 'anthropic-cli' or pin['engine_id'] != 'claude-sdk'
+                or pin['profile_version'] != PROFILE_VERSION
+                or pin['reasoning'] not in ('low', 'medium', 'high', 'xhigh', 'max')):
+            return refused('unsupported_trial_configuration')
+        qualification = _profile_qualification(pin, sys.platform)
+        if qualification is None: return refused('native_profile_unqualified')
+        try:
+            runtime = _runtime_identity(pin)
+        except (OSError, ValueError, importlib.metadata.PackageNotFoundError):
+            return refused('runtime_unavailable')
+        if runtime['managed_policy'] != 'absent': return refused('managed_policy_unverified')
+        if any(runtime[key] != pin[key] for key in ('cli_hash', 'sdk_version', 'profile_hash')):
+            return refused('trial_runtime_drift')
+        known = (runtime['platform'], pin['cli_version'], runtime['cli_hash'], runtime['sdk_version'])
+        if known not in VERIFIED_NATIVE_RUNTIMES: return refused('native_enforcement_unverified')
+        return {'admitted': True, 'reason': None, 'runtime': runtime, 'profile_qualification_hash': qualification}
 
     def verify_observed(self, runtime):
         """Check a qualified consumer's closed observation without another spawn.
