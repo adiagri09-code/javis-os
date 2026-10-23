@@ -499,3 +499,39 @@ version/auth threads on cancellation; retain brain/execution ownership until the
 settle and never proceed to query after cancellation. These existing-source edits
 invalidate04c8 as current qualification; preserve its historical evidence and wait
 for complete-boundary freeze/qualification before any account retry or registration.
+
+Concrete startup2/private2 grammar and shared PrivateWorkerChannelV2 are now in
+the new native_protocol/private_channel modules. Pure11 and socket9 have independent
+scoped approval with exact public proof. The private endpoint prunes completed
+consumed stream tasks/frame buffers, retains uncertain I/O, and keeps actual close
+success distinct from cancellation and IO completion. Its isolated socketpairs
+and pure in-memory tests have documented Goal12 isolation from native job fixtures.
+No current profile registration or native child proof follows from these tests.
+
+Guardian/host policy separates immutable overall lifetime_timeout<=300 from short
+startup/actual CREATE/authorization deadlines;300 is the existing public trial and
+experiment maximum. Do not impose a60s idle timeout on legitimate long inference
+or start all four one-shot image clocks at adoption. Public socket readiness arms
+the later channels only when bytes/EOF arrive, with channel-exclusive read/close.
+No packet renews the overall budget. Actual delayed-channel proof passes1.966s
+using short.05, delay.10 and overall5; its initial overall1 correctly timed out.
+
+Host consumer uses the original retained guardian process handle to adopt actual
+worker capabilities. It persists a version2 launch_offer projection with root
+identity/image/purpose nonces and hash of exact full canonical received wire JSON,
+omitting live handle numbers/share blobs. Raw offer stays privately owned through
+adoption/drain; projection/hash never confer capability authority. Incoming host
+envelopes have fresh sequence plus source/source_sequence (guardian or worker),
+launch/PID/birth and closed body. Durable joined evidence callback returns only
+decision and persisted evidence hash before image_authorize; cancelled/late append
+must settle but cannot send allow. Existing accounting transaction remains the
+separate inference gate, without inventing a third evidence source. Actual SDK
+connect precedes before_query: first2 gates precede worker_ready, all4 precede
+engine_start_requested/accounting ACK, then client.query delivers private input.
+
+Guardian author24 passed14.572s before independent review reproduced one false
+control-close proof: cancelled logical socket I/O was swallowed as completion.
+Correct only that retained-control state, then verify affected final suite once;
+independently proven native_drained/fence release stays separate from metadata-only
+control.closed. Host source-missing9RED is preserved; concrete source implementation
+and actual three-actor tests remain underway, with no account/SDK/profile enabling.

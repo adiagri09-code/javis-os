@@ -2,6 +2,49 @@
 
 ## Current continuation — fixed root factory approved; owned verification and guardian integration
 
+Latest: independent guardian static review reproduced false control.closed after
+cancelled logical recv, before running native24. Reviewer found no other actionable
+ownership issue; author has sole native/app slot for narrow correction and final
+affected regression. Historical f33a24 is not approved final source. True native
+quiescence remains independent of unknown metadata control IO; no blanket fence
+reorder. Earlier5563 CI40022263716 now succeeded, pushed4ba CI40024951291 still runs.
+
+This continuation is progress: closed startup2/private2 protocol11 and shared
+owned private endpoint9 now have meaningful RED/GREEN and independent scoped
+approval. Source9ddcd57c/testf2147bee pure11PASS0.016s; endpoint sourced5498531/
+test1cd4a33e independent9PASS1.251s. Endpoint review reproduced settled stream
+task/plaintext accumulation before fixing it; consumed completed operations are
+pruned, uncertain IO retained. Captured pre-cleanup task refs verify EOF/cancel
+completion after pruning. Public private-native-protocol/private-worker-channel
+records exact pins/commands/failures and explicit no-authority/unknown limits.
+
+The two new tests ran concurrently with guardian only after documented isolation:
+pure stdlib values, or anonymous private socketpairs with OS-assigned ports in a
+separate isolated process/loop; no app/SDK/HOME/env/DB/sharedfiles/native children.
+No generic parallel test approval is inferred. Actual app/native tests stay serial.
+
+GuardianV2 author24PASS14.572s on f33a7dc3/test958d35da/driverdef67a76; session18714
+is terminal and released. Reviewer now owns its sole native/app slot; final review
+pending. Earlier failed full11 had cleanup errors/stale creator-thread events;
+actual repeated TerminateProcess after successful TerminateJobObject was corrected
+without treating termination as exit. Full root/debug/native/job/guard/fence terminal
+predicates stay. Short frame/authorization budgets are separated from immutable
+overall lifetime<=300 (the existing public trial/experiment/operation maximum).
+Fresh image channels arm only on public socket readiness, so later purposes do not
+expire during earlier preflight steps. Actual delayed-unused-channel test passes
+1.966s with short.05, delay.10 and lifetime5; initial lifetime1 correctly expired
+because full Windows startup itself took longer. No234s sleep/timeout policy cut.
+
+Host GuardianSessionV2 source-missing9RED (21 subtest failures) passes no fixture
+execution; author now appends the concrete three-actor consumer, preserving V1,
+while reviewer checks guardian. Host test814415aa; originaltransport29b34bdf;
+red log9db6f3d3. Root owns shared protocol/endpoint; host author owns transport/v2
+tests; guardian author owns lifetime/v2tests. Host native GREEN waits slot handoff.
+Actual source confirms SDK connect occurs before before_query/accounting ACK;
+worker_ready needs adapter_version/auth_status, engine_start_requested needs all4
+image gates, then accounting ACK gates client.query/user input. The host's initial
+contrary unrun draft was corrected before production edits/tests.
+
 Pilot choice remains owner-delegated: reconciliation primary, document processing
 secondary, Python bugfix/test technical control. This selects work types only;
 business source scope, owner acceptance and live activation are not inferred.
