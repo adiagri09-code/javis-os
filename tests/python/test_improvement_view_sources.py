@@ -14,6 +14,7 @@ from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
+from improvement_experiment_protocol import comparison_hash
 import test_improvement_view_schema as fixtures
 
 
@@ -61,6 +62,7 @@ class EffectiveViewSourceTests(SourceFixture, unittest.IsolatedAsyncioTestCase):
         self.assertEqual(candidate.content, self.assets.blobs.read(self.owner.brain_id, self.proposal['content_hash']))
         self.assertNotEqual(baseline.content, candidate.content)
         self.assertEqual(baseline.manifest['target'], candidate.manifest['target'])
+        self.assertEqual(baseline.manifest['comparison_hash'], comparison_hash(self.comparison))
         self.assertEqual(baseline.manifest['semantic'], candidate.manifest['semantic'])
         self.assertEqual(self.f.f.f.skill.read_bytes(), before)
         self.assertEqual(self.semantic_subject.current_evidence(self.owner, self.proposal['id'])['verdict'], 'unknown')
@@ -234,6 +236,17 @@ class EffectiveViewSourceTests(SourceFixture, unittest.IsolatedAsyncioTestCase):
         # every SQL/blob/source field is valid but no atomic publisher/event ran.
         with self.assertRaisesRegex(PermissionError, 'publication_unavailable'):
             subject.load_current(self.owner, self.comparison['id'], 'candidate')
+
+    async def test_older_matrix_only_comparison_pin_stays_cold_and_cannot_be_promoted(self):
+        subject, generation = self.views_service(), self.generation()
+        module = importlib.import_module('improvement_view_sources')
+        with patch.object(module, 'comparison_hash', side_effect=lambda row: row['matrix_hash']):
+            result = self.freeze(subject, generation=generation)
+        metadata = subject.read_existing(self.owner, self.comparison['id'])
+        self.assertEqual(self.freeze(subject, generation=generation), result)
+        with self.assertRaises(IM.ConflictError):
+            subject.load_current(self.owner, self.comparison['id'], 'candidate')
+        self.assertEqual(subject.read_existing(self.owner, self.comparison['id']), metadata)
 
 
 class ProbeObservationPolicyTests(unittest.TestCase):

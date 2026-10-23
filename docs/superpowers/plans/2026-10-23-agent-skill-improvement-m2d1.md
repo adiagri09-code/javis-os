@@ -263,9 +263,11 @@ privilege. This changes only disposable test cleanup, not source authority polic
 
 ### Task 3 — explicit v4 admission and full paired/final lineage
 
-**Files:** new `server/improvement_view_admission.py`; extend the actual Trial
+**Files:** new `server/improvement_view_admission.py` and pure
+`server/improvement_view_trial_protocol.py`; extend the actual Trial
 request/host/lineage/SQL-trigger consumers, ExperimentService and comparison
-runtime integration; focused new `test_improvement_view_admission.py`.
+runtime integration; focused new `test_improvement_view_admission.py` and
+`test_improvement_view_trial_protocol.py`.
 
 **Interfaces:** host-derived v4 preserves explicit comparison cell/case/repeat
 lineage and adds exact frozen view/binding identity. Owner HTTP still cannot
@@ -273,6 +275,41 @@ select a cell, issue a pin/grant or submit an authority verdict. Only the
 concrete service chooses the next frozen slot and reserves through the SAME
 TrialStore/CallLedger transaction and real TrialTasks handoff. No fake baseline
 or regenerated deadline for an existing admission. Legacy versions remain closed.
+
+Frozen v4 shape: the exact v2 common request fields plus required `view`, with
+version4. `view` has exactly `view_id,view_hash,binding_hash`; view_hash is the
+canonical immutable manifest hash, not the raw skill content hash. Existing
+candidate_bundle_hash remains the typed A arm-envelope hash, not an installed M0
+bundle. Preserve the complete v1 comparison lineage and optional qualification
+ID shape; actual scope/source/claim authority is separately checked. A temporary
+v2 copy may validate common pure shape only; never use a projected hash, request,
+logical key, Trial or runtime authorization. Return/hash/reserve the full v4.
+Logical keys use their own improvement-trial-v4 namespace and include the exact
+view ID/hash/binding, comparison/pair/cell/case/repeat/variant. Deadlines remain
+outside logical identity, inside full request hash, and exact replay never resets
+the original deadline.
+
+Before v4 consumers, align the view manifest/proof comparison_hash with B's
+actual comparison_hash(row), which includes kind and cell_count as well as the
+matrix. Task2's prototype field used matrix_hash while its other scoped pins
+still bound the actual comparison; do not perpetuate two meanings for one name.
+Observe focused RED, update the producer/proof and genuine metadata fixture,
+then verify affected source paths. No D real-model/production view exists yet;
+older prototype views remain cold history and cannot silently gain new authority.
+
+As soon as any v4 admission/runtime entry becomes reachable, add its actual
+source dependencies to PROFILE_SOURCES in that same change. That invalidates
+the old C registration immediately; never leave v4 reachable under C's9dcf
+qualification while waiting for Task4. Task4 completes enforcement scenarios and
+registers only the final exact footprint. Unit SDK fixtures remain labeled
+technical; default actual native readiness must stay false until qualification.
+
+Actual literal-link consumers found before edits: experiment_lineage,
+experiment_service snapshots/stop union/next scheduling, comparison_results,
+experiment_admission, trials, trial_views and views. Version-specific consumers
+also include private_review, trial_host, trial_decisions, trial_results and
+trial_checks. Extend each deliberately; a second independent12000-cell allowance
+for new links would violate the shared14000/28000 bounds.
 
 - [ ] RED: a valid-looking v4 caller cannot bypass the actual view binding;
   candidate/final requests through v1/v2/v3 remain rejected without decryption.

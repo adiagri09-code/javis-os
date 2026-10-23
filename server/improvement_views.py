@@ -70,7 +70,7 @@ class EffectiveViews:
     @staticmethod
     def _proof(snapshot, metadata):
         return {'version': 1, 'evidence_class': 'technical', 'brain_id': snapshot.candidate['brain_id'],
-            'comparison_id': snapshot.comparison['id'], 'comparison_hash': snapshot.comparison['matrix_hash'],
+            'comparison_id': snapshot.comparison['id'], 'comparison_hash': snapshot.manifests()['baseline']['comparison_hash'],
             'definition_hash': snapshot.experiment['definition_hash'],
             'source_authority_hash': snapshot.observed['source_authority_hash'],
             'semantic': snapshot.manifests()['baseline']['semantic'], 'views': metadata['views']}

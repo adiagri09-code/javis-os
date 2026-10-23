@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 import improvement_store as IM
 from improvement_experiments import _identifier, _generation
+from improvement_experiment_protocol import comparison_hash
 from improvement_trial_records import _brain
 from improvement_view_protocol import view_manifest
 from improvement_view_schema import assert_installed
@@ -88,7 +89,7 @@ class _SourceCapture:
             result[variant] = view_manifest({'version': 1, 'evidence_class': 'technical', 'brain_id': candidate['brain_id'],
                 'experiment_id': self.experiment['id'], 'context_id': value['context_id'],
                 'context_generation': value['context_generation'], 'comparison_id': self.comparison['id'],
-                'comparison_hash': self.comparison['matrix_hash'], 'definition_hash': self.experiment['definition_hash'],
+                'comparison_hash': comparison_hash(self.comparison), 'definition_hash': self.experiment['definition_hash'],
                 'arm_ordinal': self.comparison['ordinal'], 'arm_hash': self.comparison['arm_hash'],
                 'candidate_id': candidate['id'], 'variant': variant,
                 'target': {**{key: candidate[key] for key in ('target_id', 'base_revision_id', 'base_hash', 'base_generation')},
