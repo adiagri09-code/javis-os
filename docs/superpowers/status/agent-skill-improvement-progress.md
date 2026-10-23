@@ -12,12 +12,20 @@ grant, settings, SDK and profile fence remains at its existing site.
 
 New component9RED then11GREEN0.318s; two actual view/capture tests with an inert
 observerPASS28.805s (12 observations/two full reads; end-of-capture runtime edit
-refused). These are technical fixtures, not native or business proof. Static
-independent review found no actionable issue; independent verification and seven
-sequential affected scripts are pending/in progress. Current source changes the
-native footprint and is deliberately unregistered: do not authorize native or
-account execution from historicale7 proof. No unchanged account retry or deadline
-increase. Plan: `../plans/2026-10-24-agent-skill-improvement-m2d1-view-observation.md`.
+refused). Seven affected scripts94PASS465.156s on identical source maps.
+Independent scoped review APPROVED matching source hashes:11PASS0.350s and one
+view boundaryPASS15.010s. Public unit evidence9525fa0c (committed LF bytes).
+Actual selected-CLI read-only component:12 pins9.172s/12 full reads ->1.796s/2
+full reads, identical pins, no auth/native/model queries. This is not full-pipeline
+latency or business evidence.
+
+Product delta committed a8155c63; exact new81-source profilebe4a5866 has native
+20PASS94.516s on WindowsCLI309/hash5441781f/SDK116. Public qualificationfd52de7a.
+Only one registry entry is added; all four prior entries remain. Metadata5RED
+(missing new registration) then5GREEN0.085s. Scoped registration verification is
+pending; no new account attempt yet. Historicale7 cannot authorize changed source.
+No unchanged account retry or deadline increase. Plan:
+`../plans/2026-10-24-agent-skill-improvement-m2d1-view-observation.md`.
 
 ## Current continuation — raw role artifact boundary, 24 October
 

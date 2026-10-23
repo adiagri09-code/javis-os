@@ -185,4 +185,7 @@ contain native execution or semantic publication. A read-only component measure
 on the configured CLI reduced twelve pin captures from9.172s to1.796s (12 full
 reads to2), returning identical pins. This does not establish whole-pipeline
 latency, a genuine account pair or business gain. Changed source requires its
-own exact native qualification; historical e7 proof is insufficient.
+own exact native qualification; historical e7 proof is insufficient. Profile
+be4a5866 now has20 native enforcement checks94.516s on exact CLI309/SDK116 and
+is registered separately; this qualification uses dummy local providers. A new
+bounded account attempt has not yet run at this checkpoint.

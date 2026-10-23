@@ -9,7 +9,8 @@ Actual selected-account feasibility ddc5af2c made two calls, then the first v4
 candidate cell timed out180s before materialization/query. Its reservation was
 refunded. Preserve history, raw output, usage, deadline and no-retry behavior.
 One subsequent read-only load_current resolved10.266s: twelve create_pin calls
-spent9.246s hashing the same298624160-byte CLI. Profile evidence2c3d38b6.
+spent9.246s hashing the same298624160-byte CLI. Profile evidencec184a053
+(committed LF bytes; the original Windows working-copy hash was2c3d38b6).
 
 Components/callers: improvement_views.EffectiveViews._load_current is synchronous
 and read-only; called by load_current and resolve_request. Nested capture_sources
@@ -52,11 +53,11 @@ a second fresh complete binary read confirms exact original digest AND identity.
   Real create_pin runs separately in component tests. No native readiness is
   inferred from the inert observer; runtime mutation after last capture refuses
   output. Existing actual source mutations remain affected regression checks.
-- [ ] Focused GREEN then existing selection, view sources/lineage/reservations,
+- [x] Focused GREEN then existing selection, view sources/lineage/reservations,
   materialization/qualification and trial runner affected suites sequentially.
   Reuse unchanged native worker/role/sandbox proofs only by exact source; changed
   footprint requires a new exact20 native qualification before account calls.
-- [ ] The old preserved view pins e7 and must refuse changed source; do not patch
+- [x] The old preserved view pins e7 and must refuse changed source; do not patch
   its authority to obtain a positive after-profile. Measure the actual12-pin
   read-only component or a newly prepared legitimate synthetic view with a new
   output file only after correctness checks; report timings and never promise a
