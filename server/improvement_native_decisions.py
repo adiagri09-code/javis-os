@@ -9,10 +9,25 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+from contextlib import closing
 
 import improvement_store as IM
 from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES
 from improvement_native_protocol import _canonical, _digest, _fields, _parse, _uint, MAX_PRIVATE_BYTES
+
+
+def attempt_scope(*, kind, brain_id, receipt, config_pin, capability_hash):
+    """Lexical attempt binding shared by the actual writer and historical reader."""
+    from improvement_native_protocol import _identity, _text, _tree
+    if type(kind) is not str or kind not in ('trial', 'operation'):
+        raise ValueError('invalid_native_attempt_scope')
+    _text(brain_id, 1000); _digest(capability_hash)
+    _tree(receipt); _tree(config_pin)
+    if type(receipt) is not dict or type(config_pin) is not dict:
+        raise ValueError('invalid_native_attempt_scope')
+    return IM._hash({'version': 1, 'kind': kind, 'brain_id': brain_id,
+        'identity': _identity(kind, receipt), 'workspace_hash': IM._hash(receipt),
+        'engine_config_hash': IM._hash(config_pin), 'capability_hash': capability_hash})
 
 
 def _joined(value):
@@ -65,6 +80,46 @@ class NativeImageDecisionStore:
         if type(assets) is not IM.ImprovementStore:
             raise TypeError('concrete_improvement_store_required')
         self.assets = assets
+
+    def read(self, principal, joined, *, scope_hash, connection=None):
+        """Read exact historical evidence; never authorize a current invocation.
+
+        A result publisher supplies its own final transaction connection to keep
+        the event/bytes check in the same publication boundary. No live source,
+        current callback, lease transition or native process is touched here.
+        """
+        brain = IM._brain(principal)
+        _digest(scope_hash)
+        joined, raw = _joined(joined)
+        digest = hashlib.sha256(raw).hexdigest()
+        key = 'native-image:' + IM._hash([scope_hash, joined['launch_nonce'], joined['purpose']])
+
+        def load(conn):
+            record = self.assets._replay(conn, brain, key, 'native_image_decision',
+                {'scope_hash': scope_hash, 'joined_hash': digest})
+            if record is None:
+                raise PermissionError('native_decision_unavailable')
+            _fields(record, {'version', 'scope_hash', 'joined_hash', 'decision', 'blob_hashes'})
+            if (type(record['version']) is not int or record['version'] != 1
+                    or record['scope_hash'] != scope_hash or record['joined_hash'] != digest
+                    or type(record['decision']) is not str or record['decision'] not in ('allow', 'deny')
+                    or type(record['blob_hashes']) is not list
+                    or not 1 <= len(record['blob_hashes']) <= MAX_PRIVATE_BYTES // MAX_ASSET_BYTES):
+                raise AssetUnavailable('native_decision_evidence_unavailable')
+            chunks = []
+            for blob_hash in record['blob_hashes']:
+                _digest(blob_hash)
+                chunks.append(self.assets.blobs.read(brain, blob_hash))
+            if b''.join(chunks) != raw:
+                raise AssetUnavailable('native_decision_evidence_mismatch')
+            return {'decision': record['decision'], 'durable_evidence_hash': IM._hash(record)}
+
+        if connection is not None:
+            return load(connection)
+        if not IM.has_schema(self.assets.store):
+            raise PermissionError('improvement_store_unavailable')
+        with closing(self.assets.store._conn()) as owned:
+            return load(owned)
 
     def persist(self, principal, joined, *, scope_hash, current):
         brain = IM._brain(principal)

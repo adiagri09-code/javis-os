@@ -2,6 +2,20 @@
 
 ## Current continuation — actual profiles, startup2 routes and exit status approved
 
+Historical native decision reader is independently approved4 PASS.891s after
+meaningful missing-API RED4 and author4 PASS.865s. It rereads actual M0 event and
+exact encrypted join bytes, supports same result-publication transaction, and
+does not rerun live authority or write. Shared attempt_scope binds full stored
+receipt/config/brain/identity/capability. Existing persist method AST unchanged.
+Actual independent result/check integration is in progress; no native proof from
+an allow string. Public native-decision-reader records hashes and coverage.
+
+CI readiness: NativeSDKTests now has the same isolated-Windows marker as its
+actual production runtime requirement. Reviewer verified all method bodies AST
+unchanged, sys imported; historical genuine isolated-driver proofs remain valid.
+This is explicit unsupported-platform skipping, not Linux SDK transport coverage;
+pure portable checks remain enabled. Final-head CI and qualification still due.
+
 Owner delegated pilot selection: reconciliation primary, document processing
 secondary, Python bugfix/test technical control. No source/activation expansion.
 

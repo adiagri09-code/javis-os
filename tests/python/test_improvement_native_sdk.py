@@ -101,6 +101,8 @@ class Capture:
     async def __aexit__(self, *args): await self.aclose()
 
 
+@unittest.skipUnless(os.name == 'nt' and sys.flags.isolated,
+                     'owned SDK transport requires isolated Windows driver')
 class NativeSDKTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.m = component(self)
