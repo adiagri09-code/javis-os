@@ -1,5 +1,29 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — manifest4 foundation and early Linux CI approved
+
+Manifest4 readonly foundation independently passes11 .039s after author11 .042s;
+68 immediately affected existing checks pass. Root verified all14 explicit final
+manifest pins with zero mismatches. Public manifest4-foundation preserves exact
+versions1/2/3 behavior and the necessary supported-version test delta2/3/4 vsfuture5.
+Untouched old asset correlator remains UNKNOWN for4. No materializer/profile/
+receipt/check/result/worker/registry now emits or executes the new version.
+
+Early portable Linux CI40029282316 completed SUCCESS on isolated a86c716e snapshot,
+not current branch head. Exact seven portable files still match current checkout;
+image14 .156s, private9 .287s and actual POSIX selector1 .030s pass. Full existing
+workflow succeeds; public portable-channel-ci records log hash/snapshot/limits.
+This closes pending genuine POSIX evidence only, not Windows Selector support,
+new boundary qualification or exact-final-head PR CI. Do not reuse this as final CI.
+
+Next concrete work is actual versioned profile/worker/client factory and completed
+input-write/session proof, followed by durable image callback/current authority
+and result/runner adapters. Static admission must precede every guarded preflight;
+runtime close must precede completion. Then add the explicit closed dummy-only
+qualification admission before freezing all reachable sources, qualify the SAME
+pipeline, register exact bytes, and only then admit configured-account feasibility.
+No live activation/deploy/account retry, M2 completion or Goal completion claimed.
+
 ## Current continuation — actual observation storage and static admission approved
 
 Commit8f2f5678 contains actual Trial/operation observation2 storage: independent18

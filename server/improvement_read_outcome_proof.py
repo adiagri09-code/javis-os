@@ -95,7 +95,7 @@ def correlate_read_outcomes(manifest, workspace, events):
 
 
 def _correlate(manifest, workspace, events):
-    if manifest['version'] not in (2, 3):
+    if manifest['version'] not in (2, 3, 4):
         return _out('unknown', 'read_outcome_protocol_unavailable')
     if (type(workspace) is not dict or type(workspace.get('trial_id')) is not str
             or not _IDENTITY.fullmatch(workspace['trial_id']) or type(workspace.get('attempt')) is not int

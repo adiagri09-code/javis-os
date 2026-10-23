@@ -9,7 +9,7 @@ from improvement_sandbox import _IDENTITY, _frozen, _hash, _json, _manifest
 
 
 class SkillAssetBroker:
-    """Serve only a validated v2/v3 manifest's selected skill for one host attempt.
+    """Serve only a validated v2/v3/v4 manifest's selected skill for one host attempt.
 
     ``read(args)`` accepts an exact plain dictionary of string ``view_id``,
     ``view_hash``, ``asset_id`` and ``content_hash``. A hit returns a fresh dict
@@ -36,7 +36,7 @@ class SkillAssetBroker:
         # _manifest defensively freezes and validates the entire public input,
         # including asset bytes, context, contract, fixtures and view structure.
         pinned = _manifest(manifest)
-        if pinned["version"] not in (2, 3):
+        if pinned["version"] not in (2, 3, 4):
             raise ValueError("unsupported_skill_asset_manifest")
         if type(input_hash) is not str or input_hash != _hash(pinned):
             raise ValueError("trial_input_hash_mismatch")

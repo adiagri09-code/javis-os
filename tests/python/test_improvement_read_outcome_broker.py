@@ -184,8 +184,8 @@ class PinnedReadOutcomeBrokerTests(unittest.TestCase):
         self.assertEqual(broker.observations, ())
         self.assertEqual(broker.fixture_events, ())
 
-    def test_v2_and_v3_only_accept_full_pinned_manifest_with_strict_bindings(self):
-        for version in (2, 3):
+    def test_v2_v3_v4_accept_only_full_pinned_manifest_with_strict_bindings(self):
+        for version in (2, 3, 4):
             value = manifest(version)
             broker = PinnedReadOutcomeBroker(value, trial_id="trial-a", attempt=2, input_hash=sha(canonical(value)))
             self.assertEqual(broker.read(SKILL, skill_args(value))["outcome"], "hit")
@@ -195,7 +195,7 @@ class PinnedReadOutcomeBrokerTests(unittest.TestCase):
             for replacement in replacements:
                 with self.subTest(field=field, replacement=replacement), self.assertRaises(ValueError):
                     self.broker(**{field: replacement})
-        for invalid in (None, [], {**self.value, "extra": "field"}, {**self.value, "version": 4}):
+        for invalid in (None, [], {**self.value, "extra": "field"}, {**self.value, "version": 5}):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 PinnedReadOutcomeBroker(invalid, trial_id="trial-a", attempt=2, input_hash=sha(canonical(invalid)))
         legacy = manifest(1)

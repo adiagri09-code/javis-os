@@ -40,7 +40,7 @@ def _request_snapshot(value):
 class PinnedReadOutcomeBroker:
     """Wrap actual skill/fixture decisions in closed, attempt-bound envelopes.
 
-    Accept only a fully validated materialized manifest2/3 with the canonical
+    Accept only a fully validated materialized manifest2/3/4 with the canonical
     input_hash and the same strict trial_id/attempt bounds as SkillAssetBroker.
     An optional fixture_broker must be a concrete FixtureBroker with exactly the
     pinned grant and fixture inventory. It remains a host-owned capability; its
@@ -74,7 +74,7 @@ class PinnedReadOutcomeBroker:
         if type(manifest) is not dict:
             raise ValueError("invalid_read_manifest")
         pinned = _manifest(manifest)
-        # This unchanged broker also enforces v2/v3 and strict trial/hash binding.
+        # This broker also enforces v2/v3/v4 and strict trial/hash binding.
         self._skill_broker = SkillAssetBroker(pinned, trial_id=trial_id, attempt=attempt, input_hash=input_hash)
         self._grant_hash = pinned["grant_hash"]
         fixtures = pinned["case"]["fixtures"]
