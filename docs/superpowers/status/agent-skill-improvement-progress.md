@@ -141,6 +141,22 @@
   has no qualified registration; Tasks6–9/public C and all business/live gates stay
   open. T4 early LinuxCI39900250323 is still in progress on a43638e7; it cannot
   verify these newer T5 sources. No additional model/auth call occurred.
+- Task6 generated proposal/one-repair/staging component is complete locally:
+  concrete owned workflow uses real role calls/results/artifacts and actual A
+  authoring. Whole batch and generated publication/links/events share one writer;
+  mid-batch failure rolls back all A rows. Max remaining two slots includes manual
+  drafts; same-key concurrent callers share one operation; one structural repair
+  retains original data/allowance. No new region/exact-diff/source/activation grant.
+  Source/grant/current-call/native evidence drift fences publication. Repeated HTTP
+  cancellation/shutdown retains real worker/admission/publication threads after DB
+  terminal status. Missing native evidence cannot become structural repair. Native
+  unobservable reasoning/input-use remain unknown, drafts remain A-unreviewed and
+  business_proof=false. Final scoped9/9 GREEN330s (new workflow18 GREEN164s inside
+  it), on pinned unchanged LF sources. Actual Task4 retry head a43638e7 LinuxCI
+  39900250323 is now SUCCESS; T5 head306e0871 Linux39901547032 remains in progress.
+  Current footprint27 files has no qualified native registration; Task7 semantic/
+  dependency receipts, Task8 API/full stop, Task9 qualification/whole-C review/final
+  CI and all business/live gates stay open. No actual model/auth query or deploy.
 - Generated proposals remain A-unreviewed with separately pinned semantic and
   dependency assessments. No assessment/owner product confirmation waives source,
   runtime/view, qualification, activation or real business-data gates. Candidate/

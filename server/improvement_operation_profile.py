@@ -29,6 +29,9 @@ def operation_user_prompt(manifest):
     if manifest['request']['kind'] == 'propose' and manifest['data'].get('kind') == 'authorized_tuning':
         from improvement_generation_protocol import render_proposer_input
         return _json({'request': manifest['request'], 'proposer_task': json.loads(render_proposer_input(manifest['data']))})
+    if manifest['request']['kind'] == 'repair' and manifest['data'].get('kind') == 'authorized_structural_repair':
+        from improvement_generation_protocol import render_repair_input
+        return _json({'request': manifest['request'], 'repair_task': json.loads(render_repair_input(manifest['data']))})
     return _json({"request": manifest["request"], "authorized_input": manifest["data"]})
 
 

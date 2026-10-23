@@ -279,57 +279,72 @@ class SkillCandidates:
             raise ValueError("candidate_sensitive_content")
         IM.ensure(self.store)
         with self.store._Tx(self.store) as connection:
-            replay = self.assets._replay(connection, brain, event_key, "skill_candidate_stage", payload)
-            if replay is not None:
-                return replay
-            self._edit_open(connection, brain, experiment_id)
-            self._guard(connection, principal, state, observed)
-            candidates = connection.execute("SELECT target_id,base_revision_id,ordinal FROM improvement_skill_candidates "
-                "WHERE brain_id=? AND experiment_id=? ORDER BY ordinal", (brain, experiment_id)).fetchall()
-            if len(candidates) >= 2:
-                raise IM.ConflictError("candidate_slots_full")
-            if any(row["target_id"] != patch["target_id"] or row["base_revision_id"] != patch["base_revision_id"] for row in candidates):
-                raise IM.ConflictError("candidate_primary_component_changed")
-            ordinal = len(candidates) + 1
-            region = self._region(connection, brain, state, observed, patch)
-            if region is not None:
-                validated = validate_body_patch(raw, patch, {"start": region["start"], "end": region["end"], "before_hash": region["before_hash"]})
-            evidence = self._evidence(connection, brain, state["context"], patch["evidence_refs"])
-            owner_key = "candidate-owner-" + IM._hash([brain, event_key])
-            provenance = {"version": 1, "context_id": state["context"]["id"], "experiment_id": experiment_id,
-                "target_id": patch["target_id"], "base_revision_id": patch["base_revision_id"], "before_hash": patch["before_hash"],
-                "after_hash": validated["content_hash"], "patch_hash": validated["patch_hash"], "ordinal": ordinal,
-                "source_authority_hash": observed["source_authority_hash"], "context_generation": state["grant"]["generation"],
-                "authority_id": region["id"] if region is not None else None,
-                "authority_generation": 1 if region is not None else None,
-                "owner_request_event": owner_key, "evidence_refs": evidence,
-                "semantic_status": "unreviewed", "reference_inventory": validated["reference_inventory"], "dependency_status": "unresolved"}
-            content_hash = self.blobs.write(brain, validated["content"])
-            patch_hash = self.blobs.write(brain, IM._json(patch).encode("utf-8"))
-            provenance_hash = self.blobs.write(brain, IM._json(provenance).encode("utf-8"))
-            if content_hash != validated["content_hash"] or patch_hash != validated["patch_hash"]:
-                raise AssetUnavailable("candidate_publication_mismatch")
-            self._guard(connection, principal, state, observed)
-            self._evidence(connection, brain, state["context"], patch["evidence_refs"])
-            if region is not None:
-                current_region = self._region(connection, brain, state, observed, patch)
-                if current_region is None or dict(current_region) != dict(region):
-                    raise IM.ConflictError("candidate_edit_authority_changed")
-            candidate_id = "isc_" + secrets.token_hex(12)
-            connection.execute("INSERT INTO improvement_skill_candidates "
-                "(id,brain_id,context_id,experiment_id,target_id,base_revision_id,base_hash,base_generation,ordinal,content_hash,"
-                "byte_size,patch_hash,provenance_hash,authority_id,authority_generation,semantic_status,owner_event_key,created_at) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
-                    candidate_id, brain, state["context"]["id"], experiment_id, patch["target_id"], patch["base_revision_id"],
-                    patch["before_hash"], state["target"]["generation"], ordinal, content_hash, validated["byte_size"], patch_hash,
-                    provenance_hash, region["id"] if region is not None else None, 1 if region is not None else None,
-                    "unreviewed", event_key, time.time()))
-            owner_result = {"context_id": state["context"]["id"], "experiment_id": experiment_id,
-                            "target_id": patch["target_id"], "patch_hash": patch_hash, "candidate_id": candidate_id}
-            self.assets._event(connection, principal, owner_key, "skill_candidate_owner_request", payload, owner_result)
-            result = self.records._public(connection, self.records._row(connection, brain, candidate_id))
-            self.assets._event(connection, principal, event_key, "skill_candidate_stage", payload, result)
-            return result
+            return self._stage_in(connection, principal, experiment_id, patch, event_key=event_key,
+                                  state=state, observed=observed, raw=raw)
+
+    def _stage_in(self, connection, principal, experiment_id, patch, *, event_key, state, observed, raw):
+        """Actual owner staging inside the caller's writer, including batch rollback."""
+        IC.CaseStore(self.assets)._own_transaction(connection)
+        brain = _brain(principal)
+        if (state['context']['experiment_id'] != experiment_id or state['target']['id'] != patch['target_id']
+                or state['target']['current_revision_id'] != patch['base_revision_id']
+                or state['target']['source_hash'] != patch['before_hash']):
+            raise IM.ConflictError('candidate_stage_scope_changed')
+        payload = {"experiment_id": experiment_id, "patch_hash": IM._hash(patch)}
+        validated = validate_body_patch(raw, patch, None)
+        if redact(patch) != patch or redact(validated["content"].decode("utf-8")) != validated["content"].decode("utf-8"):
+            raise ValueError("candidate_sensitive_content")
+        replay = self.assets._replay(connection, brain, event_key, "skill_candidate_stage", payload)
+        if replay is not None:
+            return replay
+        self._edit_open(connection, brain, experiment_id)
+        self._guard(connection, principal, state, observed)
+        candidates = connection.execute("SELECT target_id,base_revision_id,ordinal FROM improvement_skill_candidates "
+            "WHERE brain_id=? AND experiment_id=? ORDER BY ordinal", (brain, experiment_id)).fetchall()
+        if len(candidates) >= 2:
+            raise IM.ConflictError("candidate_slots_full")
+        if any(row["target_id"] != patch["target_id"] or row["base_revision_id"] != patch["base_revision_id"] for row in candidates):
+            raise IM.ConflictError("candidate_primary_component_changed")
+        ordinal = len(candidates) + 1
+        region = self._region(connection, brain, state, observed, patch)
+        if region is not None:
+            validated = validate_body_patch(raw, patch, {"start": region["start"], "end": region["end"], "before_hash": region["before_hash"]})
+        evidence = self._evidence(connection, brain, state["context"], patch["evidence_refs"])
+        owner_key = "candidate-owner-" + IM._hash([brain, event_key])
+        provenance = {"version": 1, "context_id": state["context"]["id"], "experiment_id": experiment_id,
+            "target_id": patch["target_id"], "base_revision_id": patch["base_revision_id"], "before_hash": patch["before_hash"],
+            "after_hash": validated["content_hash"], "patch_hash": validated["patch_hash"], "ordinal": ordinal,
+            "source_authority_hash": observed["source_authority_hash"], "context_generation": state["grant"]["generation"],
+            "authority_id": region["id"] if region is not None else None,
+            "authority_generation": 1 if region is not None else None,
+            "owner_request_event": owner_key, "evidence_refs": evidence,
+            "semantic_status": "unreviewed", "reference_inventory": validated["reference_inventory"], "dependency_status": "unresolved"}
+        content_hash = self.blobs.write(brain, validated["content"])
+        patch_hash = self.blobs.write(brain, IM._json(patch).encode("utf-8"))
+        provenance_hash = self.blobs.write(brain, IM._json(provenance).encode("utf-8"))
+        if content_hash != validated["content_hash"] or patch_hash != validated["patch_hash"]:
+            raise AssetUnavailable("candidate_publication_mismatch")
+        self._guard(connection, principal, state, observed)
+        self._evidence(connection, brain, state["context"], patch["evidence_refs"])
+        if region is not None:
+            current_region = self._region(connection, brain, state, observed, patch)
+            if current_region is None or dict(current_region) != dict(region):
+                raise IM.ConflictError("candidate_edit_authority_changed")
+        candidate_id = "isc_" + secrets.token_hex(12)
+        connection.execute("INSERT INTO improvement_skill_candidates "
+            "(id,brain_id,context_id,experiment_id,target_id,base_revision_id,base_hash,base_generation,ordinal,content_hash,"
+            "byte_size,patch_hash,provenance_hash,authority_id,authority_generation,semantic_status,owner_event_key,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
+                candidate_id, brain, state["context"]["id"], experiment_id, patch["target_id"], patch["base_revision_id"],
+                patch["before_hash"], state["target"]["generation"], ordinal, content_hash, validated["byte_size"], patch_hash,
+                provenance_hash, region["id"] if region is not None else None, 1 if region is not None else None,
+                "unreviewed", event_key, time.time()))
+        owner_result = {"context_id": state["context"]["id"], "experiment_id": experiment_id,
+                        "target_id": patch["target_id"], "patch_hash": patch_hash, "candidate_id": candidate_id}
+        self.assets._event(connection, principal, owner_key, "skill_candidate_owner_request", payload, owner_result)
+        result = self.records._public(connection, self.records._row(connection, brain, candidate_id))
+        self.assets._event(connection, principal, event_key, "skill_candidate_stage", payload, result)
+        return result
 
     def authorize_diff(self, principal, candidate_id, *, expected_generation, before_hash, after_hash, event_key):
         brain = _brain(principal)

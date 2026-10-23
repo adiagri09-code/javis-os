@@ -298,19 +298,51 @@ Interfaces: ProposalService.generate(owner,experiment_id,expected_generation,
 event_key) and actual durable batch/repair records. Connect real improve_propose
 operations to A's existing validator/staging with immutable generated provenance.
 
-- [ ] RED: native synthetic output becomes exact A proposals with actual role
+- [x] RED: native synthetic output becomes exact A proposals with actual role
   call/result refs; a malformed batch gets at most one durable structural repair.
-- [ ] Validate the entire batch before publishing any proposals; crash/replay/
+- [x] Validate the entire batch before publishing any proposals; crash/replay/
   repair cannot consume a third A slot or partially authorize invalid output.
-- [ ] Factor a transaction-owned A stage primitive only where necessary; preserve
+- [x] Factor a transaction-owned A stage primitive only where necessary; preserve
   existing manual API/replay/hash behavior. Publish original owner intent, real
   operation artifact hash and candidate link atomically under final source CAS.
-- [ ] Keep A semantic_status=unreviewed immutable. An editable region authorizes
+- [x] Keep A semantic_status=unreviewed immutable. An editable region authorizes
   only actual granted bytes; generation never mints exact-diff/source grants.
   Proposals without edit authority remain readable/staged and unavailable to run.
-- [ ] Test protected/frontmatter/description/ownership/enabled/dependency escapes,
+- [x] Test protected/frontmatter/description/ownership/enabled/dependency escapes,
   stale source after native output, concurrent generate/repair and cancellation.
-- [ ] GREEN genuine generation/repair/private-review/old-A regressions; commit.
+- [x] GREEN genuine generation/repair/private-review/old-A regressions; commit.
+
+Task6 component complete locally: concrete ProposalService owns actual input/
+intent/op admission, existing OperationTasks native completion and result publication.
+A transaction-owned _stage_in preserves original public stage/replay behavior and
+lets whole-batch A candidates/events plus generated publication/links commit in one
+writer. Original owner region grants remain unchanged; no new exact-diff/source/
+activation grant. Actual generated role call/result/artifact/input refs are retained.
+
+Closed native JSON rejects duplicate keys and validates the whole batch, target,
+actual evidence and remaining global slots before A inserts. One genuine repair
+operation receives only original input/allowance, actual invalid artifact and fixed
+validation code. Invalid repair terminates without looping. Missing observable
+native evidence cannot be repaired into permission. Unobservable reasoning/input-use
+remain unknown; all A drafts stay unreviewed and business_proof=false.
+
+Evidence: actual2 workflows RED5.214s -> GREEN24.888s; first7 GREEN79.391s.
+Actual ledger model mismatch before product consumption and a preflight after
+shutdown during slow input reproduced2 RED17.886s; fixes plus repeated HTTP cancel,
+DB-terminal publication-thread ownership, owner-cancel fence and strict JSON6
+GREEN47.447s. Full body-patch schema now reaches both real role prompt renderers;
+its missing-contract case reproduced RED. Owner-region/two drafts, unsupported
+preflight, incomplete native inventory and renderer/duplicate-key5 GREEN27.741s.
+
+Final affected9-script regression GREEN330s on canonical LF sources with all7
+source/test hashes unchanged through the run. New workflow18 cases GREEN164s
+inside it, including concurrent same-key callers with one existing manual slot,
+mid-batch failure rollback, source drift, bounded repair and actual current calls.
+Old A authoring/private review/body rules and operation input/result/worker/runner
+passed. No full-improvement sweep or real native account/model query. Task4 retry
+head a43638e7 LinuxCI39900250323 now SUCCESS; newer T5 Linux39901547032 is still
+in progress and neither is exact-final-C acceptance. Native footprint27 files,
+qualification registry empty; Tasks7–9/public C and business/live gates remain open.
 
 ## Task 7 — semantic/dependency evidence with exact provenance
 
