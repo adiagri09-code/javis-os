@@ -1,5 +1,32 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — owned environment and durable decision store approved
+
+Commit19e1890b fixes actual engine startup mutation before explicit owned client
+construction: author2PASS.876s, independent2PASS.849s, affected factory2PASS.812s
+and both legacy startup diagnostics pass. Absent/None factory keeps old startup
+override; native factory preserves exact environment, SDK default initialization
+availability bound and separate immutable lifetime. Public owned-client-environment
+records constructor-sentinel scope, no actual native/account query proof.
+
+New NativeImageDecisionStore uses existing M0 events and encrypted blobs with
+two actual-transaction current-authority checks, exact replay bytes, scope/join
+hashes and mismatch denial. Author8PASS1.547s, independent8PASS1.688s after missing
+unit8FAIL1.151s. Public native-decision-store records synthetic input/current guard
+and no enabled production callback. Current callback integration, cancellation
+settlement and native provenance remain separate obligations.
+
+Actual observation storage candidate passes new18 and affected legacy9; scoped
+independent review is underway. Root verified all10 explicit storage manifest pins
+with zero mismatches. No result readers/runners/receipts or native routes enabled.
+
+Read-only worker audit is persisted in the existing integration plan. Critical
+remaining points are registration/static admission BEFORE any native preflight,
+mandatory runtime close before worker_complete despite common-engine disconnect
+suppression, manifest4/receipt4/read-outcome integration, and an explicit closed
+dummy qualification policy in final canonical source. The old patched-opener
+harness cannot qualify the new path. No intermediate registration/account retry.
+
 ## Current continuation — worker/codec approved; actual durable consumers in progress
 
 Selected pilots are reconciliation primary, document processing secondary and

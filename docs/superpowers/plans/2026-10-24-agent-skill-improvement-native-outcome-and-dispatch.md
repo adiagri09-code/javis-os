@@ -614,3 +614,33 @@ bytes and repeats current authority; a previous allow is never current authority
 Cancellation is settled by the existing host-owned transition wrapper and cannot
 send a late allow. This store does not authenticate peer/native provenance or
 replace the actual host join, selected-account guard, or accounting ACK.
+
+### Worker integration audit constraints
+
+Read-only audit of the actual callers confirms startup2 must be decoded from the
+original initial bytes, then adopted before broader imports. Preflight must have
+registration/current source/SDK/managed-policy admission BEFORE any guarded CLI
+launch; verify_observed after preflight is necessary but insufficient alone.
+The explicit native client factory uses a copied options.env for its transport,
+with the original options retained for SDK callbacks. Its query policy comes from
+the validated manifest, exact prompt/cwd/model/effort and fixture_only/pinned_skill
+inventory. No resume or legacy hidden-process shim on this path.
+
+Engine environment correction is committed19e1890b. SDK initialize uses its own
+default availability bound; no new ambient timeout variable is installed for the
+owned client. Token expiry gate does not mutate the environment. Common engine
+disconnect suppresses exceptions, so native_runtime.aclose MUST succeed before
+worker_complete; session close is still mandatory in outer finally.
+
+The old dummy-provider harness patches its opener/shim and bypasses run_request;
+it cannot qualify the new production boundary. Current closed startup/SDK env
+also refuses dummy endpoint/API/config/proxy fields, and live auth verification
+correctly requires registration and subscription auth. Before final freeze, add
+one explicit closed qualification-only admission/policy: frozen candidate/source/
+runtime, synthetic workspace, numeric loopback endpoint, literal dummy key,
+empty auth home/config and strict existing proxy guards. Keep live/default auth
+policy unchanged; qualification scope can never yield a live capability or
+production eligibility. Exercise the SAME fixed entrypoints/run_request/profile/
+factory/capture/guardian/durable consumers under that scope, with actual dummy
+auth output retained. No opener/source/env patching after freeze. This branch is
+not implemented or qualified yet; do not register intermediate component bytes.
