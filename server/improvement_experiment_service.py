@@ -17,7 +17,7 @@ from improvement_trials import TERMINAL
 from improvement_execution_limits import (MAX_COMPARISON_TRIALS, MAX_PREPARATION_TRIALS,
     MAX_TRIAL_ATTEMPTS, MAX_ROLE_OPERATIONS, MAX_ROLE_ATTEMPTS)
 from improvement_operation_schema import TERMINAL as ROLE_TERMINAL
-from improvement_comparison_links import comparison_tables, comparison_table, experiment_trial_scope
+from improvement_comparison_links import comparison_tables, has_view_binding, experiment_trial_scope
 
 
 def _call_settled(status, engine_at):
@@ -47,6 +47,15 @@ class ExperimentService:
         self.operation_tasks = OperationTasks(self.execution, OperationRunner(self.execution))
         self.proposals = ProposalService(self.execution, self.operation_tasks)
         self.semantic = SemanticReview(self.execution, self.operation_tasks)
+        from improvement_comparison_schedule import ComparisonSchedule
+        from improvement_view_admission import ViewExperimentAdmission
+        from improvement_views import EffectiveViews
+        self.schedule = ComparisonSchedule(plans, self.trials)
+        self.views = plans.host._views
+        if self.views is None:
+            self.views = EffectiveViews(plans, self.semantic)
+        self.view_admission = ViewExperimentAdmission(plans, self.views, self.schedule)
+        self.trials.bind_views(self.views)
         self._operations = {}
         self._loop = None
         self._closed = False
@@ -391,53 +400,34 @@ class ExperimentService:
             {"expected_generation": expected_generation}, stop)
 
     def _next_slot(self, principal, experiment_id, comparison_id, expected_generation, event_key):
+        return self.schedule.next_slot(principal, experiment_id, comparison_id, expected_generation, event_key)
+
+    def _admit_next(self, principal, experiment_id, comparison_id, expected_generation, event_key):
         brain = _brain(principal)
         with closing(self.store._conn()) as connection:
-            # An admission replay already chose its immutable slot. Recover it
-            # before current-state checks, then Admission verifies the exact event.
-            event = connection.execute("SELECT operation,result_json FROM improvement_events WHERE brain_id=? AND event_key=?",
-                                       (brain, event_key)).fetchone()
-            if event is not None:
-                if event["operation"] != "experiment_admit_slot":
-                    raise IM.ConflictError("event_payload_conflict")
-                saved = json.loads(event["result_json"])
-                trial = self.trials._row(connection, brain, saved["trial_id"])
-                return json.loads(trial["request_json"])["lineage"]["cell_position"]
-            row = self.records._row(connection, brain, experiment_id)
-            self.records._public(row)
-            if row["generation"] != expected_generation or row["phase"] not in ("probing", "comparing", "qualifying"):
-                raise IM.ConflictError("experiment_state_stale")
-            comparison = connection.execute("SELECT * FROM improvement_comparisons WHERE brain_id=? AND experiment_id=? AND id=?",
-                                            (brain, experiment_id, comparison_id)).fetchone()
-            if comparison is None:
-                raise PermissionError("experiment_comparison_unavailable")
-            table = comparison_table(connection, brain, comparison_id)
-            links = list(connection.execute("SELECT l.cell_position,l.trial_id,t.status,t.attempt,a.status AS attempt_status,"
-                "a.result_json,a.workspace_json FROM " + table + " l "
-                "JOIN improvement_trials t ON t.id=l.trial_id AND t.brain_id=l.brain_id "
-                "LEFT JOIN improvement_trial_attempts a ON a.trial_id=t.id AND a.brain_id=t.brain_id AND a.attempt=t.attempt "
-                "WHERE l.brain_id=? AND l.comparison_id=? ORDER BY l.cell_position LIMIT 4001", (brain, comparison_id)))
-            if ([row["cell_position"] for row in links] != list(range(len(links)))
-                    or any(row["status"] not in TERMINAL or row['attempt_status'] not in TERMINAL or row['result_json'] is None for row in links)):
-                raise IM.ConflictError("experiment_cell_pending_or_gapped")
-            if len(links) >= comparison["cell_count"]:
-                raise IM.ConflictError("experiment_comparison_exhausted")
-            for link in links:
-                try:
-                    pointer = json.loads(link['result_json'])
-                    if type(pointer) is not dict or set(pointer) != {'result_id', 'result_hash', 'blob_hash'}:
-                        raise ValueError('invalid_result_pointer')
-                    result = connection.execute('SELECT result_hash,blob_hash FROM improvement_trial_results '
-                        'WHERE id=? AND brain_id=? AND trial_id=? AND attempt=?',
-                        (pointer['result_id'], brain, link['trial_id'], link['attempt'])).fetchone()
-                    if result is None or any(result[key] != pointer[key] for key in ('result_hash', 'blob_hash')):
-                        raise ValueError('missing_published_result')
-                    receipt = json.loads(link['workspace_json']) if link['workspace_json'] is not None else None
-                    if not self.trials.workspace.cleanup_proven(link['trial_id'], link['attempt'], receipt):
-                        raise ValueError('cleanup_unproven')
-                except (ValueError, TypeError, KeyError) as error:
-                    raise IM.ConflictError('experiment_cell_pending_or_incomplete') from error
-            return len(links)
+            view = has_view_binding(connection, brain, comparison_id)
+        if view:
+            return self.view_admission.admit_next(principal, experiment_id, comparison_id,
+                expected_generation=expected_generation, event_key=event_key)
+        position = self._next_slot(principal, experiment_id, comparison_id, expected_generation, event_key)
+        with closing(self.store._conn()) as connection:
+            replay = connection.execute('SELECT 1 FROM improvement_events WHERE brain_id=? AND event_key=?', (brain, event_key)).fetchone()
+            if replay is None:
+                self.schedule.require_idle(connection, brain, experiment_id)
+        if replay is not None:
+            return self.admission.admit(principal, experiment_id, comparison_id, position,
+                expected_generation=expected_generation, event_key=event_key)
+        handle = self.trials.workspace.acquire_brain_execution(brain)
+        if handle is None:
+            raise IM.ConflictError('experiment_execution_busy')
+        try:
+            position = self._next_slot(principal, experiment_id, comparison_id, expected_generation, event_key)
+            with closing(self.store._conn()) as connection:
+                self.schedule.require_idle(connection, brain, experiment_id)
+            return self.admission.admit(principal, experiment_id, comparison_id, position,
+                expected_generation=expected_generation, event_key=event_key)
+        finally:
+            handle.close()
 
     async def next(self, principal, experiment_id, comparison_id, *, expected_generation, event_key):
         _identifier(comparison_id)
@@ -446,9 +436,7 @@ class ExperimentService:
         async def start():
             admitted, handed_off = None, False
             try:
-                position = await _settled_call(self._next_slot, principal, experiment_id, comparison_id, expected_generation, event_key)
-                admitted = await _settled_call(self.admission.admit, principal, experiment_id, comparison_id, position,
-                    expected_generation=expected_generation, event_key=event_key)
+                admitted = await _settled_call(self._admit_next, principal, experiment_id, comparison_id, expected_generation, event_key)
                 current = await asyncio.to_thread(self.trials.get, principal, admitted.trial_id)
                 state = await asyncio.to_thread(self.records.get, principal, experiment_id)
                 if current["status"] == "reserved":

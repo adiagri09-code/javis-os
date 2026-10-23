@@ -355,6 +355,26 @@ Current76-source profilebc7f176a is still unregistered. Owned admission/kernel
 barriers, v4 report consumers and actual final-registry ownership remain OPEN;
 the metadata cleanup check alone does not prove the complete handoff boundary.
 
+Task3 owned-next checkpoint: concrete ComparisonSchedule is shared by service and
+ViewExperimentAdmission. Closed view event payload is exactly experiment_id,
+comparison_id,expected_generation; its position comes from the frozen schedule.
+Cold exact replay precedes current authority/kernel checks. New admissions hold
+the actual brain barrier through fresh scoped idle/schedule checks, current
+source/semantic/native preflight and atomic existing Trial/Call/view-link/event.
+Legacy service next also holds that barrier without changing legacy event bytes.
+New view source is bound to both same-store TrialStore instances and the host.
+Both new modules joined the native footprint in the SAME reachable change.
+Seven scoped next/handoff/cancellation checks plus64 affected API/lifetime/stop/
+profile checks passed (71 total;401.851s recorded time, basis per evidence row).
+Evidence `../evidence/2026-10-23-m2d1-task3-owned-next.json`, SHA256
+4d9df2ba736bf8fc736dc2d8e0e19d10b8f24cf406d7ee0dc99684b1aa944221.
+Current78-source profile058166e7 remains unregistered, with zero real model calls.
+Retained-host/closed-workflow v4 resolver lifecycle still needs its scoped audit;
+no task/resume support is claimed. Actual v4 report projection, existing final
+qualification-registry ownership, real workspace/native and public controls
+remain open. Task3 NOT done. Earlier Linux39949800035 succeeded only ab5dc1ef;
+Linux39952941333 on52c79f1c is still running and cannot qualify this new code.
+
 Next additive table contract (before SQL): `improvement_view_trial_links` columns
 are `comparison_id,brain_id,experiment_id,cell_position,trial_id,request_hash,
 pair_id,case_id,repeat,variant,view_id,view_hash,binding_hash,created_at`.

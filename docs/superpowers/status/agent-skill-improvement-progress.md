@@ -135,6 +135,19 @@ Task3 still lacks complete shared stop/recovery/report/next/admission scopes and
 existing qualification-registry ownership. V4 materialization explicitly denies
 until Task4 implements it. Task3 and D remain OPEN; no live scope is enabled.
 
+Lifecycle1a09a0e3 then passed28 affected checks (182.812s): stop/refund/recovery
+includes actual v4 links under the shared12000 comparison bound, and next refuses
+pending/terminal-no-result slots. Owned next now passes71 scoped+affected checks
+(401.851s recorded, basis per row), evidence
+`../evidence/2026-10-23-m2d1-task3-owned-next.json` SHA256
+4d9df2ba736bf8fc736dc2d8e0e19d10b8f24cf406d7ee0dc99684b1aa944221.
+Actual brain barrier covers next/source/native-preflight/Trial+Call reservation;
+concurrent owner keys reserve once and cancelled HTTP stays owned through stop.
+Current native profile is78 sources/058166e7, deliberately unregistered. No real
+query or actual v4 materialization. View report/final registry, retained lifetime
+audit, actual workspace/native qualification and public controls remain OPEN.
+Early Linux39949800035 succeeded on ab5dc1ef; later source needs its own CI.
+
 - Final affected regression21/21 GREEN,663.451s, qualified across two frozen
   segments: first15 passed scripts retain identical product/helper/test bytes;
   only the failed standalone task-drain test changed from a30ms scheduler sample

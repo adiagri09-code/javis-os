@@ -42,7 +42,8 @@ PROFILE_SOURCES = ("improvement_claude.py", "improvement_sandbox.py", "improveme
                    "improvement_views.py", "improvement_view_sources.py", "improvement_view_history.py", "improvement_view_lineage.py",
                    "improvement_view_trial_protocol.py", "improvement_view_protocol.py", "improvement_view_schema.py",
                    "improvement_store.py", "improvement_blobs.py", "improvement_cases.py", "improvement_case_schema.py",
-                   "improvement_candidate_records.py", "improvement_candidate_schema.py", "improvement_skill_patch.py")
+                   "improvement_candidate_records.py", "improvement_candidate_schema.py", "improvement_skill_patch.py",
+                   "improvement_comparison_schedule.py", "improvement_view_admission.py")
 VERIFIED_NATIVE_RUNTIMES = {("win32", "2.1.304",
     "019e5174d5d954585edb1a946fe280e44a973050b4897034adf0e16306f85fdd", "0.2.116"),
     ("win32", "2.1.308", "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53", "0.2.116")}

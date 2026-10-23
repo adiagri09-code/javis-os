@@ -134,7 +134,8 @@ class NativeFootprintTests(unittest.TestCase):
         self.assertIsNone(profile_qualification(pin | {'profile_hash': profile_hash()}, 'win32'))
         self.assertTrue({'improvement_trials.py', 'improvement_trial_host.py', 'improvement_views.py',
             'improvement_view_sources.py', 'improvement_view_history.py', 'improvement_view_lineage.py',
-            'improvement_view_trial_protocol.py', 'improvement_view_protocol.py'} <= set(PROFILE_SOURCES))
+            'improvement_view_trial_protocol.py', 'improvement_view_protocol.py',
+            'improvement_comparison_schedule.py', 'improvement_view_admission.py'} <= set(PROFILE_SOURCES))
 
 
 if __name__ == '__main__':
