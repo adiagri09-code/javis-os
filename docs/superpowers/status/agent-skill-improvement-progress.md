@@ -165,6 +165,20 @@ c56e88ee52a9813711021db8d93984f53594d0ee42bdbb519eab8679dcf7c60e.
 Current78-source profilebfda8912 is UNREGISTERED. No real query/native execution,
 ordinary D2 task/session resume, business or rollout acceptance is claimed.
 
+Report checkpoint:63 tests passed sequentially in166.953s on one frozen source
+map. Real pending v4 Trial/Call links now appear in reports; missing evidence
+remains inconclusive. Current owner meaning veto blocks new reporting, while
+historical report bytes/hash and cold replay remain unchanged, including the
+older metadata-only prototype with no result refs. Full18 integrity checks and
+report v1 envelope remain intact. Evidence
+`../evidence/2026-10-23-m2d1-task3-reports.json`, SHA256
+aabb253c30404d6155ba2bba92981285462da56e9e6439c5218abc363567609d.
+Current78-source profile4e3ecee0 is unregistered; final qualification ownership,
+actual view workspace/native execution and public controls remain OPEN.
+Linux39957029202 failed on olderdad605c3, before the fixture correction; current
+Linux39959675109 remains in progress on254a90ca, preceding this report change.
+No real model query or business/live acceptance is claimed.
+
 - Final affected regression21/21 GREEN,663.451s, qualified across two frozen
   segments: first15 passed scripts retain identical product/helper/test bytes;
   only the failed standalone task-drain test changed from a30ms scheduler sample

@@ -401,6 +401,34 @@ Current78-source profilebfda8912 remains unregistered. This resolves concrete
 service reconstruction only; D2 ordinary task/session resume is still unverified.
 Task3 v4 report projection/final registry and Tasks4/5 remain OPEN.
 
+Next report interface ruling before code: keep the existing closed version1
+comparison-report envelope and immutable historical bytes. It is runtime-neutral;
+exact result_refs pin each actual TrialResult and its full request/view identity.
+An explicit v4 TrialResult has version4 and effective_view exactly equal to the
+closed request.view; no runtime v2 projection or hash substitution. Preserve all
+18 B native checks and unknown/inconclusive outcomes. Snapshot selects one actual
+comparison link format from its immutable binding, authenticates publication and
+view descriptors in SQL without warming files; explicit current report creation
+requires the concrete current view/semantic source and tuning-only common source
+capture. Cold historical reads/replay do not require current grants/files/native.
+New pure tests use labeled untrusted report dictionaries only; integration tests
+use genuine pending v4 Trials and never fabricate successful future results or
+qualification. Affected modules: comparison_results plus existing linked readers;
+tests: new view_reports, existing comparison_results/reports/plans and view/source
+authority boundaries as their actual changes require. No Task3 completion yet.
+
+Task3 report checkpoint: 63 checks across view_reports6, comparison_results19,
+comparison_reports13, comparison_plans24 and NativeFootprint1 passed sequentially
+in166.953s on one unchanged source map. Actual pending v4 Trial/Call is captured;
+no successful native result is fabricated. New reports recheck current meaning;
+historical replay/read preserves exact report bytes, including all-absent result
+refs on the older metadata-only schema7 prototype. Explicit v4 projection retains
+all18 native checks and the comparison-report v1 envelope. Portable evidence
+`../evidence/2026-10-23-m2d1-task3-reports.json`, SHA256
+aabb253c30404d6155ba2bba92981285462da56e9e6439c5218abc363567609d.
+Current78-source profile4e3ecee0 remains unregistered. Final registry, actual
+workspace/native and public controls remain OPEN; Task3 is not complete.
+
 Next additive table contract (before SQL): `improvement_view_trial_links` columns
 are `comparison_id,brain_id,experiment_id,cell_position,trial_id,request_hash,
 pair_id,case_id,repeat,variant,view_id,view_hash,binding_hash,created_at`.
