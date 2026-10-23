@@ -2,8 +2,9 @@
 
 This boundary stores proposed experiment identity and immutable comparison
 lineage in the existing resonance database. It is not a new Goal, monetary
-ledger, execution grant or production activation pointer. M2B is being implemented
-in six units; this document records the implemented storage unit first.
+ledger, execution grant or production activation pointer. Its supported engineering
+boundary was published as0.293.0/PR800; positive final execution still requires
+genuine C+D semantic/effective-view support and the full M2 gates remain open.
 
 ## Schema5 and recovery
 
@@ -244,5 +245,7 @@ The current four-file native profile is qualified separately in
 `agent-skill-runtime-2.1.308-qualification.json`: five passing technical checks,
 dummy auth HOME/config and localhost fake inference only. That result does not
 replace the historical real-smoke profile, prove actual effort/asset use, or
-establish candidate/business/activation eligibility. Whole-B review, exact-head
-Linux CI and publication are still required for this engineering continuation.
+establish candidate/business/activation eligibility. Whole-B independent review
+approved the scoped-recovery fix; exact-head LinuxCI39880551488 passed on2fe944ae,
+merged tree47f50f70 is identical, and publication39882926274 succeeded. Complete
+M2/business/rollout acceptance remains separate and open.

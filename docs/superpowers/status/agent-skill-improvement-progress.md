@@ -21,8 +21,36 @@
   `cbef2f464932e533825512e8e11c2299e6b3bf4f` as0.292.0. Final-head Linux
   CI39862650038 passed on d4703f34; actual merged tree is identical.
   Publication39865749261 succeeded. M1 main CI39856024098 also passed.
-- Current engineering continuation is M2B below. Earlier pending/failure
+- M2B engineering published0.293.0: PR800 squash47f50f707268681dd4cbe8c7e443945155376237;
+  exact-head LinuxCI39880551488 SUCCESS on reviewed2fe944ae. Merged tree is
+  identical4e53048721ca658f620a73361b4281326852e3b6. Actual GHCR publication
+  39882926274 and Build & push succeeded. Independent whole-B review/recovery
+  recheck approved with no open Important/Critical. Fixed-source9-script
+  regression passed251s; broad63-script sweep passed1048s across the narrow fix,
+  explicitly not used as exact-head proof. Task6 accepted; Task4 positive C+D
+  qualification integration, complete M2/business/rollout remain open.
+- Current engineering continuation is M2C below. Earlier pending/failure
   checkpoints remain historical; complete M2/business/rollout gates remain open.
+
+## M2C engineering continuation
+
+- Reuse attached managed M2 worktree on `codex/agent-skill-improvement-m2c` from
+  actual published main47f50f70/0.293.0. Fresh open-PR inspection found no other
+  reservation;0.294.0 is reserved before C product code with both changelogs.
+- Plan: `../plans/2026-10-23-agent-skill-improvement-m2c.md`. Design refinement,
+  concrete schema/protocol/ownership contract audit and self-review remain open;
+  no C implementation or accepted semantic evidence exists yet.
+- Baseline-first investigation favors a genuine typed preparation solver Trial
+  inside the durable experiment, without fake candidate/arm or a v1 downgrade.
+  Every consumer/result/stop/recovery scope and combined capacity bound must
+  account for it. Proposer/reviewer calls need distinct actual operation identity,
+  CallLedger/usage and native worker/workspace ownership; no fake solver Trials.
+- Generated proposals remain A-unreviewed with separately pinned semantic and
+  dependency assessments. No assessment/owner product confirmation waives source,
+  runtime/view, qualification, activation or real business-data gates. Candidate/
+  final execution stays closed until genuine C+D support. Broader UI is F.
+- M2B publication is verified; mainCI39882926358 runs on the identical merge tree
+  and has not yet been claimed passed. No deploy/restart/live activation occurred.
 
 ## M2B engineering continuation
 
