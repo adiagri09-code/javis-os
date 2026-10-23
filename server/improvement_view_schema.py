@@ -25,6 +25,17 @@ SCHEMA = (
     "FOREIGN KEY(candidate_id,brain_id) REFERENCES improvement_skill_candidates(id,brain_id),"
     "FOREIGN KEY(base_revision_id,brain_id) REFERENCES improvement_revisions(id,brain_id),"
     "FOREIGN KEY(semantic_receipt_id,brain_id) REFERENCES improvement_semantic_receipts(id,brain_id))",
+    "CREATE TABLE improvement_view_trial_links("
+    "comparison_id TEXT NOT NULL,brain_id TEXT NOT NULL,experiment_id TEXT NOT NULL,"
+    "cell_position INTEGER NOT NULL CHECK(cell_position BETWEEN 0 AND 3999),trial_id TEXT NOT NULL,request_hash TEXT NOT NULL,"
+    "pair_id TEXT NOT NULL,case_id TEXT NOT NULL,repeat INTEGER NOT NULL CHECK(repeat IN (1,2)),"
+    "variant TEXT NOT NULL CHECK(variant IN ('baseline','candidate')),view_id TEXT NOT NULL,view_hash TEXT NOT NULL,"
+    "binding_hash TEXT NOT NULL,created_at REAL NOT NULL,PRIMARY KEY(comparison_id,brain_id,cell_position),UNIQUE(trial_id,brain_id),"
+    f"{_digest('view_hash')},{_digest('binding_hash')},"
+    "FOREIGN KEY(comparison_id,brain_id) REFERENCES improvement_comparison_views(comparison_id,brain_id),"
+    "FOREIGN KEY(experiment_id,brain_id) REFERENCES improvement_experiments(id,brain_id),"
+    "FOREIGN KEY(trial_id,brain_id) REFERENCES improvement_trials(id,brain_id),"
+    "FOREIGN KEY(view_id,brain_id) REFERENCES improvement_effective_views(id,brain_id))",
     "CREATE TABLE improvement_effective_view_assets("
     "view_id TEXT NOT NULL,brain_id TEXT NOT NULL,position INTEGER NOT NULL CHECK(position=0),"
     "asset_id TEXT NOT NULL,canonical_ref TEXT NOT NULL,before_hash TEXT NOT NULL,content_hash TEXT NOT NULL,"
@@ -78,9 +89,51 @@ SCHEMA = (
     "AND b.candidate_id=c.candidate_id AND b.source_authority_hash=c.source_authority_hash "
     "AND ba.canonical_ref=ca.canonical_ref AND ba.identity=ca.identity AND ba.before_hash=ca.before_hash) "
     "BEGIN SELECT RAISE(ABORT,'comparison_view_scope_mismatch'); END",
+    "CREATE TRIGGER improvement_view_binding_runtime_fence BEFORE INSERT ON improvement_comparison_views WHEN EXISTS "
+    "(SELECT 1 FROM improvement_experiment_trial_links l WHERE l.comparison_id=NEW.comparison_id AND l.brain_id=NEW.brain_id) "
+    "BEGIN SELECT RAISE(ABORT,'comparison_runtime_already_started'); END",
+    "CREATE TRIGGER improvement_legacy_trial_view_fence BEFORE INSERT ON improvement_experiment_trial_links WHEN EXISTS "
+    "(SELECT 1 FROM improvement_comparison_views b WHERE b.comparison_id=NEW.comparison_id AND b.brain_id=NEW.brain_id) "
+    "OR EXISTS(SELECT 1 FROM improvement_view_trial_links l WHERE l.trial_id=NEW.trial_id AND l.brain_id=NEW.brain_id) "
+    "OR EXISTS(SELECT 1 FROM improvement_trials t WHERE t.id=NEW.trial_id AND t.brain_id=NEW.brain_id "
+    "AND json_extract(t.request_json,'$.version')=4) "
+    "BEGIN SELECT RAISE(ABORT,'view_trial_version_required'); END",
+    "CREATE TRIGGER improvement_view_trial_scope BEFORE INSERT ON improvement_view_trial_links WHEN NOT EXISTS "
+    "(SELECT 1 FROM improvement_comparison_views b "
+    "JOIN improvement_comparisons p ON p.id=b.comparison_id AND p.brain_id=b.brain_id "
+    "JOIN improvement_effective_views v ON v.id=NEW.view_id AND v.brain_id=b.brain_id AND v.comparison_id=p.id "
+    "JOIN improvement_effective_view_assets a ON a.view_id=v.id AND a.brain_id=v.brain_id AND a.position=0 "
+    "JOIN improvement_trials t ON t.id=NEW.trial_id AND t.brain_id=b.brain_id "
+    "WHERE b.comparison_id=NEW.comparison_id AND b.brain_id=NEW.brain_id AND p.experiment_id=NEW.experiment_id "
+    "AND v.experiment_id=NEW.experiment_id AND v.variant=NEW.variant AND v.manifest_hash=NEW.view_hash "
+    "AND b.binding_hash=NEW.binding_hash AND NEW.cell_position<p.cell_count "
+    "AND v.id=CASE NEW.variant WHEN 'baseline' THEN b.base_view_id ELSE b.candidate_view_id END "
+    "AND t.request_hash=NEW.request_hash AND json_extract(t.request_json,'$.version')=4 "
+    "AND json_extract(t.request_json,'$.pins.experiment_id')=NEW.experiment_id "
+    "AND json_extract(t.request_json,'$.lineage.comparison_id')=p.id "
+    "AND json_extract(t.request_json,'$.lineage.definition_hash')=p.definition_hash "
+    "AND json_extract(t.request_json,'$.lineage.matrix_hash')=p.matrix_hash "
+    "AND json_extract(t.request_json,'$.lineage.arm_hash')=p.arm_hash "
+    "AND json_extract(t.request_json,'$.lineage.arm_ordinal')=p.ordinal "
+    "AND json_extract(t.request_json,'$.lineage.context_id')=v.context_id "
+    "AND json_extract(t.request_json,'$.lineage.candidate_id')=v.candidate_id "
+    "AND json_extract(t.request_json,'$.lineage.cell_position')=NEW.cell_position "
+    "AND json_extract(t.request_json,'$.lineage.pair_id')=NEW.pair_id "
+    "AND json_extract(t.request_json,'$.case_id')=NEW.case_id AND json_extract(t.request_json,'$.repeat')=NEW.repeat "
+    "AND json_extract(t.request_json,'$.variant')=NEW.variant "
+    "AND json_extract(t.request_json,'$.view.view_id')=v.id AND json_extract(t.request_json,'$.view.view_hash')=NEW.view_hash "
+    "AND json_extract(t.request_json,'$.view.binding_hash')=b.binding_hash "
+    "AND EXISTS(SELECT 1 FROM improvement_events ev WHERE ev.brain_id=b.brain_id AND ev.operation='comparison_views_freeze' "
+    "AND json_extract(ev.result_json,'$.comparison_id')=p.id AND json_extract(ev.result_json,'$.binding_hash')=b.binding_hash "
+    "AND json_extract(ev.result_json,'$.views.'||NEW.variant||'.view_id')=v.id "
+    "AND json_extract(ev.result_json,'$.views.'||NEW.variant||'.manifest_hash')=NEW.view_hash)) "
+    "OR EXISTS(SELECT 1 FROM improvement_experiment_trial_links l WHERE l.trial_id=NEW.trial_id AND l.brain_id=NEW.brain_id) "
+    "OR EXISTS(SELECT 1 FROM improvement_preparation_trial_links l WHERE l.trial_id=NEW.trial_id AND l.brain_id=NEW.brain_id) "
+    "BEGIN SELECT RAISE(ABORT,'view_trial_scope_mismatch'); END",
 )
 
-IMMUTABLE = ('improvement_effective_views', 'improvement_effective_view_assets', 'improvement_comparison_views')
+IMMUTABLE = ('improvement_effective_views', 'improvement_effective_view_assets', 'improvement_comparison_views',
+             'improvement_view_trial_links')
 
 
 def assert_installed(connection):

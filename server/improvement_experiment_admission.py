@@ -58,6 +58,8 @@ class ExperimentAdmission:
                                        (payload["comparison_id"], brain, row["id"])).fetchone()
         if comparison is None:
             raise PermissionError("experiment_comparison_unavailable")
+        from improvement_comparison_links import require_legacy_comparison
+        require_legacy_comparison(connection, brain, comparison["id"])
         if comparison["kind"] != "tuning":
             raise PermissionError("experiment_final_execution_unavailable")
         # Derive only closed schedule metadata before any plaintext/probe. A

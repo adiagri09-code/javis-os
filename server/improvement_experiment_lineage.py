@@ -27,6 +27,12 @@ def _same(expected, actual):
 
 def require_experiment_version(connection, brain, request):
     """A legacy shape cannot erase ownership by an existing B experiment."""
+    if request.get('version') == 2:
+        from improvement_comparison_links import require_legacy_comparison
+        lineage = request.get('lineage')
+        if type(lineage) is not dict or 'comparison_id' not in lineage:
+            raise ValueError('invalid_experiment_request')
+        require_legacy_comparison(connection, brain, lineage['comparison_id'])
     if request.get("version") not in (2, 3):
         from improvement_experiment_qualification import experiment_owned
         if experiment_owned(connection, brain, request.get("case_set_id"), request["pins"]):

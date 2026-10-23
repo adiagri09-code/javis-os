@@ -311,6 +311,18 @@ also include private_review, trial_host, trial_decisions, trial_results and
 trial_checks. Extend each deliberately; a second independent12000-cell allowance
 for new links would violate the shared14000/28000 bounds.
 
+Next additive table contract (before SQL): `improvement_view_trial_links` columns
+are `comparison_id,brain_id,experiment_id,cell_position,trial_id,request_hash,
+pair_id,case_id,repeat,variant,view_id,view_hash,binding_hash,created_at`.
+Primary key is comparison/brain/cell; Trial/brain is unique. Composite FKs bind
+the actual comparison-view binding, experiment, Trial and effective view. Its
+insert guard requires full version4 request/lineage/view pins and the actual
+variant asset. New additive guards reject a legacy link after a view binding
+and reject a view binding after any legacy link. Existing B/C SQL definitions
+stay byte-identical. Positive v4 rows wait for actual admission; negative tests
+must use genuine C-preparation/B-baseline Trial rows, never fake future Calls.
+Cold partial7 prototypes remain readable but cannot acquire new view authority.
+
 - [ ] RED: a valid-looking v4 caller cannot bypass the actual view binding;
   candidate/final requests through v1/v2/v3 remain rejected without decryption.
 - [ ] RED: pending, terminal-without-result or SQL-completed-but-still-closing
