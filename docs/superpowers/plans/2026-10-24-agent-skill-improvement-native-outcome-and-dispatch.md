@@ -595,3 +595,22 @@ Each unit gets meaningful original REDs, affected regression and scoped review;
 app/native test ownership stays serial. Successful component proof is reused only
 where exact code/semantics remain unaffected. Final-head full CI, all18 checks,
 business/owner/source gates and D2/E/F/M3–M8 obligations remain open.
+
+### Durable admission decision boundary
+
+The next root storage unit is NativeImageDecisionStore(ImprovementStore), using
+the existing improvement_events and encrypted RevisionBlobs. Its synchronous
+persist(principal, joined, *, scope_hash, current) takes only a closed joined
+host observation and an explicit trusted synchronous authority callback. The
+callback receives the actual transaction connection and a defensive observation;
+it must recheck the caller's current configuration/source/lease/generation and
+return exactly allow or deny. Check before replay/write and again after fallible
+blob IO. A callback error never releases allow. An image mismatch always denies.
+
+The deterministic event key binds brain, scope, launch and invocation purpose;
+the request hash binds scope and exact joined hash. Store only decision, hashes
+and encrypted chunk references in event result_json. Replay validates encrypted
+bytes and repeats current authority; a previous allow is never current authority.
+Cancellation is settled by the existing host-owned transition wrapper and cannot
+send a late allow. This store does not authenticate peer/native provenance or
+replace the actual host join, selected-account guard, or accounting ACK.
