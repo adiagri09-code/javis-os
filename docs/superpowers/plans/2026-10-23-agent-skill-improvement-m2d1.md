@@ -150,11 +150,18 @@ Trial/call/link publication is Task3's completion gate.
 
 - [ ] RED: schema6 lacks view tables; forged body/hash/source/variant identity,
   mutable/foreign links, duplicate comparison runtime and unknown schema reject.
-- [ ] GREEN: real encrypted save/cold read, writer CAS/event replay, concurrent
+- [ ] GREEN: real encrypted metadata save/cold read, concurrent
   one-time byte-preserved migration backup, crash rollback and old-reader refusal.
 - [ ] Verify actual published C reader refuses schema7 and its backup restores
   exact historical schema6. Preserve all earlier backup boundaries.
 - [ ] Commit verified task; record exact source/test/command/runtime evidence.
+
+Task boundary ruling: positive atomic pair publication/CAS/event replay belongs
+to Task2's concrete host publisher, which owns current source/semantic authority.
+Task1 proves the schema/immutable scoped metadata and pure identity without
+inventing a publish API or pretending metadata is execution authority. Task2
+must prove the same event key returns its exact stored pair, changed payload
+conflicts, and a second insert/source-CAS failure rolls back both views/binding.
 
 ### Task 2 — current host view capture and source authority
 
@@ -179,6 +186,9 @@ view/asset; no fallback to canonical, root-relative same-name or global mirror.
 - [ ] GREEN: baseline/candidate differ at exactly the owner-authorized body;
   all other protected/context/dependency bytes and identities match. UTF-8/BOM/
   CRLF remain exact, with no canonical or global mirror write.
+- [ ] Actual host pair publication is one writer/event with current generation
+  CAS, cold exact replay, conflicting-payload rejection and complete rollback
+  when a second view/binding/source fence fails. No partial eligible view exists.
 - [ ] Add actual ACL, directory/file incarnation, symlink/junction and Linux
   case-distinct brain tests using shared stable readers. No lowercase hash as
   authorization. Verify deterministic replays after off/revoke remain historical.
@@ -337,6 +347,7 @@ and traversal guards. `semantic` has exact fields
 `receipt_id,binding_hash,assessment_hash,dependency_hash,owner_event_key`;
 owner_event_key is null or the actual bounded owner event key, not an approval
 boolean. Actual row and current proof matching is Task2, not this pure validator.
+Its non-null length is8..160, matching the actual ImprovementStore event contract.
 
 `assets` is exactly one primary body asset in D1, with exact fields
 `id,canonical_ref,before_hash,content_hash,identity,authority_hash,origin`.

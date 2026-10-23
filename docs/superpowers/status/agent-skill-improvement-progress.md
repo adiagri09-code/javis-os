@@ -49,8 +49,12 @@
   D1 builds shared immutable view identity/source resolution and actual isolated
   candidate probes; full D remains open until production router/lazy/hub/native
   task/resume integration is actually verified. E/F and M3–M8 remain open.
-  C's exact-tree CI/native baseline is reused because no runtime source has
-  changed yet; do not rerun it merely for the new branch/resume.
+  Task1 started at d00312d5. Its closed pure view protocol now passes11 tests
+  after observed missing-module RED; a further event-reference RED exposed the
+  actual8..160 owner event-key bound and is fixed. Schema7/real scoped SQL,
+  migration/backup/old-reader gates remain pending; Task1 is not complete.
+  Existing C runtime closure remains unchanged and retains its source-qualified
+  CI/native baseline. The new protocol alone grants no runtime authority.
 - Earlier pending/failure
   checkpoints remain historical; complete M2/business/rollout gates remain open.
 
