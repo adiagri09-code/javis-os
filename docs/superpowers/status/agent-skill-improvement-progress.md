@@ -102,6 +102,31 @@
 
 ## M2C engineering continuation
 
+### D1 paired native-view checkpoint, 23 October
+
+Owner controls are committed/pusheddaed0cf26872abe9d6e03f7d8bc59b04c39f8f83.
+The new opt-in native-view test passed on the same unchanged product81-source
+profile2221a859:39.172s wall, two native queries/separate sessions, four local
+provider model messages, zero selected-account calls. Both manifests come from
+actual temporary owner/view/Trial materialization with the exact pinned native
+configuration captured before the comparison context. Preparation/reviewer
+fixtures remain explicitly simulated. Native execution uses real SDK/CLI,
+TrialProfile, owned hidden jobs and dummy auth/local transport without an
+adapter/readiness stub. Exact prompts/view/assets/receipts, denied ambient/
+outside tools, unchanged canonical bytes and cleanup after native drain pass.
+
+The initial harness attempt failed when cleanup_proven's actual ACL metadata
+spawn reached the worker-only Popen interception. The original failed log/source
+record is retained; keeping that proof within the existing real-Popen scope
+fixed the fixture without changing product code or relaxing an assertion.
+Sanitized evidence `../evidence/2026-10-23-m2d1-native-view-enforcement.json`,
+SHA2560691a727db9dd81b91e814ccfaa4278f04d9c90c5a325cc789b282de31f6a10c.
+All server and owner47+route test bytes are unchanged, so that scoped evidence
+is reused. Current profile remains UNREGISTERED. Composite solver/role/death/
+quiescence qualification, actual native TrialRunner/account feasibility,
+genuine selected-final positive, independent whole-D1 review and final CI remain
+open. D2/E/F/M3–M8 and business/live acceptance stay open; no activation/deploy.
+
 ### D1 owner-view controls checkpoint, 23 October
 
 Actual owner `view-freeze`/`view-evidence` POSTs now accept only comparison ID,

@@ -93,6 +93,11 @@ execution authority. Unknown future schemas are refused.
 The current D1 native source profile is unregistered. Historical C native
 qualification does not qualify this changed source tree. Technical tests use
 isolated temporary stores and explicitly simulated adapters where stated.
+The paired-view opt-in test separately passed with the actual pinned CLI and
+dummy local provider: exact baseline/candidate prompts and receipts, distinct
+sessions, denied ambient tools and plaintext cleanup after native job drain.
+Its preparation/reviewer fixtures remain simulated. This proves direct native
+profile enforcement, without asserting a native TrialRunner/account call.
 Genuine selected-final positive execution and exact-source D1 native
 qualification remain open. Production router/lazy/hub/task integration belongs
 to D2; atomic activation/rollback and the complete operator flow belong to

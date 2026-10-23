@@ -662,6 +662,47 @@ remain unknown rather than being omitted from mandatory integrity.
 - [ ] Commit actual view execution/evidence, not an empty adapter or readiness
   flag. An inconclusive/rejected outcome is valid and keeps baseline.
 
+Native-view qualification unit, frozen before test code: add opt-in
+`tests/python/test_improvement_view_native_qualification.py`. Derive both v2
+manifests through the actual temporary owner/source/CaseStore/semantic/view/
+Trial materialization fixtures, using an exact pinned native engine configuration
+before the comparison context is captured. Preparation/reviewer evidence in
+these fixtures stays explicitly simulated and cannot qualify a business/final
+selection. The native exercise itself uses real TrialWorkspace, FixtureBroker,
+TrialProfile, SDK and pinned CLI with no adapter/readiness stub or registry entry.
+Run each variant in a separate hidden owned Windows job/start gate, empty auth
+HOME and local dummy provider; no selected account credentials or inference.
+Check exact prompt/asset/view/receipt identities, distinct native sessions,
+denied outside/ambient tools and expected answers, unchanged canonical bytes,
+then drain the native job before actual plaintext cleanup. The local provider
+must observe only the expected model/medium/no-fast/two-message fixture exchange.
+Publish sanitized scenario/source/runtime hashes without fixture bodies/paths.
+Affected product bytes: none; native footprint remains the same81 sources. The
+new test composes existing materialization with actual native enforcement;
+it does not claim a native TrialRunner/CallLedger feasibility or positive final.
+Retain existing full solver/typed-role/host-supervisor-death/quiescence native
+qualification checks on the same source profile before registration. Reuse
+unchanged exact-source evidence after review; rerun only affected proof if fixes
+change its source/runtime. Real selected-model feasibility follows registration.
+
+Native-view checkpoint: the opt-in actual CLI test passed on unchanged81-source
+profile2221a859 in39.172s process wall. Two genuine temporary v2 materializations
+carry the exact native pin captured before the comparison context; each uses a
+separate native query/session and two local provider messages. Full existing
+blackbox isolation checks plus exact native prompt/view/asset/receipt identity
+and real cleanup-after-job-drain pass. Actual reasoning/asset use stay unknown.
+The first attempt failed in the test harness's cleanup ACL interception; its
+log/source record is preserved. Moving the actual cleanup proof inside the
+existing real-Popen scope fixed the harness without weakening an assertion or
+changing product source. Sanitized evidence
+`../evidence/2026-10-23-m2d1-native-view-enforcement.json`, SHA256
+0691a727db9dd81b91e814ccfaa4278f04d9c90c5a325cc789b282de31f6a10c.
+Native account calls remain0 and profile is still UNREGISTERED. Shared solver/
+typed-role/death/quiescence composite qualification, genuine native TrialRunner
+feasibility/positive final, whole-D1 review and final CI remain open. Prior owner
+API47+route evidence is reused: all server and its executed test/route bytes are
+unchanged; only this independent opt-in test and documentation were added.
+
 ### Task 5 — owned public controls, regressions and publication
 
 Independent owner-control unit while genuine final/native proof stays open:
