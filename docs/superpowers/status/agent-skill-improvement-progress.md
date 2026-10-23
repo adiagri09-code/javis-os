@@ -33,7 +33,25 @@
   regression passed251s; broad63-script sweep passed1048s across the narrow fix,
   explicitly not used as exact-head proof. Task6 accepted; Task4 positive C+D
   qualification integration, complete M2/business/rollout remain open.
-- Current engineering continuation is M2C below. Earlier pending/failure
+- M2C engineering published0.296.0: PR801 squash2727edcc5cdfab6f2dcf2e2871164f22f2771f92.
+  Exact final-head LinuxCI39929264818 passed on independently reviewed d05f4881;
+  actual merged tree5712b6ba79720a5a44a43d3cecd85cff84f3cd21 is identical.
+  Publication39933347548 and Build & push succeeded. Task9 completed through
+  its actual published-source verifier; no open Important/Critical findings.
+  Native profile9dcf7184 and21-script regression evidence remain source-bound.
+  Historical real feasibility aa51b4b9 still has baseline shape FAIL, semantic
+  UNKNOWN and partial usage; it does not establish a business win or live grant.
+- Current engineering continuation is M2D1, branch
+  `codex/agent-skill-improvement-m2d1` in the SAME isolated worktree
+  `C:/Users/admin/.codex/worktrees/agent-skill-improvement-m2a/Javis-OS`.
+  DraftPR803 reserves0.297.0 before code, c4991ec8. Its bilingual changelog
+  reservation test passed. Plan is `../plans/2026-10-23-agent-skill-improvement-m2d1.md`.
+  D1 builds shared immutable view identity/source resolution and actual isolated
+  candidate probes; full D remains open until production router/lazy/hub/native
+  task/resume integration is actually verified. E/F and M3–M8 remain open.
+  C's exact-tree CI/native baseline is reused because no runtime source has
+  changed yet; do not rerun it merely for the new branch/resume.
+- Earlier pending/failure
   checkpoints remain historical; complete M2/business/rollout gates remain open.
 
 ## M2C engineering continuation
@@ -468,7 +486,7 @@
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
 | M1 | Complete engineering: PR795 merged9dd7a9f9, CI39852883192 and publication39856024117 succeeded;0.291.0 | One historical real-engine synthetic baseline; aggregate unknown; no business pilot | Trial/activation flags false; not enabled |
-| M2 | A0.292.0 and B0.293.0 published; C/PR8010.296.0 in final regression/CI; D–F open | Real synthetic C role pipeline ran on ddec90ad; baseline fail, semantic unknown; no independent skill pilot | Not enabled |
+| M2 | A0.292.0, B0.293.0 and C0.296.0 published; D1/PR8030.297.0 starting; D–F open | Real synthetic C role pipeline ran on ddec90ad; baseline fail, semantic unknown; no independent skill pilot | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
 | M5 | Pending | No agent pilot | Not enabled |
@@ -506,11 +524,12 @@
 
 ## Next action
 
-Finish C/PR801's final affected regression and exact-final Linux CI, recheck
-main/version, integrate when all required gates pass, and verify actual0.296.0
-publication. Continue M2D's candidate effective view, sealed qualification and
-scoped manual apply/revert from that integrated foundation. Source gap analysis
-may proceed during CI; retain all existing isolation/ownership gates.
+Execute D1's plan from published C2727edcc: immutable view protocol/schema7,
+actual current-source resolver and authority, explicit v4 comparison/final
+admission and real native/evidence/stop integration. Use focused RED/GREEN and
+affected tests per Goal12. Continue D's required production pin/resolver paths,
+then E apply/revert/canary and F full operator/feasibility without relabeling a
+trial-only resolver as complete D. Retain all existing isolation/ownership gates.
 Do not use live prompt builders or fallback engine selection as a heartbeat guard.
 The owner run and activation capabilities remain false pending their actual release gates.
 Full M0–M8 Goal remains active; no business or live rollout gate is closed by a code merge.
