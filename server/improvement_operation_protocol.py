@@ -35,7 +35,7 @@ def operation_materialization(value):
     if type(value) is not dict or set(value) != {
             "version", "brain_id", "operation_id", "request", "engine_config_hash", "data", "learning_origin"}:
         raise ValueError("invalid_operation_materialization")
-    if (type(value["version"]) is not int or value["version"] != 1 or value["learning_origin"] != "compose"
+    if (type(value["version"]) is not int or value["version"] not in (1, 2) or value["learning_origin"] != "compose"
             or type(value["brain_id"]) is not str or not 1 <= len(value["brain_id"]) <= 1000 or "\x00" in value["brain_id"]
             or type(value["data"]) is not dict):
         raise ValueError("invalid_operation_materialization")
