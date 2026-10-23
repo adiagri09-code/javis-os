@@ -16,8 +16,15 @@ import winproc
 from improvement_blobs import MAX_ASSET_BYTES, check_ancestry
 from improvement_cases import _digest, _fields, _frozen, _text
 from improvement_store import _hash
+from improvement_native_qualifications import profile_qualification as _profile_qualification
 
-PROFILE_VERSION = "claude-isolated-trial-v1"
+PROFILE_VERSION = "claude-isolated-roles-v2"
+PROFILE_SOURCES = ("improvement_claude.py", "improvement_sandbox.py", "improvement_worker.py", "claude_sdk_engine.py",
+                   "improvement_native_transport.py", "improvement_operation_adapter.py", "improvement_operation_worker.py",
+                   "improvement_operation_profile.py", "improvement_operation_workspace.py", "improvement_operation_protocol.py",
+                   "improvement_operation_execution.py", "improvement_operation_evidence.py", "improvement_trial_evidence.py",
+                   "improvement_operation_checks.py", "improvement_operation_results.py", "improvement_trial_checks.py",
+                   "improvement_operation_runner.py", "improvement_operation_tasks.py", "improvement_operation_recovery.py")
 VERIFIED_NATIVE_RUNTIMES = {("win32", "2.1.304",
     "019e5174d5d954585edb1a946fe280e44a973050b4897034adf0e16306f85fdd", "0.2.116"),
     ("win32", "2.1.308", "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53", "0.2.116")}
@@ -37,8 +44,7 @@ async def _settled_owned(future):
 
 def profile_hash():
     root = Path(__file__).parent
-    return _hash({name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in
-                  ("improvement_claude.py", "improvement_sandbox.py", "improvement_worker.py", "claude_sdk_engine.py")})
+    return _hash({name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in PROFILE_SOURCES})
 
 
 def _managed_policy():
@@ -87,7 +93,7 @@ def _runtime_observation(pin):
               "profile_hash": profile_hash(), "managed_policy": managed, "auth": {}}
     known = (sys.platform, pin["cli_version"], digest, result["sdk_version"])
     if (managed != "absent" or digest != pin["cli_hash"] or known not in VERIFIED_NATIVE_RUNTIMES
-            or result["profile_hash"] != pin["profile_hash"]):
+            or result["profile_hash"] != pin["profile_hash"] or _profile_qualification(pin, sys.platform) is None):
         return result
     with tempfile.TemporaryDirectory(prefix="improvement-verify-") as scratch:
         environment = worker_environment(Path(scratch))
@@ -127,6 +133,9 @@ class ClaudeTrialAdapter:
                 or self.pin["profile_version"] != PROFILE_VERSION
                 or self.pin["reasoning"] not in ("low", "medium", "high", "xhigh", "max")):
             return unsupported("unsupported_trial_configuration")
+        qualification = _profile_qualification(self.pin, sys.platform)
+        if qualification is None:
+            return unsupported("native_profile_unqualified")
         try:
             observed = _runtime_observation(self.pin)
         except (OSError, ValueError, IndexError, subprocess.SubprocessError, importlib.metadata.PackageNotFoundError):
@@ -140,14 +149,13 @@ class ClaudeTrialAdapter:
             return unsupported("native_enforcement_unverified")
         if observed.get("auth") != {"logged_in": True, "method": "claude.ai", "provider": "firstParty", "plan": "max"}:
             return unsupported("native_auth_policy_unverified")
+        observed = {**observed, "profile_qualification_hash": qualification}
         return {"supported": True, "reason": None, "requested": requested,
                 "capability_hash": _hash({"pin": self.pin, "runtime": observed}), "runtime": observed}
 
     async def execute(self, request, workspace):
         """The parent persists engine start before releasing a query in a clean process."""
-        from improvement_sandbox import TrialWorkspace, _private_directory, worker_environment
-        from improvement_store import _json
-        from improvement_worker import WorkerGroup, process_flags
+        from improvement_sandbox import TrialWorkspace
         if self.workspace_root is None or not callable(self.before_engine_start):
             raise ValueError("trial_start_boundary_unbound")
         request = _frozen(request)
@@ -168,108 +176,12 @@ class ClaudeTrialAdapter:
         verified = await asyncio.to_thread(self.verify)
         if not verified.get("supported") or verified.get("capability_hash") != request["capability_hash"]:
             raise ValueError("trial_capability_drift")
-        await asyncio.to_thread(_private_directory, Path(receipt["path"]) / "tmp")
-        environment = worker_environment(Path(receipt["path"]))
-        identity = {key: receipt[key] for key in ("trial_id", "attempt", "input_hash")}
-        process = guard = None
-        stderr_task = None
-        maximum = 8 * 1024 * 1024
-
-        async def send(packet):
-            raw = _json(packet).encode("utf-8") + b"\n"
-
-            def write():
-                process.stdin.write(raw)
-                process.stdin.flush()
-
-            await asyncio.to_thread(write)
-
-        async def drain_stderr():
-            # Drain to avoid a pipe deadlock; raw stderr is never a public result or artifact.
-            while await asyncio.to_thread(process.stderr.read, 4096):
-                pass
-
-        async def close_worker():
-            if guard is not None:
-                await asyncio.to_thread(guard.close)
-            elif process is not None and process.poll() is None:
-                await asyncio.to_thread(winproc.kill_tree, process.pid)
-            if process is not None:
-                try:
-                    await asyncio.to_thread(process.wait, timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    await asyncio.to_thread(process.wait, timeout=5)
-                for stream in (process.stdin, process.stdout, process.stderr):
-                    stream.close()
-            if stderr_task is not None:
-                await asyncio.gather(stderr_task, return_exceptions=True)
-
-        try:
-            async with asyncio.timeout(max(0.0, deadline - time.time())):
-                spawn = asyncio.create_task(asyncio.to_thread(subprocess.Popen,
-                    [sys.executable, "-I", "-X", "utf8", str(Path(__file__).with_name("improvement_worker.py"))],
-                    cwd=receipt["path"], env=environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE, start_new_session=sys.platform != "win32", creationflags=process_flags()))
-                spawned, cancelled = await _settled_owned(asyncio.gather(spawn, return_exceptions=True))
-                if isinstance(spawned[0], BaseException):
-                    raise spawned[0]
-                process = spawned[0]
-                # The child blocks on its first input until its whole lifetime is owned.
-                guard = WorkerGroup(process.pid)
-                if cancelled is not None:
-                    raise cancelled
-                stderr_task = asyncio.create_task(drain_stderr())
-                await send({"version": 1, "config_pin": self.pin, "workspace_root": str(self.workspace_root),
-                            "receipt": receipt, "capability_hash": request["capability_hash"]})
-                sequence, state = 0, "starting"
-                while True:
-                    raw = await asyncio.to_thread(process.stdout.readline, maximum + 1)
-                    if not raw or len(raw) > maximum or not raw.endswith(b"\n"):
-                        raise ValueError("trial_worker_protocol_incomplete")
-                    packet = json.loads(raw)
-                    sequence += 1
-                    if (not isinstance(packet, dict) or type(packet.get("sequence")) is not int
-                            or packet.get("sequence") != sequence or type(packet.get("version")) is not int
-                            or packet.get("version") != 1):
-                        raise ValueError("invalid_trial_worker_packet")
-                    kind = packet.get("type")
-                    if kind == "worker_error":
-                        _fields(packet, {"version", "sequence", "type", "reason", "error_type"})
-                        yield packet
-                        raise RuntimeError("trial_worker_failed")
-                    extras = {"worker_ready": {"capability_hash"}, "engine_start_requested": set(),
-                              "engine_event": {"event"}, "fixture_event": {"event"},
-                              "worker_complete": {"fixture_events", "tool_denials"}}
-                    if kind not in extras:
-                        raise ValueError("invalid_trial_worker_packet")
-                    _fields(packet, {"version", "sequence", "type", *identity, *extras[kind]})
-                    if any(packet.get(key) != value for key, value in identity.items()):
-                        raise ValueError("trial_worker_identity_drift")
-                    if kind == "worker_ready":
-                        if state != "starting" or packet["capability_hash"] != request["capability_hash"]:
-                            raise ValueError("trial_capability_drift")
-                        state = "ready"
-                    elif kind == "engine_start_requested":
-                        if state != "ready":
-                            raise ValueError("trial_worker_start_repeated")
-                        await self.before_engine_start()
-                        await send({"type": "engine_start_ack", **identity})
-                        state = "running"
-                    elif state != "running":
-                        raise ValueError("trial_worker_event_before_start")
-                    yield packet
-                    if kind == "worker_complete":
-                        break
-                if await asyncio.to_thread(process.wait, timeout=5) != 0:
-                    raise RuntimeError("trial_worker_failed")
-        finally:
-            closed, cancelled = await _settled_owned(asyncio.gather(
-                asyncio.create_task(close_worker()), return_exceptions=True))
-            if isinstance(closed[0], BaseException):
-                raise closed[0]
-            if cancelled is not None:
-                raise cancelled
+        from improvement_native_transport import execute_worker
+        from contextlib import aclosing
+        async with aclosing(execute_worker("trial", request, receipt, config_pin=self.pin,
+                workspace_root=self.workspace_root, before_engine_start=self.before_engine_start)) as packets:
+            async for packet in packets:
+                yield packet
 
 
 class TrialProfile:

@@ -38,6 +38,10 @@
 
 ## M2C engineering continuation
 
+- Owner delegated pilot choice in the pending M2–M3 question: prioritize data
+  reconciliation as the business pilot, document processing second; Python
+  bug-fix/test remains the additional technical pilot. This selects the work
+  types, without supplying an accepted business dataset or live activation grant.
 - Reuse attached managed M2 worktree on `codex/agent-skill-improvement-m2c` from
   actual published main47f50f70/0.293.0. Fresh open-PR inspection found no other
   reservation;0.294.0 is reserved before C product code with both changelogs.
@@ -86,6 +90,31 @@
   Same-operation foreign-role recovery was reproduced RED then fixed, with final
   telemetry9/25.058s. Full current-head CI/review remains pending. No actual role
   worker/model query; native learning exclusion is carried explicitly to Task4.
+- Task4 is IN PROGRESS in the working tree: typed operation workspace/profile/
+  worker/adapter, shared owned native IPC, real SQL leases/markers/refund and
+  encrypted replay/late trace. Four new component scripts passed53s; earlier
+  affected legacy worker/decoder checks passed separately. These are synthetic
+  technical checks, not full Runner/native qualification or business evidence.
+  Lifecycle supervisor/results/recovery/full learning-exclusion proof remain.
+  Native profile changed to roles-v2 with thirteen actual source files, so the
+  prior native qualification is historical. Actual current profile qualification
+  must gate role execution; the old runtime tuple alone cannot qualify a new
+  profile. No real model/auth query or public role enablement occurred.
+- Earlier C Linux runs on bb869812/b2927d55 failed only two old backup-count
+  assertions. Exact per-migration backup/original-content tests now pass14s,
+  committed0ca0dba7; its LinuxCI39892216765 is pending. That commit excludes the
+  uncommitted Task4 runtime and cannot validate it. Exact final-C CI is required.
+- The exact0ca0dba7 LinuxCI39892216765 subsequently completed SUCCESS; it verifies
+  committed Tasks1–3/backup corrections only. Task4 now also has actual encrypted
+  results, pure typed record checks, owned Runner/Tasks, owner cancellation and
+  scoped crash recovery. Completion/cancel/recovery checks use the actual worker/
+  profile with a synthetic SDK engine; real session/lesson/job stores stay unchanged.
+  Native profile qualification is enforced before native version/auth probes.
+  Its reviewed registration authority is separate from the nineteen-file profile
+  hash to avoid self-reference; roles-v2 has no qualified registration yet.
+  The planned single infrastructure retry and exact-current native qualification
+  remain open. An interim Task4 commit/early Linux run may capture tested core
+  ownership while those are implemented; it does not complete Task4 or enable C.
 - Generated proposals remain A-unreviewed with separately pinned semantic and
   dependency assessments. No assessment/owner product confirmation waives source,
   runtime/view, qualification, activation or real business-data gates. Candidate/

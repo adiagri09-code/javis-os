@@ -42,21 +42,25 @@ def _metadata(row):
     return {"sequence": row["sequence"], "kind": row["kind"], "payload_hash": row["payload_hash"], "late": bool(row["late"])}
 
 
+def decode_trace(blobs, brain, row):
+    try:
+        hashes = json.loads(row["blob_hashes_json"])
+        if not isinstance(hashes, list) or not 1 <= len(hashes) <= MAX_PACKET_BYTES // MAX_ASSET_BYTES:
+            raise AssetUnavailable("invalid_trial_trace_chunks")
+        raw = b"".join(blobs.read(brain, digest) for digest in hashes)
+        if len(raw) > MAX_PACKET_BYTES or hashlib.sha256(raw).hexdigest() != row["payload_hash"]:
+            raise AssetUnavailable("trial_trace_hash_mismatch")
+        return json.loads(raw)
+    except (ValueError, TypeError, UnicodeError) as error:
+        raise AssetUnavailable("trial_trace_unavailable") from error
+
+
 class TrialEvidence:
     def __init__(self, trials):
         self.trials = trials
 
     def _decode(self, brain, row):
-        try:
-            hashes = json.loads(row["blob_hashes_json"])
-            if not isinstance(hashes, list) or not 1 <= len(hashes) <= MAX_PACKET_BYTES // MAX_ASSET_BYTES:
-                raise AssetUnavailable("invalid_trial_trace_chunks")
-            raw = b"".join(self.trials.blobs.read(brain, digest) for digest in hashes)
-            if len(raw) > MAX_PACKET_BYTES or hashlib.sha256(raw).hexdigest() != row["payload_hash"]:
-                raise AssetUnavailable("trial_trace_hash_mismatch")
-            return json.loads(raw)
-        except (ValueError, TypeError, UnicodeError) as error:
-            raise AssetUnavailable("trial_trace_unavailable") from error
+        return decode_trace(self.trials.blobs, brain, row)
 
     def read(self, principal, identifier, attempt, sequence):
         brain = IM._brain(principal)

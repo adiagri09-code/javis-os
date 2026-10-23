@@ -1,0 +1,136 @@
+"""Durable raw role products and checks, separate from proposal/semantic acceptance."""
+from __future__ import annotations
+
+import hashlib
+import json
+import secrets
+import time
+from contextlib import closing
+
+import improvement_store as IM
+import improvement_usage as IU
+from improvement_blobs import AssetUnavailable
+from improvement_operation_checks import execution_checks
+from improvement_operation_execution import OperationExecution
+from improvement_trial_evidence import decode_trace
+from improvement_trial_records import _brain
+
+
+class OperationResults:
+    def __init__(self, execution):
+        if type(execution) is not OperationExecution:
+            raise TypeError("concrete_operation_results_required")
+        self.execution = execution
+
+    def read(self, principal, identifier, attempt):
+        if type(attempt) is not int or attempt not in (1, 2):
+            raise ValueError("invalid_operation_result_attempt")
+        self.execution.records.get(principal, identifier)
+        brain = _brain(principal)
+        with closing(self.execution.store._conn()) as connection:
+            operation = self.execution._row(connection, principal, identifier)
+            rows = list(connection.execute("SELECT * FROM improvement_operation_results WHERE operation_id=? AND brain_id=? AND attempt=?",
+                                           (identifier, brain, attempt)))
+            if not rows:
+                raise PermissionError("operation_result_unavailable")
+            if len(rows) != 1:
+                raise AssetUnavailable("operation_result_ambiguous")
+        record = rows[0]
+        raw = self.execution.blobs.read(brain, record["blob_hash"])
+        value = json.loads(raw)
+        if (IM._hash(value) != record["result_hash"] or value.get("operation_id") != identifier
+                or type(value.get("attempt")) is not int or value["attempt"] != attempt
+                or value.get("request_hash") != operation["request_hash"]):
+            raise AssetUnavailable("operation_result_binding_mismatch")
+        return value
+
+    def artifact(self, principal, identifier, attempt):
+        report = self.read(principal, identifier, attempt)
+        reference = report["artifact"]
+        if reference is None:
+            raise PermissionError("operation_artifact_unavailable")
+        raw = self.execution.blobs.read(_brain(principal), reference["blob_hash"])
+        if hashlib.sha256(raw).hexdigest() != reference["hash"] or len(raw) != reference["byte_size"]:
+            raise AssetUnavailable("operation_artifact_changed")
+        return raw
+
+    @staticmethod
+    def _trace(connection, row):
+        return [dict(item) for item in connection.execute("SELECT * FROM improvement_operation_observations WHERE operation_id=? AND brain_id=? "
+            "AND attempt=? ORDER BY sequence", (row["id"], row["brain_id"], row["attempt"]))]
+
+    def finish(self, principal, identifier, *, expected_generation, lease_token, capability_hash):
+        from improvement_experiment_protocol import _digest
+        _digest(capability_hash)
+        brain = _brain(principal)
+        with closing(self.execution.store._conn()) as connection:
+            row, attempt = self.execution._leased(connection, principal, identifier, expected_generation, lease_token, time.time())
+            prepared = self.execution._current(connection, principal, row)
+            if row["status"] != "running" or attempt["engine_at"] is None or attempt["workspace_json"] is None:
+                raise IM.ConflictError("operation_result_state_stale")
+            trace = self._trace(connection, row)
+            if (not trace or trace[-1]["kind"] != "worker_complete"
+                    or any(item["late"] or item["sequence"] != number for number, item in enumerate(trace, 1))):
+                raise IM.ConflictError("operation_trace_incomplete")
+            workspace = json.loads(attempt["workspace_json"])
+            materialization_hash = attempt["materialization_hash"]
+            request_hash, number = row["request_hash"], row["attempt"]
+        self.execution.host._snapshot_observe(principal, prepared[1])
+        manifest = self.execution.workspace.validate(workspace)
+        if (IM._hash(manifest) != materialization_hash or manifest["operation_id"] != identifier
+                or manifest["brain_id"] != brain or IM._hash(manifest["request"]) != request_hash):
+            raise IM.ConflictError("operation_materialization_changed")
+        packets = [decode_trace(self.execution.blobs, brain, item) for item in trace]
+        checks = execution_checks(prepared[1]["engine_config"], manifest, workspace, packets, capability_hash)
+        events = [packet["event"] for packet in packets if packet["type"] == "engine_event"]
+        artifacts = [event for event in events if event.get("type") == "artifact"]
+        receipts = [event for event in events if event.get("type") == "operation_installation_receipt"]
+        artifact = installation = None
+        if len(artifacts) == 1 and type(artifacts[0].get("content")) is str:
+            raw = artifacts[0]["content"].encode()
+            if hashlib.sha256(raw).hexdigest() == artifacts[0].get("hash"):
+                blob = self.execution.blobs.write(brain, raw)
+                artifact = {"hash": blob, "blob_hash": blob, "byte_size": len(raw)}
+        if len(receipts) == 1 and type(receipts[0].get("receipt")) is dict and IM._hash(receipts[0]["receipt"]) == receipts[0].get("hash"):
+            blob = self.execution.blobs.write(brain, IM._json(receipts[0]["receipt"]).encode())
+            installation = {"hash": blob, "blob_hash": blob}
+        report = {"version": 1, "operation_id": identifier, "attempt": number, "request_hash": request_hash,
+                  "input_hash": workspace["input_hash"], "materialization_hash": materialization_hash,
+                  "engine_config_hash": manifest["engine_config_hash"], "capability_hash": capability_hash,
+                  "artifact": artifact, "installation": installation, "checks": checks,
+                  "verdict": "fail" if any(item["verdict"] == "fail" for item in checks) else (
+                      "unknown" if any(item["verdict"] == "unknown" for item in checks) else "pass"),
+                  "usage": IU.operation_usage(manifest["request"]["experiment_id"], identifier),
+                  "trace_hashes": [item["payload_hash"] for item in trace], "business_proof": False}
+        blob = self.execution.blobs.write(brain, IM._json(report).encode())
+        completion = next((item["verdict"] for item in checks if item["id"] == "completion"), "unknown")
+        call_status = "ok" if completion == "pass" else "error" if completion == "fail" else "interrupted"
+        status = "completed" if call_status == "ok" and report["verdict"] != "fail" else "failed"
+        self.execution.host._snapshot_observe(principal, prepared[1])
+        with self.execution.store._Tx(self.execution.store) as connection:
+            row, attempt = self.execution._leased(connection, principal, identifier, expected_generation, lease_token, time.time())
+            if (row["status"] != "running" or self._trace(connection, row) != trace
+                    or attempt["materialization_hash"] != materialization_hash or attempt["workspace_json"] != IM._json(workspace)
+                    or self.execution._current(connection, principal, row) != prepared):
+                raise IM.ConflictError("operation_result_state_stale")
+            self.execution.host._snapshot_observe(principal, prepared[1])
+            self.execution._current(connection, principal, row)
+            stamp = time.time()
+            self.execution._leased(connection, principal, identifier, expected_generation, lease_token, stamp)
+            call = self.execution.bound_call(connection, row, attempt)
+            pin = prepared[1]["engine_config"]
+            if (call["engine_at"] != attempt["engine_at"] or call["status"] not in ("running", call_status)
+                    or call["engine"] != pin["provider"] or call["model"] != pin["model"]):
+                raise IM.ConflictError("operation_call_state_stale")
+            if call["status"] == "running":
+                self.execution.ledger._settle_in(connection, attempt["call_id"], call_status, None, None, None, stamp)
+            connection.execute("INSERT INTO improvement_operation_results VALUES(?,?,?,?,?,?,?)", (
+                "ior_" + secrets.token_hex(12), identifier, brain, number, IM._hash(report), blob, stamp))
+            connection.execute("UPDATE improvement_operation_attempts SET status=?,result_json=?,lease_token=NULL,lease_until=NULL,updated_at=? "
+                "WHERE operation_id=? AND brain_id=? AND attempt=?", (status, IM._json(report), stamp, identifier, brain, number))
+            self.execution._advance(connection, row, status, stamp)
+            result = {**self.execution._public(connection, self.execution._row(connection, principal, identifier)), "result": report}
+            self.execution.assets._event(connection, principal, "operation-result:" + identifier + ":" + str(number),
+                "operation_result", {"operation_id": identifier, "attempt": number, "result_hash": IM._hash(report)},
+                {"operation_id": identifier, "attempt": number, "result_hash": IM._hash(report), "status": status})
+            return result

@@ -228,6 +228,17 @@ with TrialWorkspace; keep distinct actual operation attempt lifetime locks.
   failure, engine/checker/live-task after DB terminal and late result publication.
 - [ ] GREEN lifecycle/legacy native boundary tests; commit; no real account yet.
 
+Task4 checkpoint: real worker/profile/IPC, SQL lease/marker/refund/late trace,
+encrypted result checks, owned Runner/Tasks/cancellation and selected recovery
+are implemented and under impact regression. Actual SDK messages in these tests
+are synthetic; production sessions/lessons/jobs remain unchanged on completion,
+cancellation and recovery. Native qualification registration now binds complete
+profile source + runtime and denies probes until qualified. The registration
+authority remains separate from the profile digest to avoid self-reference.
+The single host-observed infrastructure retry below is still required before
+Task4 completion. An interim tested-core commit enables early Linux feedback
+per Goal section12, without marking Task4 complete or enabling public C roles.
+
 ## Task 5 — actual tuning projection and generation contract
 
 Interfaces: ImproverInputs.build(owner,experiment_id,expected_generation) returns

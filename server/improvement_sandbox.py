@@ -178,6 +178,63 @@ def _atomic(path, content):
             os.unlink(temporary)
 
 
+def _try_workspace_lifetime_lock(root, namespace, key):
+    """Shared OS primitive; the caller supplies its actual ownership namespace."""
+    _private_directory(root)
+    directory = root / namespace
+    check_ancestry(directory)
+    directory.mkdir(exist_ok=True)
+    path = directory / (_bytes_hash(key.encode()) + ".lock")
+    check_ancestry(path)
+    handle = open(path, "a+b", buffering=0)
+    try:
+        if not handle.seek(0, os.SEEK_END):
+            handle.write(b"\0")
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as error:
+        handle.close()
+        if error.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+            return None
+        raise
+    except BaseException:
+        handle.close()
+        raise
+    return handle
+
+
+@contextlib.contextmanager
+def _workspace_mutation_lock(root, key):
+    _private_directory(root)
+    lock_root = root / ".locks"
+    lock_root.mkdir(exist_ok=True)
+    lock = lock_root / (_bytes_hash(key.encode()) + ".lock")
+    check_ancestry(lock)
+    with open(lock, "a+b", buffering=0) as handle:
+        if not handle.seek(0, os.SEEK_END):
+            handle.write(b"\0")
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 class TrialWorkspace:
     def __init__(self, root: Path):
         self.root = Path(root).absolute()
@@ -195,32 +252,7 @@ class TrialWorkspace:
 
     def _try_lifetime_lock(self, namespace, key):
         """An OS-held lock disappears on host death, unlike the durable journal."""
-        _private_directory(self.root)
-        directory = self.root / namespace
-        check_ancestry(directory)
-        directory.mkdir(exist_ok=True)
-        path = directory / (_bytes_hash(key.encode()) + ".lock")
-        check_ancestry(path)
-        handle = open(path, "a+b", buffering=0)
-        try:
-            if not handle.seek(0, os.SEEK_END):
-                handle.write(b"\0")
-            handle.seek(0)
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as error:
-            handle.close()
-            if error.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
-                return None
-            raise
-        except BaseException:
-            handle.close()
-            raise
-        return handle
+        return _try_workspace_lifetime_lock(self.root, namespace, key)
 
     @staticmethod
     def release_execution(handles):
@@ -313,29 +345,8 @@ class TrialWorkspace:
 
     @contextlib.contextmanager
     def _lock(self, trial_id, attempt):
-        _private_directory(self.root)
-        lock_root = self.root / ".locks"
-        lock_root.mkdir(exist_ok=True)
-        lock = lock_root / (_bytes_hash(f"{trial_id}:{attempt}".encode()) + ".lock")
-        check_ancestry(lock)
-        with open(lock, "a+b", buffering=0) as handle:
-            if not handle.seek(0, os.SEEK_END):
-                handle.write(b"\0")
-            handle.seek(0)
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(handle, fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                handle.seek(0)
-                if os.name == "nt":
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-                else:
-                    fcntl.flock(handle, fcntl.LOCK_UN)
+        with _workspace_mutation_lock(self.root, f"{trial_id}:{attempt}"):
+            yield
 
     def prepare(self, trial_id, attempt, input_manifest):
         manifest = _manifest(input_manifest)
