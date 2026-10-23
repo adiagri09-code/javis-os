@@ -148,6 +148,32 @@ class EffectiveViews:
             return result
 
     def load_current(self, principal, comparison_id, variant):
+        resolved, _ = self._load_current(principal, comparison_id, variant)
+        return resolved
+
+    def resolve_request(self, principal, value, *, connection, require_link, trial_id=None):
+        from improvement_view_trial_protocol import validate_request_v4
+        request = validate_request_v4(value)
+        brain, comparison_id = _brain(principal), request['lineage']['comparison_id']
+        saved = self._metadata(connection, brain, comparison_id)
+        if saved is None:
+            raise PermissionError('comparison_views_unavailable')
+        descriptor = saved['views'][request['variant']]
+        if request['view'] != {'view_id': descriptor['view_id'], 'view_hash': descriptor['manifest_hash'],
+                'binding_hash': saved['binding_hash']}:
+            raise IM.ConflictError('comparison_view_request_changed')
+        comparison = connection.execute('SELECT experiment_id,kind FROM improvement_comparisons WHERE id=? AND brain_id=?',
+            (comparison_id, brain)).fetchone()
+        if comparison is None or comparison['experiment_id'] != request['pins']['experiment_id']:
+            raise PermissionError('comparison_view_request_unavailable')
+        # Final cells require ownership in the existing qualification registry.
+        # They remain closed until that explicit boundary is implemented.
+        if comparison['kind'] != 'tuning' or request.get('qualification_id'):
+            raise PermissionError('view_final_qualification_unavailable')
+        return self._load_current(principal, comparison_id, request['variant'], request=request,
+            connection=connection, require_link=require_link, trial_id=trial_id)
+
+    def _load_current(self, principal, comparison_id, variant, *, request=None, connection=None, require_link=False, trial_id=None):
         brain = _brain(principal)
         _identifier(comparison_id)
         if type(variant) is not str or variant not in ('baseline', 'candidate'):
@@ -155,11 +181,11 @@ class EffectiveViews:
         metadata = self.read_existing(principal, comparison_id)
         if metadata is None:
             raise PermissionError('comparison_views_unavailable')
-        with closing(self.store._conn()) as connection:
-            comparison = connection.execute('SELECT experiment_id FROM improvement_comparisons WHERE id=? AND brain_id=?',
+        with closing(self.store._conn()) as source_connection:
+            comparison = source_connection.execute('SELECT experiment_id FROM improvement_comparisons WHERE id=? AND brain_id=?',
                 (comparison_id, brain)).fetchone()
-            generation = self.plans.records._row(connection, brain, comparison['experiment_id'])['generation']
-            self._published(connection, brain, metadata, generation)
+            generation = self.plans.records._row(source_connection, brain, comparison['experiment_id'])['generation']
+            self._published(source_connection, brain, metadata, generation)
         snapshot = capture_sources(self.plans, self.semantic, principal, comparison_id, generation)
         proof = json.loads(self.blobs.read(brain, metadata['binding_hash']))
         if IM._hash(proof) != metadata['binding_hash'] or proof != self._proof(snapshot, metadata):
@@ -172,8 +198,17 @@ class EffectiveViews:
                     or view_hash(manifest) != metadata['views'][key]['manifest_hash'] or manifest != expected[key]):
                 raise IM.ConflictError('comparison_view_manifest_changed')
             raw_manifests[key] = raw
+        lineage = None
+        if request is not None:
+            from improvement_view_lineage import load_view_lineage
+            lineage = load_view_lineage(connection, brain, request, blobs=self.blobs, current=True,
+                require_link=require_link, trial_id=trial_id)
+            if lineage['view']['manifest'] != expected[variant]:
+                raise IM.ConflictError('comparison_view_request_changed')
+        # Refresh actual files/grants after every manifest and lineage blob read.
         if capture_sources(self.plans, self.semantic, principal, comparison_id, generation) != snapshot:
             raise IM.ConflictError('comparison_view_authority_changed')
-        return ResolvedView(metadata['views'][variant]['view_id'], comparison_id, metadata['binding_hash'],
+        resolved = ResolvedView(metadata['views'][variant]['view_id'], comparison_id, metadata['binding_hash'],
             metadata['views'][variant]['manifest_hash'], raw_manifests[variant],
             snapshot.proposal['before' if variant == 'baseline' else 'after'], snapshot.observational_unknowns)
+        return resolved, lineage

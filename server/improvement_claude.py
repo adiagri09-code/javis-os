@@ -29,7 +29,20 @@ PROFILE_SOURCES = ("improvement_claude.py", "improvement_sandbox.py", "improveme
                    "improvement_improver_inputs.py", "improvement_generation_protocol.py", "improvement_comparison_plans.py",
                    "improvement_proposals.py", "improvement_skill_candidates.py", "improvement_role_workflow.py",
                    "improvement_semantic_review.py", "improvement_semantic_protocol.py", "improvement_semantic_records.py",
-                   "improvement_dependency_evidence.py", "improvement_execution_limits.py", "improvement_native_lifetime.py")
+                   "improvement_dependency_evidence.py", "improvement_execution_limits.py", "improvement_native_lifetime.py",
+                   "improvement_trials.py", "improvement_trial_host.py", "improvement_trial_records.py", "improvement_trial_admission.py",
+                   "improvement_trial_context.py", "improvement_trial_sources.py", "improvement_trial_sql_context.py",
+                   "improvement_trial_dashboard.py", "improvement_trial_file_sources.py", "improvement_trial_selection.py",
+                   "improvement_trial_service.py", "improvement_trial_associations.py", "improvement_trial_runner.py",
+                   "improvement_trial_tasks.py", "improvement_trial_results.py", "improvement_trial_products.py",
+                   "improvement_trial_decisions.py", "improvement_trial_views.py", "improvement_trial_schema.py",
+                   "improvement_experiment_lineage.py", "improvement_experiment_admission.py", "improvement_experiment_service.py",
+                   "improvement_experiment_protocol.py", "improvement_experiment_qualification.py", "improvement_experiments.py",
+                   "improvement_experiment_schema.py", "improvement_comparison_results.py", "improvement_comparison_links.py",
+                   "improvement_views.py", "improvement_view_sources.py", "improvement_view_history.py", "improvement_view_lineage.py",
+                   "improvement_view_trial_protocol.py", "improvement_view_protocol.py", "improvement_view_schema.py",
+                   "improvement_store.py", "improvement_blobs.py", "improvement_cases.py", "improvement_case_schema.py",
+                   "improvement_candidate_records.py", "improvement_candidate_schema.py", "improvement_skill_patch.py")
 VERIFIED_NATIVE_RUNTIMES = {("win32", "2.1.304",
     "019e5174d5d954585edb1a946fe280e44a973050b4897034adf0e16306f85fdd", "0.2.116"),
     ("win32", "2.1.308", "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53", "0.2.116")}

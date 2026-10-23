@@ -325,6 +325,23 @@ Portable evidence `../evidence/2026-10-23-m2d1-task3-history.json`, SHA256
 No real v4 Trial/Call has yet been created; root dispatch still rejects4. Task3
 remains OPEN. No actual query, new native qualification or business/live proof.
 
+Task3 actual-reservation checkpoint: the real TrialStore now creates v4 Trials,
+existing improve_probe Calls and exact view links atomically after concrete
+same-store source/semantic/lineage observation. Real Principal flows through all
+current hooks; historical replay/cold metadata survive off/revoke without blob
+reads. Descriptor mismatch denies before plaintext, and source edits after real
+ledger reservation or the last history read roll back/deny. The first focused
+RED/GREEN preceded nine sequential affected checks:140 tests,231.248s wall time.
+Evidence `../evidence/2026-10-23-m2d1-task3-reservations.json`, SHA256
+bde6b073ae78acbf4e220cd5363fa40fd16e1f4bc5dd3d2ac225cd83a0b8a796.
+The reachable source footprint expanded in the SAME change to76 files, hash
+51b62052babed7b4ceee02f8edf5a7101c92cefe0873280fc6148a6b7dcf7e3c.
+No registration matches it; actual native readiness remains false. Engine markers
+for new reservations are NULL. V4 materialization is explicitly closed until
+Task4's real workspace path, and final cells until existing-registry ownership.
+Shared bounded consumers/admission/kernel barriers are next. Task3 is not done;
+this draft cannot be released or described as complete v4 execution.
+
 Next additive table contract (before SQL): `improvement_view_trial_links` columns
 are `comparison_id,brain_id,experiment_id,cell_position,trial_id,request_hash,
 pair_id,case_id,repeat,variant,view_id,view_hash,binding_hash,created_at`.

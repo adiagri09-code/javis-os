@@ -33,7 +33,7 @@ def require_experiment_version(connection, brain, request):
         if type(lineage) is not dict or 'comparison_id' not in lineage:
             raise ValueError('invalid_experiment_request')
         require_legacy_comparison(connection, brain, lineage['comparison_id'])
-    if request.get("version") not in (2, 3):
+    if request.get("version") not in (2, 3, 4):
         from improvement_experiment_qualification import experiment_owned
         if experiment_owned(connection, brain, request.get("case_set_id"), request["pins"]):
             raise PermissionError("experiment_request_version_required")

@@ -47,6 +47,11 @@ class TrialResults:
         with closing(self.trials.store._conn()) as connection:
             trial = self.trials._row(connection, brain, identifier)
             request = json.loads(trial["request_json"])
+            if request.get('version') == 4:
+                from improvement_view_lineage import load_view_lineage
+                if IM._hash(request) != trial['request_hash']:
+                    raise AssetUnavailable('view_trial_request_changed')
+                load_view_lineage(connection, brain, request, blobs=self.trials.blobs, current=False, require_link=True, trial_id=identifier)
             if request.get("version") == 3:
                 from improvement_preparation_lineage import load_preparation_lineage
                 if IM._hash(request) != trial["request_hash"]:
@@ -181,7 +186,7 @@ class TrialResults:
             row, attempt = self.trials._leased(connection, principal, identifier, expected_generation, lease_token, time.time())
             if row["status"] != "evaluating" or attempt["engine_at"] is None:
                 raise IM.ConflictError("trial_evaluation_stale")
-            case = self.trials._current(connection, brain, request, trial_id=row["id"])
+            case = self.trials._current(connection, brain, request, trial_id=row["id"], principal=principal)
             workspace = json.loads(attempt["workspace_json"])
             manifest = self.trials.workspace.validate(workspace)
             if IM._hash(manifest) != attempt["materialization_hash"]:
@@ -229,7 +234,7 @@ class TrialResults:
             row, attempt = self.trials._leased(connection, principal, identifier, expected_generation, lease_token, time.time())
             if row["status"] != "evaluating" or row["attempt"] != number:
                 raise IM.ConflictError("trial_evaluation_stale")
-            self.trials._current(connection, brain, request, trial_id=row["id"])
+            self.trials._current(connection, brain, request, trial_id=row["id"], principal=principal)
             self.trials.workspace.validate(workspace)
             if self._artifact_hash(connection, row, workspace, contract) != artifact_hash:
                 raise IM.ConflictError("trial_output_changed")

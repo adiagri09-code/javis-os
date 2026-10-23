@@ -121,6 +121,20 @@ C's native registration must be invalidated in the same change that makes v4
 reachable and the exact final D footprint qualified before actual queries.
 The draft PR is not ready to integrate. Business/live/M3–M8 gates stay open.
 
+Subsequent Task3 history checkpoint b755699e passed56 scoped tests (portable
+evidence170d0de3). Actual reservation now passes140 tests in nine sequential
+affected checks,231.248s, recorded in
+`../evidence/2026-10-23-m2d1-task3-reservations.json` (SHA256
+bde6b073ae78acbf4e220cd5363fa40fd16e1f4bc5dd3d2ac225cd83a0b8a796).
+Genuine v4 baseline/candidate Trials and existing Calls/links are created; source
+changes roll back actual reservations, and cold replay stays readable after
+off/revoke. No model query/engine marker. Current native footprint is now76
+files/51b62052, deliberately UNREGISTERED, invalidating C9dc for this new code.
+No default actual native execution can pass until final D qualification. Current
+Task3 still lacks complete shared stop/recovery/report/next/admission scopes and
+existing qualification-registry ownership. V4 materialization explicitly denies
+until Task4 implements it. Task3 and D remain OPEN; no live scope is enabled.
+
 - Final affected regression21/21 GREEN,663.451s, qualified across two frozen
   segments: first15 passed scripts retain identical product/helper/test bytes;
   only the failed standalone task-drain test changed from a30ms scheduler sample
