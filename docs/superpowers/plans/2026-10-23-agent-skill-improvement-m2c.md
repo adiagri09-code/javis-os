@@ -173,17 +173,34 @@ actual host-issued role improver|semantic_reviewer and purpose improve_propose|
 improve_evaluate; no fabricated trial_id/case_id. Native operation recorder verifies
 the actual CallLedger purpose/mirror/brain/model/engine marker before persistence.
 
-- [ ] RED: existing ledger/metadata rejects genuine role operations; forged
+Impact: CallLedger, closed turn metadata, shared recorder/store/index/error counts
+and per-operation view; actual operation attempt reservation stays in schema6.
+Fix-loop new focused cases; task regression new roles plus old ledger/Team/usage/
+turn metadata. Actual native no-learning behavior depends on Task4's worker;
+Task3 must not claim metadata alone proves that runtime exclusion.
+
+- [x] RED: existing ledger/metadata rejects genuine role operations; forged
   model role/brain/call refs and cross-role result packets must still reject.
-- [ ] Extend actual CallLedger purpose schema/allowlist and closed turn metadata,
+- [x] Extend actual CallLedger purpose schema/allowlist and closed turn metadata,
   preserving Team and Trial formats and historical parsers byte-for-byte.
-- [ ] Reuse usage events/index for operation-specific request/token/coverage
+- [x] Reuse usage events/index for operation-specific request/token/coverage
   attribution. Expose null for unknown counts; equivalent price is not cash billing.
-- [ ] Preserve learning_origin filtering for every native role; source trials,
-  semantic review and proposal messages cannot seed production lessons/jobs.
-- [ ] Test engine-marker interruption/refund, late telemetry, replay, foreign
+- [x] Preserve trusted learning_origin=compose on role metadata; telemetry never
+  persists shared conversations/jobs. Actual worker/runner no-learning behavior is
+  verified in Task4 before role enablement, not inferred from this metadata.
+- [x] Test engine-marker interruption/refund, late telemetry, replay, foreign
   call identity, mixed role/session packets, usage-index reads and Team regressions.
-- [ ] GREEN meaningful role/usage/learning/ledger checks; commit.
+- [x] GREEN meaningful role/usage/ledger checks; commit. Runtime learning exclusion
+  remains an explicit Task4 dependency and whole-C release gate.
+
+Task3 evidence: identity5 RED→GREEN, usage-index/view/error3 RED→GREEN, actual
+operation call3 RED→GREEN, genuine marked operation telemetry RED→GREEN. Final
+impacted8 scripts GREEN98s (real ledger, new calls/telemetry/usage, schema6, Team
+quality usage, usage hotpath/index). Old Trial usage30 GREEN4.282s and original
+turn context/Trial metadata checks passed. A later same-operation foreign-role
+recovery finding RED1/2.921s is fixed; focused final telemetry9 GREEN25.058s.
+Other unchanged successful paths are conditionally reused; full exact-head CI
+remains required. No real worker/provider/model query or semantic acceptance.
 
 ## Task 4 — native role worker, workspace and owned lifecycle
 
@@ -200,6 +217,11 @@ with TrialWorkspace; keep distinct actual operation attempt lifetime locks.
 - [ ] No ambient hooks/plugins/skills/native Read/Bash/web/connectors; only actual
   preloaded fixture capability and immutable role input. No arbitrary evaluator
   code/script/registry from a model or HTTP body.
+- [ ] Actual isolated proposer/reviewer output containing JAVIS_LESSON, memory
+  instructions and job suggestions produces zero production conversation/lesson/
+  job effects, including cancellation/recovery. Trusted origin metadata alone
+  from Task3 is not evidence of this runtime exclusion. Shared display persistence
+  would additionally require durable digest/reaction replay provenance guards.
 - [ ] Include every new role worker/renderer/workspace source in explicit native
   profile footprint; version the profile. Historical results remain historical.
 - [ ] Test malformed packets, foreign live brain lock, lease expiry, cleanup

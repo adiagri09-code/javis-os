@@ -78,6 +78,14 @@
   qualification14/58.135s are conditional historical scope evidence, not final
   commit CI. The blob guard change also changes evaluator source identity;
   current E2E reruns the fresh pins. No blanket rerun of all improvement scripts.
+- Task3 now reserves genuine improve_propose/evaluate calls/attempts/events in the
+  existing writer and validates actual operation/call/marker ownership for native
+  telemetry. Operation metadata, shared usage projection/reconciliation and error
+  coverage remain separate from solver/Team identity; unknown data stays unknown.
+  Eight impacted scripts passed98s; old Trial usage30/4.282s and turn checks passed.
+  Same-operation foreign-role recovery was reproduced RED then fixed, with final
+  telemetry9/25.058s. Full current-head CI/review remains pending. No actual role
+  worker/model query; native learning exclusion is carried explicitly to Task4.
 - Generated proposals remain A-unreviewed with separately pinned semantic and
   dependency assessments. No assessment/owner product confirmation waives source,
   runtime/view, qualification, activation or real business-data gates. Candidate/

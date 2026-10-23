@@ -123,7 +123,7 @@ def _connect() -> sqlite3.Connection:
                  "event_key TEXT PRIMARY KEY, team_id TEXT, task_id TEXT, payload TEXT)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_team ON usage_observations(team_id,task_id)")
     columns = {row[1] for row in conn.execute("PRAGMA table_info(usage_observations)")}
-    for column in ("experiment_id", "trial_id", "cli_session_id"):
+    for column in ("experiment_id", "trial_id", "cli_session_id", "operation_id"):
         if column not in columns:
             try:
                 conn.execute(f"ALTER TABLE usage_observations ADD COLUMN {column} TEXT")
@@ -131,6 +131,7 @@ def _connect() -> sqlite3.Connection:
                 if column not in {row[1] for row in conn.execute("PRAGMA table_info(usage_observations)")}:
                     raise
     conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_improvement ON usage_observations(experiment_id,trial_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_operation ON usage_observations(experiment_id,operation_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_session ON usage_observations(cli_session_id)")
     conn.execute("CREATE TABLE IF NOT EXISTS usage_cli_requests("
                  "request_key TEXT PRIMARY KEY, session_id TEXT, payload TEXT)")
@@ -150,18 +151,23 @@ def _connect() -> sqlite3.Connection:
 def _project_observation(conn, event) -> None:
     """The event file owns bills; this rebuildable projection only supplies execution attribution."""
     ex = event.get("execution") or {}
-    if not (ex.get("team_id") or (ex.get("experiment_id") and ex.get("trial_id"))) or not event.get("event_id"):
+    if "operation_id" in ex:
+        import turn_context
+        ex = turn_context.execution_metadata(ex)
+        if ex is None:
+            return
+    if not ex or not (ex.get("team_id") or (ex.get("experiment_id") and (ex.get("trial_id") or ex.get("operation_id")))) or not event.get("event_id"):
         return
     key = up.observation_key(event)
     prior = conn.execute("SELECT payload FROM usage_observations WHERE event_key=?", (key,)).fetchone()
     if prior:
         old = json.loads(prior[0])
         event = {**event, "ts": old.get("ts"), "day": old.get("day")}
-    conn.execute("INSERT INTO usage_observations(event_key,team_id,task_id,experiment_id,trial_id,cli_session_id,payload) "
-                 "VALUES(?,?,?,?,?,?,?) ON CONFLICT(event_key) DO UPDATE SET "
+    conn.execute("INSERT INTO usage_observations(event_key,team_id,task_id,experiment_id,trial_id,operation_id,cli_session_id,payload) "
+                 "VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(event_key) DO UPDATE SET "
                  "cli_session_id=excluded.cli_session_id,payload=excluded.payload",
                  (key, ex.get("team_id"), ex.get("task_id"), ex.get("experiment_id"), ex.get("trial_id"),
-                  ex.get("cli_session_id"), json.dumps(event)))
+                  ex.get("operation_id"), ex.get("cli_session_id"), json.dumps(event)))
 
 
 def _ingest_team_events(conn) -> int:
@@ -208,14 +214,18 @@ def execution_events(team_id, task_id=None):
         conn.close()
 
 
-def improvement_events(experiment_id, trial_id=None):
+def improvement_events(experiment_id, trial_id=None, *, operation_id=None):
     """Read improvement attribution from the same rebuildable observation/request tables."""
+    if operation_id is not None and (trial_id is not None or type(operation_id) is not str or not operation_id):
+        raise ValueError("invalid_improvement_usage_selection")
     conn = _connect()
     try:
         _ingest_team_events(conn)
         conn.commit()
-        where, args = "experiment_id=?", [experiment_id]
-        if trial_id is not None:
+        where, args = "experiment_id=? AND trial_id IS NOT NULL", [experiment_id]
+        if operation_id is not None:
+            where, args = "experiment_id=? AND operation_id=? AND trial_id IS NULL", [experiment_id, operation_id]
+        elif trial_id is not None:
             where += " AND trial_id=?"
             args.append(trial_id)
         events = [json.loads(row[0]) for row in conn.execute(
