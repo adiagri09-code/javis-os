@@ -2,6 +2,23 @@
 
 ## Current continuation — fixed root factory approved; owned verification and guardian integration
 
+Shared protocol/endpoint proof is committede2380bd7 locally. Guardian independent
+25 attempt stopped failfast after7tests1.328s: first6incl canceled-control fix pass,
+delayed50ms native marker missing; exact cause UNKNOWN. One assigned later diagnostic
+passed1.608s but leaves that failure unresolved; current trace showed only3ms gate
+margin at hostauthorization. Approved TEST-ONLY split now asserts unused receive
+task/owner/channel deadlines remainNone afterdeliberateidle, then uses actual
+production8s gate for unchanged native/image/terminal positive checks.
+
+Reviewer also traced same real raw-task cancellation flaw into existing image
+channel dependency. Root reproduced1REDerror0.060s and corrected sticky unknown
+after actualsocketclose. New14PASS1.505s, independent14PASS1.507s/no warnings on
+sourceb8a5a50b/test8f12da2d; existing13assertionsunchanged. Historical13 remains
+history, no blanket update. Public image-channel-cancelled-io records negative
+owner retained across retry/processdrain. Guardian author now has sole native/app
+slot for ONE consolidated25 on source4b9ee58c/test370474d2/imageb8a5a50b; final
+native review remains pending. Root/host have no active app/native tests.
+
 Latest: independent guardian static review reproduced false control.closed after
 cancelled logical recv, before running native24. Reviewer found no other actionable
 ownership issue; author has sole native/app slot for narrow correction and final
