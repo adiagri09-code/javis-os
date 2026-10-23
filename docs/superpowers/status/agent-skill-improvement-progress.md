@@ -1,5 +1,44 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — read-outcome foundations and actual anyio gate, 24 October
+
+Versioned native skill reads are committed/pushed ea74d62e on PR803. Its exact
+83-source profile04c8c77b remains unchanged. CI40012063416 is running; Docker
+size check passed, full Python check pending. No deployment or account retry.
+
+The next plan preserves input/receipt3 UNKNOWN semantics and introduces future
+input/receipt4 only when complete dispatch/outcome integration is ready. New
+standalone PinnedReadOutcomeBroker reuses actual skill/fixture decisions and
+emits immutable ten-field envelopes/observations. New pure correlator validates
+underlying pinned payloads and actual native call/result identity/session/bytes;
+None supports derived success only with exact unique host/native delivery.
+Absent raw flags stay UNKNOWN, explicit errors cannot be overwritten, and
+verified denial is boundary evidence rather than a successful skill read.
+No execution caller or new PROFILE_SOURCES entry exists yet.
+
+Author15broker/24proof RED-to-GREEN checks pass; independent sequential15PASS
+0.072s and24PASS0.112s approve the exact four files and nine readonly dependencies.
+All83 qualified source pins remain unchanged; no native20 rerun is necessary for
+these unreachable components. Public read-outcome-foundation8700030d records
+hashes and limits. Actual input4/receipt4 integration/qualification remains open.
+
+A separate once-only inert probe uses the SDK-imported anyio.open_process on
+the actual creating/debugging OS thread. Three cases pass in2.516s: selected
+image, identical-byte foreign image refusal and real cancellation before a local
+image ACK. Actual CREATE hFile identity/hash, process/thread incarnation/exact
+job, continued debug EXIT, anyio wait/reader/aclose and job drain all precede guard
+release. Independent limited static review verifies29 artifact/runtime/source
+pins and unchanged83 source pins. Public sdk-anyio-image-gate retains original
+V1 failure and V2 bootstrap-resume distinction. No SDK client/query, selected
+CLI/account/provider or guardian IPC ran. Guardian receipt/ACK/drain, worker death,
+full SDK/configuration proof and all18 eligibility remain unqualified.
+
+Full Goal M0–M8 stays active. Pilot work types remain reconciliation, document
+processing and Python technical control; business-source/owner/live gates stay
+open. Continue actual guardian ownership and version4 integration, then full
+D2/E/F/M3–M8. Reserved0.299.0; final-head CI/review/integration still required.
+
+
 ## Current continuation — native skill reads, 24 October
 
 Owner delegated pilot choice: reconciliation first, document processing second,
