@@ -250,5 +250,24 @@ class ImageMetadataChannelTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(caught.exception.owner, channel)
         self.assertFalse(channel.closed)
 
+    async def test_cancelled_raw_receive_never_becomes_completed_io_cleanup(self):
+        left, right = self.pair()
+        channel = self.channel(left)
+        caller = asyncio.create_task(channel.receive_create())
+        while not channel._io_tasks: await asyncio.sleep(0)
+        raw = channel._io_tasks[0]
+        await asyncio.sleep(.01)  # Actual public-loop socket read is pending.
+        raw.cancel()
+        with self.assertRaises(self.module().ImageChannelCleanupError) as caught:
+            await caller
+        self.assertIs(caught.exception.owner, channel)
+        self.assertTrue(raw.cancelled())
+        self.assertEqual(left.fileno(), -1)  # Actual close still happens.
+        self.assertFalse(channel.closed)
+        self.assertTrue(channel.io_completion_unknown)
+        self.assertTrue(channel._buffers)
+        with self.assertRaises(self.module().ImageChannelCleanupError): await channel.aclose()
+        self.assertFalse(channel.closed)
+
 
 if __name__ == '__main__': unittest.main()
