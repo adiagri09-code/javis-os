@@ -63,6 +63,11 @@ class OperationWorkerTests(unittest.TestCase):
                 self.cwd = kwargs["cwd"]
                 testcase.assertEqual(kwargs["allowed_tools"], [])
                 testcase.assertIn(payload["receipt"]["role"], kwargs["system_prompt"])
+                if getattr(testcase, 'require_raw_artifact', False):
+                    testcase.assertIn('Your final response is the artifact itself: exactly one raw JSON object.',
+                                      kwargs['system_prompt'])
+                    testcase.assertIn('No Markdown code fences, headings, preface or commentary.', kwargs['system_prompt'])
+                    testcase.assertIn('all required keys and their exact types', kwargs['system_prompt'])
 
             async def query(self, prompt):
                 options = self.trial_profile.options(self)
@@ -114,6 +119,14 @@ class OperationWorkerTests(unittest.TestCase):
     def test_semantic_role_preserves_distinct_genuine_identity(self):
         events, _ = self.execute(self.payload("semantic"))
         self.assertEqual((events[-1]["role"], events[-1]["purpose"]), ("semantic_reviewer", "improve_evaluate"))
+
+    def test_improver_worker_receives_raw_final_artifact_instructions(self):
+        self.require_raw_artifact = True
+        self.execute(self.payload())
+
+    def test_semantic_worker_receives_raw_final_artifact_instructions(self):
+        self.require_raw_artifact = True
+        self.execute(self.payload('semantic'))
 
     def test_drifted_config_rejects_before_adapter_or_engine_creation(self):
         payload = self.payload()
