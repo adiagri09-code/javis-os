@@ -1,5 +1,37 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — worker/codec approved; actual durable consumers in progress
+
+Selected pilots are reconciliation primary, document processing secondary and
+Python bugfix/test technical control, as delegated by the owner. No new business
+source access, live activation or owner acceptance is inferred from that choice.
+
+Worker session source95970ef1/testb6c747fe is independently approved13PASS4.889s
+after author13PASS4.943s. Internal dispatch now unwinds before outer cleanup,
+closing the independently reproduced reentrant-close P2. Commit313aa1eb contains
+the component and public native-worker-session evidence. Root verified all17
+explicit final manifest files with zero mismatches; no main route enabled.
+
+Pure observation codec source3cd30058/testc9b55432 is independently approved14PASS
+.052s after author14PASS.050s, isolated stdlib/protocol only. Commit9b227da2 and
+public native-observation-codec retain lexical authority limits. Actual encrypted
+SQLite writer/read integration is underway; existing V1 history stays immutable.
+
+Root reproduced a new lost-usage path: fully decoded private usage rejected by
+host phase checks vanished before publication. Meaningful RED1FAIL.166s; scoped
+fix retains it once in closing evidence without live delivery/authorization.
+Author1PASS.188s, independent1PASS.162s, affected host21PASS12.887s. Current host
+source5693e2b0/test6587cd56 and public rejected-usage-retention preserve exact
+proof and distinguish the initial fixture error. Native/provider authority is
+not conferred by this socket-only regression.
+
+Next actual integration is durable observation2 history for both Trial and
+operation: stored first-offer/receipt binding, strict active counters, unchanged
+lease/writer checks, V2 drained freeze and explicit late gap/unknown handling.
+One author owns app/native tests; root/reviewer do not overlap those tests.
+Complete boundary qualification/registration and final-head CI remain pending;
+historical native20 proof does not qualify changed source bytes.
+
 ## Current continuation — guardian component approved; host review and early Linux channel check
 
 Engine bridge is independently approved at sourcef1dcc8ed/testa34a72bd: actual

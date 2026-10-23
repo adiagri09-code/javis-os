@@ -609,10 +609,13 @@ class GuardianSessionV2:
         if not stream.closed: raise self._error(True)
         self._stream_states[stream] = 'closed'
 
-    async def _publish(self, source, source_sequence, body):
+    def _envelope(self, source, source_sequence, body):
         self._packet_sequence += 1
-        packet = {'version': 2, 'sequence': self._packet_sequence, 'source': source,
+        return {'version': 2, 'sequence': self._packet_sequence, 'source': source,
             'source_sequence': source_sequence, 'launch_nonce': self._nonce, **self._worker_identity, 'body': _v2_copy(body)}
+
+    async def _publish(self, source, source_sequence, body):
+        packet = self._envelope(source, source_sequence, body)
         if self._stopped and body['type'] == 'drained':
             self._final_drained = packet
             self._available.set()
@@ -866,8 +869,10 @@ class GuardianSessionV2:
             self._stop(error)
 
     async def _worker_loop(self):
+        packet, published = None, False
         try:
             while not self._stopped:
+                packet, published = None, False
                 packet = await self._private.receive(timeout=None if self._accounting_acknowledged else self._timeout)
                 body, kind = packet['body'], packet['body']['type']
                 if not self._endpoint_event.is_set():
@@ -911,6 +916,12 @@ class GuardianSessionV2:
             raise
         except BaseException as error:
             self._stop(error)
+
+        finally:
+            # A decoded event is evidence even when phase validation rejects it.
+            # Keep it out of live delivery and reuse the one worker pending slot.
+            if packet is not None and not published and 'worker' not in self._pending_publish:
+                self._pending_publish['worker'] = self._envelope('worker', packet['sequence'], packet['body'])
 
     def _maybe_join(self, purpose):
         if (self._stopped or purpose in self._joins or purpose not in self._published_images
