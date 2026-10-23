@@ -227,6 +227,9 @@ Cleanup/final-CAS failure leaves `stopping`; explicit recovery retries safely.
 
 To recover, refresh metadata and call `recover` with a new event key. It does not
 restart the solver, refresh a source grant or revive a stopped experiment. Stop
+recovery settles and cleans only this experiment's immutable trial links; an old
+unlinked expired reservation or damaged journal is left to separate owner trial
+recovery and cannot block this experiment's closure. Stop
 acknowledgments retain their original intent/generation; `current` separately
 shows refreshed metadata. Off/revoked contexts still permit stop settlement.
 Resume currently supports host-observable source/runtime blockers after exact

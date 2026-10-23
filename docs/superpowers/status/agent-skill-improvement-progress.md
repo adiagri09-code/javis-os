@@ -130,6 +130,18 @@
   Full required regressions, fresh whole-B review, final exact-head Linux CI and
   integration/publication remain pending; Task6 and full M2 are not complete.
 
+- Fresh whole-B review of cbef2f46..69a91832 found one Important recovery-scope
+  issue: brain-wide trial recovery could touch an unrelated old trial or let its
+  damaged journal block an otherwise empty stopping experiment. Root reproduced
+  it, added three behavioral RED cases, then scoped both expired settlement and
+  filesystem cleanup to actual immutable experiment links. The separate existing
+  brain-wide owner-trial recovery remains unchanged. New scope suite3 GREEN13.544s;
+  the independent original diagnostic now closes the experiment and leaves the
+  unrelated journal intact. Reviewer28 focused tests passed and no other Important
+  issue was identified. Fixed-source regressions, independent recheck and new
+  exact-head Linux CI remain required before integration. The initial broad63
+  regression spans the narrow fix and cannot serve as exact-final-head evidence.
+
 ## M2A engineering continuation
 
 - Worktree: `C:/Users/admin/.codex/worktrees/agent-skill-improvement-m2a/Javis-OS`;

@@ -496,9 +496,15 @@ class TrialStore:
         self.cleanup_terminal(principal)
         return result
 
-    def _recover_in(self, connection, principal, *, now=None):
+    def _recover_in(self, connection, principal, *, now=None, trial_ids=None):
         self.cases._own_transaction(connection)
         brain = IM._brain(principal)
+        if trial_ids is not None:
+            if (type(trial_ids) is not list or len(trial_ids) > 12000
+                    or any(type(identifier) is not str or not IC._ID.fullmatch(identifier) for identifier in trial_ids)
+                    or len(set(trial_ids)) != len(trial_ids)):
+                raise ValueError("invalid_trial_recovery_selection")
+            trial_ids = frozenset(trial_ids)
         result = {"not_run": 0, "unknown": 0}
         now = time.time() if now is None else now
         rows = list(connection.execute("SELECT t.* FROM improvement_trials t JOIN improvement_trial_attempts a "
@@ -507,6 +513,8 @@ class TrialStore:
             "((a.lease_until IS NOT NULL AND a.lease_until<=?) OR "
             "(a.lease_until IS NULL AND json_extract(t.request_json,'$.deadline_at')<=?))", (brain, now, now)))
         for row in rows:
+            if trial_ids is not None and row["id"] not in trial_ids:
+                continue
             call = connection.execute("SELECT c.engine_at FROM agent_calls c JOIN improvement_trial_attempts a "
                 "ON c.id=a.call_id WHERE a.trial_id=? AND a.attempt=?", (row["id"], row["attempt"])).fetchone()
             status = "not_run" if call["engine_at"] is None else "unknown"

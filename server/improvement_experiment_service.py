@@ -349,11 +349,26 @@ class ExperimentService:
     async def recover(self, principal, experiment_id, *, event_key):
         async def recover():
             acknowledgment = await _settled_call(self._recover_ack, principal, experiment_id, event_key)
-            await _settled_call(self.trials.recover, principal)
+            await _settled_call(self._recover_linked, principal, experiment_id)
             current = await self._settle_stop(principal, experiment_id)
             return {"acknowledgment": acknowledgment, "current": current}
 
         return await self._operation(principal, experiment_id, event_key, "recover", {}, recover)
+
+    def _recover_linked(self, principal, experiment_id):
+        """Settle and clean only actual links; broad owner recovery stays separate."""
+        brain = _brain(principal)
+        with self.store._Tx(self.store) as connection:
+            self.records._public(self.records._row(connection, brain, experiment_id))
+            identifiers = [row[0] for row in connection.execute(
+                "SELECT trial_id FROM improvement_experiment_trial_links WHERE brain_id=? AND experiment_id=? "
+                "ORDER BY trial_id LIMIT 12001", (brain, experiment_id))]
+            if len(identifiers) > 12000:
+                raise IM.ConflictError("experiment_trial_history_changed")
+            result = self.trials._recover_in(connection, principal, trial_ids=identifiers)
+        for identifier in identifiers:
+            self.trials.cleanup_terminal(principal, identifier)
+        return result
 
     async def close(self):
         self._bind()
