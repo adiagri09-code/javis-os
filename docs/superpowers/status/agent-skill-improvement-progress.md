@@ -33,6 +33,17 @@
   Bash/other paths, task/session binding, cache partitions, activation selectors
   and resume remain open; no production adapter support from this experiment.
 
+Latest scoped review of85bf8e68 found one Important/P1: a transient external
+Windows junction could return outside bytes despite pre/post lexical checks.
+The descriptor repair now authenticates Windows actual opened-handle path before
+reading; POSIX uses anchored nofollow component opens and nonblocking leaf open.
+Regular-file/size checks precede body reads. Exact original repro is now refused.
+Seven affected commands passed sequentially; new14-test suite12PASS/2 Windows
+platform/privilege skips. Inside Windows junction remains readable. Evidence:
+`../evidence/2026-10-24-m2d2-descriptor-fix.json`. Prior skill-read containment
+claim at85bf is superseded; scoped fix review and actual final-head LinuxCI remain
+pending. All81 isolated native pins remain unchanged, with no native/model query.
+
 ## Identity and authority
 
 - Goal: execute the complete M0–M8 contract in `../AGENT-SKILL-IMPROVEMENT-GOAL.md`.

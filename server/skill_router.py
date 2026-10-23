@@ -32,6 +32,7 @@ import stat
 from dataclasses import dataclass
 
 import fastyaml
+from skill_asset_io import open_skill_source
 
 # slug 1 đoạn an toàn (không '/', không '..') → chống path traversal khi join base/slug
 _SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -233,7 +234,7 @@ def read_skill_asset(root, slug: str, max_bytes: int = SKILL_ASSET_MAX_BYTES) ->
         before = path.stat()
         if not stat.S_ISREG(before.st_mode) or before.st_size > max_bytes:
             return None
-        with path.open('rb') as handle:
+        with open_skill_source(root, path, max_bytes) as handle:
             opened = os.fstat(handle.fileno())
             raw = handle.read(max_bytes + 1)
             finished = os.fstat(handle.fileno())

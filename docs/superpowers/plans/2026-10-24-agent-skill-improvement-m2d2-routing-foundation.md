@@ -165,3 +165,26 @@ Native plugin design probe is separate synthetic evidence only: attempt2 FAILED
 (stale cwd Read bypassed permission callback); attempt3 A and B-only continuation
 PASS controlled Read/Skill deny-hook mechanism. No policy parity, Bash/other path,
 resumed native session or production adapter support follows from that proof.
+
+
+### Task2 independent P1 repair — descriptor authority
+
+Reviewer confirmed at85bf8e68: a transient actual external Windows junction can
+satisfy all pathname stats and final lexical resolution yet return external bytes.
+Original repro/log preserved in task ledger. Do not approve/merge current unit.
+Impact before repair: new server/skill_asset_io.py owns OS-opened descriptor
+containment; skill_router uses it before any body read. Hub/lazy callers keep the
+same API. POSIX opens each resolved absolute path component from a directory fd
+with O_DIRECTORY/O_NOFOLLOW and opens the leaf nonblocking/nofollow. Windows
+checks GetFinalPathNameByHandleW on the actual descriptor against the expected
+resolved in-brain path; no second textual resolve substitutes for handle identity.
+Both validate regular-file and size on fstat before reading; close all fds on
+failure. Initial resolution retains ordinary within-brain link support. Unsupported
+platform facilities fail unavailable, never use unchecked path fallback.
+Tests add the exact transient junction/symlink window, actual inside-directory-link
+support, and POSIX swapped FIFO refusal without blocking. Reader mutation fixture
+must observe actual binary handle reads rather than the replaced Path.open seam.
+First run new behavior tests on old source to establish RED; then focused GREEN,
+original independent reproduction and same7 affected scripts sequentially. Source
+native81 unchanged must be verified; full final-head CI still required. Reviewer
+rechecks only this fix/new OS boundary and original affected behaviors.
