@@ -1043,7 +1043,12 @@ class ClaudeSDK:
         # (loop_watch caught it). `to_thread` copies the turn's context variables, so the per-turn hub key still lands.
         options = await asyncio.to_thread(self._options)
         completion = _CompletionWatch(RESULT_IDLE if getattr(options, "include_hook_events", False) else None)
-        client = ClaudeSDKClient(options=options)
+        trial_profile = getattr(self, "trial_profile", None)
+        # The trusted isolated profile may construct the client with its owned
+        # native transport. A factory failure must escape before connect/query;
+        # falling back would bypass that transport's held-create boundary.
+        client_factory = getattr(trial_profile, "create_client", None)
+        client = client_factory(options) if client_factory is not None else ClaudeSDKClient(options=options)
         started = time.time()
         tools_running = 0   # số tool đã gọi mà CHƯA thấy kết quả về
         da_co_chu = False   # đã nhận được sự kiện đầu tiên chưa (quyết định dùng trần nào)

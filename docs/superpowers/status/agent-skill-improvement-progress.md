@@ -2,6 +2,21 @@
 
 ## Current continuation — guardian component approved; host review and early Linux channel check
 
+Engine bridge is independently approved at sourcef1dcc8ed/testa34a72bd: actual
+query/options ignored a trusted profile client factory before2 meaningful REDs;
+now optional create_client(options) runs before connect/accountACK, with no fallback
+on factory failure. Author2 .842s, independent2 .833s, existing Claude22 1.447s.
+Public native-client-factory records the bounded hook, not actual transport proof
+or enabled production consumers. New v4 consumers must require/bind it explicitly.
+
+Worker author12PASS4.587s source54e3cee1/testfb093ea1 was NOT approved. Independent
+static review found reentrant dispatch cleanup: runtime image_ack->worker.send
+failure->worker.aclose->runtime/capture close waits the same image_ack callback.
+Reviewer did not run12; author owns sole native/app slot for focused active-runtime
+dispatch failure RED, a non-reentrant internal emitter and final affected suite.
+No root/reviewer tests run meanwhile. Original missing-json fixture failure and
+unknown partial-acquisition cases stay explicit; no production main route enabled.
+
 Latest scoped results supersede pending reviews below: host source5b1c7cf8/
 test389a473a approved independently21PASS12.726s after author21PASS12.956s;
 commit4d936c0b/public host-native-v2 evidence preserves four P2s/five REDs/history.
