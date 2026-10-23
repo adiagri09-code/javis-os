@@ -535,3 +535,63 @@ Correct only that retained-control state, then verify affected final suite once;
 independently proven native_drained/fence release stays separate from metadata-only
 control.closed. Host source-missing9RED is preserved; concrete source implementation
 and actual three-actor tests remain underway, with no account/SDK/profile enabling.
+
+## Current consumer integration sequence
+
+Guardian component is now approved at source4b9ee58c/test370474d2: author25 and
+independent25 pass against exact imageb8 dependency. POSIX-only channel changes
+do not alter default Windows Proactor execution; early Linux CI40029282316 checks
+the seven-file portable snapshot a86c716e, not the unfinished runtime boundary.
+
+Host author21 passes after five meaningful REDs for four independent ownership
+findings: cancelled raw/thread task completion, partial public startup without
+stdin EOF, acquired-but-unassigned Popen and socket registration after fallible
+configuration. Source5b1c7cf8/test389a473a awaits narrowed independent correction
+review. SDK source4414befa author19 is historical pending two reviewer corrections:
+consumed stream task/result accumulation and immutable original Process/raw stdin/
+SDK wrapper binding. A completed send is still delivery evidence only. Do not
+start another native qualification on these intermediate candidates.
+
+Next root changes have these concrete caller/dependency boundaries:
+
+1. Add the actual startup2 worker consumer and route only new canonical initial
+   packets from the fixed Trial/operation entrypoints. Verify actual self PID and
+   creation time before fromshare; install the exact private environment before
+   broader configuration/SDK imports. Own every socket immediately upon native
+   acquisition, adopt endpoints first, and retain failed owners through actual
+   drain. Legacy first-packet semantics/valid bytes remain unchanged. The new
+   consumer must use NativeInvocationSet rather than the legacy hidden-process
+   shim or duplicate preflight subprocesses.
+2. Share the existing supported/capability checks with already observed closed
+   preflight runtime without allowing observation data to bypass source/runtime
+   registration. TrialProfile and OperationProfile supply an explicit fresh
+   client factory to the actual SDK engine using the qualified custom transport.
+   First two purposes gate worker_ready; all four gate engine_start_requested;
+   the existing accounting ACK gates actual client.query. Client disconnect and
+   invocation-owner close both remain owned. No new model/provider/default limit.
+3. Extend durable Trial/operation readers and writers together for the strict
+   version2 host envelope, global sequence, per-source sequence and exact launch/
+   worker incarnation. Preserve old version1 bytes/readers and prohibit mixed
+   histories. Existing encrypted observation tables retain late observed usage
+   under actual writer/lease/generation checks, including UNKNOWN cleanup.
+   Fresh admission preflight has no attempt workspace: reuse ImprovementStore's
+   existing improvement_events transaction/idempotency and encrypted blob store
+   for durable joined dispatch/image decisions. Store only hashes/blob references
+   in public audit metadata; no parallel ledger, invented attempt or inferred ACK.
+   Recheck current authority/config within the durable transition before allow;
+   cancellation waits for the real transition but cannot release a late allow.
+4. Version Trial manifest/receipt4 and operation materialization/receipt2 with the
+   native dispatch and exact completed-input-write proof. Independently verify
+   full expected user wrapper/content, fresh single transport, original Process/
+   stdin, unpredictable write nonce and exact held dispatch incarnation. Native
+   wire default session and native init UUID are distinct fields. Join subsequent
+   actual init/assistant/terminal events to the same fresh transport. Missing or
+   contradictory evidence remains UNKNOWN/FAIL, never provider acceptance or
+   comprehension. Then freeze the complete source/SDK/policy footprint, qualify
+   the actual local-provider pipeline once, register the new exact profile, and
+   only afterward admit the bounded configured-account feasibility run.
+
+Each unit gets meaningful original REDs, affected regression and scoped review;
+app/native test ownership stays serial. Successful component proof is reused only
+where exact code/semantics remain unaffected. Final-head full CI, all18 checks,
+business/owner/source gates and D2/E/F/M3–M8 obligations remain open.

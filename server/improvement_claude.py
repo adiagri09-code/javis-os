@@ -157,6 +157,43 @@ class ClaudeTrialAdapter:
         self.before_engine_start = before_engine_start
 
     def verify(self):
+        return self._verify_with_observer(lambda: _runtime_observation(self.pin))
+
+    def verify_observed(self, runtime):
+        """Check a qualified consumer's closed observation without another spawn.
+
+        This validates data and the existing registration/configuration gates.
+        Actual process/channel provenance must already be established by the
+        trusted worker/host consumer; caller-supplied hashes are not authority.
+        """
+        def observe():
+            from improvement_native_protocol import _tree, _fields as closed_fields, _text as closed_text, _digest as closed_digest
+            _tree(runtime)
+            closed_fields(runtime, {'platform', 'cli_hash', 'sdk_version', 'profile_hash',
+                'managed_policy', 'cli_version', 'auth'})
+            for field in ('platform', 'sdk_version', 'cli_version'):
+                closed_text(runtime[field], 128)
+            for field in ('cli_hash', 'profile_hash'):
+                closed_digest(runtime[field])
+            if type(runtime['managed_policy']) is not str or runtime['managed_policy'] not in ('absent', 'present', 'unknown'):
+                raise ValueError('invalid_observed_runtime')
+            closed_fields(runtime['auth'], {'logged_in', 'method', 'provider', 'plan'})
+            if type(runtime['auth']['logged_in']) is not bool:
+                raise ValueError('invalid_observed_runtime')
+            for field in ('method', 'provider', 'plan'):
+                if runtime['auth'][field] is not None:
+                    closed_text(runtime['auth'][field], 128)
+            # The isolated preflight carries these pin fields too; compare them
+            # to fresh local metadata rather than treating an assertion as an
+            # observation of the currently installed source/SDK.
+            if (profile_hash() != runtime['profile_hash']
+                    or importlib.metadata.version('claude-agent-sdk') != runtime['sdk_version']):
+                raise ValueError('observed_runtime_metadata_drift')
+            return _frozen(runtime)
+
+        return self._verify_with_observer(observe)
+
+    def _verify_with_observer(self, observe):
         requested = {key: self.pin[key] for key in ("provider", "engine_id", "model", "reasoning")}
 
         def unsupported(reason):
@@ -170,7 +207,7 @@ class ClaudeTrialAdapter:
         if qualification is None:
             return unsupported("native_profile_unqualified")
         try:
-            observed = _runtime_observation(self.pin)
+            observed = observe()
         except (OSError, ValueError, IndexError, subprocess.SubprocessError, importlib.metadata.PackageNotFoundError):
             return unsupported("runtime_unavailable")
         if observed.get("managed_policy") != "absent":

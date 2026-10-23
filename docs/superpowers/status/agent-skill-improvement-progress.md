@@ -2,6 +2,41 @@
 
 ## Current continuation — guardian component approved; host review and early Linux channel check
 
+Latest scoped results supersede pending reviews below: host source5b1c7cf8/
+test389a473a approved independently21PASS12.726s after author21PASS12.956s;
+commit4d936c0b/public host-native-v2 evidence preserves four P2s/five REDs/history.
+SDK source355c03a5/testa1474c45 approved independently22PASS3.821s after author22
+PASS3.760s; commit3f998a34/public native-sdk-component evidence preserves both P2s
+and all failed candidates. Root verified all10 declared host delta manifest files
+and all26 SDK manifest files. Explicit pinsets are not exhaustive import proof.
+
+Root added shared verify_observed(runtime) without enabling a consumer. Missing
+method6/20subfail RED then6GREEN; self-review then reproduced3 additional REDs
+where asserted pin metadata hid current source/SDK drift. Final source39c6e1ce/
+test0023a135 passes author7 .020s, independent7 .018s, existing Claude22 1.488s.
+Fresh local source hash/installed SDK metadata must match after closed validation,
+with registration first; legacy verify keeps its observer/gates/capability parity.
+No CLI/account/model calls. Public observed-runtime-verification records exact
+proof. Whole-runtime registration still historical/invalid for changed sources.
+
+Worker endpoint consumer is the next actual unit: author owns ONLY new
+native_worker module/test and has sole native/app slot after root/reviewer release.
+Missing-module3RED .090s; implementation/real isolated-child adoption fixtures in
+progress. No main route is enabled. Actual fixed factory cwd is source.root, while
+initial HOME/USERPROFILE/TEMP/TMP/AppData all equal private scratch. Worker checks
+source cwd separately; preflight invocation cwd is verified initial scratch, not
+repo context. Private startup retains selected login discovery HOME/AppData via
+existing worker_environment (never copied); isolated TEMP/state/brain paths stay
+under scratch. Runtime client factory, durable evidence2, input/manifest4 and
+complete frozen qualification remain open. No root/reviewer app/native tests run
+while worker author owns the slot.
+
+Diagnostic Linux CI40029282316 on a86c remains in progress (Docker-size job passed,
+Python test step running at last check). Do not call POSIX cleanup GREEN from
+Windows/static proof; diagnostic ref contains only seven portable files, not
+these newly approved runtime/verifier consumers. Main PR803 still holds local
+runtime changes pending complete qualification and final-head CI.
+
 Goal remains ACTIVE M0–M8. Owner-delegated pilot choice remains reconciliation
 primary, document processing secondary, Python bugfix/test technical control;
 no new source scope, business acceptance or activation inferred.
