@@ -127,6 +127,20 @@
   Exact core a1acaa99 LinuxCI39896580083 succeeded (test and Docker-size jobs);
   new retry changes need fresh Linux feedback. Tasks5–9, independent stable whole-C
   review and exact-final-C CI remain open; no business/semantic/native readiness.
+- Task5 authorized input component is complete locally: actual sealed preparation
+  refs, baseline/protected context/public contract and tuning-only snapshot/trace/
+  artifact/receipt projection are encrypted/hash-bound after final source and SQL
+  CAS. No private answers, arbitrary checker reasons/evidence or holdout blobs are
+  read into this model path. Unknown native coverage, reasoning/input use, tool
+  payload coverage and partial usage stay explicit; no separate recipe grant or
+  whole recipe library is inferred. Pure bounded output validation accepts only
+  up to remaining two A body-patch slots or not_a_target_defect with genuine refs.
+  The actual proposer prompt uses this renderer. An unnecessary common holdout
+  blob read and a late-trace omission race were reproduced and fixed. Final scoped
+  regression10/10 GREEN256s, new input cases10 GREEN50s within it. Source25 profile
+  has no qualified registration; Tasks6–9/public C and all business/live gates stay
+  open. T4 early LinuxCI39900250323 is still in progress on a43638e7; it cannot
+  verify these newer T5 sources. No additional model/auth call occurred.
 - Generated proposals remain A-unreviewed with separately pinned semantic and
   dependency assessments. No assessment/owner product confirmation waives source,
   runtime/view, qualification, activation or real business-data gates. Candidate/

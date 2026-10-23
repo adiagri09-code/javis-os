@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 from improvement_claude import TrialProfile
@@ -25,6 +26,9 @@ def operation_system_prompt(manifest):
 
 
 def operation_user_prompt(manifest):
+    if manifest['request']['kind'] == 'propose' and manifest['data'].get('kind') == 'authorized_tuning':
+        from improvement_generation_protocol import render_proposer_input
+        return _json({'request': manifest['request'], 'proposer_task': json.loads(render_proposer_input(manifest['data']))})
     return _json({"request": manifest["request"], "authorized_input": manifest["data"]})
 
 

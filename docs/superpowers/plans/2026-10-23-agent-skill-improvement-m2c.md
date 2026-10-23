@@ -252,19 +252,45 @@ Interfaces: ImproverInputs.build(owner,experiment_id,expected_generation) return
 bounded immutable data/hash/refs from actual preparation results and authorized
 tuning snapshots; render_proposer_input is a pure data renderer.
 
-- [ ] RED: private answers/qualification/regression/unrelated artifact cannot be
+- [x] RED: private answers/qualification/regression/unrelated artifact cannot be
   substituted, even after case relabel/clone/shared qualification fingerprint.
-- [ ] Load exact actual tuning result IDs/hashes, artifacts/source/public contract,
+- [x] Load exact actual tuning result IDs/hashes, artifacts/source/public contract,
   baseline bytes and protected context. Never reuse PrivateReview as a model API.
-- [ ] Separate infrastructure/native/usage unknown from task deficiency. No CoT;
+- [x] Separate infrastructure/native/usage unknown from task deficiency. No CoT;
   preserve authorized traces with timing/tool/result/artifact/error evidence only.
-- [ ] Reject credential-bearing/insufficient source, stale grants/config/bytes and
+- [x] Reject credential-bearing/insufficient source, stale grants/config/bytes and
   extra instructions outside the task. Pin recipe refs only when actually scoped
   and authorized; no whole recipe library or truncated required business input.
-- [ ] Closed generation output: ≤2 genuine body patches, hypothesis/affected
+- [x] Closed generation output: ≤2 genuine body patches, hypothesis/affected
   component/evidence refs and not_a_target_defect for infrastructure causes.
-- [ ] Revalidate current authority after last slow read and before publication.
-- [ ] GREEN data-minimization/source/fingerprint/injection tests; commit.
+- [x] Revalidate current authority after last slow read and before publication.
+- [x] GREEN data-minimization/source/fingerprint/injection tests; commit.
+
+Task5 component evidence: six absent-feature RED34.233s; first implementation
+found a real unnecessary holdout-blob read in common ExperimentPlans._state.
+The new internal tuning-only source projection fixes that without changing other
+callers' full-source validation; private-answer/holdout read spies pass. Three
+initial no-new-exposure assertions were corrected to preserve the genuine prior
+baseline Trial exposures, not reset them to zero. Six GREEN36.335s.
+
+Actual operation prompt now uses the pure proposer renderer. Four renderer/
+reevaluation/credential/CoT checks GREEN13.166s (the first reevaluation test hook
+was corrected to avoid recursively calling itself). A genuine late writer trace
+at input publication reproduced RED6.642s; final trace/artifact/receipt snapshot
+CAS fixed it, focused3 GREEN6.617s. Full task impact10/10 scripts GREEN256s on
+canonical LF sources, including actual preparation execution, comparison plans,
+A body patches, source/association authority and native worker/runner. Ten new
+input cases passed50s inside that regression. No blanket improvement sweep.
+
+Full required input is encrypted/hash-bound with exact sealed result refs and
+current source/grant/config fences; oversize/credentials reject before publication.
+Evaluator-private reasons/evidence and reasoning text are withheld; observed tool,
+result/error/timing metadata and receipts remain bound. Missing tool payloads,
+actual reasoning/input use and native coverage stay explicit unknowns. No separate
+scoped recipe grant exists, so no recipe library is added; complete already-bound
+protected context is retained. Native profile now pins25 source files and still
+has no reviewed qualification registration. No native/model/API call or staging
+is enabled by this component. Task6 will consume the closed generated batch.
 
 ## Task 6 — bounded generated proposal and repair publication
 

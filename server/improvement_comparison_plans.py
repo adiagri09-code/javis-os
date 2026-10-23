@@ -41,7 +41,9 @@ class ExperimentPlans:
             raise ValueError("invalid_experiment_request")
         return value
 
-    def _prepare(self, connection, principal, public):
+    def _prepare(self, connection, principal, public, *, source_split=None):
+        if source_split not in (None, 'tuning'):
+            raise ValueError('invalid_experiment_source_projection')
         brain = _brain(principal)
         row, binding, contract_hash, refs = self.associations._authority(connection, principal,
             public["experiment_id"], public["contract_id"])
@@ -89,6 +91,8 @@ class ExperimentPlans:
             "evaluator": contract["evaluator"], "evidence_class": "technical"})
         self.records._bound_in(connection, brain, value, public["expected_context_generation"])
         for case in actual:
+            if source_split is not None and case['split'] != source_split:
+                continue
             authorize_case(connection, brain, {"case_set_id": public["case_set_id"], "case_id": case["id"],
                 "pins": {"case_set_hash": case_set["manifest_hash"], "grant_hash": row["grant_hash"]}},
                 binding["fixture_inventory"], blobs=self.blobs, baseline_content=binding["capture"]["baseline_context"]["content"])
@@ -119,7 +123,7 @@ class ExperimentPlans:
             self.assets._event(connection, principal, event_key, "experiment_owner_create", public, result)
             return result
 
-    def _state(self, connection, principal, experiment_id, expected_generation, *, unsealed):
+    def _state(self, connection, principal, experiment_id, expected_generation, *, unsealed, source_split=None):
         brain = _brain(principal)
         row = self.records._row(connection, brain, experiment_id)
         self.records._public(row)
@@ -131,7 +135,7 @@ class ExperimentPlans:
         value = definition(json.loads(row["definition_json"]))
         public = {key: value[key] for key in ("experiment_id", "contract_id", "case_set_id", "base_bundle_id", "timeout_seconds")}
         public.update(expected_context_generation=value["context_generation"], repeat_policy=value["repeat_policy"]["kind"])
-        prepared = self._prepare(connection, principal, public)
+        prepared = self._prepare(connection, principal, public, source_split=source_split)
         if prepared[0] != value:
             raise IM.ConflictError("experiment_definition_changed")
         return row, prepared

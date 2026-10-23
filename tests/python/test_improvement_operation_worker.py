@@ -234,7 +234,8 @@ class OperationWorkerTests(unittest.TestCase):
                     "improvement_operation_execution.py", "improvement_operation_evidence.py", "improvement_trial_evidence.py",
                     "improvement_operation_checks.py", "improvement_operation_results.py", "improvement_trial_checks.py",
                     "improvement_operation_runner.py", "improvement_operation_tasks.py", "improvement_operation_recovery.py",
-                    "improvement_operation_retry.py", "improvement_operation_schema.py", "improvement_operation_records.py"}
+                    "improvement_operation_retry.py", "improvement_operation_schema.py", "improvement_operation_records.py",
+                    "improvement_improver_inputs.py", "improvement_generation_protocol.py", "improvement_comparison_plans.py"}
         self.assertEqual(set(IC.PROFILE_SOURCES), expected)
         import hashlib
         self.assertEqual(IC.profile_hash(), IM._hash({name: hashlib.sha256((SERVER / name).read_bytes()).hexdigest()
