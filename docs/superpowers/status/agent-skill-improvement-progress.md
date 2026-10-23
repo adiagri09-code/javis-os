@@ -1,5 +1,37 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — native image read-sharing component, 24 October
+
+Current pushedf131d958/PR803/reserved0.299.0 has exact native972175a2 and
+independent registration approval; full LinuxCI40005387321 is pending. Main
+d3d7cb36/0.298.0 unchanged at last read. Historical29fCI39997792693 succeeded.
+
+Own-file native launch probes expose two false assumptions: metadata-only
+directory handles do not exclude write/delete sharing, and retaining a leaf
+does not prevent junction entry replacement. Proper flags3/existingtarget
+POSIX controls close the earlier flags2 evidence gap. Suspended actual anyio
+spawn of inert copiedwhere.exe proves job/thread plumbing, not full SDK or
+guardian-held image binding. First help-output fixture failure is preserved;
+newroot /R marker controls pass. Attribute-only mountpoint SET still succeeds
+on an empty directory even with a read guard; loaded-image/metadata exclusion
+coverage remains UNKNOWN. No actual Claude/account call occurred.
+
+New standalone ImageReadGuard owns root-to-leaf real read/shareREAD/NoFollow
+handles, refuses observed reparse/path/type mismatch, hashes the held leaf and
+keeps explicit UNKNOWN coverage for metadata exclusion/loaded image. Parent17
+checksPASS0.250s; independent17PASS0.199s. Two scoped review lifecycle
+findings were reproduced then fixed: partial close invalidates snapshots;
+failed entry/exit retains cleanup ownership or closes all handles. Fresh
+metadata observations refuse detected drift without claiming future exclusion.
+
+This module is not yet reachable from native execution; existing81 profile
+pins remain exactly972175a2. No new native qualification/account readiness or
+genuine pair/final is implied. Evidence: native-launch-probes and
+native-image-guard JSON records; next guardian ownership/full drain and actual
+loaded-image attestation before any new proof can PASS. Full D2/E/F/M3–M8 and
+business/live gates remain open. No deploy/restart/live activation.
+
+
 ## Current continuation — preparation heartbeat, 24 October
 
 The new actual account attempt on01717332 is terminal: two marked calls, baseline
