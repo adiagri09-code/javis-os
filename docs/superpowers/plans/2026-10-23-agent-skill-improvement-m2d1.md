@@ -342,6 +342,19 @@ Task4's real workspace path, and final cells until existing-registry ownership.
 Shared bounded consumers/admission/kernel barriers are next. Task3 is not done;
 this draft cannot be released or described as complete v4 execution.
 
+Task3 lifecycle checkpoint: stop/recovery snapshots and scoped attempt SQL now
+include both actual comparison formats under ONE12000-cell bound, plus existing
+prep2000/attempt28000 bounds. Next metadata selects the frozen format and checks
+terminal attempts, exact published result pointers and actual workspace cleanup.
+The original three real-v4 reproductions RED47.063s became GREEN47.098s. A mixed
+legacy/view budget fixture uses two genuine reservations; no future SQL rows or
+successful results are fabricated. Final four affected scripts passed28 tests
+sequentially182.812s. Evidence `../evidence/2026-10-23-m2d1-task3-lifecycle.json`,
+SHA25615071ce22cdd11604343a869889c913881577b6470707514c6d1aca9552641c8.
+Current76-source profilebc7f176a is still unregistered. Owned admission/kernel
+barriers, v4 report consumers and actual final-registry ownership remain OPEN;
+the metadata cleanup check alone does not prove the complete handoff boundary.
+
 Next additive table contract (before SQL): `improvement_view_trial_links` columns
 are `comparison_id,brain_id,experiment_id,cell_position,trial_id,request_hash,
 pair_id,case_id,repeat,variant,view_id,view_hash,binding_hash,created_at`.

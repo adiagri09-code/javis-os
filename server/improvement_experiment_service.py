@@ -17,6 +17,7 @@ from improvement_trials import TERMINAL
 from improvement_execution_limits import (MAX_COMPARISON_TRIALS, MAX_PREPARATION_TRIALS,
     MAX_TRIAL_ATTEMPTS, MAX_ROLE_OPERATIONS, MAX_ROLE_ATTEMPTS)
 from improvement_operation_schema import TERMINAL as ROLE_TERMINAL
+from improvement_comparison_links import comparison_tables, comparison_table, experiment_trial_scope
 
 
 def _call_settled(status, engine_at):
@@ -100,10 +101,12 @@ class ExperimentService:
 
     def _snapshot(self, connection, brain, experiment_id):
         links = []
-        # Preserve every immutable link field in the final-CAS snapshot. The two
-        # link types are distinct evidence; only their actual Trial IDs combine.
+        # Preserve each format's immutable fields. Both comparison formats share
+        # one bound of12,000 cells; preparation retains its separate2,000 bound.
         schema = connection.execute("SELECT version FROM improvement_schema WHERE id=1").fetchone()[0]
-        scopes = [('improvement_experiment_trial_links', MAX_COMPARISON_TRIALS)]
+        comparison_formats = comparison_tables(connection)
+        scopes = [(table, MAX_COMPARISON_TRIALS) for table in comparison_formats]
+        comparison_count = 0
         if schema >= 6:
             scopes.append(('improvement_preparation_trial_links', MAX_PREPARATION_TRIALS))
         for table, bound in scopes:
@@ -115,16 +118,16 @@ class ExperimentService:
                 (brain, experiment_id, bound + 1))]
             if len(selected) > bound:
                 raise IM.ConflictError('experiment_trial_history_changed')
+            if table in comparison_formats:
+                comparison_count += len(selected)
+                if comparison_count > MAX_COMPARISON_TRIALS:
+                    raise IM.ConflictError('experiment_trial_history_changed')
             links.extend(selected)
         if len({link['trial_id'] for link in links}) != len(links):
             raise IM.ConflictError('experiment_trial_history_changed')
         # UNION avoids SQLite's host parameter limit at the valid 14000-cell
         # bound and scopes before reading attempts or interpreting reservations.
-        selected_sql = "SELECT trial_id,brain_id FROM improvement_experiment_trial_links WHERE brain_id=? AND experiment_id=?"
-        parameters = (brain, experiment_id)
-        if schema >= 6:
-            selected_sql += " UNION ALL SELECT trial_id,brain_id FROM improvement_preparation_trial_links WHERE brain_id=? AND experiment_id=?"
-            parameters += (brain, experiment_id)
+        selected_sql, parameters = experiment_trial_scope(connection, brain, experiment_id)
         attempts = [dict(row) for row in connection.execute(
             "SELECT a.*,c.status AS call_status,c.engine_at AS call_engine_at,c.brain_id AS call_brain_id,"
             "c.purpose AS call_purpose,c.reason_ref AS call_reason_ref,c.mirror_ref AS call_mirror_ref,"
@@ -408,14 +411,32 @@ class ExperimentService:
                                             (brain, experiment_id, comparison_id)).fetchone()
             if comparison is None:
                 raise PermissionError("experiment_comparison_unavailable")
-            links = list(connection.execute("SELECT l.cell_position,t.status FROM improvement_experiment_trial_links l "
+            table = comparison_table(connection, brain, comparison_id)
+            links = list(connection.execute("SELECT l.cell_position,l.trial_id,t.status,t.attempt,a.status AS attempt_status,"
+                "a.result_json,a.workspace_json FROM " + table + " l "
                 "JOIN improvement_trials t ON t.id=l.trial_id AND t.brain_id=l.brain_id "
-                "WHERE l.brain_id=? AND l.comparison_id=? ORDER BY l.cell_position", (brain, comparison_id)))
+                "LEFT JOIN improvement_trial_attempts a ON a.trial_id=t.id AND a.brain_id=t.brain_id AND a.attempt=t.attempt "
+                "WHERE l.brain_id=? AND l.comparison_id=? ORDER BY l.cell_position LIMIT 4001", (brain, comparison_id)))
             if ([row["cell_position"] for row in links] != list(range(len(links)))
-                    or any(row["status"] not in TERMINAL for row in links)):
+                    or any(row["status"] not in TERMINAL or row['attempt_status'] not in TERMINAL or row['result_json'] is None for row in links)):
                 raise IM.ConflictError("experiment_cell_pending_or_gapped")
             if len(links) >= comparison["cell_count"]:
                 raise IM.ConflictError("experiment_comparison_exhausted")
+            for link in links:
+                try:
+                    pointer = json.loads(link['result_json'])
+                    if type(pointer) is not dict or set(pointer) != {'result_id', 'result_hash', 'blob_hash'}:
+                        raise ValueError('invalid_result_pointer')
+                    result = connection.execute('SELECT result_hash,blob_hash FROM improvement_trial_results '
+                        'WHERE id=? AND brain_id=? AND trial_id=? AND attempt=?',
+                        (pointer['result_id'], brain, link['trial_id'], link['attempt'])).fetchone()
+                    if result is None or any(result[key] != pointer[key] for key in ('result_hash', 'blob_hash')):
+                        raise ValueError('missing_published_result')
+                    receipt = json.loads(link['workspace_json']) if link['workspace_json'] is not None else None
+                    if not self.trials.workspace.cleanup_proven(link['trial_id'], link['attempt'], receipt):
+                        raise ValueError('cleanup_unproven')
+                except (ValueError, TypeError, KeyError) as error:
+                    raise IM.ConflictError('experiment_cell_pending_or_incomplete') from error
             return len(links)
 
     async def next(self, principal, experiment_id, comparison_id, *, expected_generation, event_key):
