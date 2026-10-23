@@ -237,9 +237,9 @@ explicit recovery. Preserve owner-private artifact reads versus model projection
 
 ## Task5 — pure comparator and immutable exact-result reports
 
-- [ ] Reproduce the named behavioral RED cases.
-- [ ] Implement this unit and inspect its exact source/authority boundaries.
-- [ ] Run named GREEN/regression checks, record actual evidence and commit the unit.
+- [x] Reproduce the named behavioral RED cases.
+- [x] Implement this unit and inspect its exact source/authority boundaries.
+- [x] Run named GREEN/regression checks, record actual evidence and commit the unit.
 
 Partial report component now has pure expected-cell arithmetic and a concrete
 ComparisonResults store. Reports enumerate missing cells, pin exact immutable
@@ -260,8 +260,20 @@ markers also reproduced RED->GREEN. A final-policy file-I/O source race and
 uncaught corrupt Fernet result both reproduced RED->GREEN; the scoped reviewer
 independently reran original diagnostics and found no remaining Important issue.
 Final component regression passed5/5 scripts178s (Plans, new Reports/Results,
-v2 Execution/Lineage); the new component has31 tests. Candidate selection/report-
-policy/current-reference integration remains unimplemented; Task5 is not complete.
+v2 Execution/Lineage); the report component has31 tests and was committedc860d8c0.
+The selection component adds11 tests and a final seven-script GREEN264s run.
+Only exact current complete tuning reports for EVERY declared arm can seal the
+experiment. The chosen arm must show supported tuning improvement; other complete
+arms may tie or lose. All report IDs/hashes are pinned in the immutable selection.
+Publications use monotonic event IDs, preserving both wall-clock rollback safety
+and explicit republication of identical immutable reports. The new source/authority
+guards run after all slow policy/result work; replay remains cold after stopping.
+The scoped reviewer found premature sealing with an incomplete second arm; the
+root reproduced RED, fixed all-arm coverage and passed the full regression. Root
+clock-order/republication reproductions also passed RED->GREEN. These synthetic
+complete-storage fixtures never claim real native execution or business acceptance.
+Task5's supported mechanics are complete; final execution remains C+D gated and
+whole-B engineering/release acceptance is still Task6 work.
 
 
 New improvement_comparison_results.py and tests. Enumerate expected cells first.

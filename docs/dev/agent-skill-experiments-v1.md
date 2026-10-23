@@ -166,5 +166,15 @@ than repeats and applies the frozen multiple-test correction. Qualification
 overlap with tuning/regression and observed regression losses prevent a passing
 pilot gate. Missing or corrupt encrypted evidence stays incomplete. Numerical
 success over synthetic fixtures remains technical, with business eligibility and
-real-world independence unverified. Report creation is not candidate selection
-or activation; the report-selection integration remains unfinished in this unit.
+real-world independence unverified. Report creation is not activation.
+
+Candidate selection requires the latest published complete report for every
+declared arm, exact current result references and policy, and fresh source/edit
+authority. The chosen arm must support tuning improvement; a complete losing or
+tying counterpart is retained as evidence. Immutable report ID/hash pairs are
+sealed in ordinal order. Selection cannot abandon another partial tuning branch
+after observing a favorable output. Publication order uses append-only event IDs,
+including explicit republication of identical report bytes; wall time is not an
+ordering authority. KEEP_BASE can still stop without spending final qualification.
+Selecting a candidate seals further editing/tuning but does not open final
+execution, allocate a holdout, activate anything or certify business eligibility.

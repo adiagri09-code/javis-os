@@ -92,7 +92,7 @@
   No unused positive v2 qualification helper or readiness flag was added. Positive
   final allocation/linked consumption and drift/resume remain C+D dependencies;
   Task4 and complete M2 remain open. Task5 reports can proceed independently.
-- Task5 report component is in progress locally: pure complete-case arithmetic,
+- Task5 report component committedc860d8c0: pure complete-case arithmetic,
   exact integer multiple-test correction, critical/regression preservation and
   explicit technical/unverified evidence; concrete encrypted immutable reports
   enumerate expected cells and pin exact result IDs/hashes. Pure19 tests GREEN.
@@ -101,8 +101,13 @@
   late source drift during policy hashing and corrupt Fernet results reproduced
   RED->GREEN. Scoped independent review found no remaining Important issue;
   final component regression5/5 scripts GREEN178s, including31 new component
-  tests. Candidate selection still remains closed
-  until report-policy/current-reference integration; Task5 is not complete.
+  tests. Selection now pins exact complete CURRENT tuning evidence for every
+  declared arm; the chosen arm must support improvement. Publication ordering
+  uses immutable event IDs, handling clock rollback and deduplicated report
+  republication. Scoped premature-second-arm sealing finding and root chronology
+  findings reproduced RED->GREEN. Selection11 tests GREEN39.9s; final seven-script
+  regression GREEN264s. Candidate selection opens only that metadata seal; final
+  execution/allocation remains C+D gated. Task6 and whole-B acceptance remain open.
 
 ## M2A engineering continuation
 

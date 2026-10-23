@@ -275,6 +275,8 @@ class ExperimentPlans:
             raise ValueError("invalid_experiment_selection")
         self.records._available()
         payload = {"experiment_id": experiment_id, "choice": choice, "ordinal": ordinal, "expected_generation": expected_generation}
+        if choice == "candidate":
+            return self._select_candidate(principal, payload, event_key)
         with self.store._Tx(self.store) as connection:
             replay = self.assets._replay(connection, brain, event_key, "experiment_select", payload)
             if replay is not None:
@@ -286,14 +288,86 @@ class ExperimentPlans:
             if connection.execute("SELECT 1 FROM improvement_experiment_selections WHERE brain_id=? AND experiment_id=?",
                                   (brain, experiment_id)).fetchone():
                 raise IM.ConflictError("experiment_sealed")
-            if choice == "candidate":
-                # Task5 must bind exact, complete immutable tuning reports before this branch opens.
-                raise PermissionError("experiment_selection_report_unavailable")
             connection.execute("INSERT INTO improvement_experiment_selections VALUES(?,?,?,?,?,?,?,?)", (
                 experiment_id, brain, choice, None, row["definition_hash"], "[]", event_key, time.time()))
             connection.execute("UPDATE improvement_experiments SET phase='stopping',generation=generation+1,stop_kind='completed',"
                 "stop_event_key=?,stop_reason='keep_base',resume_from=NULL,blocker_json=NULL,blocker_hash=NULL,updated_at=? WHERE id=? AND brain_id=?",
                 (event_key, time.time(), experiment_id, brain))
+            result = self.records._public(self.records._row(connection, brain, experiment_id))
+            self.assets._event(connection, principal, event_key, "experiment_select", payload, result)
+            return result
+
+    @staticmethod
+    def _latest_tuning_report(connection, brain, experiment_id, ordinal):
+        # Publication events are append-only and monotonic. Wall time can move
+        # backwards, and republishing identical evidence reuses its report row.
+        row = connection.execute("SELECT r.*,e.id AS publication_id,e.result_json AS publication_json,c.id AS expected_comparison_id "
+            "FROM improvement_events e JOIN improvement_comparisons c ON c.id=json_extract(e.result_json,'$.comparison_id') "
+            "AND c.brain_id=e.brain_id LEFT JOIN improvement_comparison_reports r "
+            "ON r.id=json_extract(e.result_json,'$.report_id') AND r.brain_id=e.brain_id "
+            "WHERE e.brain_id=? AND c.experiment_id=? AND c.ordinal=? AND c.kind='tuning' "
+            "AND e.operation='comparison_report' ORDER BY e.id DESC LIMIT 1",
+            (brain, experiment_id, ordinal)).fetchone()
+        if row is None:
+            raise PermissionError("experiment_selection_report_unavailable")
+        published = json.loads(row["publication_json"])
+        if (row["id"] is None or row["experiment_id"] != experiment_id or row["comparison_id"] != row["expected_comparison_id"]
+                or published.get("report_hash") != row["report_hash"]):
+            raise PermissionError("experiment_selection_report_unavailable")
+        return dict(row)
+
+    def _select_candidate(self, principal, payload, event_key):
+        """Seal exact current tuning evidence; this grants no final execution."""
+        from improvement_comparison_results import ComparisonResults
+        brain, experiment_id = _brain(principal), payload["experiment_id"]
+        generation, ordinal = payload["expected_generation"], payload["ordinal"]
+        reports = ComparisonResults(self)
+        with closing(self.store._conn()) as connection:
+            replay = self.assets._replay(connection, brain, event_key, "experiment_select", payload)
+            if replay is not None:
+                return replay
+            self._state(connection, principal, experiment_id, generation, unsealed=True)
+            declared = tuple(row[0] for row in connection.execute("SELECT ordinal FROM improvement_experiment_arms "
+                "WHERE brain_id=? AND experiment_id=? ORDER BY ordinal", (brain, experiment_id)))
+            if ordinal not in declared:
+                raise PermissionError("experiment_selection_report_unavailable")
+            prepared = []
+            for arm_ordinal in declared:
+                saved = self._latest_tuning_report(connection, brain, experiment_id, arm_ordinal)
+                metadata = reports._metadata(connection, brain, saved["comparison_id"])
+                captured = reports._snapshot(connection, brain, metadata)
+                prepared.append((arm_ordinal, saved, metadata, captured))
+        validated = []
+        for arm_ordinal, saved, metadata, captured in prepared:
+            report = reports.read(principal, saved["id"])
+            refs, summary = reports._evidence(principal, metadata, captured)
+            policy = reports._policy(metadata["definition"])
+            if (report["policy"] != policy or report["result_refs"] != refs or report["summary"] != summary
+                    or not summary["complete"] or (arm_ordinal == ordinal and not summary["selection_supported"])
+                    or report["arm_hash"] != metadata["comparison"]["arm_hash"] or IM._hash(report) != saved["report_hash"]):
+                raise PermissionError("experiment_selection_report_unavailable")
+            validated.append((arm_ordinal, saved, metadata, captured, policy))
+        with self.store._Tx(self.store) as connection:
+            replay = self.assets._replay(connection, brain, event_key, "experiment_select", payload)
+            if replay is not None:
+                return replay
+            if tuple(row[0] for row in connection.execute("SELECT ordinal FROM improvement_experiment_arms "
+                    "WHERE brain_id=? AND experiment_id=? ORDER BY ordinal", (brain, experiment_id))) != declared:
+                raise IM.ConflictError("experiment_selection_evidence_changed")
+            for arm_ordinal, saved, metadata, captured, policy in validated:
+                if (self._latest_tuning_report(connection, brain, experiment_id, arm_ordinal) != saved
+                        or reports._snapshot(connection, brain, metadata) != captured or reports._policy(metadata["definition"]) != policy):
+                    raise IM.ConflictError("experiment_selection_evidence_changed")
+            # Final full source/arm observation and SQL fences follow all slow
+            # report/blob/policy work. No model, new claim or exposure is opened.
+            for _, _, metadata, _, _ in validated:
+                reports._guard(connection, principal, metadata, generation)
+            evidence = [[saved["id"], saved["report_hash"]] for _, saved, _, _, _ in validated]
+            connection.execute("INSERT INTO improvement_experiment_selections VALUES(?,?,?,?,?,?,?,?)", (
+                experiment_id, brain, "candidate", ordinal, metadata["comparison"]["definition_hash"],
+                IM._json(evidence), event_key, time.time()))
+            connection.execute("UPDATE improvement_experiments SET phase='comparing',generation=generation+1,updated_at=? WHERE id=? AND brain_id=?",
+                               (time.time(), experiment_id, brain))
             result = self.records._public(self.records._row(connection, brain, experiment_id))
             self.assets._event(connection, principal, event_key, "experiment_select", payload, result)
             return result
