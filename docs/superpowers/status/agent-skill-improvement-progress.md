@@ -92,6 +92,17 @@
   No unused positive v2 qualification helper or readiness flag was added. Positive
   final allocation/linked consumption and drift/resume remain C+D dependencies;
   Task4 and complete M2 remain open. Task5 reports can proceed independently.
+- Task5 report component is in progress locally: pure complete-case arithmetic,
+  exact integer multiple-test correction, critical/regression preservation and
+  explicit technical/unverified evidence; concrete encrypted immutable reports
+  enumerate expected cells and pin exact result IDs/hashes. Pure19 tests GREEN.
+  Actual synthetic Runner/Fernet/ledger tests preserve report refs across genuine
+  product reevaluation and reject pointer races. Missing artifact/call marker,
+  late source drift during policy hashing and corrupt Fernet results reproduced
+  RED->GREEN. Scoped independent review found no remaining Important issue;
+  final component regression5/5 scripts GREEN178s, including31 new component
+  tests. Candidate selection still remains closed
+  until report-policy/current-reference integration; Task5 is not complete.
 
 ## M2A engineering continuation
 

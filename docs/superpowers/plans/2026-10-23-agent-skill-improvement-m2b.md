@@ -241,6 +241,28 @@ explicit recovery. Preserve owner-private artifact reads versus model projection
 - [ ] Implement this unit and inspect its exact source/authority boundaries.
 - [ ] Run named GREEN/regression checks, record actual evidence and commit the unit.
 
+Partial report component now has pure expected-cell arithmetic and a concrete
+ComparisonResults store. Reports enumerate missing cells, pin exact immutable
+result IDs/hashes, derive native integrity separately from product criteria and
+retain unknown/unstable coverage. Repeats count within cases; corrected sign-test
+decisions use integer arithmetic. Technical numerical success never certifies
+business acceptance or real independence. Regression primary business losses
+also block the pilot, even when that criterion is not marked critical.
+
+Scoped review found three arithmetic defects, reproduced RED then fixed: cross-
+split qualification contamination, an unknown repeat masking a known critical
+failure, and primary regression loss being offset by qualification wins. Initial
+pure13 tests became16 after those reproductions; result-projection tests bring
+the pure suite to19 GREEN. Actual Runner/Fernet/ledger synthetic baseline tests
+verify immutable report refs across genuine reevaluation and reject a pointer
+change during report creation. Missing actual artifacts and missing real call
+markers also reproduced RED->GREEN. A final-policy file-I/O source race and
+uncaught corrupt Fernet result both reproduced RED->GREEN; the scoped reviewer
+independently reran original diagnostics and found no remaining Important issue.
+Final component regression passed5/5 scripts178s (Plans, new Reports/Results,
+v2 Execution/Lineage); the new component has31 tests. Candidate selection/report-
+policy/current-reference integration remains unimplemented; Task5 is not complete.
+
 
 New improvement_comparison_results.py and tests. Enumerate expected cells first.
 Select exact linked trial/attempt/result_id/result_hash, read via TrialResults.read

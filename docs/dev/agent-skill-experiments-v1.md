@@ -150,3 +150,21 @@ still has no positive execution path before actual C+D readiness; the lower v2
 allocation/consumption integration is intentionally unfinished, not enabled by a
 caller readiness flag. A CaseStore source change also changes EVALUATOR_PIN;
 historical records do not become fresh execution authority automatically.
+
+ComparisonResults creates immutable encrypted reports over the entire frozen
+matrix, including explicit missing slots. It snapshots the actual linked trial,
+attempt and result pointer, reads each selected result with an explicit immutable
+result ID/hash, and rejects pointer changes before publication. Reports also
+verify actual call markers, artifact bytes, output manifests, product criteria
+and evaluator pins. Historical reports keep their old references after genuine
+product reevaluation; a newer result cannot silently replace an old reference.
+
+Native integrity, product verdicts, repeat stability and regression are separate.
+Unknown executions never make a candidate win; a known critical failure is not
+erased by another unknown repeat. The exact integer sign test counts cases rather
+than repeats and applies the frozen multiple-test correction. Qualification
+overlap with tuning/regression and observed regression losses prevent a passing
+pilot gate. Missing or corrupt encrypted evidence stays incomplete. Numerical
+success over synthetic fixtures remains technical, with business eligibility and
+real-world independence unverified. Report creation is not candidate selection
+or activation; the report-selection integration remains unfinished in this unit.
