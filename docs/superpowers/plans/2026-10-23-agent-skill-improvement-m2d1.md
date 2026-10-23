@@ -161,7 +161,7 @@ Trial/call/link publication is Task3's completion gate.
 Task1 local implementation evidence: six sequential affected scripts passed104
 tests in221.921s, source/runtime/log-bound in
 `../evidence/2026-10-23-m2d1-task1-verification.json` (SHA256
-fd76fe8e8cf40d39b68ba5ed845de2439dd63a4db77ea3e17f47f1932306529e).
+b9d7c51fd9725111678365f667b4af2168738b73329e89475ba2d700d52f76f8).
 The actual task-done verifier checks committed bytes against the full retained
 dependency/log evidence, without repeating already-passed tests. This is local
 foundation completion; checkpoint Linux CI and full D1 review/runtime/final CI

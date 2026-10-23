@@ -57,7 +57,7 @@
   comparison rows. Cold metadata neither decrypts nor migrates; canonical skill
   bytes and target pointers stay unchanged. Evidence:
   `../evidence/2026-10-23-m2d1-task1-verification.json`, SHA256
-  fd76fe8e8cf40d39b68ba5ed845de2439dd63a4db77ea3e17f47f1932306529e.
+  b9d7c51fd9725111678365f667b4af2168738b73329e89475ba2d700d52f76f8.
   Task1 local foundation is verified; task-done checks committed bytes/logs.
   Checkpoint Linux CI remains pending. WSL is unavailable; the PR workflow now
   fetches actual C2727edcc for its reader test. No real provider/account inference
