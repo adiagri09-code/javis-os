@@ -394,3 +394,52 @@ unchanged source/test hashes. A first overly deep invocation temp failed two old
 fixture subcases at a269-character Windows lock path; the preserved failure and
 short-private-temp passing rerun are recorded separately. No assertions/product
 authority were changed. This component remains unreachable/outside PROFILE_SOURCES.
+
+## Canonical components and concrete guardian integration
+
+NativeDebugInvocation and its lazy x64 Win32 helper now pass11 actual isolated
+component tests, independently11PASS4.300s. It returns the original SDK-imported
+anyio Process after allow/final resume, with the creator-thread pump through EXIT.
+Privacy/equality-spoofing failures were reproduced and corrected before freezing.
+Failed event reads, handle close or uncooperative callbacks retain the owner for
+retry. This proves one-process lifecycle with fixture ACKs, not image association,
+whole-job/death recovery or a three-actor SDK query. Exact pins and REDs are public.
+
+The fixed bootstrap independently passes12 tests plus1 Linux-only skip. It reads
+exactly one bounded manifest frame, verifies declared current runtime/source/import
+files with public guards, executes captured fixed target bytes and retains guard/DLL
+cleanup ownership. Actual direct-base child startup, initial loaded sections,
+unlisted imports and externally authenticated complete-manifest authority remain
+unproved; the real file/module fixture simulates isolation flags. No runtime caller.
+
+Next ImageMetadataChannel supplies one owned connected socket and a closed
+CREATE/ACK exchange. Retain an uncancelled actual async IO task; shutdown wakes it
+on cancellation/error, completion precedes close, partial frames poison the channel.
+Lost close authority stays unproven. No blocking reader thread is promoted.
+Only bounded strict metadata schemas and nonce/incarnation binding are allowed.
+Later endpoint transfer uses actual held target incarnations, never receipt PIDs.
+Python documents [socket sharing](https://docs.python.org/3.12/library/socket.html#socket.socket.share)
+and [async socket IO](https://docs.python.org/3.12/library/asyncio-eventloop.html#working-with-socket-objects);
+these are design references, not evidence of a cross-process run.
+
+Initial ownership needs guardian-first creation: host-Popen-then-assignment has a
+host-death gap. Precreate job/inventory/fences outside the worker; fixed guardian
+creates the bootstrap root. Seal all transient guardian copies of worker stdio
+before the host sends private packets. Only closed runtime/source/image policy
+and native metadata reach guardian. Selected executable path/hash is allowed image
+metadata; full config/model/SDK argv/env/auth-home stay on direct host-worker data.
+Install the allowed worker environment before engine imports/verify. The guardian
+is trusted qualified fixed-purpose code; debugger handles provide no memory
+isolation against compromised guardian code, and none is claimed.
+
+Use a guardian-only direct CreateProcessW/STARTUPINFOEX factory with JOB_LIST
+and exact HANDLE_LIST. Microsoft's [attribute contract](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute)
+supports creation-time job assignment on Windows10/Server2016+. Installed CPython
+must not be assumed to support a job_list attribute dictionary. The native factory
+avoids Popen std-handle mutation and the unassigned-root cleanup special case;
+unsupported/attribute/create failure refuses without fallback. Explicit Unicode
+environment and extended startup flags belong to the fixed-root grammar, separately
+from the SDK query parser. Do not add a speculative post_create hook to the frozen
+SDK capture. Actual root image/debug and nested worker-native ownership still need
+qualification. Host adopts a duplicated retained worker wait/query capability from
+the retained guardian, never PID reopen. All18 and authority/usage/fence/CI gates stay.

@@ -8,12 +8,15 @@ approved borrowed-file API and public importV2/guardianV6/D2 audit evidence. Its
 records the successful limited inert probes and their historical failures. No merge,
 deployment, restart, native/model/account rerun or live activation occurred.
 
-Next canonical NativeDebugInvocation extracts the proven isolated creator/pump
-lifecycle into the SDK's actual async process interface. It is not a new production
-consumer yet. The implementation owns a persistent samecreator pump, exact one
-dispatch, bound image ACK and cancellation/failure drain; undrainable callback/handle
-state must remain owned. Component tests run sequentially in their sole slot, no
-unchanged native20/V6 repetition. Existing plan records the custom SDK transport
+Canonical NativeDebugInvocation now exposes the SDK's actual async process interface
+with a persistent samecreator pump through EXIT and exact one dispatch. Initial9
+RED/GREEN preceded a real privacy/strict-ACK finding, then2 RED tests with7 expected
+failures and corrected11GREEN4.226s. Independent isolated11PASS4.300s approves
+source902ba370/helper54dd2ed7/testf712dd9e with7 unchanged evidence/dependency pins;
+all83 qualified source pins remain unchanged. Public canonical-native-capture
+records retained/retryable cancellation/error/handle/ACK ownership and limits.
+No runtime consumer/profile entry, image validation, full job/worker-death or SDK
+query proof is implied. Existing plan records the custom SDK transport
 integration consumer, stable capability versus per-invocation proof separation,
 owned async verification and explicit host-preflight lifetime requirement. Full
 guardian/bootstrap/control integration remains open.
@@ -24,9 +27,32 @@ remain unchanged. Pure8 RED-to-GREEN pass0.008s, affected17 pass0.433s, independ
 sequential17 pass0.458s and8 pass0.011s on unchanged266b75f1/fe73ba59/aee418b0 pins.
 Public query-dispatch-policies records the first deep-temp Windows269-char failure
 and unchanged-source short-temp passing rerun. No runtime caller/profile change.
-Bootstrap fixed-entrypoint/framing/declared-file verification implementation is
-queued with explicit UNKNOWN unlisted-import exclusion and initial loaded-section
-provenance; external qualification must authenticate the bootstrap/import closure.
+Bootstrap fixed-entrypoint/framing/declared-file verification now passes12 tests
+plus1 Linux-only skip in0.196s; independent same13 collected12PASS1skip0.213s approves
+source7d1a69f0/teste25ebc72 and unchanged public guard dependency4fc9654a. This is
+controlled in-process Windows file/module verification with simulated isolation
+flags, not actual isolated direct-base child startup. Public native-bootstrap
+records fixed targets, exact framed stdin/no-overread, verified captured target
+bytes and retained close-error ownership. Unlisted-import exclusion/initial loaded
+sections stay UNKNOWN; external qualification must authenticate bootstrap/manifest
+completeness. No production caller/profile entry or SDK/native-child call.
+
+Query policy delta is committed locally7f710bbc (not yet pushed; next reviewed
+component is batched to avoid needless duplicate full CI runs). Its three Git
+blob IDs exactly equal tested worktree bytes. Capture author freeze uses37 explicit
+files; an initial broad glob accidentally included an open reviewer log and failed,
+preserved separately without source/test changes. A genuinely asynchronous closed
+metadata channel is the next consumer prerequisite; the current capture callback
+does not promote blocking stdin reads into cancellable IO.
+
+Next metadata image channel uses one owned connected socket and a cooperative
+async CREATE/ACK exchange, with strict closed schemas, nonce/incarnation binding,
+partial-frame poison and settled IO before close. This remains a component until
+cross-process endpoint transfer and whole guardian lifecycle are qualified. Initial
+worker creation/assignment also needs a concrete no-orphan lifetime: a host crash
+between suspended Popen and guardian/job assignment must not be ignored. Guardian-
+first fixed worker creation with transient private-pipe capability copies closed
+before host writes private data is being checked against actual code/contracts.
 
 ## Previous continuation — query validator committed; startup import measured
 
