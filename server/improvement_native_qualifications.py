@@ -47,7 +47,13 @@ QUALIFIED_PROFILES = {('win32', '2.1.308',
     ('win32', '2.1.309',
     '5441781f2b6bbd07354b4a74560ee88c68c9bf05d6db3c7e24c452c91673dc53', '0.2.116',
     'claude-isolated-roles-v2', '972175a29309295afc596902ef711ea51400ba77c2f39e27aab1141f9a0f6a10'):
-    'a84d266da09b3d4bd029eaa99a5ef3821e86e7439a7517197994cc6d89e7d109'}
+    'a84d266da09b3d4bd029eaa99a5ef3821e86e7439a7517197994cc6d89e7d109',
+    # Exact83-source versioned skill-read footprint; all20 local native checks.
+    # docs/superpowers/evidence/2026-10-24-m2d1-native-qualification-skill-reads.json
+    ('win32', '2.1.309',
+    '5441781f2b6bbd07354b4a74560ee88c68c9bf05d6db3c7e24c452c91673dc53', '0.2.116',
+    'claude-isolated-roles-v2', '04c8c77baec04d04019752bc8abc2f9a5906e094ededfbdd56cfc3c712aef126'):
+    'bf793edf18abf0cbeecf83983ee619ae4a4c96415b844cc488b2ed1ed9c09a4a'}
 
 
 def profile_qualification(pin, platform):

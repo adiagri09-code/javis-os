@@ -10,7 +10,7 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.299.0] - 2026-10-23
 ### Improved
-- **Test skill edits against a fixed snapshot.** Isolated trials keep the baseline and edit separate and record exactly which content was loaded for comparison.
+- **Test skill edits against a fixed snapshot.** Isolated trials keep the baseline and edit separate and distinguish supplied skills from reads supported by evidence.
 - **Stopping a trial preserves its history.** Cancelling a request retains ownership of running work, and workspace cleanup waits for execution to finish.
 - **Invalid review output has an explicit result.** Repeating the same request does not call the model again; this release supports isolated trials, with live activation still disabled.
 ### Fixed

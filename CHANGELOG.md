@@ -8,7 +8,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.299.0] - 2026-10-23
 ### Cải thiện
-- **Thử bản sửa skill trên bản chụp cố định.** Luồng thử cách ly giữ riêng bản gốc và bản sửa, ghi lại đúng nội dung đã nạp để đối chiếu kết quả.
+- **Thử bản sửa skill trên bản chụp cố định.** Luồng thử cách ly giữ riêng bản gốc và bản sửa, phân biệt skill được cung cấp với lần đọc có bằng chứng.
 - **Dừng thử vẫn giữ được lịch sử.** Hủy yêu cầu không bỏ lại tác vụ đang chạy; việc dọn thư mục chờ phần thực thi kết thúc.
 - **Báo rõ đầu ra kiểm tra không hợp lệ.** Gửi lại cùng yêu cầu không tự gọi model thêm; phạm vi hiện tại vẫn là thử cách ly, chưa bật áp dụng trên brain thật.
 ### Sửa lỗi

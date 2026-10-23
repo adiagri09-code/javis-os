@@ -1,4 +1,4 @@
-"""Opt-in actual CLI enforcement on genuine temporary v2 paired materializations.
+"""Opt-in actual CLI enforcement on genuine temporary v3 paired materializations.
 
 Preparation/reviewer fixtures are simulated. Native queries use dummy auth and a
 local provider; this is not selected-account, TrialRunner or business evidence.
@@ -38,7 +38,7 @@ def native_view_worker(root):
     """Called inside the existing pinned/dummy/hidden qualification wrapper."""
     payload = json.loads((root / 'view-input.json').read_bytes())
     manifest, pin, trial_id = (payload[key] for key in ('manifest', 'pin', 'trial_id'))
-    if manifest['version'] != 2 or manifest['engine_config_hash'] != _hash(pin):
+    if manifest['version'] != 3 or manifest['engine_config_hash'] != _hash(pin):
         raise ValueError('qualification_view_configuration_changed')
     if pin['profile_hash'] != native.profile_hash() or pin['cli_path'] != os.environ['JAVIS_TEST_NATIVE_CLI']:
         raise ValueError('qualification_view_profile_changed')
@@ -202,6 +202,15 @@ if '--qualification-worker' not in sys.argv:
                                         line = 'data: ' + json.dumps(value) + '\n'
                                     lines.append(line)
                                 body = ''.join(lines).encode()
+                                if b'"stop_reason": "tool_use"' in body:
+                                    asset, view = manifest['assets'][0], manifest['effective_view']
+                                    args = {'view_id': view['view_id'], 'view_hash': view['view_hash'],
+                                        'asset_id': asset['id'], 'content_hash': asset['hash']}
+                                    reads = [('asset-hit', args)]
+                                    if variant == 'candidate':
+                                        reads.append(('asset-miss', args | {'asset_id': 'foreign-asset'}))
+                                    body = runtime.append_tool_calls(body, [(identifier,
+                                        'mcp__skill__skill_asset_read', arguments) for identifier, arguments in reads])
                             return reply(instance, status, body, content_type)
 
                         handler.do_POST, handler.reply = observed_post, actual_fixture_reply
@@ -215,13 +224,15 @@ if '--qualification-worker' not in sys.argv:
                             patch.object(http.server, 'ThreadingHTTPServer', side_effect=server), \
                             patch.object(tempfile, 'mkdtemp', side_effect=directory):
                         method = runtime.CandidateNativeTests.test_candidate_reuses_full_native_blackbox_with_extra_tool_and_ambient_canaries
-                        method(runtime.CandidateNativeTests())
+                        boundary = runtime.CandidateNativeTests()
+                        boundary.expected_tools = ['mcp__fixture__fixture_read', 'mcp__skill__skill_asset_read']
+                        method(boundary)
                     self.assertEqual(len(spawn.observations), 1)
                     events = spawn.observations[0]['events']
                     receipts = [event['receipt'] for event in events if event['type'] == 'installation_receipt']
                     self.assertEqual(len(receipts), 1)
                     receipt = receipts[0]
-                    self.assertEqual(receipt['version'], 2)
+                    self.assertEqual(receipt['version'], 3)
                     self.assertEqual(receipt['effective_view'], manifest['effective_view'])
                     self.assertEqual(receipt['trial_id'], trial_id)
                     self.assertEqual(receipt['engine_config_hash'], _hash(self.pin))
@@ -230,18 +241,47 @@ if '--qualification-worker' not in sys.argv:
                     sessions.append(receipt['session_id'])
                     requests = [body for path, body in bodies if path == '/v1/messages']
                     self.assertEqual(len(requests), 2)
+                    outcomes = {block['tool_use_id']: block for message in requests[-1]['messages']
+                        if isinstance(message.get('content'), list) for block in message['content']
+                        if block.get('type') == 'tool_result'}
+                    observations = [event['observation'] for event in events
+                        if event['type'] == 'skill_asset_broker_observation']
+                    self.assertEqual(len(observations), 1)
+                    self.assertFalse(outcomes['asset-hit'].get('is_error', False))
+                    actual_text = outcomes['asset-hit']['content']
+                    if type(actual_text) is list:
+                        self.assertEqual(len(actual_text), 1)
+                        actual_text = actual_text[0]['text']
+                    self.assertEqual(actual_text, observations[0]['response_text'])
+                    self.assertEqual(json.loads(actual_text)['content'], manifest['assets'][0]['content'])
+                    if variant == 'candidate':
+                        self.assertIs(outcomes['asset-miss']['is_error'], True)
+                        self.assertNotIn(manifest['assets'][0]['content'], str(outcomes['asset-miss']))
+                    native_reads = [event for event in events if event['type'] == 'tool_result'
+                        and event['id'] in ('asset-hit', 'asset-miss')]
+                    self.assertEqual({event['id'] for event in native_reads},
+                        {'asset-hit', 'asset-miss'} if variant == 'candidate' else {'asset-hit'})
+                    from improvement_skill_asset_proof import correlate_asset_reads
+                    workspace_binding = {key: receipt[key] for key in ('trial_id', 'attempt', 'input_hash')}
+                    read_proof = correlate_asset_reads(manifest, workspace_binding, events)
+                    self.assertEqual(receipt['asset_read_proofs'], read_proof['proofs'])
                     system = '\n'.join(block.get('text', '') for block in requests[0]['system'])
                     self.assertIn(trial_system_prompt(manifest), system)
                     self.assertNotIn('private-owner-answer', json.dumps(requests))
                     self.assertNotIn('"expected"', system)
-                    EVIDENCE.append({'scenario': 'actual-v2-view-native-local-enforcement', 'variant': variant,
+                    EVIDENCE.append({'scenario': 'actual-v3-view-native-local-enforcement', 'variant': variant,
                         'production_billing': False, 'profile_hash': before_profile,
                         'seconds': round(time.monotonic() - started, 3), 'view': manifest['effective_view'],
                         'manifest_hash': _hash(manifest), 'engine_config_hash': _hash(self.pin),
                         'receipt_hash': _hash(receipt), 'request_hashes': [_hash(body) for body in requests],
                         'native_session_hash': hashlib.sha256(receipt['session_id'].encode()).hexdigest(),
                         'all_owned_processes_closed': True, 'plaintext_cleaned_after_job_drain': True,
-                        'observed_reasoning': 'unknown', 'observed_asset_use': 'unknown'})
+                        'observed_reasoning': 'unknown', 'observed_asset_use': read_proof['verdict'],
+                        'asset_read_reason': read_proof['reason'], 'native_read_results': [
+                            {'id': event['id'], 'native_is_error': event['native_is_error'],
+                             'content_hash': _hash(event['content'])} for event in native_reads],
+                        'asset_response_hash': observations[0]['response_hash'],
+                        'foreign_asset_denied': variant == 'candidate'})
                 self.assertFalse(scratch.exists())
             self.assertNotEqual(sessions[0], sessions[1])
             self.assertNotEqual(materials['baseline'][1]['assets'], materials['candidate'][1]['assets'])

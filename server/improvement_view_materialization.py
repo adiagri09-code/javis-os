@@ -20,7 +20,7 @@ def materialize_view(trials, connection, row, baseline_context, principal):
     contract = json.loads(connection.execute('SELECT contract_json FROM improvement_contracts '
         'WHERE brain_id=? AND manifest_hash=?', (brain, pins['contract_hash'])).fetchone()[0])
     public = IC.public_contract(contract)
-    result = _manifest({'version': 2, 'brain_id': brain,
+    result = _manifest({'version': 3, 'brain_id': brain,
         'bundle_hash': pins['base_bundle_hash' if request['variant'] == 'baseline' else 'candidate_bundle_hash'],
         'engine_config_hash': pins['engine_config_hash'], 'contract_hash': pins['contract_hash'],
         'grant_hash': pins['grant_hash'], 'baseline_context': baseline_context,

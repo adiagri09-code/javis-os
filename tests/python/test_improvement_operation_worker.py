@@ -266,7 +266,8 @@ class OperationWorkerTests(unittest.TestCase):
                     "improvement_store.py", "improvement_blobs.py", "improvement_cases.py", "improvement_case_schema.py",
                     "improvement_candidate_records.py", "improvement_candidate_schema.py", "improvement_skill_patch.py",
                     "improvement_comparison_schedule.py", "improvement_view_admission.py", "improvement_view_materialization.py",
-                    "improvement_view_qualification.py", "improvement_view_qualification_history.py"}
+                    "improvement_view_qualification.py", "improvement_view_qualification_history.py",
+                    "improvement_skill_asset_broker.py", "improvement_skill_asset_proof.py"}
         self.assertEqual(set(IC.PROFILE_SOURCES), expected)
         self.assertEqual(len(IC.PROFILE_SOURCES), len(expected))
         import hashlib

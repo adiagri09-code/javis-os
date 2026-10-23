@@ -84,12 +84,12 @@ def _manifest(value):
         raise ValueError("insufficient_source: trial_input_contains_credentials")
     required = {"version", "brain_id", "bundle_hash", "engine_config_hash", "contract_hash", "grant_hash",
                 "baseline_context", "public_contract", "assets", "case", "learning_origin"}
-    if type(manifest.get('version')) is int and manifest['version'] == 2:
+    if type(manifest.get('version')) is int and manifest['version'] in (2, 3):
         required.add('effective_view')
     _fields(manifest, required)
-    if type(manifest["version"]) is not int or manifest["version"] not in (1, 2):
+    if type(manifest["version"]) is not int or manifest["version"] not in (1, 2, 3):
         raise ValueError("unsupported_trial_input")
-    if manifest['version'] == 2:
+    if manifest['version'] in (2, 3):
         view = manifest['effective_view']
         _fields(view, {'view_id', 'view_hash', 'binding_hash'})
         if type(view['view_id']) is not str or not _IDENTITY.fullmatch(view['view_id']):
@@ -117,7 +117,7 @@ def _manifest(value):
     assets = manifest["assets"]
     if not isinstance(assets, list) or not assets or len(assets) > 100:
         raise ValueError("invalid_trial_assets")
-    if manifest['version'] == 2 and (len(assets) != 1 or type(assets[0]) is not dict
+    if manifest['version'] in (2, 3) and (len(assets) != 1 or type(assets[0]) is not dict
             or type(assets[0].get('path')) is not str or not assets[0]['path'].startswith('skills/')):
         raise ValueError('invalid_trial_view_assets')
     paths, identities = set(), set()
@@ -164,8 +164,16 @@ def _private_directory(path: Path):
 
 def trial_system_prompt(input_manifest):
     manifest = _manifest(input_manifest)
+    if manifest['version'] == 3:
+        asset, view = manifest['assets'][0], manifest['effective_view']
+        args = {'view_id': view['view_id'], 'view_hash': view['view_hash'],
+                'asset_id': asset['id'], 'content_hash': asset['hash']}
+        assets = ('Read the selected skill using mcp__skill__skill_asset_read with these exact arguments:\n'
+                  + _json(args) + '\nUse the returned pinned instructions for this task.')
+    else:
+        assets = _json(manifest['assets'])
     prompt = (manifest["baseline_context"]["content"] + "\n\n<effective_assets>\n"
-              + _json(manifest["assets"]) + "\n</effective_assets>\n\n<public_acceptance>\n"
+              + assets + "\n</effective_assets>\n\n<public_acceptance>\n"
               + _json(manifest["public_contract"]["content"]) + "\n</public_acceptance>")
     if len(prompt.encode("utf-8")) > MAX_ASSET_BYTES:
         raise ValueError("insufficient_source: trial_system_prompt_too_large")
@@ -175,7 +183,7 @@ def trial_system_prompt(input_manifest):
 def _effective_hash(manifest):
     value = {"context": manifest["baseline_context"]["hash"], "bundle": manifest["bundle_hash"],
              "assets": [{key: asset[key] for key in ("id", "path", "hash")} for asset in manifest["assets"]]}
-    if manifest['version'] == 2:
+    if manifest['version'] in (2, 3):
         value['effective_view'] = manifest['effective_view']
     return _hash(value)
 

@@ -32,6 +32,26 @@ MARKERS = ("QUALIFICATION_AMBIENT_SKILL", "QUALIFICATION_AMBIENT_AGENT", "QUALIF
 EVIDENCE = []
 
 
+def append_tool_calls(body, calls):
+    """Compose controlled provider replies without reusing or reordering indexes."""
+    values = [json.loads(line[6:]) for line in body.decode().splitlines() if line.startswith('data: ')]
+    indexes = [value['index'] for value in values if value.get('type') == 'content_block_start']
+    if indexes != list(range(len(indexes))):
+        raise AssertionError('Noncontiguous native qualification content blocks')
+    additions = []
+    for index, (identifier, name, args) in enumerate(calls, len(indexes)):
+        for kind, data in (("content_block_start", {"type": "content_block_start", "index": index,
+            "content_block": {"type": "tool_use", "id": identifier, "name": name, "input": {}}}),
+            ("content_block_delta", {"type": "content_block_delta", "index": index,
+             "delta": {"type": "input_json_delta", "partial_json": json.dumps(args)}}),
+            ("content_block_stop", {"type": "content_block_stop", "index": index})):
+            additions.append("event: " + kind + "\ndata: " + json.dumps(data) + "\n\n")
+    marker = b"event: message_delta\n"
+    if body.count(marker) != 1:
+        raise AssertionError('Ambiguous native qualification message delta')
+    return body.replace(marker, ''.join(additions).encode() + marker, 1)
+
+
 def candidate(path):
     """No discovery, execution, authentication or generic unknown-runtime exemption."""
     from improvement_trial_selection import MAX_BINARY_BYTES, _read_stable
@@ -239,15 +259,7 @@ class CandidateNativeTests(unittest.TestCase):
 
             def injected_reply(instance, status, body, content_type="application/json"):
                 if content_type == "text/event-stream" and b'"stop_reason": "tool_use"' in body:
-                    additions = []
-                    for index, (identifier, name, args) in enumerate(extras, 6):
-                        for kind, data in (("content_block_start", {"type": "content_block_start", "index": index,
-                            "content_block": {"type": "tool_use", "id": identifier, "name": name, "input": {}}}),
-                            ("content_block_delta", {"type": "content_block_delta", "index": index,
-                             "delta": {"type": "input_json_delta", "partial_json": json.dumps(args)}}),
-                            ("content_block_stop", {"type": "content_block_stop", "index": index})):
-                            additions.append("event: " + kind + "\ndata: " + json.dumps(data) + "\n\n")
-                    body = body.replace(b"event: message_delta\n", "".join(additions).encode() + b"event: message_delta\n", 1)
+                    body = append_tool_calls(body, extras)
                 return reply(instance, status, body, content_type)
 
             handler.do_POST, handler.reply = observed_post, injected_reply
@@ -267,7 +279,9 @@ class CandidateNativeTests(unittest.TestCase):
              patch.object(existing.http.server, "ThreadingHTTPServer", side_effect=server), \
              patch.object(existing.subprocess, "Popen", side_effect=_spawn):
             method = inspect.unwrap(existing.NativeBoundaryTests.test_native_profile_denies_outside_tools_and_ambient_configuration)
-            method(existing.NativeBoundaryTests())
+            boundary = existing.NativeBoundaryTests()
+            boundary.expected_tools = getattr(self, 'expected_tools', ['mcp__fixture__fixture_read'])
+            method(boundary)
         self.assertEqual(len(_spawn.observations), 1)
         result = _spawn.observations[0]
         observations = result["qualification"]

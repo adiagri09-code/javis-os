@@ -1,5 +1,63 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — native skill reads, 24 October
+
+Owner delegated pilot choice: reconciliation first, document processing second,
+Python bugfix/test as the technical control. This is a work-type choice, not
+new business-source access, owner acceptance or live activation permission.
+
+Fresh linked v4 materializations now use input manifest3 and receipt3. The
+prompt supplies an exact read descriptor; a second closed readonly MCP tool
+serves only immutable pinned skill bytes. Old manifests1/2 retain exact prompt,
+hash, tool and receipt behavior. Operation roles remain fixture-only. Both new
+reachable broker/proof modules join the exact native footprint, now83 sources;
+the historical972175a2 registration does not authorize this changed footprint.
+
+The pure correlator joins actual native call/result IDs, initialized stream
+session, exact arguments and unpredictable broker response IDs/text/hash.
+Receipt summaries are independently recomputed by the checker. Available,
+selected, observed read and comprehension remain distinct; no comprehension
+claim. Missing native optional error flags stay UNKNOWN. Full18 and actual
+reasoning gates remain unchanged.
+
+Review found two mixed-valid orphan/replay cases: reproduced14 tests/2FAIL,
+fixed14PASS0.061s. It also caught the shared operation-inventory signature
+regression and two qualification-fixture issues; all are corrected. The exact
+83-source footprint expectation is updated without weakening its set/hash checks.
+Sequential affected verification:133PASS197.876s subprocess wall on unchanged
+product sources, with qualification-fixture-only repairs between records.
+Independent final proof14PASS0.040s + native-skill11PASS3.386s, source/test hashes
+unchanged; scoped review approved. Raw records/logs live in the native-skill-reads
+ledger. Actual native qualification20PASS93.952s on the frozen83-source
+profile04c8c77b with dummy auth/local providers. Both paired arms return the
+exact host response and candidate foreign read is denied. Actual success
+is_error is absent/NULL; explicit denied-read error is TRUE. Coverage therefore
+stays UNKNOWN. A single exact registration was added after proof;7metadata
+checks show1RED0.129s then7GREEN0.126s. Independent registration audit APPROVED,
+7PASS0.127s;83source/6test pins,3raw/4logs/full1183-file record verified. All6
+prior entries and lookup/unrelated fixture ASTs remain unchanged. The profile
+source was not changed by registration, so no native20 rerun is needed.
+No selected-account call has been retried. Public native-skill-reads evidence
+9b745a63 and native qualification bf793edf preserve the exact source/log pins.
+
+Separate inert debug-image evidence preserves V1 failed before first Resume.
+V2's distinct pre-user-mode CREATE gate binds actual hFile volume/file ID/hash
+to the retained guard, accepts the selected image, and refuses an identical-byte
+foreign file with zero output. Actual EXIT/job/process drain precedes guard
+release. No SDK/Claude/account ran in these probes. Guardian confidentiality,
+SDK creator-thread/debug-pump compatibility, death/cancel/drain and native
+configuration coverage remain unqualified. Public debug-image-handle record
+and hashed confidential-guardian design addendum preserve these limits.
+
+Main fetched again:0.298.0; open PR805/807 have no reserved version, PR803 keeps
+0.299.0. Bilingual changelog validation passes. Current delta is ready for
+commit/push and final-head CI, with the full Goal still active.
+
+Goal M0–M8 stays active; genuine configured-account pair/final, full D2/E/F,
+M3–M8, business evidence and live gates remain open. PR803/reserved0.299.0,
+final-head CI/review/integration still required. No deploy/restart/live activation.
+
+
 ## Current continuation — immutable skill broker and Linux fixture repair, 24 October
 
 Standalone SkillAssetBroker now validates/fixes one materialized v2 manifest,

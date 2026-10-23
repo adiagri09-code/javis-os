@@ -36,7 +36,7 @@ class ViewMaterializationTests(sources.SourceFixture, unittest.IsolatedAsyncioTe
         for position in (0, 1):
             request, claimed, manifest = self.materialize(trials, metadata, position, 'view-materialize-pair-' + str(position))
             manifests[request['variant']] = manifest
-            self.assertEqual(manifest['version'], 2)
+            self.assertEqual(manifest['version'], 3)
             self.assertEqual(manifest['effective_view'], request['view'])
             with closing(self.assets.store._conn()) as connection:
                 resolved, _ = self.host._views.resolve_request(self.owner, request, connection=connection,
