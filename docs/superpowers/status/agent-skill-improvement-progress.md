@@ -191,6 +191,20 @@ Current79-source profilebeddb902 is unregistered. Native v4 receipt/check/result
 integration, final qualification ownership and public controls remain open.
 No actual native query, successful result, eligibility or business/live proof.
 
+Native identity/pipeline checkpoint:75 checks passed,176.126s recorded with
+per-row timing basis. Actual owner schedule/Runner/ledger/products/Fernet results
+and cleanup execute one pair using a clearly simulated adapter. Result4 pins
+the full request/lineage/view; Profile receipt2 derives from real workspace2.
+Full18 check IDs and unknown effort/asset use remain; both simulated results
+are non-pass, and comparison selection stays unsupported. Actual histories read
+exactly after off/revoke. Legacy checks/Claude/results/v2 execution pass.
+Evidence `../evidence/2026-10-23-m2d1-task4-view-execution.json`, SHA256
+4d7c1b9f7ea74b27e1b335ae93274561fb8290e2a82915ed61bc66bb54aea721.
+Source79/2192bf86 remains unregistered; no real model call/native qualification.
+Linux39959675109 SUCCESS254a90ca; Linux39965159570 in progressc811b9d6.
+Current result code still requires its own CI/review. Final holdout ownership,
+native scenarios on final exact source and public controls remain open.
+
 - Final affected regression21/21 GREEN,663.451s, qualified across two frozen
   segments: first15 passed scripts retain identical product/helper/test bytes;
   only the failed standalone task-drain test changed from a30ms scheduler sample

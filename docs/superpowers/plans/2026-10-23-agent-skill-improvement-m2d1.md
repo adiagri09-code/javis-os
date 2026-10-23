@@ -482,6 +482,36 @@ is unregistered. Actual v4 receipts/checks/results, native qualification and fin
 registry remain open. No native query/result/eligibility was manufactured. Task3
 and Task4 remain OPEN; no task-done marker.
 
+Next unit: TrialProfile installation receipt v2 is exactly receipt v1 plus
+`effective_view`, generated from the actual bound workspace v2. Pure invariants
+explicitly validate full request4 and require workspace2/receipt2 and exact view
+identity; other request versions retain workspace1/receipt1. Full18 check IDs and
+unknown effort/asset use remain unchanged. TrialResults writes/reads version4
+with full request hash, experiment_lineage and effective_view; owner recheck
+retains these exact pins. Actual Runner/CallLedger/encrypted products/cleanup is
+tested with a clearly simulated adapter, never claimed as native qualification.
+Affected sources: claude, trial_checks, trial_results; callers: worker, Runner,
+comparison projection/history/owner decisions. Tests: new view execution/checks,
+existing Claude/checks/results/experiment execution and workspace/footprint.
+
+Receipt/result checkpoint:75 checks passed across the direct owned pair1 and
+seven sequential affected commands,176.126s recorded (unittest vs subprocess
+basis per row). The direct pair reused unchanged source bytes rather than being
+rerun solely for bookkeeping. Actual owner schedule, Runner, Trial/Call start,
+encrypted products/results and cleanup produce/read explicit result4 with full
+request/view pins. After off/revoke, both actual result4 histories and comparison
+history stay cold/exact. The adapter is simulated, both results remain non-pass
+and selection unsupported; two cells are not a full A/B or final qualification.
+Pure record checks preserve all18 IDs and reject changed view/legacy receipt,
+with reasoning/asset-use unknown. Native Profile derives receipt2 from its real
+workspace2 and returns detached descriptors. Legacy Claude/checks/results and
+actual v2 execution regressions pass. Evidence
+`../evidence/2026-10-23-m2d1-task4-view-execution.json`, SHA256
+4d7c1b9f7ea74b27e1b335ae93274561fb8290e2a82915ed61bc66bb54aea721.
+Profile79/2192bf86b6a49e0fa2d524324db79c4a52493d91f37c56b9f183a4fa8b922e4d
+is UNREGISTERED. Final registry, exact native qualification and public controls
+remain OPEN; neither Task3 nor Task4 is complete.
+
 **Files:** new `server/improvement_view_materialization.py`; extend actual
 TrialStore.materialize, sandbox/worker/TrialProfile, receipts/checks/results/
 views/products/comparison projection. Add all new native-path sources to the

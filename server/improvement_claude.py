@@ -256,7 +256,7 @@ class TrialProfile:
         tools = ["mcp__fixture__fixture_read"]
         model_coverage = ("observed" if self.observed_models == {self.pin["model"]}
                           else "mismatch" if self.observed_models else "unknown")
-        return {"version": 1, "trial_id": workspace["trial_id"], "attempt": workspace["attempt"], "session_id": session_id,
+        receipt = {"version": 1, "trial_id": workspace["trial_id"], "attempt": workspace["attempt"], "session_id": session_id,
                 "input_hash": workspace["input_hash"], "effective_hash": workspace["effective_hash"],
                 "bundle_hash": manifest["bundle_hash"], "contract_hash": manifest["contract_hash"],
                 "public_contract_hash": manifest["public_contract"]["hash"], "engine_config_hash": manifest["engine_config_hash"],
@@ -277,6 +277,9 @@ class TrialProfile:
                              "prompt": "host_attested" if self._selection is not None else "unknown",
                              "tool_inventory": "observed" if self._native_tools == tools else "unknown",
                              "model": model_coverage, "reasoning": "unknown"}}
+        if manifest['version'] == 2:
+            receipt.update(version=2, effective_view=_frozen(manifest['effective_view']))
+        return receipt
 
     async def before_query(self):
         if self._started:

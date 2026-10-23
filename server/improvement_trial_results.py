@@ -78,6 +78,10 @@ class TrialResults:
             report = json.loads(raw)
             if IM._hash(report) != result["result_hash"]:
                 raise AssetUnavailable("trial_result_hash_mismatch")
+            if request.get('version') == 4 and (report.get('version') != 4 or report.get('trial_id') != identifier
+                    or report.get('attempt') != attempt or report.get('request_hash') != trial['request_hash']
+                    or report.get('experiment_lineage') != request['lineage'] or report.get('effective_view') != request['view']):
+                raise AssetUnavailable('view_trial_result_changed')
             if request.get("version") == 2 and (report.get("version") != 2 or report.get("trial_id") != identifier
                     or report.get("attempt") != attempt or report.get("request_hash") != trial["request_hash"]
                     or report.get("experiment_lineage") != request["lineage"]):
@@ -222,7 +226,9 @@ class TrialResults:
                   "capability_hash": capability_hash, "live_guard": guard,
                   "trace": {"count": len(records), "last_sequence": records[-1]["sequence"],
                             "hash": IM._hash([[record["sequence"], record["payload_hash"]] for record in records])}}
-        if request.get("version") == 2:
+        if request.get('version') == 4:
+            report.update(version=4, request_hash=IM._hash(request), experiment_lineage=request['lineage'], effective_view=request['view'])
+        elif request.get("version") == 2:
             report.update(version=2, request_hash=IM._hash(request), experiment_lineage=request["lineage"])
         elif request.get("version") == 3:
             report.update(version=3, request_hash=IM._hash(request), preparation_lineage=request["preparation"])

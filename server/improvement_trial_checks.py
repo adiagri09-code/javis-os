@@ -105,13 +105,16 @@ def _receipt(events, workspace, manifest, request, capability):
                           "multiple_installation_receipts" if records else "missing_installation_receipt")
     event, receipt = records[0], records[0].get("receipt")
     try:
-        _fields(receipt, _RECEIPT_FIELDS)
-        if (type(receipt["version"]) is not int or receipt["version"] != 1
+        view_trial = request.get('version') == 4
+        _fields(receipt, _RECEIPT_FIELDS | ({'effective_view'} if view_trial else set()))
+        if (type(receipt["version"]) is not int or receipt["version"] != (2 if view_trial else 1)
                 or type(receipt["attempt"]) is not int or event.get("hash") != _hash(receipt)
                 or (receipt["session_id"] is not None and not isinstance(receipt["session_id"], str))):
             raise ValueError("invalid_installation_receipt")
         expected = {key: workspace[key] for key in ("trial_id", "attempt", "input_hash", "effective_hash")}
         expected.update({key: manifest[key] for key in ("bundle_hash", "contract_hash", "engine_config_hash", "grant_hash")})
+        if view_trial:
+            expected['effective_view'] = request['view']
         expected.update(public_contract_hash=manifest["public_contract"]["hash"], capability_hash=capability,
             baseline_context_hash=manifest["baseline_context"]["hash"], expected_system_prompt_hash=_sha(trial_system_prompt(manifest)),
             fixture_inventory_hash=_hash([{key: item[key] for key in ("snapshot_id", "hash", "source")}
@@ -255,7 +258,12 @@ def execution_invariants(request, manifest, workspace_receipt, packets, capabili
     try:
         request, manifest, workspace, packets = map(_frozen, (request, manifest, workspace_receipt, packets))
         _manifest(manifest)
-        if request.get("version") == 3:
+        if request.get('version') == 4:
+            from improvement_view_trial_protocol import validate_request_v4
+            request = validate_request_v4(request)
+            if manifest['version'] != 2:
+                raise ValueError('view_workspace_required')
+        elif request.get("version") == 3:
             from improvement_preparation_protocol import validate_preparation_request_v3
             request = validate_preparation_request_v3(request)
         elif request.get("version") == 2:
@@ -268,9 +276,11 @@ def execution_invariants(request, manifest, workspace_receipt, packets, capabili
                 "baseline_context_hash", "target_generations", "deadline_at"}, {"qualification_id"})
         if request.get("version") != 3:
             CaseStore._pin_shape(request["pins"])
+        if request['version'] != 4 and manifest['version'] != 1:
+            raise ValueError('legacy_workspace_required')
         _digest(capability_hash)
         _fields(workspace, {"trial_id", "attempt", "path", "input_path", "output_root", "input_hash", "effective_hash"})
-        if (type(request["version"]) is not int or request["version"] not in (1, 2, 3) or request["variant"] not in ("baseline", "candidate")
+        if (type(request["version"]) is not int or request["version"] not in (1, 2, 3, 4) or request["variant"] not in ("baseline", "candidate")
                 or type(workspace["attempt"]) is not int or workspace["attempt"] < 1 or not isinstance(workspace["trial_id"], str)
                 or not _ID.fullmatch(workspace["trial_id"]) or not isinstance(packets, list) or len(packets) > 100000
                 or any(not isinstance(packet, dict) for packet in packets)):
@@ -285,10 +295,15 @@ def execution_invariants(request, manifest, workspace_receipt, packets, capabili
     bundle = pins["base_bundle_hash" if request["variant"] == "baseline" else "candidate_bundle_hash"]
     expected = {"bundle_hash": bundle, "contract_hash": pins["contract_hash"], "engine_config_hash": _hash(engine),
                 "grant_hash": pins["grant_hash"]}
+    if request['version'] == 4:
+        expected['effective_view'] = request['view']
     materialization = _equal("materialization", expected, manifest, "materialization_pin_mismatch")
     if (manifest["case"]["id"] != request["case_id"] or _hash(manifest["baseline_context"]) != request["baseline_context_hash"]
             or _hash(engine) != pins["engine_config_hash"]):
         materialization = _row("materialization", "fail", "case_context_or_configuration_mismatch")
+    if (request['version'] == 4 and request['variant'] == 'candidate'
+            and manifest['assets'][0]['id'] != request['lineage']['candidate_id']):
+        materialization = _row('materialization', 'fail', 'candidate_identity_mismatch')
     rows.append(materialization)
     if contract is None:
         rows.append(_row("contract_projection", "unknown", "full_contract_unavailable"))
