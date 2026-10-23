@@ -1138,6 +1138,7 @@ async def execute_worker_v2(kind_namespace, request, receipt, *, config_pin, wor
     usage handling under the caller's actual writer/lease state. It runs through
     cancellation, including failed cleanup; UNKNOWN never erases received usage.
     before_engine_start remains the separate accounting transaction/ACK gate.
+    A completion packet also requires successful retained process exit statuses.
     """
     import inspect
     if kind_namespace not in ('trial', 'operation'):
@@ -1156,6 +1157,7 @@ async def execute_worker_v2(kind_namespace, request, receipt, *, config_pin, wor
         launch_nonce=launch_nonce, invocations=invocations, persist_before_allow=persist_before_allow,
         timeout=timeout, close_timeout=close_timeout, lifetime_timeout=remaining)
     pending_packet = None
+    completion_seen = cancelled = False
     try:
         await owner.start({'kind': kind_namespace, 'request': {'version': 1, 'config_pin': config_pin,
             'workspace_root': str(workspace_root), 'receipt': receipt, 'capability_hash': request['capability_hash']},
@@ -1171,9 +1173,13 @@ async def execute_worker_v2(kind_namespace, request, receipt, *, config_pin, wor
                 if interrupted is not None: raise interrupted
                 await owner.send_worker({'type': 'engine_start_ack', **owner._binding['identity']})
             pending_packet = None
+            if kind == 'worker_complete': completion_seen = True
             yield packet
             if kind == 'worker_error': raise RuntimeError(kind_namespace + '_worker_failed')
             if kind == 'worker_complete': break
+    except asyncio.CancelledError:
+        cancelled = True
+        raise
     finally:
         closed, interrupted = await _settled_owned(asyncio.gather(
             asyncio.create_task(owner.aclose()), return_exceptions=True))
@@ -1186,3 +1192,7 @@ async def execute_worker_v2(kind_namespace, request, receipt, *, config_pin, wor
         if isinstance(observed[0], BaseException): raise observed[0]
         if interrupted is not None: raise interrupted
         if observed_interrupted is not None: raise observed_interrupted
+        if completion_seen and not cancelled:
+            statuses = (getattr(owner, '_worker_exit_code', None), getattr(owner, '_guardian_exit_code', None))
+            if any(type(status) is not int or status != 0 for status in statuses):
+                raise RuntimeError(kind_namespace + '_worker_exit_failed')

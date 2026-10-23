@@ -1,5 +1,34 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — actual profiles, startup2 routes and exit status approved
+
+Owner delegated pilot selection: reconciliation primary, document processing
+secondary, Python bugfix/test technical control. No source/activation expansion.
+
+Native input binding aa9ad4ef independently passes8 (1.749s); TrialProfile4
+e98e4dca independently passes8 (3.559s), affected legacy15+3 pass. Exact actual
+SDK constructor/write binding is covered with engineering native IO; no provider
+or comprehension claim. Public native-profile-binding/trial-profile4 evidence.
+
+OperationProfile2 independently passes7 (2.574s), affected legacy3 pass. Actual
+fixed worker startup2 routes independently pass14 (2.394s), affected legacy3+4
+pass. New profiles bind before options, guarded preflight admits before CLI,
+typed accounting ACK precedes query and runtime close precedes worker_complete.
+Routes use engineering runtime/session seams; no new materializer emits versions
+4/2 and no parent consumer activates this boundary yet. Public operation-profile2
+and startup2-worker-routes evidence record exact hashes and limits.
+
+Actual inert Windows exit7 reproduced a false success after worker_complete.
+Only execute_worker_v2 changed: after cleanup/closing evidence/cancellation,
+completion now requires exact builtin integer zero for worker and guardian.
+Independent5 PASS3.435s; affected cancellation1 PASS.176s. Actual drain/closed
+status and synthetic usage7/null survive. Public native-exit-status evidence.
+
+Next is actual parent adapter/callback/runner and independent result/check
+integration, then closed dummy-only qualification admission. Historical native
+registration and early Linux CI remain historical, not current qualification.
+No selected-account retry, deployment/live activation or milestone completion.
+
 ## Current continuation — manifest4 foundation and early Linux CI approved
 
 Manifest4 readonly foundation independently passes11 .039s after author11 .042s;
