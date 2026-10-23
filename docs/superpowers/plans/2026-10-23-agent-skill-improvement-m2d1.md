@@ -664,10 +664,24 @@ remain unknown rather than being omitted from mandatory integrity.
 
 ### Task 5 — owned public controls, regressions and publication
 
+Independent owner-control unit while genuine final/native proof stays open:
+POST `view-freeze` and `view-evidence` under the existing experiment route accept
+exactly `comparison_id,expected_generation,event_key`. No body/view/native grants
+or automatic next/query. Both are owned before synchronous work and scope the
+comparison to the URL experiment; stop joins these source threads. Freeze reuses
+the actual immutable publication/replay. Current evidence recomputes (never a
+durable readiness ticket), returns only metadata, C observational unknowns,
+current generation/check time and `current_view_sources_and_semantics` scope.
+Cold owner GET `/{experiment_id}/views/{comparison_id}` uses only existing store
+metadata, never a service/source/native factory, including after off/revoke.
+Affected files: requests/API/service, route snapshot, actual-main auth test and
+new actual-view API/lifetime tests. Native footprint service already included;
+profile remains unregistered. Actual positive final proof/Task3 is still open.
+
 **Files:** extend actual experiment owner API/service/requests/route snapshot,
 operator guide, bilingual changelogs and progress; focused owner route/stop tests.
 
-- [ ] Explicit owner view-freeze/current-evidence control is closed and CSRF/
+- [x] Explicit owner view-freeze/current-evidence control is closed and CSRF/
   session protected; history stays cold after off/revoke. No API-token-only
   authoring, caller native proof or automatic next/model dispatch.
 - [ ] Stop/recovery owns new view/admission/materialization/result threads,
@@ -680,6 +694,24 @@ operator guide, bilingual changelogs and progress; focused owner route/stop test
 - [ ] Record D1 engineering status and actual model/business/rollout separately;
   continue D2 production router/lazy/hub/native/task-pin integration. Do not
   call D, M2, M3-M8 or full Goal complete because this subproject ships.
+
+Owner-control engineering checkpoint:47 unittest checks and one actual route
+snapshot check passed across9 sequential processes,295.126s subprocess wall,
+on one frozen server/test/route source map. Actual main tests cover session and
+CSRF for all26 improvement routes; the621-entry snapshot adds exactly3 routes,
+with retained route definitions/order otherwise preserved. Actual HTTP view
+publication/current inspection, completed-key authority rechecks, foreign scope
+denial, cold history/replay after off/revoke, and cancelled HTTP ownership pass.
+A controlled in-process mutation removing only the view stop joins is rejected
+by the actual source-thread settlement assertion; the unmodified source passes.
+Existing B/C APIs, service/stop/lifetime workflows and actual v4 paired reservation
+also pass. No native verify/query occurs through the new view controls. Guide:
+`docs/dev/agent-skill-m2d1-views.md`. Evidence
+`../evidence/2026-10-23-m2d1-task5-view-controls.json`, SHA256
+b3a617be7e9eda67398ff166b28ff7ff833908e2f779089bfa670f088b3305a9.
+Current81-source profile2221a859 is unregistered. Genuine selected-final positive,
+exact D1 native qualification, independent whole-D1 review and exact-final CI
+remain OPEN; this checkpoint does not complete Task3/4/5 or authorize rollout.
 
 ## Self-review and interface freeze
 

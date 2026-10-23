@@ -277,7 +277,7 @@ class ExperimentService:
                 await _drain(asyncio.gather(*pending, return_exceptions=True))
         pending = tuple(entry[2] for key, entry in self._operations.items()
             if key[:2] == (brain, experiment_id) and (entry[1].startswith('workflow:')
-                or entry[1] in ('create', 'bind', 'freeze', 'report', 'resume', 'select_candidate')))
+                or entry[1] in ('create', 'bind', 'freeze', 'report', 'resume', 'select_candidate', 'view-freeze', 'view-evidence')))
         if pending:
             await _drain(asyncio.gather(*pending, return_exceptions=True))
         return await _settled_call(self._finish_stop, principal, experiment_id)
@@ -455,10 +455,49 @@ class ExperimentService:
         return await self._operation(principal, experiment_id, event_key, "next",
             {"comparison_id": comparison_id, "expected_generation": expected_generation}, start)
 
+    def _view_scope(self, connection, principal, experiment_id, comparison_id):
+        brain = _brain(principal)
+        row = self.records._row(connection, brain, experiment_id)
+        self.records._public(row)
+        comparison = connection.execute('SELECT * FROM improvement_comparisons WHERE id=? AND brain_id=? AND experiment_id=?',
+            (comparison_id, brain, experiment_id)).fetchone()
+        if comparison is None:
+            raise PermissionError('experiment_comparison_unavailable')
+        arm = connection.execute('SELECT * FROM improvement_experiment_arms WHERE experiment_id=? AND brain_id=? AND ordinal=?',
+            (experiment_id, brain, comparison['ordinal'])).fetchone()
+        if arm is None or IM._hash(json.loads(arm['envelope_json'])) != comparison['arm_hash']:
+            raise IM.ConflictError('experiment_arm_changed')
+        return row, {'definition': json.loads(row['definition_json']), 'comparison': dict(comparison), 'arm': json.loads(arm['envelope_json'])}
+
+    def _view_evidence(self, principal, experiment_id, comparison_id, expected_generation):
+        from improvement_experiment_lineage import current_fences
+        from improvement_experiment_qualification import require_tuning_families
+        brain = _brain(principal)
+        with closing(self.store._conn()) as connection:
+            row, proof = self._view_scope(connection, principal, experiment_id, comparison_id)
+            if row['generation'] != expected_generation:
+                raise IM.ConflictError('experiment_state_stale')
+            metadata = self.views._metadata(connection, brain, comparison_id)
+            if metadata is None:
+                raise PermissionError('comparison_views_unavailable')
+        resolved = self.views.load_current(principal, comparison_id, 'baseline')
+        with closing(self.store._conn()) as connection:
+            if proof['comparison']['kind'] == 'final':
+                self.view_admission.qualification.preview(connection, principal, comparison_id, expected_generation=expected_generation)
+            current, final_proof = self._view_scope(connection, principal, experiment_id, comparison_id)
+            if (current['generation'] != expected_generation or final_proof != proof
+                    or self.views._metadata(connection, brain, comparison_id) != metadata):
+                raise IM.ConflictError('comparison_view_authority_changed')
+            require_tuning_families(connection, brain, proof['definition']['case_set_id'])
+            current_fences(connection, brain, proof)
+        return {'view_binding': metadata, 'evidence_scope': 'current_view_sources_and_semantics',
+            'current_generation': expected_generation, 'checked_at': time.time(),
+            'observational_unknowns': list(resolved.observational_unknowns)}
+
     async def control(self, principal, experiment_id, operation, value):
         from improvement_experiment_requests import validate
         data = validate(value, operation)
-        if operation not in ("create", "bind", "freeze", "report", "select"):
+        if operation not in ("create", "bind", "freeze", "report", "select", 'view-freeze', 'view-evidence'):
             raise ValueError("invalid_experiment_control")
         if operation == "create" and data["experiment_id"] != experiment_id:
             raise ValueError("invalid_experiment_identity")
@@ -474,6 +513,12 @@ class ExperimentService:
                 return self.plans.freeze(principal, experiment_id, event_key=event_key, **arguments)
             if operation == "select":
                 return self.plans.select(principal, experiment_id, event_key=event_key, **arguments)
+            if operation in ('view-freeze', 'view-evidence'):
+                with closing(self.store._conn()) as connection:
+                    self._view_scope(connection, principal, experiment_id, data['comparison_id'])
+                if operation == 'view-freeze':
+                    return self.views.freeze_comparison(principal, event_key=event_key, **arguments)
+                return self._view_evidence(principal, experiment_id, **arguments)
             with closing(self.store._conn()) as connection:
                 self.records._row(connection, _brain(principal), experiment_id)
                 if connection.execute("SELECT 1 FROM improvement_comparisons WHERE id=? AND brain_id=? AND experiment_id=?",

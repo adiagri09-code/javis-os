@@ -102,6 +102,37 @@
 
 ## M2C engineering continuation
 
+### D1 owner-view controls checkpoint, 23 October
+
+Actual owner `view-freeze`/`view-evidence` POSTs now accept only comparison ID,
+experiment generation and event key. Freeze uses actual immutable publication;
+current evidence rechecks authority on every completed-key retry and exposes
+source/semantic scope plus unknowns, never a native readiness ticket. Cold
+view-binding GET uses the existing metadata store after off/revoke. The service
+owns source threads through HTTP cancellation; stop joins them before final
+settlement. No automatic next/query or canonical skill mutation is introduced.
+
+On one frozen source map,47 unittest checks plus the actual route snapshot check
+passed in9 sequential processes,295.126s wall. Main session/CSRF protection covers
+all26 improvement routes. The snapshot changes618→621 with exactly3 additions;
+all retained definitions and relative ordering remain exact. The actual lifetime
+test rejects a controlled mutation removing the new stop joins, then passes on
+unmodified code. Existing B/C owner/stop/lifetime workflows and actual v4 paired
+reservation remain green. Operator guide:
+`../../dev/agent-skill-m2d1-views.md`. Evidence
+`../evidence/2026-10-23-m2d1-task5-view-controls.json`, SHA256
+b3a617be7e9eda67398ff166b28ff7ff833908e2f779089bfa670f088b3305a9.
+The route snapshot was intentionally regenerated with the direct Python script;
+the wrapper does not forward its documented `--update` flag. No product failure
+was hidden by accepting an unrelated route change.
+
+Profile81/2221a8599529ac50cf3c9c98057cd003e9dfc45828ac808b5f11e802279511ba
+is unregistered; historical C qualification does not apply. No real model call,
+selected-final positive, business proof, deployment or activation occurred.
+Task3/4/5 and D2/E/F/M3–M8 stay OPEN. Earlier LinuxCI39970471529 succeeded on
+c5229ea3; ec6f1d6c CI39976688967 was still in progress at this checkpoint.
+PR803 remains draft; independent whole-D1 review and final-head CI are pending.
+
 ### D1 Task3 checkpoint, 23 October
 
 Task1/Task2/legacy-fixture Linux CI39944212136 succeeded on exact d81606b5.
