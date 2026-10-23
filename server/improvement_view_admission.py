@@ -26,6 +26,8 @@ class ViewExperimentAdmission:
         self.plans, self.views, self.schedule = plans, views, schedule
         self.host, self.assets, self.store = plans.host, plans.assets, plans.store
         self.trials = plans.admission.trials
+        from improvement_view_qualification import ViewQualification
+        self.qualification = ViewQualification(plans, views)
         self.host.bind_views(views)
         self.trials.bind_views(views)
 
@@ -56,10 +58,10 @@ class ViewExperimentAdmission:
             (payload['comparison_id'], brain, payload['experiment_id'])).fetchone()
         if comparison is None:
             raise PermissionError('experiment_comparison_unavailable')
-        if comparison['kind'] != 'tuning':
-            raise PermissionError('view_final_qualification_unavailable')
+        if comparison['kind'] == 'final':
+            self.qualification.preview(connection, principal, comparison['id'], expected_generation=payload['expected_generation'])
         row, prepared = self.plans._state(connection, principal, payload['experiment_id'], payload['expected_generation'],
-            unsealed=True, source_split='tuning')
+            unsealed=comparison['kind'] == 'tuning', source_split='tuning')
         value = definition(json.loads(row['definition_json']))
         arm = self.plans._frozen_arm(connection, principal, row, prepared, comparison['ordinal'])
         if comparison['definition_hash'] != row['definition_hash'] or comparison['arm_hash'] != arm['envelope_hash']:
@@ -69,8 +71,9 @@ class ViewExperimentAdmission:
         if cases is None:
             raise PermissionError('experiment_case_set_unavailable')
         manifest = json.loads(cases[0])
-        matrix = comparison_matrix(value, arm['envelope_hash'], comparison['ordinal'], 'tuning',
-            [case['id'] for case in manifest['cases'] if case['split'] == 'tuning'], manifest['seed'])
+        splits = ('tuning',) if comparison['kind'] == 'tuning' else ('qualification', 'regression')
+        matrix = comparison_matrix(value, arm['envelope_hash'], comparison['ordinal'], comparison['kind'],
+            [case['id'] for case in manifest['cases'] if case['split'] in splits], manifest['seed'])
         if comparison['matrix_hash'] != IM._hash(matrix) or comparison['cell_count'] != 2 * len(matrix['pairs']):
             raise IM.ConflictError('experiment_matrix_changed')
         cell = matrix_cell(matrix, position)
@@ -89,7 +92,8 @@ class ViewExperimentAdmission:
                 'arm_ordinal': arm['ordinal'], 'arm_hash': arm['envelope_hash'], 'candidate_id': arm['candidate_id'],
                 'pair_id': cell['pair_id'], 'cell_position': position},
             'view': {'view_id': descriptor['view_id'], 'view_hash': descriptor['manifest_hash'], 'binding_hash': metadata['binding_hash']}})
-        self.host._bound(connection, principal, request, allow_unlinked=True)
+        if comparison['kind'] == 'tuning':
+            self.host._bound(connection, principal, request, allow_unlinked=True)
         return request, prepared
 
     def admit_next(self, principal, experiment_id, comparison_id, *, expected_generation, event_key):
@@ -137,6 +141,15 @@ class ViewExperimentAdmission:
                     or self._prepare(connection, principal, payload, position) != prepared):
                 raise IM.ConflictError('view_admission_authority_changed')
             request = {**prepared[0], 'deadline_at': time.time() + prepared[1][0]['timeout_seconds']}
+            kind = connection.execute('SELECT kind FROM improvement_comparisons WHERE id=? AND brain_id=?',
+                (payload['comparison_id'], brain)).fetchone()[0]
+            if kind == 'final':
+                claim = self.qualification._reserve_in(connection, principal, payload['comparison_id'],
+                    expected_generation=payload['expected_generation'])
+                case = self.trials.cases._case(connection, brain, request['case_set_id'], request['case_id'])
+                if case['split'] == 'qualification':
+                    request = validate_request_v4(request | {'qualification_id': claim})
+                self.host._bound(connection, principal, request, allow_unlinked=True)
             trial = self.trials._reserve_in(connection, principal, request, event_key=reserve_key)
             self.host._bound(connection, principal, request)
             # Final real source/grant capture follows every slow linked blob read.

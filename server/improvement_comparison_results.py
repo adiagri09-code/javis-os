@@ -328,7 +328,12 @@ class ComparisonResults:
                 raise PermissionError('view_resolver_unavailable')
             # Validates both frozen manifests and current meaning/dependencies,
             # followed by real source capture after all slow lineage I/O.
-            views.load_current(principal, comparison['id'], 'baseline')
+            if comparison['kind'] == 'final':
+                from improvement_view_qualification import ViewQualification
+                ViewQualification(self.plans, views).preview(connection, principal, comparison['id'],
+                    expected_generation=expected_generation)
+            else:
+                views.load_current(principal, comparison['id'], 'baseline')
         current_fences(connection, principal.brain_id, metadata)
 
     def _snapshot(self, connection, brain, metadata):

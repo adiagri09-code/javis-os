@@ -577,6 +577,39 @@ is unregistered. No actual selected-final link is exercised or claimed. Final
 runtime remains explicitly closed pending actual owned reserve/consume; Task3
 is OPEN. Continue from this checkpoint, not by repeating these green scripts.
 
+Next owned-registry unit: implement a SQL/blob-only historical qualification
+reader and concrete same-plans/view qualifier. Current preview authenticates the
+real selected event, every declared tuning report's current full18 policy and
+evidence, current selected view/source/meaning, then claims the existing global
+qualification family in the owner's actual admission transaction. No unlinked
+legacy or consumed reservation is adopted. Final regression rejects qualification
+aliases but keeps normal exposure; only qualification cells carry/consume the
+shared claim. Integrate through ViewAdmission, current view/lineage and existing
+TrialStore materialization, retaining replay-before-I/O and atomic Call/link/event.
+Tests start with actual nonfinal/missing/foreign scope denials and constructor
+ownership; positive final integration is not fabricated and remains unverified
+until a genuinely eligible selected final exists. New native-reachable modules
+must join the exact footprint in the same source change. Keep full18/unknown.
+
+Owned registry code checkpoint:70 checks passed across8 sequential scripts in
+494.250s, on one frozen source map. New actual denials cover nonfinal/missing/
+foreign scope, missing/foreign transaction, and consumed qualification relabelled
+as regression. Existing genuine tuning owner schedule/Runner/results/cleanup,
+lineage/history, TrialStore, reports and worker regressions pass. Code now derives
+selected-report/publication proof, shares the existing CaseStore claim registry
+inside actual admission, consumes qualification only on materialization, and
+authenticates cold qualification history without host/store backedges. Current
+final report creation refreshes selected evidence; full18/unknown remains intact.
+This replaces temporary unconditional final-unavailable gates with conditional
+owned enforcement, not an exercised positive final path. No eligible/final row is
+fabricated. Evidence `../evidence/2026-10-23-m2d1-task3-owned-qualification.json`,
+SHA2565f54cee420f022709b4ea9278fcc5cda975f85c2b1faf55f9f9b9eea0283697a.
+Source81/759f44aba5b931e24b1cbb8a59ffe49528a26e07a6d0797afa4339ac1478958e
+is unregistered. Genuine positive final/native/public proof and Task3 remain OPEN.
+Static follow-up found legacy v2 tuning may lack the same family fence; reproduce
+that separately before claiming the alias audit complete. An ignored3-test draft
+is ready; do not change completed source maps or repeat the8 green scripts.
+
 **Files:** new `server/improvement_view_materialization.py`; extend actual
 TrialStore.materialize, sandbox/worker/TrialProfile, receipts/checks/results/
 views/products/comparison projection. Add all new native-path sources to the

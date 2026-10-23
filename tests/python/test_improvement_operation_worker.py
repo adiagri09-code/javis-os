@@ -252,7 +252,8 @@ class OperationWorkerTests(unittest.TestCase):
                     "improvement_view_trial_protocol.py", "improvement_view_protocol.py", "improvement_view_schema.py",
                     "improvement_store.py", "improvement_blobs.py", "improvement_cases.py", "improvement_case_schema.py",
                     "improvement_candidate_records.py", "improvement_candidate_schema.py", "improvement_skill_patch.py",
-                    "improvement_comparison_schedule.py", "improvement_view_admission.py", "improvement_view_materialization.py"}
+                    "improvement_comparison_schedule.py", "improvement_view_admission.py", "improvement_view_materialization.py",
+                    "improvement_view_qualification.py", "improvement_view_qualification_history.py"}
         self.assertEqual(set(IC.PROFILE_SOURCES), expected)
         self.assertEqual(len(IC.PROFILE_SOURCES), len(expected))
         import hashlib

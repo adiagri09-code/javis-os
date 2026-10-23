@@ -229,6 +229,20 @@ owned reserve/consume and final native/public controls remain open; runtime
 final requests are still explicitly denied. No final/eligible result is faked.
 Linux39965159570 SUCCESSc811b9d6; b3a3f0cb CI39966693829 was still in progress.
 
+Owned final code checkpoint:70 tests passed494.250s across8 sequential scripts
+on one source map. Conditional selected-report/current-view authorization now
+reserves/links the existing qualification registry in actual admission and
+consumes only before returning qualification input. Cold historical ownership
+has a separate SQL/blob reader. Actual tests deny nonfinal/foreign/missing scope,
+missing/foreign transaction and consumed qualification relabelled as regression;
+the real tuning pipeline with simulated engine still passes and stays non-pass.
+Evidence `../evidence/2026-10-23-m2d1-task3-owned-qualification.json`, SHA256
+5f54cee420f022709b4ea9278fcc5cda975f85c2b1faf55f9f9b9eea0283697a.
+Source81/759f44ab is UNREGISTERED. Genuine positive selected-final execution is
+unverified; no eligible selection/result was fabricated and full18/unknown was
+preserved. Legacy v2 tuning-family bypass is under separate audit. Task3, native
+qualification, public controls and whole-D1 integration remain OPEN.
+
 - Final affected regression21/21 GREEN,663.451s, qualified across two frozen
   segments: first15 passed scripts retain identical product/helper/test bytes;
   only the failed standalone task-drain test changed from a30ms scheduler sample

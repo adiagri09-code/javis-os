@@ -167,12 +167,17 @@ class EffectiveViews:
             (comparison_id, brain)).fetchone()
         if comparison is None or comparison['experiment_id'] != request['pins']['experiment_id']:
             raise PermissionError('comparison_view_request_unavailable')
-        # Final cells require ownership in the existing qualification registry.
-        # They remain closed until that explicit boundary is implemented.
-        if comparison['kind'] != 'tuning' or request.get('qualification_id'):
-            raise PermissionError('view_final_qualification_unavailable')
-        return self._load_current(principal, comparison_id, request['variant'], request=request,
+        if comparison['kind'] == 'tuning' and request.get('qualification_id'):
+            raise PermissionError('unexpected_qualification_claim')
+        if comparison['kind'] == 'final':
+            from improvement_view_qualification_history import qualification_metadata
+            qualification_metadata(connection, brain, request)
+        resolved, proof = self._load_current(principal, comparison_id, request['variant'], request=request,
             connection=connection, require_link=require_link, trial_id=trial_id)
+        if comparison['kind'] == 'final':
+            from improvement_view_qualification import ViewQualification
+            ViewQualification(self.plans, self).validate_current(connection, principal, request, proof)
+        return resolved, proof
 
     def _load_current(self, principal, comparison_id, variant, *, request=None, connection=None, require_link=False, trial_id=None):
         brain = _brain(principal)

@@ -379,14 +379,16 @@ class TrialStore:
             self._leased(connection, principal, identifier, expected_generation, lease_token, now)
             request = json.loads(row["request_json"])
             if request.get("qualification_id"):
-                # Historical trials stay readable, but a new materialization
-                # cannot consume a holdout later frozen by a B experiment.
-                # V2 final cells are already denied by _current above.
-                from improvement_experiment_qualification import require_legacy_qualification
-                require_legacy_qualification(connection, row["brain_id"], request["case_set_id"], request["pins"])
-                connection.execute("UPDATE improvement_qualification SET status='consumed',consumed_at=? "
-                                   "WHERE id=? AND brain_id=? AND status='reserved'",
-                                   (now, request["qualification_id"], row["brain_id"]))
+                if request.get('version') == 4:
+                    from improvement_view_qualification import ViewQualification
+                    ViewQualification(self._views.plans, self._views).consume_in(connection, principal, request)
+                else:
+                    # A bare legacy pin cannot consume a later B-owned holdout.
+                    from improvement_experiment_qualification import require_legacy_qualification
+                    require_legacy_qualification(connection, row["brain_id"], request["case_set_id"], request["pins"])
+                    connection.execute("UPDATE improvement_qualification SET status='consumed',consumed_at=? "
+                                       "WHERE id=? AND brain_id=? AND status='reserved'",
+                                       (now, request["qualification_id"], row["brain_id"]))
             else:
                 case = self.cases._case(connection, row["brain_id"], request["case_set_id"], request["case_id"])
                 for fingerprint in case["fingerprints"]:

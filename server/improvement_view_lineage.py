@@ -27,9 +27,15 @@ def load_view_lineage(connection, brain, value, *, blobs, current, require_link,
             if (trial['request_hash'] != link['request_hash'] or trial['request_json'] != IM._json(request)
                     or trial_id is not None and trial['id'] != trial_id):
                 raise IM.ConflictError('view_trial_link_changed')
+        qualification = None
+        if proof['comparison']['kind'] == 'final':
+            from improvement_view_qualification_history import load_qualification
+            qualification = load_qualification(connection, brain, request, proof, blobs=blobs)
+        elif request.get('qualification_id'):
+            raise PermissionError('unexpected_qualification_claim')
         if current:
             current_fences(connection, brain, proof)
-        return {**proof, 'view': view}
+        return {**proof, 'view': view, **({'qualification': qualification} if qualification is not None else {})}
     except (IM.ConflictError, PermissionError):
         raise
     except (TypeError, ValueError, KeyError, UnicodeError, RecursionError) as error:
