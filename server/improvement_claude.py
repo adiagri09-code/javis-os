@@ -313,6 +313,11 @@ class TrialProfile:
         self._asset_broker = None
         self._pending_asset_events = []
         self._asset_events = []
+        self._read_outcome_broker = None
+        self._pending_read_observations = []
+        self._read_events = []
+        self._native_binding = None
+        self._native_environment = None
 
     def bind_installation(self, manifest, workspace, capability_hash):
         from improvement_sandbox import TrialWorkspace, _manifest, trial_system_prompt
@@ -330,15 +335,68 @@ class TrialProfile:
         prompt_hash = hashlib.sha256(trial_system_prompt(manifest).encode("utf-8")).hexdigest()
         if hashlib.sha256(self.system_prompt.encode("utf-8")).hexdigest() != prompt_hash:
             raise ValueError("trial_prompt_installation_mismatch")
+        read_broker = None
+        if manifest['version'] == 4:
+            from improvement_read_outcome_broker import PinnedReadOutcomeBroker
+            read_broker = PinnedReadOutcomeBroker(manifest, fixture_broker=self.broker, **{
+                key: workspace[key] for key in ('trial_id', 'attempt', 'input_hash')})
         self._installation = {"manifest": manifest, "workspace": workspace,
                               "capability_hash": capability_hash, "prompt_hash": prompt_hash}
+        self._read_outcome_broker = read_broker
         if manifest['version'] == 3:
             from improvement_skill_asset_broker import SkillAssetBroker
             self._asset_broker = SkillAssetBroker(manifest, **{
                 key: workspace[key] for key in ('trial_id', 'attempt', 'input_hash')})
 
     def _tools(self):
-        return ['mcp__fixture__fixture_read'] + (['mcp__skill__skill_asset_read'] if self._asset_broker is not None else [])
+        return ['mcp__fixture__fixture_read'] + (['mcp__skill__skill_asset_read']
+            if self._asset_broker is not None or self._read_outcome_broker is not None else [])
+
+    def bind_native_runtime(self, runtime, *, environment, user_prompt):
+        """Install the root-owned native factory only for a fresh installed4.
+
+        The concrete binding validates the runtime's full configuration, exact
+        environment/policy and completed original-stream delivery. This profile
+        neither opens a transport nor infers provider acceptance from that proof.
+        """
+        if (self._installation is None or self._installation['manifest']['version'] != 4
+                or self._native_binding is not None or self._selection is not None or self._started):
+            raise ValueError('trial_native_binding_unavailable')
+        from improvement_native_profile import NativeProfileBinding
+        workspace = self._installation['workspace']
+        policy = {'version': 2, 'cli_path': self.pin['cli_path'], 'model': self.pin['model'],
+            'reasoning': self.pin['reasoning'], 'prompt_hash': self._installation['prompt_hash'],
+            'cwd': workspace['path'], 'tools': self._tools(), 'tool_policy': 'pinned_skill'}
+        binding = NativeProfileBinding(runtime, kind='trial', identity={key: workspace[key] for key in
+            ('trial_id', 'attempt', 'input_hash')}, data_hash=workspace['input_hash'], user_prompt=user_prompt,
+            environment=environment, query_policy=policy)
+        self._native_environment = _frozen(environment)
+        self._native_binding = binding
+        # An INSTANCE hook, absent from every legacy/unbound profile. Failure
+        # above cannot leave an ambient-client fallback factory installed.
+        self.create_client = binding.create_client
+
+    def _native_required(self):
+        if (self._installation is not None and self._installation['manifest']['version'] == 4
+                and self._native_binding is None):
+            raise ValueError('trial_native_runtime_unbound')
+
+    def _read_outcome(self, tool_name, args):
+        response = self._read_outcome_broker.read(tool_name, args)
+        observation = next(item for item in reversed(self._read_outcome_broker.observations)
+                           if item['observation_id'] == response['observation_id'])
+        # Keep only immutable host evidence before init; no None or fabricated
+        # session field is attached. Association waits for the actual init UUID.
+        self._pending_read_observations.append(_json(observation))
+        return response
+
+    def _flush_read_observations(self):
+        if type(self._native_session_id) is not str or not self._native_session_id:
+            return []
+        events = [{'type': 'trial_read_broker_observation', 'observation': json.loads(item),
+                   'session_id': self._native_session_id} for item in self._pending_read_observations]
+        self._pending_read_observations.clear()
+        return events
 
     def installation_receipt(self, session_id, *, pending_events=()):
         if self._installation is None:
@@ -370,7 +428,7 @@ class TrialProfile:
                              "prompt": "host_attested" if self._selection is not None else "unknown",
                              "tool_inventory": "observed" if self._native_tools == tools else "unknown",
                              "model": model_coverage, "reasoning": "unknown"}}
-        if manifest['version'] in (2, 3):
+        if manifest['version'] in (2, 3, 4):
             receipt.update(version=2, effective_view=_frozen(manifest['effective_view']))
         if manifest['version'] == 3:
             from improvement_skill_asset_proof import correlate_asset_reads
@@ -379,9 +437,21 @@ class TrialProfile:
             if proof['verdict'] == 'pass':
                 for asset in receipt['asset_revisions']:
                     asset['observed_use'] = 'observed'
+        if manifest['version'] == 4:
+            from improvement_read_outcome_proof import correlate_read_outcomes, SKILL_TOOL
+            proof = correlate_read_outcomes(manifest, workspace,
+                [json.loads(event) for event in self._read_events] + list(pending_events))
+            delivery = None if self._native_binding is None else self._native_binding.completed_delivery
+            receipt.update(version=4, read_outcome_proofs=proof['proofs'], native_input_delivery=_frozen(delivery))
+            if proof['verdict'] == 'pass':
+                for asset in receipt['asset_revisions']:
+                    if any(item['tool_name'] == SKILL_TOOL and item['outcome'] == 'hit'
+                           and item['resource_id'] == asset['id'] for item in proof['proofs']):
+                        asset['observed_use'] = 'observed'
         return receipt
 
     async def before_query(self):
+        self._native_required()
         if self._started:
             raise ValueError("trial_profile_already_used")
         self._started = True
@@ -390,6 +460,7 @@ class TrialProfile:
         await self._before_query()
 
     def options(self, engine):
+        self._native_required()
         from claude_agent_sdk import ClaudeAgentOptions, PermissionResultDeny, create_sdk_mcp_server, tool
         if engine.session_id:
             raise ValueError("trial_resume_forbidden")
@@ -402,6 +473,9 @@ class TrialProfile:
         @tool("fixture_read", "Read a pinned authorized fixture by snapshot identity and source version",
               {"snapshot_id": str, "source_version": str})
         async def fixture_read(args):
+            if self._read_outcome_broker is not None:
+                result = self._read_outcome('mcp__fixture__fixture_read', args)
+                return {'content': [{'type': 'text', 'text': _json(result)}], 'is_error': result['outcome'] != 'hit'}
             if isinstance(args, dict) and set(args) == {"snapshot_id", "source_version"}:
                 result = self.broker.read("fixture.read", {"snapshot_id": args["snapshot_id"]},
                                           args["source_version"], self.broker.grant_hash)
@@ -411,10 +485,13 @@ class TrialProfile:
                     "is_error": result["status"] != "fixture_hit"}
 
         servers = {"fixture": create_sdk_mcp_server("fixture", tools=[fixture_read])}
-        if self._asset_broker is not None:
+        if self._asset_broker is not None or self._read_outcome_broker is not None:
             @tool('skill_asset_read', 'Read the selected immutable trial skill by exact view, asset and content identity',
                   {'view_id': str, 'view_hash': str, 'asset_id': str, 'content_hash': str})
             async def skill_asset_read(args):
+                if self._read_outcome_broker is not None:
+                    result = self._read_outcome('mcp__skill__skill_asset_read', args)
+                    return {'content': [{'type': 'text', 'text': _json(result)}], 'is_error': result['outcome'] != 'hit'}
                 result = self._asset_broker.read(args)
                 if result['status'] == 'skill_asset_hit':
                     observation = self._asset_broker.observations[-1]
@@ -437,6 +514,8 @@ class TrialProfile:
             extra_args={"no-session-persistence": None, "disable-slash-commands": None, "no-chrome": None,
                         "restricted": None, "safe-mode": None},
             max_buffer_size=8 * 1024 * 1024, stderr=engine._on_stderr)
+        if self._read_outcome_broker is not None:
+            options.env = _frozen(self._native_environment)
         self._selection = {"system_prompt_hash": hashlib.sha256(options.system_prompt.encode("utf-8")).hexdigest()}
         return options
 
@@ -445,6 +524,8 @@ class TrialProfile:
         from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, ToolUseBlock, UserMessage, ToolResultBlock
         events = [json.loads(event) for event in self._pending_asset_events]
         self._pending_asset_events.clear()
+        if self._read_outcome_broker is not None and not (isinstance(message, SystemMessage) and message.subtype == 'init'):
+            events.extend(self._flush_read_observations())
         if isinstance(message, SystemMessage):
             if message.subtype == "init":
                 tools = message.data.get("tools")
@@ -454,6 +535,10 @@ class TrialProfile:
                     self._native_tools = list(tools)
                 self._native_session_id = message.data.get("session_id")
             events.append({"type": "native_system", "subtype": message.subtype, "data": _frozen(message.data)})
+            if self._read_outcome_broker is not None and message.subtype == 'init':
+                # Host association uses this actual exclusive stream init; emit
+                # it first so early SDK handler execution cannot precede init.
+                events.extend(self._flush_read_observations())
         elif isinstance(message, AssistantMessage):
             if message.model:
                 self.observed_models.add(message.model)
@@ -463,7 +548,7 @@ class TrialProfile:
                 if isinstance(block, ToolUseBlock):
                     self._tool_names[block.id] = block.name
                     event = {"type": "tool_call", "name": block.name, "id": block.id}
-                    if self._asset_broker is not None:
+                    if self._asset_broker is not None or self._read_outcome_broker is not None:
                         event.update(input=_frozen(block.input), session_id=message.session_id or self._native_session_id)
                     events.append(event)
         elif isinstance(message, UserMessage) and isinstance(message.content, list):
@@ -480,7 +565,7 @@ class TrialProfile:
                             self.denials.append(denial)
                             events.append(denial)
                     event = {"type": "tool_result", "id": block.tool_use_id, "is_error": block.is_error}
-                    if self._asset_broker is not None:
+                    if self._asset_broker is not None or self._read_outcome_broker is not None:
                         # UserMessage has no session field in the pinned SDK. This
                         # is the initialized client stream, not an invented wire field.
                         event.update(content=_frozen(block.content), native_is_error=block.is_error,
@@ -507,4 +592,7 @@ class TrialProfile:
         if self._asset_broker is not None:
             self._asset_events.extend(_frozen([event for event in events if event['type'] in
                 ('native_system', 'tool_call', 'tool_result', 'skill_asset_broker_observation')]))
+        if self._read_outcome_broker is not None:
+            self._read_events.extend(_json(event) for event in events if event['type'] in
+                ('native_system', 'tool_call', 'tool_result', 'trial_read_broker_observation'))
         return events
