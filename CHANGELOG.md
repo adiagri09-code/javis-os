@@ -6,6 +6,10 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.299.0] - 2026-10-23
+### Cải thiện
+- **Chuẩn bị bản thử skill theo phiên bản cố định.** Đặt chỗ cho resolver bản gốc/candidate và đường probe cách ly; phạm vi cuối sẽ được ghi sau kiểm chứng. Chưa mở áp dụng trên brain thật.
+
 ## [0.298.0] - 2026-10-23
 ### Sửa lỗi
 - **Giọng chọn trên máy này dùng được cả trên máy khác.** Trước đây giọng đọc chỉ lưu trong trình duyệt đang mở, nên chọn giọng nữ trên máy tính thì điện thoại vẫn giữ giọng cũ, lưu bao nhiêu lần cũng vậy. Giờ giọng lưu trên Javis, mọi máy và ghi chú giọng nói gửi qua Telegram, Zalo đều dùng đúng giọng đó.
