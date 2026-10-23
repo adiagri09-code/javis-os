@@ -38,6 +38,40 @@
 
 ## M2C engineering continuation
 
+- Task9 native checkpoint: current profile aa51b4b9 (34 sources), exact
+  CLI2.1.308/c9796ba2 and SDK0.2.116 passed both complete native suites:
+  solver5/5 in10.588s and roles5/5 in45.642s, including real host/supervisor
+  death, all three typed role renderers, ambient canaries and pending native
+  cancellation. Published sanitized qualification evidence is bound by
+  SHA310e6df5; the exact registry entry does not attest auth or business effects.
+  Six sequential affected regressions passed34.672s with40 unchanged source/test
+  hashes. Separate safe re-pin/native auth projection verifies the persisted
+  opus5-5/medium/subscription selection and actual current runtime, zero model
+  calls. Genuine role/CallLedger feasibility, whole-C review, final broader
+  affected regression and exact-final Linux CI remain open. Earlier empty-registry
+  and failing qualification checkpoints below remain historical.
+- Task9 in progress from9d892ea9. Actual CLI dummy-auth/local-provider qualification
+  exposed native lifetime gaps: job/accounting disappearance preceded process
+  exit; actual host death released the byte lock while four native handles were
+  unsignaled. The first named-job alternative also failed and was discarded.
+  Normal/cancellation cleanup now retains handles and waits; a separate cleanup
+  supervisor retains durable fences on the SAME brain and actual attempt locks
+  across host death. A suspended Windows launcher is assigned before resume,
+  preventing pre-existing Python launcher descendants from escaping the job.
+  Birth notifications are checked against cumulative kernel TotalProcesses;
+  dropped/unreadable inventory cannot issue a cleanup proof. Supervisor death
+  leaves both fences in place and cannot grant automatic recovery.
+  The supervised native four-method suite passed37.082s before the final ready
+  protocol change; the actual final-protocol supervisor-death case passed4.494s
+  and nine cleanup/cancellation fault tests passed1.346s. Final current-source
+  qualification, affected regressions, independent review and final CI remain
+  pending. Source footprint is now34; qualification registry remains EMPTY.
+  No actual-account inference/auth or business acceptance has occurred.
+- Task8 exact LinuxCI39913163250 completed FAILURE on9d892ea9, solely
+  test_route_table.py: the eleven intentional new C owner/history routes were
+  absent from its committed snapshot. The snapshot was regenerated to618 routes;
+  only those additions and consequent existing route order shifts changed.
+  This failure is retained; it cannot satisfy final integration.
 - Owner delegated pilot choice in the pending M2–M3 question: prioritize data
   reconciliation as the business pilot, document processing second; Python
   bug-fix/test remains the additional technical pilot. This selects the work

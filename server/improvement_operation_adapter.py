@@ -48,6 +48,6 @@ class ClaudeOperationAdapter:
         from improvement_native_transport import execute_worker
         from contextlib import aclosing
         async with aclosing(execute_worker("operation", request, receipt, config_pin=self.pin,
-                workspace_root=self.workspace.root, before_engine_start=self.before_engine_start)) as packets:
+                workspace_root=self.workspace.root, brain_id=manifest['brain_id'], before_engine_start=self.before_engine_start)) as packets:
             async for packet in packets:
                 yield packet

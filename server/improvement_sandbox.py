@@ -197,6 +197,10 @@ def _try_workspace_lifetime_lock(root, namespace, key):
         else:
             import fcntl
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        from improvement_native_lifetime import fence_busy
+        if fence_busy(path):
+            handle.close()
+            return None
     except OSError as error:
         handle.close()
         if error.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):

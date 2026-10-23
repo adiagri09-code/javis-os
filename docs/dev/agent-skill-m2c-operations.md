@@ -39,8 +39,12 @@ An executable dependency remains unsupported until its actual later isolation
 and runtime qualification exist. Declared-reference coverage is not a proof of
 all executable imports or dynamic dependencies.
 
-The current source footprint has 33 files and no qualified runtime registration.
-Default native execution therefore refuses before version/auth/model probes.
+The current34-source profile aa51b4b9 is registered only for Windows CLI2.1.308
+with binary SHA c9796ba2 and SDK0.2.116, bound to the complete hashes in the
+[native evidence](../superpowers/evidence/2026-10-23-m2c-native-qualification.json).
+Other source/runtime combinations refuse before version/auth/model probes.
+Qualification uses dummy authentication and local inference; actual selected
+account readiness is checked separately before execution.
 Qualification of the final stable profile and selected runtime belongs to Task9.
 Injected test engines and the installed SDK DTO library are not that evidence.
 
@@ -86,6 +90,16 @@ Structural SQL fixtures are not evidence of model execution.
 Application shutdown closes the concrete role supervisors/workflows and owned
 controller operations before the shared Trial service and underlying sources.
 A cleanup failure is not a successful shutdown/readiness proof.
+
+On Windows, native cleanup has a separate supervisor. A worker starts suspended,
+enters its job, and resumes only after durable fences protect the actual shared
+brain and attempt locks. Host death closes the control pipe; the supervisor
+terminates and waits for native process generations before removing fences.
+Empty job accounting alone does not prove process exit. Missing birth inventory
+or supervisor death leaves recovery blocked; never delete a `.lock.native`
+fence merely because its database row or host PID is terminal. Such a fence is
+an unresolved cleanup condition, requiring actual process-lifetime evidence.
+These lifetime proofs do not grant account readiness or business acceptance.
 
 ## Errors, evidence and pilots
 

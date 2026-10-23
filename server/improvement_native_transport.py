@@ -11,12 +11,12 @@ from pathlib import Path
 import winproc
 from improvement_cases import _fields
 from improvement_claude import _settled_owned
-from improvement_sandbox import _private_directory, worker_environment
+from improvement_sandbox import _private_directory, worker_environment, _bytes_hash
 from improvement_store import _json
 
 
-async def execute_worker(kind_namespace, request, receipt, *, config_pin, workspace_root, before_engine_start):
-    from improvement_worker import WorkerGroup, process_flags
+async def execute_worker(kind_namespace, request, receipt, *, config_pin, workspace_root, brain_id, before_engine_start):
+    from improvement_worker import WorkerGroup, WorkerGroupCleanupError, process_flags
     if kind_namespace == "trial":
         worker_file, identity_keys = "improvement_worker.py", ("trial_id", "attempt", "input_hash")
     elif kind_namespace == "operation":
@@ -50,7 +50,16 @@ async def execute_worker(kind_namespace, request, receipt, *, config_pin, worksp
 
     async def close_worker():
         if guard is not None:
-            await asyncio.to_thread(guard.close)
+            # A failed drain observation retains the actual job handle. Keep
+            # this owned finally task alive: letting the error escape would let
+            # a Runner clean plaintext/release its brain lock while children may
+            # still use those bytes. This retries cleanup only, never inference.
+            while True:
+                try:
+                    await asyncio.to_thread(guard.close)
+                    break
+                except WorkerGroupCleanupError:
+                    await asyncio.sleep(.05)
         elif process is not None and process.poll() is None:
             await asyncio.to_thread(winproc.kill_tree, process.pid)
         if process is not None:
@@ -69,13 +78,26 @@ async def execute_worker(kind_namespace, request, receipt, *, config_pin, worksp
             spawn = asyncio.create_task(asyncio.to_thread(subprocess.Popen,
                 [sys.executable, "-I", "-X", "utf8", str(Path(__file__).with_name(worker_file))],
                 cwd=receipt["path"], env=environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, start_new_session=sys.platform != "win32", creationflags=process_flags()))
+                stderr=subprocess.PIPE, start_new_session=sys.platform != "win32",
+                creationflags=process_flags() | (4 if sys.platform == 'win32' else 0)))
             spawned, cancelled = await _settled_owned(asyncio.gather(spawn, return_exceptions=True))
             if isinstance(spawned[0], BaseException):
                 raise spawned[0]
             process = spawned[0]
             # The child blocks on its first input until its whole lifetime is owned.
-            guard = WorkerGroup(process.pid)
+            root = Path(workspace_root)
+            barrier = root if kind_namespace == 'trial' else root.parent / 'trials'
+            identifier = receipt['trial_id' if kind_namespace == 'trial' else 'operation_id']
+            fences = (barrier / '.executions' / (_bytes_hash(brain_id.encode()) + '.lock'),
+                root / '.lifetimes' / (_bytes_hash(f'{identifier}:{receipt["attempt"]}'.encode()) + '.lock'))
+            ownership, interrupted = await _settled_owned(asyncio.gather(
+                asyncio.create_task(asyncio.to_thread(WorkerGroup, process.pid, recovery_fences=fences,
+                    suspended=sys.platform == 'win32')), return_exceptions=True))
+            if isinstance(ownership[0], BaseException):
+                raise ownership[0]
+            guard = ownership[0]
+            if interrupted is not None:
+                raise interrupted
             if cancelled is not None:
                 raise cancelled
             stderr_task = asyncio.create_task(drain_stderr())

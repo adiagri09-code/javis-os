@@ -117,6 +117,8 @@ def qualification_worker(root):
 
 
 def _job_pids(group):
+    if getattr(group, '_guardian', None) is not None:
+        return group.inventory()
     import ctypes
     from ctypes import wintypes
 
@@ -156,13 +158,22 @@ def _spawn(command, **kwargs):
         raise AssertionError("Qualification may spawn only its explicitly gated worker")
     root = Path(command[-1])
     command = [sys.executable, "-I", "-X", "utf8", str(Path(__file__).resolve()), "--qualification-worker", str(root)]
-    kwargs.update(stdin=subprocess.PIPE, creationflags=worker.process_flags())
+    from improvement_sandbox import TrialWorkspace
+    workspace = TrialWorkspace(root / 'trial-workspaces')
+    # These are the actual synthetic solver identities used by the blackbox.
+    with patch.object(subprocess, 'Popen', original):
+        lifetime = workspace.acquire_execution('synthetic-brain', 'synthetic-native', 1)
+    if lifetime is None:
+        raise RuntimeError('qualification_solver_lifetime_unavailable')
+    kwargs.update(stdin=subprocess.PIPE, creationflags=worker.process_flags() | (4 if os.name == 'nt' else 0))
     process = original(command, **kwargs)
     try:
-        group = worker.WorkerGroup(process.pid)
+        with patch.object(subprocess, 'Popen', original):
+            group = worker.WorkerGroup(process.pid, recovery_fences=tuple(handle.name for handle in lifetime), suspended=os.name == 'nt')
     except BaseException:
         process.kill()
         process.communicate(timeout=5)
+        workspace.release_execution(lifetime)
         raise
     _spawn.roots.append(root)
     process.stdin.write("qualification_start\n")
@@ -177,6 +188,13 @@ def _spawn(command, **kwargs):
             return stdout, stderr
         finally:
             group.close()
+            with patch.object(subprocess, 'Popen', original):
+                try:
+                    workspace.cleanup('synthetic-native', 1)
+                finally:
+                    workspace.release_execution(lifetime)
+            if (root / 'trial-workspaces' / 'synthetic-native' / 'attempt-1').exists():
+                raise AssertionError('Solver plaintext workspace survived native drain')
 
     process.communicate = owned_communicate
     process.qualification_group = group

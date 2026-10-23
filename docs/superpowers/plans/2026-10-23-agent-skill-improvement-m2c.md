@@ -463,6 +463,21 @@ all later native/effective-view/business/live gates remain open.
 
 ## Task 9 — current-profile qualification, whole review and publication
 
+Task9 native correction (actual failing blackbox evidence, not a scope change):
+Windows kill-on-close, empty accounting and even disappearance of a named job
+preceded native process-handle exit. Host death therefore needs a separate
+cleanup supervisor, not a delay or a PID-list-only proof. Before any input gate
+opens, it owns a suspended launcher job and durable fences at the actual shared
+brain lock AND attempt lifetime lock. It drains on host-pipe EOF and removes
+fences only after complete process-generation inventory and exit waits. Kernel
+cumulative TotalProcesses must match birth notifications; a dropped notification
+remains fail-closed. Supervisor death retains fences; no automatic deletion or
+claim of crash cleanup follows merely from a terminal SQL state. New source is
+included in the native profile hash (34 files); the registry stays empty until
+the final complete current-source native qualification passes. Focused regression
+adds actual host/supervisor death, suspended-launcher ownership, lost-inventory
+faults and both recovery namespaces, then existing worker/lifetime consumers.
+
 - [ ] Run exact selected CLI/SDK dummy-HOME/config/auth + localhost fake-provider
   blackbox qualification for actual solver/proposer/reviewer profiles, including
   ambient source/plugin/hook/tool canaries, request identity and cancellation tree.

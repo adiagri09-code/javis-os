@@ -5962,6 +5962,46 @@
  {
   "order": 598,
   "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/preparation",
+  "name": "preparation_history",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 599,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/operations",
+  "name": "operation_history",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 600,
+  "type": "APIRoute",
+  "path": "/improvement-operations/{operation_id}",
+  "name": "operation_metadata",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 601,
+  "type": "APIRoute",
+  "path": "/improvement-candidates/{candidate_id}/semantic-history",
+  "name": "semantic_history",
+  "methods": [
+   "GET"
+  ],
+  "trong": null
+ },
+ {
+  "order": 602,
+  "type": "APIRoute",
   "path": "/improvement-experiments",
   "name": "experiment_create",
   "methods": [
@@ -5970,7 +6010,7 @@
   "trong": null
  },
  {
-  "order": 599,
+  "order": 603,
   "type": "APIRoute",
   "path": "/improvement-experiments/{experiment_id}/bind",
   "name": "experiment_bind",
@@ -5980,7 +6020,7 @@
   "trong": null
  },
  {
-  "order": 600,
+  "order": 604,
   "type": "APIRoute",
   "path": "/improvement-experiments/{experiment_id}/freeze",
   "name": "experiment_freeze",
@@ -5990,7 +6030,7 @@
   "trong": null
  },
  {
-  "order": 601,
+  "order": 605,
   "type": "APIRoute",
   "path": "/improvement-experiments/{experiment_id}/next",
   "name": "experiment_next",
@@ -6000,7 +6040,7 @@
   "trong": null
  },
  {
-  "order": 602,
+  "order": 606,
   "type": "APIRoute",
   "path": "/improvement-experiments/{experiment_id}/report",
   "name": "experiment_report",
@@ -6010,7 +6050,7 @@
   "trong": null
  },
  {
-  "order": 603,
+  "order": 607,
   "type": "APIRoute",
   "path": "/improvement-experiments/{experiment_id}/select",
   "name": "experiment_select",
@@ -6020,7 +6060,7 @@
   "trong": null
  },
  {
-  "order": 604,
+  "order": 608,
   "type": "APIRoute",
   "path": "/improvement-experiments/{experiment_id}/cancel",
   "name": "experiment_cancel",
@@ -6030,7 +6070,7 @@
   "trong": null
  },
  {
-  "order": 605,
+  "order": 609,
   "type": "APIRoute",
   "path": "/improvement-experiments/{experiment_id}/resume",
   "name": "experiment_resume",
@@ -6040,10 +6080,80 @@
   "trong": null
  },
  {
-  "order": 606,
+  "order": 610,
   "type": "APIRoute",
   "path": "/improvement-experiments/{experiment_id}/recover",
   "name": "experiment_recover",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 611,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/preparation-complete",
+  "name": "experiment_preparation-complete",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 612,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/preparation-freeze",
+  "name": "experiment_preparation-freeze",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 613,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/preparation-next",
+  "name": "experiment_preparation-next",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 614,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/propose",
+  "name": "experiment_propose",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 615,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/semantic-arbitrate",
+  "name": "experiment_semantic-arbitrate",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 616,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/semantic-evidence",
+  "name": "experiment_semantic-evidence",
+  "methods": [
+   "POST"
+  ],
+  "trong": null
+ },
+ {
+  "order": 617,
+  "type": "APIRoute",
+  "path": "/improvement-experiments/{experiment_id}/semantic-review",
+  "name": "experiment_semantic-review",
   "methods": [
    "POST"
   ],
