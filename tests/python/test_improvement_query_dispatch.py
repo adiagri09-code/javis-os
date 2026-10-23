@@ -71,6 +71,25 @@ class QueryDispatchTests(unittest.TestCase):
         return validate_query_dispatch(argv, **{"command_line": subprocess.list2cmdline(argv), "executable": None,
                                                 "cwd": CWD, "creationflags": FLAGS, "expected": expected(), **boundary})
 
+    def test_actual_fixture_only_shared_operation_options_match_version_two_policy(self):
+        # OperationProfile delegates to this unbound TrialProfile with an empty
+        # FixtureBroker. Test actual shared options/SDK serialization, without
+        # claiming an operation workspace, native dispatch or role authorization.
+        for effort in ('medium', 'high'):
+            profile = TrialProfile({'provider': 'anthropic-cli', 'model': 'claude-opus-5-5',
+                'reasoning': effort, 'cli_path': CLI, 'sdk_version': '0.2.116'},
+                FixtureBroker([], 'a' * 64), PROMPT)
+            options = profile.options(SimpleNamespace(session_id=None, cwd=CWD, _on_stderr=lambda _: None))
+            options = replace(options, permission_prompt_tool_name='stdio')
+            transport = SubprocessCLITransport(prompt='', options=options)
+            args = transport._build_command()
+            pin = expected(effort=effort) | {'version': 2, 'tool_policy': 'fixture_only', 'tools': TOOLS[:1]}
+            with self.subTest(effort=effort):
+                result = self.validate(args, expected=pin)
+                self.assertEqual(result['tools'], TOOLS[:1])
+                self.assertEqual(result['tool_policy'], 'fixture_only')
+                self.assertEqual(result['reasoning'], effort)
+
     def test_exact_closed_command_returns_only_sanitized_consistency_evidence(self):
         argv = command()
         result = self.validate(argv)

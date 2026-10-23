@@ -302,6 +302,43 @@ or independently qualify a dedicated creator/pump thread; never globally patch
 the shared server or stop pumping before the owned native process is terminal.
 This choice and its cancellation/drain evidence precede production integration.
 
+Concrete consumer choice: keep synchronous admission/services compatible through
+a blocking facade over a purpose-specific isolated async preflight helper. Existing
+worker run_request already has an event loop and outer job; it must await the async
+core instead of spawning another helper or calling asyncio.run. The closed purposes
+are adapter_version, auth_status, sdk_version and query; the preflight facade cannot
+request query or accept arbitrary argv. Host admission has no attempt workspace,
+so its helper needs explicit scratch/lifetime/fence ownership rather than borrowed
+attempt fences or putting the shared server in a disposable job.
+
+Per-invocation evidence must remain separate from the stable capability runtime:
+verify hashes the whole observed runtime, and repeated host/worker verification
+requires equality. Bind a stable versioned policy/runtime-source fingerprint there;
+never add unique launch nonce, PID, birth or receipt bytes to capability_hash input.
+Plain await to_thread(adapter.verify) can abandon its preflight thread on caller
+cancellation. Reuse existing settled-call ownership or an owned async verification
+path, and finish helper/native drain before returning cancellation to its caller.
+
+Next canonical code extracts NativeDebugInvocation from the V6 lifecycle. It owns
+one actual saved SDK-anyio open_process call, a pre-create purpose-specific argument
+validator and a cooperative async closed image-ACK callback. It returns the original
+anyio Process only after the held CREATE allow/final resume; a persistent pump stays
+on the creating event-loop OS thread through EXIT while SDK wait/aclose can run.
+Actual CreateProcess instrumentation is isolated-worker-only. On cancellation or
+failure retain spawn/raw handles/events/pump/ACK/process/streams until cleanup is
+proven; an uncooperative ACK cannot be reported quiescent. The blocking stdin readline
+used in probes is not yet a cancellable production ACK channel and is not promoted
+by this component. No runtime caller or qualification entry is added before the
+guardian/bootstrap/control integration and its frozen proof are complete.
+
+SDK116 already accepts a custom transport. A new-version profile can construct a
+SubprocessCLITransport subclass with explicitly replaced stdio permission-prompt
+options (SDKClient's replacement is otherwise unused by a preconstructed transport).
+Original options still drive SDK Query callbacks. This gives a concrete integration
+consumer for the launch owner and exact user-frame write observation while retaining
+the original transport write lock/readiness/exit checks. Legacy engines/profiles
+keep their existing path; no shared-server global process monkeypatch is permitted.
+
 ## Operation input delivery and version boundaries
 
 The operation consumer has an additional real blocker: execution_checks always
@@ -345,3 +382,15 @@ verdicts remain unchanged; never recompute historical reports upward. All three
 operation roles retain their fixture-only tool inventory. The standalone Trial
 query parser's exact two-tool grammar is not the operation grammar. Keep combined
 verdict, owner/source/grant/usage and all eligibility checks unchanged.
+
+The pure parser now has an explicit expected pin2 tool_policy. fixture_only checks
+exactly the existing single fixture SDK tool/server; pinned_skill checks exactly
+fixture plus skill. No arbitrary inventory or role/purpose field is accepted. Pin1
+and its full result bytes retain their two-tool behavior. This is grammar choice
+only, not authorization. Actual shared unbound operation options/SDK116 command
+construction pass at two efforts, without connecting or constructing an operation.
+Pure8 RED/GREEN and affected17 regression pass; independent sequential17+8 approve
+unchanged source/test hashes. A first overly deep invocation temp failed two old
+fixture subcases at a269-character Windows lock path; the preserved failure and
+short-private-temp passing rerun are recorded separately. No assertions/product
+authority were changed. This component remains unreachable/outside PROFILE_SOURCES.

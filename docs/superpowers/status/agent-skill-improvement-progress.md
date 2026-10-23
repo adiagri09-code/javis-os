@@ -1,6 +1,34 @@
 # Agent and skill improvement Goal progress
 
-## Current continuation — query validator committed; startup import measured
+## Current continuation — borrowed-file API committed; canonical capture started
+
+Commit326c9d9ea0b49f4a7c1cfb1dcfc03031732807d4 is pushed on PR803 with the scoped
+approved borrowed-file API and public importV2/guardianV6/D2 audit evidence. Its CI
+40019712830 is in progress; previous40016579262 still runs. PR body now accurately
+records the successful limited inert probes and their historical failures. No merge,
+deployment, restart, native/model/account rerun or live activation occurred.
+
+Next canonical NativeDebugInvocation extracts the proven isolated creator/pump
+lifecycle into the SDK's actual async process interface. It is not a new production
+consumer yet. The implementation owns a persistent samecreator pump, exact one
+dispatch, bound image ACK and cancellation/failure drain; undrainable callback/handle
+state must remain owned. Component tests run sequentially in their sole slot, no
+unchanged native20/V6 repetition. Existing plan records the custom SDK transport
+integration consumer, stable capability versus per-invocation proof separation,
+owned async verification and explicit host-preflight lifetime requirement. Full
+guardian/bootstrap/control integration remains open.
+
+Query grammar now explicitly separates pin2 fixture_only/pinned_skill policies,
+without granting role or execution authority; old pin1 schema/full result bytes
+remain unchanged. Pure8 RED-to-GREEN pass0.008s, affected17 pass0.433s, independent
+sequential17 pass0.458s and8 pass0.011s on unchanged266b75f1/fe73ba59/aee418b0 pins.
+Public query-dispatch-policies records the first deep-temp Windows269-char failure
+and unchanged-source short-temp passing rerun. No runtime caller/profile change.
+Bootstrap fixed-entrypoint/framing/declared-file verification implementation is
+queued with explicit UNKNOWN unlisted-import exclusion and initial loaded-section
+provenance; external qualification must authenticate the bootstrap/import closure.
+
+## Previous continuation — query validator committed; startup import measured
 
 Commit ffcd1b44ee7d021be70ab5803ac0d9a3d8c7875a is pushed on PR803; staged
 source/test bytes matched the approved9831cd30/f53eb9fd pins. New final-head CI
@@ -1303,7 +1331,7 @@ controls and independent whole-D1 review/CI remain open; Task3 is not done.
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
 | M1 | Complete engineering: PR795 merged9dd7a9f9, CI39852883192 and publication39856024117 succeeded;0.291.0 | One historical real-engine synthetic baseline; aggregate unknown; no business pilot | Trial/activation flags false; not enabled |
-| M2 | A0.292.0, B0.293.0 and C0.296.0 published; D1/PR8030.297.0 starting; D–F open | Real synthetic C role pipeline ran on ddec90ad; baseline fail, semantic unknown; no independent skill pilot | Not enabled |
+| M2 | A0.292.0, B0.293.0 and C0.296.0 published; D1/PR803 reserves0.299.0 on main0.298.0. View/ledger/qualification infrastructure and isolated skill reads implemented; canonical native dispatch and full D2/E/F remain open | Real synthetic role/format/observation attempts remain historical, with fail/unknown/not-run results; no eligible pair or independent business pilot | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
 | M5 | Pending | No agent pilot | Not enabled |
@@ -1341,12 +1369,14 @@ controls and independent whole-D1 review/CI remain open; Task3 is not done.
 
 ## Next action
 
-Execute D1's plan from published C2727edcc: immutable view protocol/schema7,
-actual current-source resolver and authority, explicit v4 comparison/final
-admission and real native/evidence/stop integration. Use focused RED/GREEN and
-affected tests per Goal12. Continue D's required production pin/resolver paths,
-then E apply/revert/canary and F full operator/feasibility without relabeling a
-trial-only resolver as complete D. Retain all existing isolation/ownership gates.
+Continue D1 from PR803/current continuation and the native-outcome-and-dispatch
+plan: canonical isolated async capture, exact worker/guardian bootstrap/control,
+owned preflight plus SDK version/query launches, then versioned read-outcome,
+dispatch/reasoning and operation input-delivery integration. Freeze and qualify
+the complete changed footprint before registering or retrying the selected account.
+Use focused RED/GREEN and affected tests per Goal12; reuse unchanged pinned proof.
+Continue full D2 production task/session bindings, then E apply/revert/canary and F
+operator/feasibility without relabeling trial-only resolution as complete D.
 Do not use live prompt builders or fallback engine selection as a heartbeat guard.
 The owner run and activation capabilities remain false pending their actual release gates.
 Full M0–M8 Goal remains active; no business or live rollout gate is closed by a code merge.
