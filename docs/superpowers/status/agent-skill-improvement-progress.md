@@ -1,6 +1,36 @@
 # Agent and skill improvement Goal progress
 
-## Current continuation — canonical capture/bootstrap committed; metadata channel verified
+## Current continuation — fixed root factory approved; owned verification and guardian integration
+
+Pilot choice remains owner-delegated: reconciliation primary, document processing
+secondary, Python bugfix/test technical control. This selects work types only;
+business source scope, owner acceptance and live activation are not inferred.
+
+Local57fea085 commits the closed image metadata channel; it is pending batch push.
+The atomic fixed worker factory now has independent scoped approval:17 collected,
+16PASS+1Linux-onlyskip2.098s on source672d55e8/test0624ea4d. Real acquisition and
+close-result failures were reproduced and corrected before approval; only actual
+native CloseHandle FALSE permits retry, while ambiguous post-success errors stay
+unproven. Factory17 is inert fixed-base Python/pipe/job engineering evidence, not
+actual SDK startup, original pipe sealing or full guardian/debug/job drain. Public
+fixed-worker-launch evidence preserves all historical failed attempts separately.
+
+Next canonical GuardianV2 API/schema is settled in the existing dispatch plan;
+missing-component11RED is recorded and implementation is underway without runtime
+enabling. A separate real cancellation gap was reproduced in both actual adapter
+generators and both actual runners: verification threads outlived their cancelled
+caller. Existing settled ownership now keeps the thread and execution lifetime;
+focused4 pass, affected regressions/review remain pending. The first too-short
+runner observations passed before cleanup finished; stronger waiting reproduced
+both original failures, preserved separately. These four changed PROFILE_SOURCES
+invalidate04c8 as a current qualification. Its20/nativeSkill evidence remains
+historical; no registration/account retry until the whole changed boundary freezes
+and qualifies. No new account/SDK/provider invocation or live use occurred.
+
+CI40019712830 at326c now succeeded. Pushed5563 CI40022263716 was still running at
+last observation; neither earlier result qualifies local or working changes.
+
+## Prior continuation — canonical capture/bootstrap committed; metadata channel verified
 
 Current pushed head5563ab908bc7bd56e94a001dff4d1ef070d50535 includes query-policy
 7f710bbc and independently approved capture/bootstrap. All eight newly committed

@@ -447,3 +447,41 @@ from the SDK query parser. Do not add a speculative post_create hook to the froz
 SDK capture. Actual root image/debug and nested worker-native ownership still need
 qualification. Host adopts a duplicated retained worker wait/query capability from
 the retained guardian, never PID reopen. All18 and authority/usage/fence/CI gates stay.
+
+The fixed factory is now independently approved on672d55e8/test0624ea4d:16PASS
+and1Linux-onlyskip2.098s. It owns preallocated native acquisition outputs; only
+explicit native CloseHandle FALSE permits retry. Interrupted/ambiguous results
+remain unproven. Public fixed-worker-launch evidence preserves failed fixture
+assumptions and real product REDs separately. Do not rerun this standalone proof
+merely to resume integration; the original pipe sealing/full job consumer remains.
+
+Concrete GuardianV2 owner: constructor receives only factory policy, selected
+image path/hash, two recovery fences, launch nonce and a fixed ordered subset of
+purpose/nonce bindings. run(owned_control_socket) and aclose() own same-loop control,
+same-creator root debug events, raw worker/job capabilities, original data-pipe
+copies, purpose image channels, guards and retained cleanup. Initial launch_offer
+includes actual held root CREATE/image comparison and process/thread incarnations,
+borrowed source capabilities and target-bound socket-share blobs. Host adopted
+means duplicated/verified host capabilities and retained blobs, not worker adoption.
+After all original/transient guardian data-pipe capabilities are known closed,
+stdio_sealed permits host startup input and root gate release. Worker adopts image
+and private control endpoints from its later direct startup packet. Guardian never
+receives that private control share, config/model/auth-home or user input.
+
+Strict bounded canonical control2 frames carry launch binding and monotonic
+per-direction sequences. image_observed carries purpose/incarnation and closed
+comparison/hash; image_authorize must match the exact pending observation and
+dispatch/durable evidence hashes. Host persists joined dispatch/image observations
+under current lease/generation before authorization; inference/accounting ACK stays
+separate. Stop/EOF/denial/expiry/malformed frames trigger owned drain. Native drained
+means root/debug/job/guard proof only; control socket IO settlement remains separately
+owned through aclose. No ambiguous share/close/IO result becomes cleanup success.
+Missing GuardianV2 produced11RED0.154s; focused real Windows inert implementation
+tests remain distinct from a full three-process host-death or genuine SDK proof.
+
+In parallel, actual bare-to_thread verification cancellation was reproduced in both
+adapters and both runners. Reuse existing settled operations rather than abandon
+version/auth threads on cancellation; retain brain/execution ownership until they
+settle and never proceed to query after cancellation. These existing-source edits
+invalidate04c8 as current qualification; preserve its historical evidence and wait
+for complete-boundary freeze/qualification before any account retry or registration.
