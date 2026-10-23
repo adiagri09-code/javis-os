@@ -1,6 +1,6 @@
 # M2D1 immutable view controls
 
-Draft implementation for reserved version 0.297.0, PR803. This document extends
+Draft implementation for reserved version 0.299.0, PR803. This document extends
 the [released M2C operations](agent-skill-m2c-operations.md); it does not declare
 this draft released, native-qualified, or enabled for ordinary tasks.
 
@@ -98,16 +98,22 @@ procedure; pointing it at the schema 7 database is not a downgrade. Earlier
 unreleased schema 7 prototypes with incomplete guards are not repaired into
 execution authority. Unknown future schemas are refused.
 
-The current D1 native source profile is unregistered. Historical C native
-qualification does not qualify this changed source tree. Technical tests use
-isolated temporary stores and explicitly simulated adapters where stated.
+The D1 profile `4d346a3a` is registered only for Windows CLI 2.1.309, binary
+SHA `5441781f`, and SDK 0.2.116, with full source/runtime hashes in the
+[qualification artifact](../superpowers/evidence/2026-10-23-m2d1-native-qualification-final.json).
+Its 20-test enforcement proof uses dummy authentication and local providers.
+The actual CLI version is checked inside the owned hidden qualification job.
+Changing source/runtime requires matching new qualification; historical C
+qualification cannot authorize this changed tree. Registration does not attest
+selected-account readiness or business quality. Technical tests use isolated
+temporary stores and explicitly simulated adapters where stated.
 The paired-view opt-in test separately passed with the actual pinned CLI and
 dummy local provider: exact baseline/candidate prompts and receipts, distinct
 sessions, denied ambient tools and plaintext cleanup after native job drain.
 Its preparation/reviewer fixtures remain simulated. This proves direct native
 profile enforcement, without asserting a native TrialRunner/account call.
-Genuine selected-final positive execution and exact-source D1 native
-qualification remain open. Production router/lazy/hub/task integration belongs
+Genuine selected-final positive execution and native TrialRunner/account
+feasibility remain open. Production router/lazy/hub/task integration belongs
 to D2; atomic activation/rollback and the complete operator flow belong to
 later E/F work. Business pilots and live rollout require their own evidence
 and scope. No deployment, restart, live activation or business acceptance is

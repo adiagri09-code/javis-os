@@ -12,12 +12,18 @@ from __future__ import annotations
 import re
 
 # Exact dummy-auth/native enforcement evidence; this does not attest account
-# readiness, actual role usage, business quality or candidate/final execution.
+# readiness, actual call usage, business quality or final eligibility.
 # docs/superpowers/evidence/2026-10-23-m2c-native-qualification.json
 QUALIFIED_PROFILES = {('win32', '2.1.308',
     'c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53', '0.2.116',
     'claude-isolated-roles-v2', '9dcf718470e70957d07454bb8b50fbde79575a3b23d8c06e24cc9b749051116b'):
-    '98ee4e8c406091ee84db2862cbf80b11a5f15cf88f7d4d96188d5e2360822ea7'}
+    '98ee4e8c406091ee84db2862cbf80b11a5f15cf88f7d4d96188d5e2360822ea7',
+    # Exact paired-view/solver/typed-role/native-lifetime enforcement, local dummy providers.
+    # docs/superpowers/evidence/2026-10-23-m2d1-native-qualification-final.json
+    ('win32', '2.1.309',
+    '5441781f2b6bbd07354b4a74560ee88c68c9bf05d6db3c7e24c452c91673dc53', '0.2.116',
+    'claude-isolated-roles-v2', '4d346a3ae4f1afa99784fc51307258ad99a8d470ac6a0c46f1d330e6b0e656fa'):
+    '012d9e37690e8711da75a344dfee0677df8d6c690b90f689ddbb14574c82f295'}
 
 
 def profile_qualification(pin, platform):

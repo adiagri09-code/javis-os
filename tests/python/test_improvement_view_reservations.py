@@ -124,7 +124,25 @@ class ViewReservationTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCa
 
 
 class NativeFootprintTests(unittest.TestCase):
-    def test_reachable_v4_invalidates_old_native_registration_without_inventing_a_new_one(self):
+    def test_current_309_registration_matches_exact_native_evidence_and_sources(self):
+        import hashlib
+        from improvement_claude import PROFILE_SOURCES, PROFILE_VERSION, profile_hash
+        from improvement_native_qualifications import profile_qualification
+        raw = (ROOT / 'docs/superpowers/evidence/2026-10-23-m2d1-native-qualification-final.json').read_bytes()
+        evidence = json.loads(raw)
+        pin = {key: evidence[key] for key in ('cli_version', 'cli_hash', 'sdk_version', 'profile_version', 'profile_hash')}
+        self.assertEqual(pin['profile_hash'], profile_hash())
+        self.assertEqual(pin['profile_version'], PROFILE_VERSION)
+        self.assertEqual(profile_qualification(pin, 'win32'), hashlib.sha256(raw).hexdigest())
+        self.assertEqual(set(evidence['source_hashes']), set(PROFILE_SOURCES))
+        self.assertEqual(len(evidence['source_hashes']), len(PROFILE_SOURCES))
+        for name, digest in evidence['source_hashes'].items():
+            self.assertEqual(hashlib.sha256((SERVER / name).read_bytes()).hexdigest(), digest, name)
+        for key in pin:
+            self.assertIsNone(profile_qualification(pin | {key: 'unqualified'}, 'win32'), key)
+        self.assertIsNone(profile_qualification(pin, 'linux'))
+
+    def test_old_308_registration_does_not_qualify_reachable_v4(self):
         from improvement_claude import PROFILE_SOURCES, PROFILE_VERSION, profile_hash
         from improvement_native_qualifications import profile_qualification
         pin = {'cli_version': '2.1.308', 'cli_hash': 'c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53',

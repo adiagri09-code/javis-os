@@ -102,6 +102,38 @@
 
 ## M2C engineering continuation
 
+### D1 fresh-main and runtime309 checkpoint, 23 October
+
+Current draftPR803 reserves0.299.0, rebased onto main d3d7cb36/0.298.0.
+All main release history was preserved. Rebased source3e1abcf0 kept all81 native
+files identical to the reviewed lifetime fix; one test's single CRLF→LF change
+was hash-reconstructed, with other improvement test bytes unchanged. Seven
+affected owner-main/voice/route/bilingual scripts passed18.375s. Independent
+reviewer closed the sole P2 at23f62b0b after a targeted20.260s real lifetime test;
+constructor/view/lifetime source pins still match after rebase.
+
+The installed CLI auto-updated to2.1.309 during final verification. The previous
+308 candidate guard refused before execution, as intended. No downgrade or
+global CLI modification occurred. The exact309 binary SHA5441781f and SDK0.2.116
+were qualified on new profile81/4d346a3ae4f1afa99784fc51307258ad99a8d470ac6a0c46f1d330e6b0e656fa.
+Actual paired views1 +solver5+roles5+quiescence9 passed20 tests in96.767s on
+identical source maps; adapter guards22 passed1.711s. Actual CLI --version is
+checked within the owned hidden dummy job. Artifact
+`../evidence/2026-10-23-m2d1-native-qualification-final.json`, SHA256
+012d9e37690e8711da75a344dfee0677df8d6c690b90f689ddbb14574c82f295.
+
+The exact registration now points to that evidence; historical C remains intact,
+lookup code is unchanged, and altered pin/platform is refused. Metadata RED→GREEN2
+passed0.045s. Current source qualification is enforcement-only: all queries used
+dummy auth and local providers, observed reasoning/asset use remain unknown.
+Reuse/source/recheck checkpoint
+`../evidence/2026-10-23-m2d1-source-checkpoint.json`, SHA256
+99c01d1afdc91f2516b57a12cecfb81bec13dd184295cfd934a37fd502661253.
+The new runtime tuple/test-version probe/registration delta needs scoped review;
+final-head CI and genuine native TrialRunner/account feasibility remain open.
+No eligible selected-final, business win, activation, deployment or restart.
+Task3/4/5, D2/E/F and M3–M8 remain OPEN; previous native proofs stay historical.
+
 ### D1 independent review and lifetime repair, 23 October
 
 One whole-D1 independent review covered published C2727edcc through740c0c67.

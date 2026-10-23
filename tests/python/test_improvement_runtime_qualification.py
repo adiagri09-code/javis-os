@@ -25,8 +25,8 @@ from _paths import ROOT, SERVER  # noqa: F401,E402
 import improvement_claude as native
 import improvement_worker as worker
 
-CANDIDATE_VERSION = "2.1.308"
-CANDIDATE_HASH = "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53"
+CANDIDATE_VERSION = "2.1.309"
+CANDIDATE_HASH = "5441781f2b6bbd07354b4a74560ee88c68c9bf05d6db3c7e24c452c91673dc53"
 SDK_VERSION = "0.2.116"
 MARKERS = ("QUALIFICATION_AMBIENT_SKILL", "QUALIFICATION_AMBIENT_AGENT", "QUALIFICATION_AMBIENT_PLUGIN")
 EVIDENCE = []
@@ -87,6 +87,10 @@ def qualification_worker(root):
         if Path(os.environ[name]) != expected:
             raise ValueError("qualification_home_not_scratch")
     pinned = candidate(os.environ["JAVIS_TEST_NATIVE_CLI"])
+    version = subprocess.run([str(pinned), '--version'], cwd=root, capture_output=True, text=True,
+        check=True, timeout=10, creationflags=worker.winproc.no_window()).stdout.strip().split()
+    if not version or version[0] != CANDIDATE_VERSION:
+        raise ValueError('qualification_native_version_changed')
     _ambient(root)
     import test_improvement_native as existing
     from claude_agent_sdk._internal.transport import subprocess_cli
@@ -112,7 +116,7 @@ def qualification_worker(root):
     result = json.loads(output.getvalue())
     import ctypes
     result["qualification"] = {"spawns": spawns, "worker_has_console": bool(ctypes.windll.kernel32.GetConsoleWindow()),
-                               "version": CANDIDATE_VERSION, "cli_hash": CANDIDATE_HASH, "sdk_version": SDK_VERSION}
+                               "version": version[0], "cli_hash": CANDIDATE_HASH, "sdk_version": SDK_VERSION}
     print(json.dumps(result), flush=True)
 
 
@@ -267,6 +271,7 @@ class CandidateNativeTests(unittest.TestCase):
         self.assertEqual(len(_spawn.observations), 1)
         result = _spawn.observations[0]
         observations = result["qualification"]
+        self.assertEqual(observations['version'], CANDIDATE_VERSION)
         self.assertFalse(observations["worker_has_console"])
         self.assertEqual({spawn["kind"] for spawn in observations["spawns"]}, {"version", "query"})
         self.assertTrue(all(spawn["creationflags"] & worker.winproc.no_window() for spawn in observations["spawns"]))
@@ -288,7 +293,7 @@ class CandidateNativeTests(unittest.TestCase):
         # Rehash the exact binary after the exercise; auto-update cannot silently substitute it.
         self.assertEqual(candidate(path), path)
         EVIDENCE.append({"scenario": "synthetic/native-local-fake-provider", "elapsed_s": round(time.monotonic() - started, 3),
-            "production_billing": False, "runtime": {"version": CANDIDATE_VERSION, "sha256": CANDIDATE_HASH, "sdk": SDK_VERSION},
+            "production_billing": False, "runtime": {"version": observations['version'], "sha256": CANDIDATE_HASH, "sdk": SDK_VERSION},
             "sdk_spawn_flags": [spawn["creationflags"] for spawn in observations["spawns"]],
             "worker_has_console": False, "requests": requests, "tool_denials": [identifier for identifier, _, _ in extras],
             "fixture_statuses": [event["status"] for event in result["broker_events"]],
