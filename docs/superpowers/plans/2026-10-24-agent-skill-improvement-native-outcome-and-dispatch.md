@@ -412,10 +412,14 @@ cleanup ownership. Actual direct-base child startup, initial loaded sections,
 unlisted imports and externally authenticated complete-manifest authority remain
 unproved; the real file/module fixture simulates isolation flags. No runtime caller.
 
-Next ImageMetadataChannel supplies one owned connected socket and a closed
-CREATE/ACK exchange. Retain an uncancelled actual async IO task; shutdown wakes it
-on cancellation/error, completion precedes close, partial frames poison the channel.
-Lost close authority stays unproven. No blocking reader thread is promoted.
+Canonical ImageMetadataChannel now supplies one owned connected socket and a closed
+CREATE/ACK exchange: corrected13PASS1.588s and independent13PASS1.447s on unchanged
+source12cce111/test2df8f4fa. Its first shutdown-only implementation failed on pending
+Windows WSARecv; preserved evidence is not cleanup success. Poison, shutdown and
+known successful socket close precede actual UNCANCELLED logical IO completion;
+only then can closed=true be reported. Keep close-success separate from IO settlement;
+partial frames poison the channel and lost close authority stays permanently
+unproven. No blocking reader thread is promoted.
 Only bounded strict metadata schemas and nonce/incarnation binding are allowed.
 Later endpoint transfer uses actual held target incarnations, never receipt PIDs.
 Python documents [socket sharing](https://docs.python.org/3.12/library/socket.html#socket.socket.share)

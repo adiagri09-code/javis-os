@@ -1,12 +1,19 @@
 # Agent and skill improvement Goal progress
 
-## Current continuation — borrowed-file API committed; canonical capture started
+## Current continuation — canonical capture/bootstrap committed; metadata channel verified
 
-Commit326c9d9ea0b49f4a7c1cfb1dcfc03031732807d4 is pushed on PR803 with the scoped
-approved borrowed-file API and public importV2/guardianV6/D2 audit evidence. Its CI
-40019712830 is in progress; previous40016579262 still runs. PR body now accurately
-records the successful limited inert probes and their historical failures. No merge,
-deployment, restart, native/model/account rerun or live activation occurred.
+Current pushed head5563ab908bc7bd56e94a001dff4d1ef070d50535 includes query-policy
+7f710bbc and independently approved capture/bootstrap. All eight newly committed
+source/test Git blobs exactly match their tested worktree bytes. New CI40022263716
+runs; older ffcd CI40016579262 succeeded, while326c CI40019712830 still runs.
+Earlier CI cannot qualify the new head. PR803 stays draft/reserved0.299.0;
+no merge/deploy/restart/selected-CLI/account retry/live activation occurred.
+
+Prior checkpoint326c9d9ea0b49f4a7c1cfb1dcfc03031732807d4 added the approved
+borrowed-file API and public importV2/guardianV6/D2 audit evidence to PR803. Current
+head/CI are recorded above. PR body preserves successful limited inert probes and
+their historical failures. No merge, deployment, restart, selected-CLI/model/account
+retry or live activation occurred.
 
 Canonical NativeDebugInvocation now exposes the SDK's actual async process interface
 with a persistent samecreator pump through EXIT and exact one dispatch. Initial9
@@ -37,22 +44,31 @@ bytes and retained close-error ownership. Unlisted-import exclusion/initial load
 sections stay UNKNOWN; external qualification must authenticate bootstrap/manifest
 completeness. No production caller/profile entry or SDK/native-child call.
 
-Query policy delta is committed locally7f710bbc (not yet pushed; next reviewed
-component is batched to avoid needless duplicate full CI runs). Its three Git
-blob IDs exactly equal tested worktree bytes. Capture author freeze uses37 explicit
+Query policy delta7f710bbc was batched with approved capture/bootstrap in one push;
+its three Git blob IDs exactly equal tested worktree bytes. Capture author freeze uses37 explicit
 files; an initial broad glob accidentally included an open reviewer log and failed,
 preserved separately without source/test changes. A genuinely asynchronous closed
 metadata channel is the next consumer prerequisite; the current capture callback
 does not promote blocking stdin reads into cancellable IO.
 
-Next metadata image channel uses one owned connected socket and a cooperative
-async CREATE/ACK exchange, with strict closed schemas, nonce/incarnation binding,
-partial-frame poison and settled IO before close. This remains a component until
-cross-process endpoint transfer and whole guardian lifecycle are qualified. Initial
+Metadata image channel now passes13 tests in1.588s and independent13 in1.447s;
+source12cce111/test2df8f4fa unchanged and no warnings. First13 failed1/3errors because
+shutdown alone did not settle Windows WSARecv; its failed source/log remain preserved.
+Corrected order is poison→shutdown→known socket close→UNCANCELLED IO completion
+before closed=true. Lost close authority stays permanently unproven; the negative
+test's real socket is closed/no IO pending, but retained proof-owner is not called
+success. Public image-metadata-channel records framing/strict metadata/binding/
+partial IO/replay/cancel scope and23-file author freeze. No children/SDK/account
+calls, cross-process endpoint transfer or runtime/profile entry. Initial
 worker creation/assignment also needs a concrete no-orphan lifetime: a host crash
 between suspended Popen and guardian/job assignment must not be ignored. Guardian-
 first fixed worker creation with transient private-pipe capability copies closed
-before host writes private data is being checked against actual code/contracts.
+before host writes private data is the settled integration direction. Use a
+guardian-only direct CreateProcessW JOB_LIST/HANDLE_LIST factory for atomic creation
+assignment, with exactly three inherited stdio pipe capabilities and no inherited
+job/control/socket metadata handles. Future socket.share transfer follows retained
+actual process identity. Factory implementation/tests are next; old SDK capture,
+bootstrap and83 qualified profile remain unchanged until actual integration.
 
 ## Previous continuation — query validator committed; startup import measured
 
