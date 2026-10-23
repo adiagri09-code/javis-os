@@ -117,6 +117,8 @@ class TrialStore:
             load_preparation_lineage(connection, brain, request, blobs=self.blobs,
                 current=True, require_link=not allow_unlinked, trial_id=trial_id)
         if experiment:
+            from improvement_experiment_qualification import require_tuning_families
+            require_tuning_families(connection, brain, request['case_set_id'])
             from improvement_experiment_lineage import load_lineage
             if request["variant"] == "candidate":
                 raise PermissionError("experiment_candidate_execution_unavailable")

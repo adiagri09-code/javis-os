@@ -68,6 +68,9 @@ def current_fences(connection, brain, proof):
     if (target["status"] != "live" or target["generation"] != frozen["base_generation"]
             or target["current_revision_id"] != frozen["base_revision_id"] or target["source_hash"] != frozen["base_hash"]):
         raise IM.ConflictError("experiment_base_changed")
+    if comparison['kind'] == 'tuning':
+        from improvement_experiment_qualification import require_tuning_families
+        require_tuning_families(connection, brain, frozen['case_set_id'])
 
 
 def _arm(connection, brain, experiment, value, lineage):

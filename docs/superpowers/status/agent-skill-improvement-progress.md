@@ -243,6 +243,18 @@ unverified; no eligible selection/result was fabricated and full18/unknown was
 preserved. Legacy v2 tuning-family bypass is under separate audit. Task3, native
 qualification, public controls and whole-D1 integration remain OPEN.
 
+Legacy baseline bypass repair: genuine RED3 showed the old v2 path reading
+context despite a later owner-declared holdout alias, and its last SQL fence
+accepting that alias. New v2 reservation/admission and common late fences now
+use the same no-consumed-exception tuning rule.30 checks passed134.850s across
+the new boundary, B lineage/admission/actual execution and actual v4 pair/native
+footprint. Exact old replay/metadata stays cold; qualifier/history source and
+v4/materialization methods retain their earlier qualified scope by AST/hash.
+Evidence `../evidence/2026-10-23-m2d1-task3-legacy-alias.json`, SHA256
+fa40a4baf1887cc1c873be511546b3d45311f3636c48c5e6c7ba18422180ee40.
+Current81-source c2e7968e is unregistered. Actual positive final/native, public
+controls and independent whole-D1 review/CI remain open; Task3 is not done.
+
 - Final affected regression21/21 GREEN,663.451s, qualified across two frozen
   segments: first15 passed scripts retain identical product/helper/test bytes;
   only the failed standalone task-drain test changed from a30ms scheduler sample

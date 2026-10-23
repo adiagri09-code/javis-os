@@ -610,6 +610,29 @@ Static follow-up found legacy v2 tuning may lack the same family fence; reproduc
 that separately before claiming the alias audit complete. An ignored3-test draft
 is ready; do not change completed source maps or repeat the8 green scripts.
 
+Legacy alias follow-up: actual RED3 reproduces v2 lower-store/owned admission
+reading context despite a genuine later owner-declared qualification alias, and
+the final SQL fence not rejecting it. Preserve exact old event replay/metadata.
+Add the shared tuning-family guard before private v2 reservation/admission reads
+and in the common last SQL fence (also covering v4 after slow source observation).
+Affected sources: trials(v2 branch), experiment_admission and experiment_lineage;
+callers: old baseline Runner/live guard and existing v4 fences. Tests: new3,
+existing B lineage/admission/actual execution plus native footprint; v4 methods,
+qualification writer/history and the70-test checkpoint stay unchanged.
+
+Legacy alias repair checkpoint: direct3 plus B lineage18, admission5, actual
+baseline execution2 and genuine v4 pair/native-footprint2 passed30 checks,
+134.850s recorded (basis per row). Both early v2 boundaries reject before
+plaintext/native preflight; final SQL fences reject later aliases, while exact
+old event replay/metadata remains cold. AST/source proof preserves the earlier
+v4 current branch, trial materialization/reserve methods and owned qualifier/
+history code; reuse that70-test scope, not a claim of final native readiness.
+Evidence `../evidence/2026-10-23-m2d1-task3-legacy-alias.json`, SHA256
+fa40a4baf1887cc1c873be511546b3d45311f3636c48c5e6c7ba18422180ee40.
+Source81/c2e7968e01bcc0434cf9368602d694ca8d7c53de6c9df487d0bd99f1e1f75dc3
+remains unregistered. Genuine positive selected-final and Task3/native/public
+acceptance remain OPEN; no model query or quality eligibility was invented.
+
 **Files:** new `server/improvement_view_materialization.py`; extend actual
 TrialStore.materialize, sandbox/worker/TrialProfile, receipts/checks/results/
 views/products/comparison projection. Add all new native-path sources to the
