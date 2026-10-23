@@ -387,6 +387,20 @@ all production source bytes match the71-test owned-next checkpoint. Evidence
 43f43c2855698e1c8e1a8a161c28c4c873630cb86d2055ecb06a15e6890bd947.
 This qualifies reuse of that scope; it does not replace fresh Linux/final CI.
 
+Retained-host audit found a real reconstruction failure: after both old services
+closed, new view admission still used the closed semantic resolver (RED1,14.657s).
+Replacement now derives from the exact same-store semantic/Trial owner chain and
+BOTH successful completed asyncio close futures, with no constructor I/O or
+caller override. Live, missing, pending, cancelled and failed close states refuse
+replacement. Frozen rows/requests/hashes stay unchanged. Original2 GREEN33.064s,
+then one added failure-state check plus affected next/API/lifetime/worker/stop
+checks passed32 total (276.518s recorded, basis per row). Evidence
+`../evidence/2026-10-23-m2d1-task3-view-lifetime.json`, SHA256
+c56e88ee52a9813711021db8d93984f53594d0ee42bdbb519eab8679dcf7c60e.
+Current78-source profilebfda8912 remains unregistered. This resolves concrete
+service reconstruction only; D2 ordinary task/session resume is still unverified.
+Task3 v4 report projection/final registry and Tasks4/5 remain OPEN.
+
 Next additive table contract (before SQL): `improvement_view_trial_links` columns
 are `comparison_id,brain_id,experiment_id,cell_position,trial_id,request_hash,
 pair_id,case_id,repeat,variant,view_id,view_hash,binding_hash,created_at`.

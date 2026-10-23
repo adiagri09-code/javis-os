@@ -81,11 +81,11 @@ class TrialStore:
         self._views = None
 
     def bind_views(self, views):
-        from improvement_views import EffectiveViews
+        from improvement_views import EffectiveViews, _retired
         if (type(views) is not EffectiveViews or views.assets is not self.assets or views.store is not self.store
                 or views.plans.admission.trials.workspace.root != self.workspace.root):
             raise TypeError('concrete_same_store_views_required')
-        if self._views is not None and self._views is not views:
+        if self._views is not None and self._views is not views and not _retired(self._views):
             raise IM.ConflictError('view_resolver_already_bound')
         self._views = views
 

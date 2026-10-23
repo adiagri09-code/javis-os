@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import asyncio
 import json
 import secrets
 import time
@@ -212,3 +213,21 @@ class EffectiveViews:
             metadata['views'][variant]['manifest_hash'], raw_manifests[variant],
             snapshot.proposal['before' if variant == 'baseline' else 'after'], snapshot.observational_unknowns)
         return resolved, lineage
+
+
+def _retired(views):
+    """Derive successful lifetime closure; never accept a caller readiness flag."""
+    from improvement_trial_service import OwnerTrialService
+    if type(views) is not EffectiveViews or type(views.semantic) is not SemanticReview:
+        return False
+    owner = views.semantic.execution.trial_service
+    if (type(owner) is not OwnerTrialService or owner.host is not views.plans.host
+            or owner.assets is not views.assets or owner.trials.store is not views.store
+            or owner.trials.workspace.root != views.plans.admission.trials.workspace.root):
+        return False
+    for lifetime in (views.semantic, owner):
+        closing = lifetime._closing
+        if (lifetime._closed is not True or not isinstance(closing, asyncio.Future)
+                or not closing.done() or closing.cancelled() or closing.exception() is not None):
+            return False
+    return True

@@ -49,10 +49,10 @@ class ExperimentService:
         self.semantic = SemanticReview(self.execution, self.operation_tasks)
         from improvement_comparison_schedule import ComparisonSchedule
         from improvement_view_admission import ViewExperimentAdmission
-        from improvement_views import EffectiveViews
+        from improvement_views import EffectiveViews, _retired
         self.schedule = ComparisonSchedule(plans, self.trials)
         self.views = plans.host._views
-        if self.views is None:
+        if self.views is None or _retired(self.views):
             self.views = EffectiveViews(plans, self.semantic)
         self.view_admission = ViewExperimentAdmission(plans, self.views, self.schedule)
         self.trials.bind_views(self.views)

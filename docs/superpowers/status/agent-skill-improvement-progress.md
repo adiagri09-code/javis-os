@@ -148,6 +148,23 @@ query or actual v4 materialization. View report/final registry, retained lifetim
 audit, actual workspace/native qualification and public controls remain OPEN.
 Early Linux39949800035 succeeded on ab5dc1ef; later source needs its own CI.
 
+Linux39952941333 failed52c79f1c only because worker's exact expected source list
+still pinned C34. Correction9795f698 explicitly expands it to78, preserves set/
+hash equality and adds duplicate/count refusal;9 worker+1 default-denial checks
+pass, with no production source change. Evidence43f43c28 qualifies prior scope
+reuse, not a fresh final CI. Later dad605c3 Linux39957029202 was already running
+before the fixture correction and may retain that exact old failure.
+
+Concrete retained-host reconstruction then reproduced role_workflow_closed.
+Resolver replacement now requires both exact typed same-store workflow/owner
+close futures to complete successfully. A live owner or missing/pending/cancelled/
+failed close refuses replacement, without constructor source/native I/O. Current
+32 scoped/affected checks pass276.518s; evidence
+`../evidence/2026-10-23-m2d1-task3-view-lifetime.json` SHA256
+c56e88ee52a9813711021db8d93984f53594d0ee42bdbb519eab8679dcf7c60e.
+Current78-source profilebfda8912 is UNREGISTERED. No real query/native execution,
+ordinary D2 task/session resume, business or rollout acceptance is claimed.
+
 - Final affected regression21/21 GREEN,663.451s, qualified across two frozen
   segments: first15 passed scripts retain identical product/helper/test bytes;
   only the failed standalone task-drain test changed from a30ms scheduler sample
