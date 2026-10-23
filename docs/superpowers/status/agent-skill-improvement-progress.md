@@ -1,5 +1,80 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — query validator committed; startup import measured
+
+Commit ffcd1b44ee7d021be70ab5803ac0d9a3d8c7875a is pushed on PR803; staged
+source/test bytes matched the approved9831cd30/f53eb9fd pins. New final-head CI
+40016579262 is in progress. Main remains0.298.0; open PR805/807 have no reserved
+version, so PR803 retains0.299.0. No merge/deploy/restart/account retry occurred.
+
+Separate once-only startup import diagnostic V2 completed both predeclared
+variants in4.219s. Minimal-root reproduced ModuleNotFoundError:pywintypes, exit10;
+explicit trusted win32/win32-lib paths plus a retained DLL-directory handle
+imported SDK/anyio successfully, exit0. Both original retained direct-base worker
+PID/birth identities matched before import ACK. Actual native-job pre/post
+snapshots retained the same two members/incarnations and cumulative total2;
+rejecting CreateProcess counter stayed0. The additional actual job member's
+observed image path was System32/conhost.exe; current reopened-file bytes are
+recorded, not loaded-image/page proof or an inferred role. All four retained
+process handles signaled before job close; both actual jobs drained to active0.
+No SDKClient/connect/open_process, CLI/model/account/provider call occurred.
+Report129805b2 and manifest46216676 preserve the result. Historical V5's lost
+startup error remains UNKNOWN. Independent limited static approval verifies175
+frozen files,25 source pins,4 prior manifests and83 qualified pins. Future
+cleanup-failure handling must also retain observer-handle dictionaries; that
+unexercised path is not proved by the two completed normal drains. Public
+startup-import-support records the scope.
+
+The separately authorized V6 guardian receipt probe subsequently passed all four
+predeclared inert cases in one6.683s run: selected image allow, identical-byte
+foreign-file refusal, EOF before ACK, and worker death while CREATE held. Actual
+remote object duplication uses the original retained worker; process/thread
+incarnations, exact job and file-ID/hash match are checked before the one bound
+allow ACK. Death keeps guardian duplicates valid and observes native terminal
+before outer-job termination, without foreign Continue. All actual jobs drain
+before guard release. Report70d56f53/manifest203d504b are independently approved
+as limited evidence:208 frozen files,165 report/runtime pins and83 unchanged
+qualified pins verified. Public guardian-image-receipt preserves both positive
+proof and limits. No SDKClient/Claude/account/provider call occurred. This is
+trusted creator capture plus guardian object checks, not independent kernel
+association, full three-actor confidentiality, SDK query/configuration or all18
+eligibility. Generic failure/repeated cancellation/recovery remain unproved.
+
+Public ImageReadGuard.compare_file_handle now compares actual full file identity
+and privately reopened synchronous bytes without reading/seeking/closing the
+borrowed handle. Three meaningful missing-method RED cases preceded implementation;
+the full35 tests (original17 unchanged plus18) pass2.033s and independent35 pass
+2.702s. Both scoped reviews approve source4fc9654a/test8c7abdc7; all83 qualified
+pins unchanged. Private close failure invalidates attestation and retains retryable
+reader ownership. Public borrowed-file-comparison evidence records the byte-bound,
+non-deadline limitation and UNKNOWN debug origin/loaded image/metadata exclusion.
+It remains unreachable/outside PROFILE_SOURCES. Historical V6 stays frozen at
+ffcd/ab6; the changed API is not retroactively qualified by that experiment.
+
+Source audit also identifies an operation-specific blocker: actual_input_use and
+actual_reasoning are always UNKNOWN, and combined semantic verdict correctly keeps
+them UNKNOWN. The existing plan now requires separately versioned exact user-frame
+delivery capture plus qualified local-provider content verification; stdin success
+alone is pipe delivery, not a native read ACK or comprehension. SDK string-query
+wire session default differs from native init session, and init may precede query
+write. Preserve both namespaces and all old operation1 reports/UNKNOWNs. This is
+an integration requirement, not new runtime input-use proof. Sync host/worker
+preflight lifetime integration and three-actor control remain open.
+
+Read-only full-D2 consumer audit at ffcd found reusable explicit Team/task/firing
+identities but additional gaps: workflow local traces are not bound/passed into
+node executors or resume; loops lack a durable pre-execution cycle ID; Goal
+operation identity is dropped by its text-only engine factory. DM native session
+history lacks effective-view identity, and ordinary warm_ping rebuilds options
+outside a turn. turn_context.execution_metadata is Team/improvement-specific and
+must not become a generic pin authority. Keep separate immutable host bindings
+and durable task/session pins, preserve ordinary owner policy and Goal text-only
+permissions, and never install task overlays into the global capability registry.
+Existing disabled-routing/per-read proofs are reused; full D2 remains open.
+Concrete consumer/function anchors and limits are recorded in
+`../evidence/2026-10-24-m2d2-consumer-context-audit.md`; this is source inspection,
+not runtime task/session-pin evidence.
+
 ## Current continuation — read-outcome foundations and actual anyio gate, 24 October
 
 Versioned native skill reads are committed/pushed ea74d62e and unreachable

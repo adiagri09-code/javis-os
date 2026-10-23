@@ -282,3 +282,66 @@ query-opened member handle must be rechecked for exact job/incarnation and held
 through terminal drain. Unknown identity or incomplete inventory stays unknown
 and never authorizes a native image ACK. This is not a relaxation of the final
 query process/image/guardian identity or lifetime requirements.
+
+Runtime binding must include actual SDK implementation hashes, not only the
+installed distribution version. The future qualified boundary should compare a
+closed SDK/capture/bootstrap source manifest against its qualification record,
+check those bytes before execution, and include the verified manifest hash in
+capability/dispatch proof. Keep historical qualification entries/receipt bytes
+unchanged. A new capability must fail closed when its actual source manifest is
+missing or changed; do not authorize modified SDK code because its version
+metadata still says0.2.116. Query/init model checks remain separate from argument
+consistency, and private reasoning/provider acceptance remain UNKNOWN.
+
+Synchronous preflight needs its own lifetime design: _runtime_observation uses
+subprocess.run for version/auth, which blocks in communicate/wait. Holding its
+debug CREATE/EXIT on that same blocked thread would deadlock. The SDK-anyio
+same-thread async probe does not prove this synchronous consumer. Use a bounded
+purpose-specific isolated preflight helper with an active creator/debug pump,
+or independently qualify a dedicated creator/pump thread; never globally patch
+the shared server or stop pumping before the owned native process is terminal.
+This choice and its cancellation/drain evidence precede production integration.
+
+## Operation input delivery and version boundaries
+
+The operation consumer has an additional real blocker: execution_checks always
+returns UNKNOWN for actual_input_use as well as actual_reasoning. OperationResults
+aggregates every check, and SemanticReview combines that verdict with meaning and
+dependency checks. Fixing Trial4 alone therefore cannot make semantic operations
+eligible. Owner arbitration must not erase a native UNKNOWN.
+
+Spec10.3 requires actual configuration and appropriate host call/read evidence;
+it explicitly does not infer comprehension. A new qualified_native_user_input_delivery
+basis must mean exact execution delivery, never comprehension, native read ACK,
+provider acceptance or semantic correctness. A completed stdin send alone proves
+only pipe delivery. Native parsed/read confirmation would require an independent
+per-input ACK or echo, which SDK116 does not provide for this string-query path.
+
+Before implementing this basis, bind the materialized data hash and the hash of
+the entire operation_user_prompt wrapper to a fresh single-client/single-query
+dispatch. Capture the actual user frame on the retained native child's real stdin
+transport, recording completion only after await send returns. Bind an unpredictable
+write nonce to operation/attempt/input/dispatch; reject partial, failed, cancelled,
+truncated, changed or duplicate writes, replay/resume and foreign sessions. Require
+native init plus assistant/terminal session evidence on that same fresh transport
+without contradiction. The frozen local-provider qualification must verify that
+the actual provider request contains the exact user content and exercise those
+negative controls. Requested client.query arguments are insufficient.
+
+SDK116 client.query serializes its string prompt as a user frame with the wire
+session_id default. The native init uses a distinct native session identity; keep
+both namespaces and qualify their fresh-transport mapping rather than compare them
+as equal. connect may produce init before query's stdin write. Do not require a
+false init-after-write ordering or invent a query UUID absent from the actual frame.
+SubprocessCLITransport.write uses its write lock, checks ready/process/exit state,
+then awaits TextSendStream.send; capture must retain those lifecycle protections.
+
+Use operation materialization2/installation receipt2 and dispatch/input-delivery
+proof1 with strict readers; report/check-policy identity must be versioned (report2
+if proof/policy fields are added). Request1 can remain only if its contract is
+unchanged. Evolve operation protocol/execution/workspace/profile/worker/checks/
+results and semantic evidence/replay together. Old version1 bytes and UNKNOWN
+verdicts remain unchanged; never recompute historical reports upward. All three
+operation roles retain their fixture-only tool inventory. The standalone Trial
+query parser's exact two-tool grammar is not the operation grammar. Keep combined
+verdict, owner/source/grant/usage and all eligibility checks unchanged.
