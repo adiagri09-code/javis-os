@@ -2,6 +2,8 @@
 from _paths import ROOT, SERVER  # noqa: F401
 
 import hashlib
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -11,7 +13,10 @@ import test_improvement_view_sources as sources
 
 class ViewObservationTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase):
     def observe_binary(self):
-        binary = self.f.f.f.skill.with_name('inert-runtime.exe')
+        # Runtime staging must not mutate pinned skill-source authority. Linux
+        # directory ctime changes when a sibling is created after provenance.
+        directory = Path(self.enterContext(tempfile.TemporaryDirectory(prefix='view-runtime-')))
+        binary = directory / 'inert-runtime.exe'
         binary.write_bytes(b'Synthetic binary observer; never execute')
         selected = self.host.selected_engine
 

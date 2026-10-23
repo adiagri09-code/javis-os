@@ -76,3 +76,13 @@ inside this scope and the returned view corresponds to the verified final bytes.
 This private decorator must not be moved around writes, async work, model/native
 execution or outward callbacks that publish a result. Independent callgraph audit
 is requested before coding. No owner/model/quality/holdout/live gate changes.
+
+## Linux fixture correction
+
+Actual CI40002516501 failed only the observation fixture because its runtime
+sibling creation changed protected skill directory ctime after provenance.
+Move only this inert binary into its own external temporary directory. Portable
+entry-clock2RED27.959s ->2GREEN29.127s; native Windows2PASS29.016s/binary11PASS
+0.765s; independent portable2PASS29.468s. Assertions/product/native81profile
+unchanged. Actual final-head Linux CI remains mandatory. Evidence:
+`../evidence/2026-10-24-m2d1-view-observation-linux-fixture.json`.
