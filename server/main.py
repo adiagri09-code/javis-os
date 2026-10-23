@@ -173,6 +173,7 @@ import channels          # sổ đăng ký kênh của Hộp thư hội thoại 
 import conversations     # Hộp thư hội thoại khách: kho khách -> hội thoại -> tin (Chatbot V2)
 import zalo_personal_channel   # Hộp thư hội thoại: đọc tin Zalo cá nhân từ MCP theo cursor
 import deploy_info              # Javis đang đứng ở đâu (docker/native) - xem _deploy_mode
+import node_security            # News item when this machine's Node.js misses a security release
 import ollama_catalog           # danh mục model để gợi ý + tìm kiếm
 import ollama_local             # dò/tải/gỡ model trên máy chạy Ollama
 import sessions                  # PROJECT_INSTRUCTIONS_MAX cho khối project trong system prompt
@@ -14012,7 +14013,7 @@ def _parse_announcements(raw: str):
         if expires and expires[:10] < today:
             continue
         kind = text(row.get("kind"), 24).lower()
-        if kind not in ("community", "marketing"):
+        if kind not in ("community", "marketing", "security"):
             kind = "community"
         priority = text(row.get("priority"), 16).lower()
         if priority not in ("high", "normal", "low"):
@@ -14289,9 +14290,17 @@ async def _notifications_data():
 
     changelog_task = asyncio.create_task(changelog_index())
     announcements_task = asyncio.create_task(_load_community_announcements())
-    changelog, (announcements, announcement_error) = await asyncio.gather(
-        changelog_task, announcements_task
+    node_task = asyncio.create_task(asyncio.to_thread(node_security.node_version))
+    changelog, (announcements, announcement_error), node_version = await asyncio.gather(
+        changelog_task, announcements_task, node_task
     )
+    # The broadcast in ANNOUNCEMENTS.json is for installs too old to run this check; here the
+    # machine's real Node.js decides, so a patched machine is not told to patch.
+    announcements = [a for a in announcements
+                     if not str(a.get("id") or "").startswith(node_security.ADVISORY_ID)]
+    node_notice = node_security.notice(node_version, deploy_info.deploy_mode())
+    if node_notice:
+        announcements.append(node_notice)
 
     releases = []
     for rel in (changelog.get("releases") or [])[:30]:

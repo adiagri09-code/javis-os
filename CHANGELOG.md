@@ -8,7 +8,9 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.295.0] - 2026-10-23
 ### Bảo mật
-- **Vá lỗ hổng Node.js tháng 10/2026.** Đang thực hiện.
+- **Vá lỗ hổng Node.js ngày 21/10/2026.** Node.js công bố 10 lỗ hổng, nặng nhất là lỗi Brotli cho phép chạy mã từ xa. Ảnh Docker mới chạy Node.js 22.23.4 đã vá, nên bản Docker chỉ cần cập nhật Javis là xong.
+- **Javis tự kiểm tra Node.js trên máy.** Máy còn chạy bản chưa vá hoặc đã hết hỗ trợ (Node 20 trở xuống) thì chuông Thông báo hiện tin Bảo mật, ghi rõ bản đang dùng và lệnh nâng cấp cho Windows, Mac, Linux. Máy đã vá thì không bị nhắc.
+- **Cài mới luôn lấy bản đã vá.** `install.sh` không còn nhận Node 20 hay Node 22 cũ: nó tự cài Node.js 22 bản mới nhất, còn Node 24 hay 26 chưa vá thì cảnh báo để bạn tự nâng.
 
 ## [0.293.0] - 2026-10-23
 ### Cải thiện
