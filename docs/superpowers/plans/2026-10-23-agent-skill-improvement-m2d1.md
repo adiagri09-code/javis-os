@@ -375,6 +375,18 @@ qualification-registry ownership, real workspace/native and public controls
 remain open. Task3 NOT done. Earlier Linux39949800035 succeeded only ab5dc1ef;
 Linux39952941333 on52c79f1c is still running and cannot qualify this new code.
 
+Linux39952941333 completed FAILURE on52c79f1c: only operation_worker's explicit
+expected source set still pins C34. Production intentionally expanded to76 there
+and78 by owned next; do not remove source coverage to satisfy the old fixture.
+The one expected-set test now explicitly lists all78, preserves exact equality
+and independent per-file hash, and adds duplicate/count refusal. Local RED1
+0.004s; full worker9 GREEN3.493s and default unregistered-profile denial1
+GREEN0.021s. AST proof confirms imports/fixtures/all other methods unchanged;
+all production source bytes match the71-test owned-next checkpoint. Evidence
+`../evidence/2026-10-23-m2d1-task3-footprint-fixture.json`, SHA256
+43f43c2855698e1c8e1a8a161c28c4c873630cb86d2055ecb06a15e6890bd947.
+This qualifies reuse of that scope; it does not replace fresh Linux/final CI.
+
 Next additive table contract (before SQL): `improvement_view_trial_links` columns
 are `comparison_id,brain_id,experiment_id,cell_position,trial_id,request_hash,
 pair_id,case_id,repeat,variant,view_id,view_hash,binding_hash,created_at`.
