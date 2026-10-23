@@ -66,6 +66,28 @@
   Task2 still owns authenticating encrypted manifests and current source/semantic
   authority plus atomic pair publication/CAS/replay; Task3 owns actual v4 lineage
   and legacy-format exclusion. No metadata row grants execution or live authority.
+- D1 Task2 local source/publication boundary now passes five sequential affected
+  scripts:76 tests,392.830s. Actual current C/edit/source authority constructs both
+  immutable views, with one publication event, generation CAS and exact historical
+  replay; second-insert and post-insert source changes roll back all view rows.
+  Resolving SQL metadata requires its exact publication event/request/generation
+  plus current source and semantic evidence. Holdout inputs and expected answers
+  are not decrypted by view capture/load. Actual Windows DACL/junction/incarnation,
+  owner arbitration, dependency and byte-format fixtures pass; Linux branches of
+  the new source service still require CI. C semantic/native unknown and A's
+  unreviewed status remain unchanged. Evidence:
+  `../evidence/2026-10-23-m2d1-task2-verification.json`, SHA256
+  588f7dba351d6d4253039819179207e467306163b14bfb7447d8c700d08fc41e.
+  All C34-profile and selected Task1 source bytes remain exact; there is no new D
+  native qualification, API wiring, actual comparison Trial or real model call.
+  Task3/4 retain actual admission/native-preflight/reservation/query fences.
+- Early Task1 LinuxCI39938959026 on8a25dee9 is FAILURE: new view schema15 and
+  protocol11 passed, while test_improvement_candidate_records.py,
+  test_improvement_cases.py and test_improvement_trials.py retain old backup/drop
+  fixture assumptions. Fix these exact fixtures next; keep backup ordering,
+  historical version/data assertions and rollback checks intact. Older
+  protocol-only LinuxCI39936301937 on d91cc25b succeeded. Neither run proves the
+  newly implemented Task2 source path. PR803 remains draft and not mergeable.
 - Earlier pending/failure
   checkpoints remain historical; complete M2/business/rollout gates remain open.
 

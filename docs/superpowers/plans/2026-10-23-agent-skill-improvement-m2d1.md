@@ -178,7 +178,9 @@ conflicts, and a second insert/source-CAS failure rolls back both views/binding.
 
 **Files:** new `server/improvement_views.py`,
 `server/improvement_view_sources.py`; use actual SkillCandidates, ExperimentPlans
-and SemanticReview; new `tests/python/test_improvement_view_sources.py`.
+and SemanticReview; new `tests/python/test_improvement_view_sources.py` and
+`tests/python/test_improvement_view_authority.py` (actual permissions, links,
+source incarnation, line endings and owner-meaning integration).
 
 **Interfaces:** `EffectiveViews(plans, semantic)` accepts concrete same-store
 dependencies. `freeze_comparison(principal, comparison_id, *,
@@ -189,21 +191,67 @@ Host interfaces are private; HTTP receives only the explicit closed control
 fields and never constructs a ResolvedView/ProbeAuthority. The shared resolver returns exact bytes and identity for a given frozen
 view/asset; no fallback to canonical, root-relative same-name or global mirror.
 
-- [ ] RED: changing/replacing/deleting/disabling/revoking source during encrypted
-  I/O or native preflight cannot publish a view or reserve a call.
-- [ ] RED: existing comparison cells prevent retrospective runtime binding; a
+Task2 implementation checkpoint: first12 source/atomic/policy tests passed95.073s.
+Actual same-event concurrent publication RED exposed stale-generation failure
+after the first writer committed; replay now rechecks the exact immutable event
+on source/generation denial, without granting new work. Pure RED also exposed
+missing-verdict KeyError and ignored native aggregate failure; both now deny.
+The service derives meaning/dependency/native observations only from actual
+current C evidence, keeps its combined unknown and A unreviewed unchanged, and
+stores the exact actual owner-event reference when required. This metadata/source
+boundary is not D native qualification or real Trial admission. Task2 remains
+open through its further authority/mutation tests and affected regression.
+
+- [x] RED: changing/replacing/deleting/disabling/revoking source during encrypted
+  I/O cannot publish or resolve a view. Actual native-preflight changes must deny
+  before CallLedger reservation/query in Tasks3/4's real consumers; that integration
+  remains mandatory rather than being simulated by Task2 metadata tests.
+- [x] RED: existing comparison cells prevent retrospective runtime binding; a
   third candidate, unrelated semantic receipt, changed protected meaning or an
   executable/ungranted dependency cannot expand the view.
-- [ ] GREEN: baseline/candidate differ at exactly the owner-authorized body;
+- [x] GREEN: baseline/candidate differ at exactly the owner-authorized body;
   all other protected/context/dependency bytes and identities match. UTF-8/BOM/
   CRLF remain exact, with no canonical or global mirror write.
-- [ ] Actual host pair publication is one writer/event with current generation
+- [x] Actual host pair publication is one writer/event with current generation
   CAS, cold exact replay, conflicting-payload rejection and complete rollback
   when a second view/binding/source fence fails. No partial eligible view exists.
-- [ ] Add actual ACL, directory/file incarnation, symlink/junction and Linux
+- [x] Add actual ACL, directory/file incarnation, symlink/junction and Linux
   case-distinct brain tests using shared stable readers. No lowercase hash as
   authorization. Verify deterministic replays after off/revoke remain historical.
-- [ ] Commit verified source capture and exact-byte resolver.
+- [x] Commit verified source capture and exact-byte resolver.
+
+Task2 local verification: five sequential affected scripts passed76 tests in
+392.830s. Portable report `../evidence/2026-10-23-m2d1-task2-verification.json`,
+SHA256588f7dba351d6d4253039819179207e467306163b14bfb7447d8c700d08fc41e.
+Task-done validates actual committed source/runtime/log hashes without repeating
+passed tests. New D native integration and Linux source/authority branches remain
+unverified until their actual consumers/CI run. Earlier Task1 LinuxCI39938959026
+passed the new schema15/protocol11 but failed three older migration fixtures;
+correct those exact fixture expectations/drop lists next, before pushing this
+checkpoint. No branch integration, new native qualification or live claim.
+
+Task2 completion scope: run the two new source/authority scripts, pure view
+protocol, existing dependency-identity and comparison-plan regression sequentially.
+Reuse Task1's exact schema7/migration/store evidence and C's source-qualified
+structural/candidate/semantic implementation evidence: those source/helper bytes
+are unchanged and the new tests traverse their actual concrete services. Full
+final-head CI still runs every mandatory script. No blanket improvement sweep.
+
+Additional REDs: view capture initially used the plan's all-case source projection;
+the actual holdout-blob spy caught that read. It now requests the existing tuning
+projection, including for common source resolution of a final view; actual final
+case admission owns its separate qualification grant. Another negative fixture
+constructed valid scoped encrypted SQL metadata without a real publication event;
+load_current now requires the exact immutable event/result/request-hash/generation
+history as well as current source/semantic proof. Cold metadata remains historical.
+The source fence after both inserts rolls back all view/binding/event rows.
+
+Supported byte tests retain existing discovery semantics: YAML CRLF and plain BOM
+are byte-exact; BOM plus YAML remains rejected as ambiguous by unchanged M2A.
+Windows native DACL mutation/rejection/restoration is actual. The first fixture's
+icacls /restore cleanup lacked privilege; DACL-only native restoration now restores
+the exact original descriptor hash without changing owner/group or requesting
+privilege. This changes only disposable test cleanup, not source authority policy.
 
 ### Task 3 — explicit v4 admission and full paired/final lineage
 
