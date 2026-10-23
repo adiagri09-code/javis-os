@@ -6,7 +6,12 @@ Pilot choice remains owner-delegated: reconciliation primary, document processin
 secondary, Python bugfix/test technical control. This selects work types only;
 business source scope, owner acceptance and live activation are not inferred.
 
-Local57fea085 commits the closed image metadata channel; it is pending batch push.
+Pushed4ba9624a76cd4bfb54d3d229263baa223944383b includes image metadata channel
+57fea085 and the fixed worker factory; CI40024951291 runs on that exact head.
+Reviewed owned-verification commita1920608 is local, not pushed yet. Keep the
+exact current-native-registration test intact while the whole changed runtime
+boundary is unfinished; qualify/register the complete frozen boundary before
+publishing those runtime changes. Do not rerun old native20 on intermediate code.
 The atomic fixed worker factory now has independent scoped approval:17 collected,
 16PASS+1Linux-onlyskip2.098s on source672d55e8/test0624ea4d. Real acquisition and
 close-result failures were reproduced and corrected before approval; only actual
@@ -30,8 +35,19 @@ invalidate04c8 as a current qualification. Its20/nativeSkill evidence remains
 historical; no registration/account retry until the whole changed boundary freezes
 and qualifies. No new account/SDK/provider invocation or live use occurred.
 
-CI40019712830 at326c now succeeded. Pushed5563 CI40022263716 was still running at
-last observation; neither earlier result qualifies local or working changes.
+CI40019712830 at326c succeeded. Earlier5563 CI40022263716 was still running at
+last observation; neither earlier result qualifies4ba or local/working changes.
+PR803 body now reflects the pushed channel/factory batch and local runtime work.
+
+GuardianV2 first implementation collected11:2 contract pass and9 Windows setup
+paths refused before launch_offer in1.639s. No passing native integration evidence
+is claimed. V2 must avoid sandbox._private_directory because it launches ACL
+helpers outside the job and imports broader host dependencies. Approved correction
+creates exclusive/fsynced markers only beneath existing authenticated private lock
+parents, with ancestry checks; authenticating those parents is a host-consumer
+precondition. No missing broad parents, ACL subprocess or new security framework.
+Author owns lifetime source/v2tests and has the sole test/native process slot;
+parent/reviewer have no active tests. Corrected implementation/review remain open.
 
 ## Prior continuation — canonical capture/bootstrap committed; metadata channel verified
 
