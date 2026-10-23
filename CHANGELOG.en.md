@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.295.0] - 2026-10-23
+### Security
+- **Node.js October 2026 security patch.** In progress.
+
 ## [0.293.0] - 2026-10-23
 ### Improved
 - **Prepare controlled comparisons.** Reserve experiment management, paired baseline/proposal trials and result reports. Final scope will be recorded after verification; changed-candidate execution and live activation remain disabled.
