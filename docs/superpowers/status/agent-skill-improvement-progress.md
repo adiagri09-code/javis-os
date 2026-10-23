@@ -157,6 +157,28 @@
   Current footprint27 files has no qualified native registration; Task7 semantic/
   dependency receipts, Task8 API/full stop, Task9 qualification/whole-C review/final
   CI and all business/live gates stay open. No actual model/auth query or deploy.
+- Task7 semantic/dependency implementation component is complete locally: actual
+  improve_evaluate role, exact A before/after/provenance/protected context and bound
+  source/engine/evaluator/declared dependency evidence. Immutable receipt/input/
+  output/call linkage never updates A's unreviewed status or original provenance.
+  Model pass + native unknown stays unknown. Exact owner arbitration encrypts its
+  rationale and cannot erase negative findings or waive native/source/dependency
+  gaps. Current consumption rechecks after slow reads and permits later-phase
+  reads without new dispatch; cold history/replay survives revoke. Granted helper
+  bytes are observed; ungranted file bodies are not read. Executable/runtime
+  dependency qualification remains unsupported here and belongs to M6/D gates.
+  Scope9/9 GREEN443s precedes a recorded two-file admission/input-binding fix;
+  final4 reproductions + normal propose/repair/review7 GREEN67.301s. Reuse is
+  conditional, never final-head proof. Source32 profile registry remains empty.
+  Task8 full API/stop and Task9 qualification/independent whole-C review/exact-final
+  CI remain; no actual model/business/live acceptance or deployment is claimed.
+- Test environment correction: prior T5/T6 evidence descriptions overgeneralized
+  an Opus-shaped worker-unit pin. Main end-to-end fixtures actually use synthetic
+  model/CLI/SDK/profile labels; installed SDK DTO library is0.2.116 with injected
+  engines/verifiers. Separate correction preserves all original source/log hashes;
+  no rerun or real-runtime claim follows from it. Task5 LinuxCI39901547032 and
+  Task6 LinuxCI39903506020 completed SUCCESS on306e0871 and07e84dc4; newer T7 code
+  still needs Linux feedback and complete exact-final-C CI.
 - Generated proposals remain A-unreviewed with separately pinned semantic and
   dependency assessments. No assessment/owner product confirmation waives source,
   runtime/view, qualification, activation or real business-data gates. Candidate/

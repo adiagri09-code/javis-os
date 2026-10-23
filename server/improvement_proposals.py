@@ -11,38 +11,17 @@ from improvement_experiments import _generation, _identifier
 from improvement_generation_protocol import input_bytes, parse_generation_output
 from improvement_improver_inputs import ImproverInputs
 from improvement_operation_adapter import ClaudeOperationAdapter
-from improvement_operation_execution import OperationExecution
-from improvement_operation_results import OperationResults
 from improvement_operation_schema import TERMINAL, assert_installed
-from improvement_operation_tasks import OperationTasks
 from improvement_trial_records import _brain
 from improvement_trial_runner import _settled_call
+from improvement_role_workflow import RoleWorkflow
 
-_REQUIRED = {'materialization', 'worker_protocol', 'installation', 'tool_inventory', 'side_effects',
-             'completion', 'actual_model', 'native_session'}
-_UNOBSERVED = {'actual_reasoning', 'actual_input_use'}
+class ProposalService(RoleWorkflow):
+    _product_kinds = frozenset({'propose', 'repair'})
 
-
-class ProposalService:
     def __init__(self, execution, tasks):
-        if (type(execution) is not OperationExecution or type(tasks) is not OperationTasks
-                or tasks.execution is not execution):
-            raise TypeError('concrete_proposal_dependencies_required')
-        self.execution, self.tasks, self.plans = execution, tasks, execution.plans
-        self.assets, self.store, self.blobs = execution.assets, execution.store, execution.blobs
-        self.inputs, self.products = ImproverInputs(self.plans), OperationResults(execution)
-        self._operations, self._closed, self._closing, self._loop = {}, False, None, None
-
-    def _bind(self):
-        loop = asyncio.get_running_loop()
-        if self._loop is None:
-            self._loop = loop
-        elif self._loop is not loop:
-            raise RuntimeError('proposal_loop_changed')
-
-    def _open(self):
-        if self._closed:
-            raise RuntimeError('proposal_service_closed')
+        super().__init__(execution, tasks)
+        self.inputs = ImproverInputs(self.plans)
 
     @staticmethod
     def _start_key(brain, event_key):
@@ -92,6 +71,7 @@ class ProposalService:
                 # Interrupted/historical request is not authority to resume work.
                 row = self.execution._row(connection, principal, old['operation_id'])
                 return {'replay': {**old, 'status': 'operation_recorded', 'operation_status': row['status']}}
+            assert_installed(connection)
             state = self.inputs._snapshot(connection, principal, identifier, payload['expected_generation'])
         built = self.inputs.build(principal, identifier, expected_generation=payload['expected_generation'])
         self._open()
@@ -122,66 +102,18 @@ class ProposalService:
             self.assets._event(connection, principal, self._start_key(brain, event_key), 'proposal_generate_start', payload, start)
             return {'state': state, 'data': data, 'operation_id': row['operation_id'], 'generation': generation}
 
-    def _product(self, connection, principal, identifier):
-        row = self.execution._row(connection, principal, identifier)
-        if row['kind'] not in ('propose', 'repair') or row['status'] != 'completed':
-            raise IM.ConflictError('proposal_operation_incomplete')
-        if connection.execute("SELECT 1 FROM improvement_events WHERE brain_id=? AND operation='operation_owner_cancel' "
-            "AND json_extract(result_json,'$.operation_id')=?", (row['brain_id'], identifier)).fetchone():
-            raise IM.ConflictError('proposal_operation_cancelled')
-        attempt = self.execution._attempt(connection, row)
-        call = self.execution.bound_call(connection, row, attempt)
-        context = self.plans.host._row(connection, row['brain_id'], row['experiment_id'])
-        pin = self.plans.host._decode(context)['engine_config']
-        if (attempt['status'] != 'completed' or attempt['engine_at'] is None or call['engine_at'] != attempt['engine_at']
-                or call['status'] != 'ok' or call['engine'] != pin['provider'] or call['model'] != pin['model']):
-            raise IM.ConflictError('proposal_call_incomplete')
-        records = [dict(item) for item in connection.execute('SELECT * FROM improvement_operation_results '
-            'WHERE operation_id=? AND brain_id=? AND attempt=?', (identifier, row['brain_id'], row['attempt']))]
-        if len(records) != 1:
-            raise IM.ConflictError('proposal_result_unavailable')
-        report = self.products.read(principal, identifier, row['attempt'])
-        if (IM._hash(report) != records[0]['result_hash'] or attempt['result_json'] != IM._json(report)
-                or report['materialization_hash'] != attempt['materialization_hash'] or report['engine_config_hash'] != IM._hash(pin)):
-            raise IM.ConflictError('proposal_result_changed')
-        checks = {item['id']: item['verdict'] for item in report['checks']}
-        if (len(checks) != len(report['checks']) or set(checks) != _REQUIRED | _UNOBSERVED
-                or any(checks[key] != 'pass' for key in _REQUIRED)
-                or any(checks[key] not in ('pass', 'unknown') for key in _UNOBSERVED)):
-            raise PermissionError('proposal_native_evidence_unavailable')
-        trace = [dict(item) for item in connection.execute('SELECT * FROM improvement_operation_observations '
-            'WHERE operation_id=? AND brain_id=? AND attempt=? ORDER BY sequence', (identifier, row['brain_id'], row['attempt']))]
-        if any(item['late'] for item in trace) or [item['payload_hash'] for item in trace] != report['trace_hashes']:
-            raise IM.ConflictError('proposal_native_trace_changed')
-        raw = self.products.artifact(principal, identifier, row['attempt']).decode('utf-8')
-        return {'row': dict(row), 'attempt': dict(attempt), 'call': call, 'record': records[0], 'report': report, 'trace': trace, 'raw': raw}
-
-    def _product_fence(self, connection, principal, product):
-        row = self.execution._row(connection, principal, product['row']['id'])
-        attempt = self.execution._attempt(connection, row)
-        if (dict(row) != product['row'] or dict(attempt) != product['attempt']
-                or self.execution.bound_call(connection, row, attempt) != product['call']):
-            raise IM.ConflictError('proposal_operation_changed')
-        if connection.execute("SELECT 1 FROM improvement_events WHERE brain_id=? AND operation='operation_owner_cancel' "
-                "AND json_extract(result_json,'$.operation_id')=?", (row['brain_id'], row['id'])).fetchone():
-            raise IM.ConflictError('proposal_operation_cancelled')
-        trace = [dict(item) for item in connection.execute('SELECT * FROM improvement_operation_observations '
-            'WHERE operation_id=? AND brain_id=? AND attempt=? ORDER BY sequence', (row['id'], row['brain_id'], row['attempt']))]
-        if trace != product['trace']:
-            raise IM.ConflictError('proposal_native_trace_changed')
-
-    def _read_product(self, principal, identifier):
-        with closing(self.store._conn()) as connection:
-            return self._product(connection, principal, identifier)
+    @staticmethod
+    def _repair_input(data, product):
+        return {'version': 1, 'kind': 'authorized_structural_repair', 'authorized_input': data,
+            'candidate_limit': data['candidate_limit'], 'invalid_output': product['raw'],
+            'invalid_artifact_hash': product['report']['artifact']['hash'], 'validation_code': 'invalid_generation_structure',
+            'parent_operation_id': product['row']['id'], 'parent_result_id': product['record']['id']}
 
     def _repair(self, principal, begun, product, event_key):
         self._open()
         state, data = begun['state'], begun['data']
         brain, value = _brain(principal), state['prepared'][0]
-        repair = {'version': 1, 'kind': 'authorized_structural_repair', 'authorized_input': data,
-            'candidate_limit': data['candidate_limit'], 'invalid_output': product['raw'],
-            'invalid_artifact_hash': product['report']['artifact']['hash'], 'validation_code': 'invalid_generation_structure',
-            'parent_operation_id': product['row']['id'], 'parent_result_id': product['record']['id']}
+        repair = self._repair_input(data, product)
         blob = self.blobs.write(brain, input_bytes(repair))
         self.plans.host._snapshot_observe(principal, state['prepared'][1])
         with self.store._Tx(self.store) as connection:
@@ -214,6 +146,18 @@ class ProposalService:
 
     def _publish(self, principal, payload, event_key, begun, product, batch, basis=None):
         state, brain = begun['state'], _brain(principal)
+        if product['row']['kind'] == 'propose' and basis is None:
+            expected_input = begun['data']
+            if product['row']['id'] != begun['operation_id']:
+                raise IM.ConflictError('proposal_input_changed')
+        elif (product['row']['kind'] == 'repair' and basis is not None and basis['row']['kind'] == 'propose'
+                and basis['row']['id'] == begun['operation_id'] and product['row']['parent_id'] == basis['row']['id']
+                and basis['row']['input_hash'] == IM._hash(begun['data'])):
+            expected_input = self._repair_input(begun['data'], basis)
+        else:
+            raise IM.ConflictError('proposal_input_changed')
+        if product['row']['input_hash'] != IM._hash(expected_input):
+            raise IM.ConflictError('proposal_input_changed')
         self.plans.host._snapshot_observe(principal, state['prepared'][1])
         observed, raw = self.plans.authoring.observe(principal, state['authoring']['target'])
         with self.store._Tx(self.store) as connection:
@@ -292,37 +236,5 @@ class ProposalService:
         if type(event_key) is not str or not 8 <= len(event_key) <= 160:
             raise ValueError('invalid_event_key')
         payload = {'experiment_id': experiment_id, 'expected_generation': expected_generation}
-        key, digest = (brain, event_key), IM._hash(payload)
-        previous = self._operations.get(key)
-        if previous is not None:
-            if previous[0] != digest:
-                raise IM.ConflictError('proposal_event_conflict')
-            return await self.tasks._join(previous[1])
-        task = asyncio.create_task(self._generate(principal, payload, event_key))
-        self._operations[key] = digest, task, experiment_id, principal
-
-        def finished(done):
-            if self._operations.get(key, (None, None))[1] is done:
-                self._operations.pop(key)
-            self.tasks._consume(done)
-
-        task.add_done_callback(finished)
-        return await self.tasks._join(task)
-
-    async def close(self):
-        self._bind()
-        if self._closing is None:
-            self._closed = True
-            self._closing = asyncio.create_task(self._close())
-        return await self.tasks._join(self._closing)
-
-    async def _close(self):
-        failure = None
-        try:
-            await self.tasks.close()
-        except BaseException as error:
-            failure = error
-        await asyncio.gather(*(entry[1] for entry in list(self._operations.values())), return_exceptions=True)
-        if failure is not None:
-            raise failure
-        return True
+        return await self._run_owned(principal, experiment_id, event_key, payload,
+                                     lambda: self._generate(principal, payload, event_key))

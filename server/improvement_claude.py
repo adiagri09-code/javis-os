@@ -27,7 +27,9 @@ PROFILE_SOURCES = ("improvement_claude.py", "improvement_sandbox.py", "improveme
                    "improvement_operation_runner.py", "improvement_operation_tasks.py", "improvement_operation_recovery.py",
                    "improvement_operation_retry.py", "improvement_operation_schema.py", "improvement_operation_records.py",
                    "improvement_improver_inputs.py", "improvement_generation_protocol.py", "improvement_comparison_plans.py",
-                   "improvement_proposals.py", "improvement_skill_candidates.py")
+                   "improvement_proposals.py", "improvement_skill_candidates.py", "improvement_role_workflow.py",
+                   "improvement_semantic_review.py", "improvement_semantic_protocol.py", "improvement_semantic_records.py",
+                   "improvement_dependency_evidence.py")
 VERIFIED_NATIVE_RUNTIMES = {("win32", "2.1.304",
     "019e5174d5d954585edb1a946fe280e44a973050b4897034adf0e16306f85fdd", "0.2.116"),
     ("win32", "2.1.308", "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53", "0.2.116")}

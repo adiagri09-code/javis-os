@@ -351,22 +351,73 @@ uses actual improve_evaluate operation(s); current_evidence validates concrete
 immutable result refs, before/after bytes, protected context, dependency closure,
 source authority and selected engine/evaluator/config. No generic readiness flag.
 
-- [ ] RED: merely retaining protected text while adding contradictory instructions
+- [x] RED: merely retaining protected text while adding contradictory instructions
   does not establish eligibility; missing helpers/changed closure remain unresolved.
-- [ ] Deterministically verify body/frontmatter/paths/current dependency bytes and
+- [x] Deterministically verify body/frontmatter/paths/current dependency bytes and
   actual scope. A model's asserted helper or source path is never authority.
-- [ ] Obtain genuine model semantic assessment over authorized exact before/after
+- [x] Obtain genuine model semantic assessment over authorized exact before/after
   data; strict output schema and actual native/usage coverage remain separate from
   its claimed score. No majority vote or invented reviewer independence.
-- [ ] Append receipts; do not UPDATE A's original provenance/status. Bind exact
+- [x] Append receipts; do not UPDATE A's original provenance/status. Bind exact
   real operation input/output IDs/hashes and source/runtime/evaluator versions.
-- [ ] Preserve unknown/disagreement/owner-required. Typed owner arbitration is
+- [x] Preserve unknown/disagreement/owner-required. Typed owner arbitration is
   exact artifact/scope; product owner-confirm cannot waive semantic/runtime drift.
-- [ ] Revalidate after slow model/blob work and at consumption; stale/revoked
+- [x] Revalidate after slow model/blob work and at consumption; stale/revoked
   receipts remain historical, never reactivate grants or accept changed bytes.
-- [ ] Candidate/final execution still closed until actual D view enforcement;
+- [x] Candidate/final execution still closed until actual D view enforcement;
   semantic assessment alone never allocates holdout, composes, applies or activates.
-- [ ] GREEN protected-meaning/dependency/receipt/owner-scope tests; commit.
+- [x] GREEN protected-meaning/dependency/receipt/owner-scope tests; commit.
+
+Task7 implementation component complete locally: actual isolated semantic role
+uses improve_evaluate and real A before/after/provenance, protected context,
+current source/grant/engine/evaluator pins and explicitly captured dependencies.
+Shared RoleWorkflow factors the existing owned admission/native product/thread
+lifetime from ProposalService, without exposing an arbitrary dispatch API.
+Append-only semantic receipts retain genuine input/output/result/call refs; A
+semantic_status/provenance remain unreviewed and unchanged.
+
+Dependency evidence is explicitly a declared-reference graph, not a full runtime
+qualification. Granted document bytes/native authority are pinned and transitively
+checked; missing/ambiguous/cyclic refs remain unknown. Metadata/discovery projection
+does not grant full file bodies. Executable helpers are read as data only, remain
+unsupported/unknown for execution here, and require M6's real isolated runtime.
+No new path, permission, helper command, model or source is accepted from output.
+
+Strict reviewer schema and actual isolated renderer separate model verdict from
+native coverage and deterministic findings. Model pass + native unknown stays
+unknown; negative assessment is preserved even when the owner disagrees. Typed
+owner arbitration pins exact receipt/binding and encrypts its private rationale;
+owner evidence cannot waive source/native/dependency gates. Cold history/replay
+survives revoke, but current evidence checks grants before decryption, then source
+and native fences again after slow reads. Read-only consumption permits later
+qualifying/awaiting_apply phases, without opening new reviews or final execution.
+
+Evidence: semantic2 absent RED5.064s -> GREEN21.702s; dependency4 absent RED ->
+GREEN.200s. Source-after-decrypt/private-reason2 RED21.753s -> core7 GREEN75.303s.
+Revoke-before-decrypt, cancel-at-arbitration and malformed/conflicting verdicts
+RED4/21.793s -> GREEN4/21.972s. Reviewer cancellation/DB-terminal receipt thread,
+concurrent key and later-phase/schema7 GREEN41.075s. Actual granted/ungranted helper
+integration2 GREEN23.369s and declared graph6 GREEN.303s; synthetic SDK throughout.
+
+Affected9-script regression GREEN443s, including semantic18/161s and original
+proposer18/165s, was followed by two narrow admission/input-binding corrections:
+older draft schema must reject before preflight, and a real call over unrelated
+input cannot mint tuning/semantic lineage. Four actual-workflow cases reproduced
+RED33.879s; final negatives + normal propose/repair/review7 GREEN67.301s. Earlier
+9-script sources are archived at exact recorded hashes with an explicit two-file
+diff; reuse is conditional impact evidence, not exact-final-head proof. No full
+sweep repeated solely for resume or these guarded boundaries. Final exact-C CI
+and independent whole-C review remain Task9.
+
+Configuration descriptor correction: main preparation/runner/workflow fixtures use
+synthetic-model and synthetic CLI/SDK/profile pins; direct worker unit fixtures use
+an Opus-shaped pin. Both inject synthetic engines/verifiers using installed SDK
+DTOs0.2.116. Earlier T5/T6 evidence labels overgeneralized the fixture pin; their
+source/log/results remain intact with a separate correction. They never proved
+native account/model qualification. Actual Task5 Linux39901547032 and Task6
+Linux39903506020 now SUCCESS on306e0871/07e84dc4 respectively; neither covers T7.
+Current footprint32 files remains unqualified; Task8 public controls/full stop,
+Task9 qualification/review/final CI and M0–M8 business/live acceptance stay open.
 
 ## Task 8 — owner controls and complete shared stop ownership
 
