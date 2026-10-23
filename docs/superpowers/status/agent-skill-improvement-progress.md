@@ -103,6 +103,30 @@
 
 ## M2C engineering continuation
 
+### D2 routing-state foundation, 24 October
+
+An independent production-path repair now makes authoritative disabled state
+agree across skill discovery and actual body loading. Previously a disabled
+canonical skill disappeared from manifests but the actual hub handler could
+still read its stale Claude mirror. Same-source enabled/disabled collisions
+also disagreed between metadata APIs. Resolver and list_skills now respect
+the disabled source before lower-priority enabled copies, including legacy state.
+Unrelated enabled-source precedence remains unchanged.
+
+Behavioral RED7 reproduced5 failures; GREEN7 passed0.123s. Actual warmed hub
+reads deny after disable without increasing usage; a warmed lazy registry drops
+the disabled skill. Five affected scripts passed sequentially in13.392s, including
+11 Phase8 pytest cases. No model or native query occurred. All81 qualified native
+source hashes remain identical, so exact958527ac/1f3391cf enforcement evidence is
+reused. Artifact `../evidence/2026-10-24-m2d2-routing-state.json`, SHA256
+56246006f3a4dce8cb58762f648c30380c67b0618dd3b5742dec366da04de610.
+
+Scoped routing-delta review and final-head CI remain required. D1 CI39990661065
+on999c207a was running before this new source delta; it cannot prove a later head.
+This repair does not implement task/session pins, production overlays or native
+materialization. Full D2/E/F and M3–M8, account pair/final-positive and all
+owner/business/live gates remain open.
+
 ### D1 selected-account feasibility and invalid-output follow-up, 23 October
 
 At54210807, exact qualified profile81/4d346a3a made two real selected-account

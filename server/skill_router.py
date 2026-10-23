@@ -185,10 +185,12 @@ def resolve_skill_file(root, slug: str) -> Optional[Path]:
     for base in _READ_BASES:
         f = root / base / slug / "SKILL.md"
         try:
+            if (root / base / ".disabled" / slug / "SKILL.md").is_file():
+                return None
             if f.is_file():
                 return f
         except OSError:
-            continue
+            return None
     return None
 
 
@@ -272,6 +274,11 @@ def list_skills(root, lang: str = "") -> list:
     def scan_base(base_rel: str):
         base = root / base_rel
         for d in _iter_skill_dirs(base):        # BẬT
+            try:
+                if (base / ".disabled" / d.name / "SKILL.md").is_file():
+                    continue
+            except OSError:
+                continue
             add(d, base_rel, True)
         dis = base / ".disabled"                # TẮT
         try:
@@ -284,8 +291,7 @@ def list_skills(root, lang: str = "") -> list:
 
     scan_base("skills")           # canonical: quyết định trạng thái, thắng mọi fallback
     scan_base(".claude/skills")   # legacy / mirror
-    for d in _iter_skill_dirs(root / ".agents"):   # rất cũ (chỉ bật)
-        add(d, ".agents", True)
+    scan_base(".agents")         # legacy: cùng trạng thái với manifest và body loader
     return out
 
 
