@@ -6,7 +6,7 @@ import math
 import time
 
 from improvement_cases import _digest, _fields, _frozen
-from improvement_claude import ClaudeTrialAdapter
+from improvement_claude import ClaudeTrialAdapter, _verify_owned
 from improvement_operation_workspace import OperationWorkspace
 from improvement_store import _hash
 
@@ -42,7 +42,7 @@ class ClaudeOperationAdapter:
                 or request["engine_config_hash"] != manifest["engine_config_hash"]
                 or request["engine_config_hash"] != _hash(self.pin)):
             raise ValueError("operation_configuration_drift")
-        verified = await asyncio.to_thread(self.verify)
+        verified = await _verify_owned(self)
         if not verified.get("supported") or verified.get("capability_hash") != request["capability_hash"]:
             raise ValueError("operation_capability_drift")
         from improvement_native_transport import execute_worker

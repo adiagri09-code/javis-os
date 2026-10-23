@@ -216,7 +216,7 @@ class TrialRunner:
             phase = "unsupported_configuration"
             adapter = self.adapter_factory(request["engine_config"], workspace_root=self.trials.workspace.root,
                                            before_engine_start=before_start)
-            verified = await asyncio.to_thread(adapter.verify)
+            verified = await _settled_call(adapter.verify)
             if not isinstance(verified, dict) or verified.get("supported") is not True:
                 raise _RunFailure("unsupported_configuration")
             IC._digest(verified.get("capability_hash"))

@@ -64,6 +64,17 @@ async def _settled_owned(future):
             cancelled = error
 
 
+async def _verify_owned(adapter):
+    """A cancelled preflight must settle before its caller releases ownership."""
+    task = asyncio.create_task(asyncio.to_thread(adapter.verify))
+    values, cancelled = await _settled_owned(asyncio.gather(task, return_exceptions=True))
+    if cancelled is not None:
+        raise cancelled
+    if isinstance(values[0], BaseException):
+        raise values[0]
+    return values[0]
+
+
 def profile_hash():
     root = Path(__file__).parent
     return _hash({name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in PROFILE_SOURCES})
@@ -195,7 +206,7 @@ class ClaudeTrialAdapter:
                 or request["engine_config_hash"] != manifest["engine_config_hash"]
                 or request["engine_config_hash"] != _hash(self.pin)):
             raise ValueError("trial_configuration_drift")
-        verified = await asyncio.to_thread(self.verify)
+        verified = await _verify_owned(self)
         if not verified.get("supported") or verified.get("capability_hash") != request["capability_hash"]:
             raise ValueError("trial_capability_drift")
         from improvement_native_transport import execute_worker

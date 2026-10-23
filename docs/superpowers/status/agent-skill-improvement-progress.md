@@ -20,7 +20,10 @@ missing-component11RED is recorded and implementation is underway without runtim
 enabling. A separate real cancellation gap was reproduced in both actual adapter
 generators and both actual runners: verification threads outlived their cancelled
 caller. Existing settled ownership now keeps the thread and execution lifetime;
-focused4 pass, affected regressions/review remain pending. The first too-short
+focused4 pass; affected TrialRunner25/OperationRunner15/Claude22 pass sequentially
+in30.704s/75.389s/1.534s. Independent focused4 pass on all7 unchanged pins in
+0.344s/2.080s/3.463s with no findings; public owned-verification records commands,
+hashes, REDs and limits. The first too-short
 runner observations passed before cleanup finished; stronger waiting reproduced
 both original failures, preserved separately. These four changed PROFILE_SOURCES
 invalidate04c8 as a current qualification. Its20/nativeSkill evidence remains

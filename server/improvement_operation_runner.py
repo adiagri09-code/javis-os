@@ -152,7 +152,7 @@ class OperationRunner:
             pin = prepared[1]["engine_config"]
             phase = "unsupported_configuration"
             adapter = self.adapter_factory(pin, workspace=execution.workspace, before_engine_start=before_start)
-            verified = await asyncio.to_thread(adapter.verify)
+            verified = await _settled_call(adapter.verify)
             if type(verified) is not dict or verified.get("supported") is not True:
                 raise _RunFailure("unsupported_configuration")
             _digest(verified.get("capability_hash"))
