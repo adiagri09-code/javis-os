@@ -216,6 +216,19 @@ Evidence `../evidence/2026-10-23-m2d1-task3-view-holdout.json`, SHA256
 Current79-source b46e2cc3 is unregistered. This is a current-authority repair,
 not a final holdout claim/native/business acceptance. Task3 remains OPEN.
 
+Additive final-link metadata checkpoint:79 checks passed204.563s recorded across
+new guards4, view schema, TrialStore, migration/store and native footprint. A
+real legacy CaseStore reservation cannot be adopted by a tuning comparison;
+missing/changed guard blocks new authority before plaintext. Earlier prototype
+metadata stays readable, existing view DDL is AST-identical, and schema2
+downgrade drops the new child first. Evidence
+`../evidence/2026-10-23-m2d1-task3-qualification-schema.json`, SHA256
+c52e682319fafcd9613e125ce3741bc6b27cb9f7bf3ae4a4b94f4b7327e3179a.
+Current79-source d6b20eb5 is unregistered. Genuine positive selected-final link,
+owned reserve/consume and final native/public controls remain open; runtime
+final requests are still explicitly denied. No final/eligible result is faked.
+Linux39965159570 SUCCESSc811b9d6; b3a3f0cb CI39966693829 was still in progress.
+
 - Final affected regression21/21 GREEN,663.451s, qualified across two frozen
   segments: first15 passed scripts retain identical product/helper/test bytes;
   only the failed standalone task-drain test changed from a30ms scheduler sample

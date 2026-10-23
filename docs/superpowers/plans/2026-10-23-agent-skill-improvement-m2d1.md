@@ -555,6 +555,28 @@ selected final comparison/view is required; no fabricated eligible/report/final
 Trial may be used to claim an exercised positive path. Historical link proof is
 immutable/cold; current admission separately revalidates policy/source/meaning.
 
+First final-registry unit installs only the frozen additive link/SQL guards;
+runtime final requests remain closed. Tests use a genuine tuning comparison and
+genuine unrelated legacy CaseStore reservation to prove no adoption, missing/
+changed-guard refusal before plaintext, prototype cold history, and continued raw
+nine-pin denial. No positive final row is fabricated. Schema7 stays one current
+unreleased shape; older7 prototypes remain metadata-readable but cannot gain new
+authority. Update the existing schema2 downgrade fixture child-first. Affected
+tests: new view qualification schema, view schema, legacy TrialStore/migration,
+and exact native source footprint. Runtime owned reserve/consume is a later unit.
+
+Qualification metadata checkpoint: direct4 plus view_schema, TrialStore, store
+and NativeFootprint passed79 checks,204.563s recorded (per-row timing basis).
+The real tuning/legacy reservation adoption is refused; changed/missing guard
+blocks current plaintext, older prototype cold metadata survives. All previous
+view DDL statements remain AST-identical; schema2 downgrade drops the new child
+first. Evidence `../evidence/2026-10-23-m2d1-task3-qualification-schema.json`,
+SHA256c52e682319fafcd9613e125ce3741bc6b27cb9f7bf3ae4a4b94f4b7327e3179a.
+Profile79/d6b20eb5678033ceec44c20ffd6d6d26d3a49da2a7114b2629108c54bb68ffe4
+is unregistered. No actual selected-final link is exercised or claimed. Final
+runtime remains explicitly closed pending actual owned reserve/consume; Task3
+is OPEN. Continue from this checkpoint, not by repeating these green scripts.
+
 **Files:** new `server/improvement_view_materialization.py`; extend actual
 TrialStore.materialize, sandbox/worker/TrialProfile, receipts/checks/results/
 views/products/comparison projection. Add all new native-path sources to the
