@@ -145,8 +145,11 @@ class ExperimentTaskDrainTests(unittest.IsolatedAsyncioTestCase):
             try:
                 self.assertTrue(await asyncio.to_thread(entered.wait, 10))
                 closing = asyncio.create_task(self.tasks.drain_owned(self.owner, []))
-                await asyncio.sleep(.03)
+                # Keep the unrelated reservation blocked until the empty drain
+                # actually finishes; elapsed scheduler time is not a join proof.
+                await asyncio.wait_for(asyncio.shield(closing), 5)
                 self.assertTrue(closing.done(), 'An empty experiment scope waited for unrelated admission')
+                self.assertFalse(release.is_set())
                 await closing
                 self.assertFalse(start.done())
             finally:

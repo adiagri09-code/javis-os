@@ -38,6 +38,28 @@
 
 ## M2C engineering continuation
 
+- Final affected regression21/21 GREEN,663.451s, qualified across two frozen
+  segments: first15 passed scripts retain identical product/helper/test bytes;
+  only the failed standalone task-drain test changed from a30ms scheduler sample
+  to actual completion while the unrelated reservation stays blocked. Its6-test
+  suite passed, and an intentionally wrong unrelated-reservation join still
+  failed with TimeoutError. The same reviewer approved this test-only correction.
+  All6 remaining scripts passed on the new frozen scope. Native profile9dcf7184
+  is unchanged. Current sanitized engineering evidence SHA2b3fd081 records
+  commands/log hashes, segment reuse, review and runtime boundaries. Fresh main
+  remains ed8163fb/0.295.0 and PR801 solely reserves0.296.0. Exact-final Linux CI,
+  integration and actual publication remain pending; no Task9 completion yet.
+- Current final-source checkpoint: rebased onto ed8163fb/main0.295.0, reserved
+  0.296.0 in PR801. Product/test bytes survived rebase unchanged; the same
+  independent reviewer approved scoped main integration, fixture corrections
+  and corrected bilingual changelog blocks. Both original Important findings
+  remain closed. The new34-source profile9dcf7184 passed exact native solver5/5
+  (11.344s process wall time), roles5/5 (43.031s), and cleanup faults9/9 (1.241s
+  unittest time). Sanitized artifact SHA98ee4e8c is registered outside the profile.
+  Separate persisted-selection/native-readiness verification passed with zero
+  model calls. Final affected21-script regression is running sequentially with
+  source/test hashes; exact-final Linux CI/integration/publication remain pending.
+  Historical aa51b4b9 feasibility remains old-source evidence only.
 - Current continuation: both Important review findings are closed by the same
   independent reviewer. Dependency identity11/11, existing dependencies6/6 and
   actual preparation ownership4/4 passed. Full old preparation regression then
@@ -446,7 +468,7 @@
 |---|---|---|---|
 | M0 | Complete: PR #794 merged09903315, CI39793439501 and publication39797072172 passed;0.287.0 | Not applicable to foundation | Metadata only; no live activation or production restart |
 | M1 | Complete engineering: PR795 merged9dd7a9f9, CI39852883192 and publication39856024117 succeeded;0.291.0 | One historical real-engine synthetic baseline; aggregate unknown; no business pilot | Trial/activation flags false; not enabled |
-| M2 | M2A published0.292.0: PR799 mergedcbef2f46, CI39862650038/publication39865749261 passed; B starting, C–F open | No skill feasibility yet | Not enabled |
+| M2 | A0.292.0 and B0.293.0 published; C/PR8010.296.0 in final regression/CI; D–F open | Real synthetic C role pipeline ran on ddec90ad; baseline fail, semantic unknown; no independent skill pilot | Not enabled |
 | M3 | Pending | No qualification or live canary | Not enabled |
 | M4 | Pending | No adapter/routing pilot | Not enabled |
 | M5 | Pending | No agent pilot | Not enabled |
@@ -484,10 +506,11 @@
 
 ## Next action
 
-Finish final-head CI for ready PR795, recheck main/version, merge when all required gates
-pass, then verify0.291.0 publication. Continue M2's validated skill authoring/comparison/
-scoped manual apply/revert and operator review from the integrated foundation. M2 source
-gap analysis may proceed during CI; its code must retain all M1 isolation/ownership gates.
+Finish C/PR801's final affected regression and exact-final Linux CI, recheck
+main/version, integrate when all required gates pass, and verify actual0.296.0
+publication. Continue M2D's candidate effective view, sealed qualification and
+scoped manual apply/revert from that integrated foundation. Source gap analysis
+may proceed during CI; retain all existing isolation/ownership gates.
 Do not use live prompt builders or fallback engine selection as a heartbeat guard.
 The owner run and activation capabilities remain false pending their actual release gates.
 Full M0–M8 Goal remains active; no business or live rollout gate is closed by a code merge.

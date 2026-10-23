@@ -478,25 +478,40 @@ the final complete current-source native qualification passes. Focused regressio
 adds actual host/supervisor death, suspended-launcher ownership, lost-inventory
 faults and both recovery namespaces, then existing worker/lifetime consumers.
 
-- [ ] Run exact selected CLI/SDK dummy-HOME/config/auth + localhost fake-provider
+- [x] Run exact selected CLI/SDK dummy-HOME/config/auth + localhost fake-provider
   blackbox qualification for actual solver/proposer/reviewer profiles, including
   ambient source/plugin/hook/tool canaries, request identity and cancellation tree.
-- [ ] Save sanitized current source hashes and constraints; old real-smoke profile
-  remains06e75, unknown reasoning/asset use stays unknown on all later profiles.
-- [ ] Only after current configuration/runtime verified, perform a necessary real
+- [x] Save sanitized current source hashes and constraints; historical real-smoke
+  remains06e75 and the later genuine C feasibility remains aa51b4b9; unknown
+  reasoning/asset use stays unknown on all later profiles.
+- [x] Only after current configuration/runtime verified, perform a necessary real
   technical role feasibility in a disposable authorized brain, with genuine usage.
   No rerun-until-win, alternate model, accepted business/semantic claim or live grant.
-- [ ] Run relevant migration/permissions/source/ledger/usage/learning/Team/prompt/
+- [x] Run relevant migration/permissions/source/ledger/usage/learning/Team/prompt/
   UI/route/startup regressions and current old-v1/v2 baseline/report/lifetime checks.
-- [ ] Fresh whole-C independent review. Reproduce actual Important findings RED,
+- [x] Fresh whole-C independent review. Reproduce actual Important findings RED,
   fix and verify; no fake readiness/adapter or scope reduction to obtain green.
-- [ ] Rewrite both changelogs around the final verified implementation before the
+- [x] Rewrite both changelogs around the final verified implementation before the
   last CI run; reservation wording is not final release documentation.
 - [ ] Exact final-head Linux CI, fresh main/version/head checks, authorized straight
   merge, merged-tree equality and actual publication success. No deploy/restart.
 - [ ] Update engineering/business/rollout progress separately and continue D's
   real effective view. Positive final qualification, business pilot, activation,
   later agent/skill expansion and full M0–M8 remain open until actual evidence.
+
+Task9 current checkpoint: exact34-source profile9dcf7184/CLI2.1.308/SDK0.2.116
+passed solver5 and roles5 after the final dependency/preparation fixes and
+fresh-main rebase. Dummy-provider qualification, actual selected-account
+readiness, and historical real-model feasibility are separate proofs. The latter
+made four actual calls on ddec90ad/profile aa51b4b9; baseline JSON shape failed,
+business accuracy requires owner confirmation, semantic/native verdict is
+unknown, and two A proposals remain unreviewed. No rerun sought a winning result.
+The same whole-C reviewer closed both Important findings and approved only the
+scoped fixture/main/changelog corrections afterward. Final21-script affected
+regression passed663.451s in two source-qualified segments; only one standalone
+test synchronization changed after the first15 successes, with an incorrect-join
+negative control still failing. Exact-final Linux CI/integration/publication
+remain pending; Task9 is not complete yet.
 
 ## Pre-flight interface audit for canonicalization
 

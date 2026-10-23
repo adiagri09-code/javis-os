@@ -16,8 +16,8 @@ import re
 # docs/superpowers/evidence/2026-10-23-m2c-native-qualification.json
 QUALIFIED_PROFILES = {('win32', '2.1.308',
     'c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53', '0.2.116',
-    'claude-isolated-roles-v2', 'aa51b4b98341e27cb2ff5f2a78a42eda86265988066d3a39e79b96b8eef7fb63'):
-    '310e6df5c5a0d41297bc4287ee6cbd179db32afac20a3533aad853d23b3fd859'}
+    'claude-isolated-roles-v2', '9dcf718470e70957d07454bb8b50fbde79575a3b23d8c06e24cc9b749051116b'):
+    '98ee4e8c406091ee84db2862cbf80b11a5f15cf88f7d4d96188d5e2360822ea7'}
 
 
 def profile_qualification(pin, platform):

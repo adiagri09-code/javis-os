@@ -6,13 +6,13 @@ Javis OS release history, newest first. You can also read it inside the app unde
 
 English entries start at 0.66.0. Every earlier release is described in the Vietnamese [CHANGELOG.md](CHANGELOG.md), which remains the maintainer's original; the in-app Updates page shows those older entries in Vietnamese.
 
-Format: each release is a `## [0.296.0] - 2026-10-23
+Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
+
+## [0.296.0] - 2026-10-23
 ### Improved
 - **Generate skill proposals from tuning evidence.** Owners can run the baseline on authorized data, seal its results, and ask the model for up to two patches to review.
 - **Assess meaning and dependencies separately.** Each patch has an independent assessment record; missing evidence stays unknown and owner approval remains separate.
 - **Stronger experiment stop and recovery.** Retain data and active work until cleanup is verified, including abrupt host termination on Windows. Changed-candidate execution and live activation remain disabled.
-
-## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
 ## [0.295.0] - 2026-10-23
 ### Security
@@ -22,7 +22,7 @@ Format: each release is a `## [0.296.0] - 2026-10-23
 
 ## [0.293.0] - 2026-10-23
 ### Improved
-- **Prepare controlled comparisons.** Reserve experiment management, paired baseline/proposal trials and result reports. Final scope will be recorded after verification; changed-candidate execution and live activation remain disabled.
+- **Manage controlled skill experiments.** Freeze experiments, chosen edit authority and paired schedules; reports retain exact published results and complete trial coverage. Owners can safely stop or recover experiments with active work. Changed-candidate execution, final qualification and live activation remain disabled.
 
 ## [0.292.0] - 2026-10-23
 ### Added

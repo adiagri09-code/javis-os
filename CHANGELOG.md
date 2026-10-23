@@ -4,13 +4,13 @@
 
 Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay trong app tại **Cài đặt → Cập nhật**.
 
-Định dạng: mỗi phiên bản là một khối `## [0.296.0] - 2026-10-23
+Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
+
+## [0.296.0] - 2026-10-23
 ### Cải thiện
 - **Đề xuất sửa skill từ bằng chứng tuning.** Chủ sở hữu có thể chạy bản gốc trên dữ liệu đã cấp quyền, chốt kết quả rồi yêu cầu model tạo tối đa hai bản sửa để duyệt.
 - **Đánh giá riêng ý nghĩa và phụ thuộc.** Mỗi bản sửa có hồ sơ đánh giá độc lập; kết quả thiếu bằng chứng vẫn giữ trạng thái chưa rõ, quyền duyệt của chủ được giữ nguyên.
 - **Dừng và phục hồi thử nghiệm chặt chẽ hơn.** Giữ dữ liệu và lượt đang chạy đến khi dọn dẹp được xác minh, kể cả khi tiến trình chủ tắt đột ngột trên Windows. Thử candidate thay đổi và áp dụng trên brain thật vẫn chưa được mở.
-
-## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
 ## [0.295.0] - 2026-10-23
 ### Bảo mật
@@ -20,7 +20,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.293.0] - 2026-10-23
 ### Cải thiện
-- **Chuẩn bị các lượt thử có đối chứng.** Đặt chỗ cho quản lý thử nghiệm, ghép cặp bản gốc với đề xuất và báo cáo kết quả. Phạm vi cuối cùng sẽ được ghi sau kiểm chứng; chưa bật candidate thay đổi hay áp dụng trên brain thật.
+- **Quản lý và so sánh thử nghiệm skill.** Lưu cố định thí nghiệm, quyền sửa và lịch đối chứng; báo cáo giữ đúng kết quả đã chốt và kiểm đủ các lượt. Chủ sở hữu có thể dừng/khôi phục thử nghiệm an toàn với tác vụ đang chạy. Candidate thay đổi, qualification cuối và áp dụng trên brain thật vẫn chưa được bật.
 
 ## [0.292.0] - 2026-10-23
 ### Thêm mới

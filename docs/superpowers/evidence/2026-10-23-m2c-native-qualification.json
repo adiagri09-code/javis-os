@@ -4,7 +4,7 @@
   "production_billing": false,
   "platform": "win32",
   "profile_version": "claude-isolated-roles-v2",
-  "profile_hash": "aa51b4b98341e27cb2ff5f2a78a42eda86265988066d3a39e79b96b8eef7fb63",
+  "profile_hash": "9dcf718470e70957d07454bb8b50fbde79575a3b23d8c06e24cc9b749051116b",
   "source_hashes": {
     "improvement_claude.py": "d16e53c2a3213a0f215d3fea05c7daf376e00b01d1607e74c50cc923d4ee37d1",
     "improvement_sandbox.py": "3a319550fe40f62f1bc9a17ef855cdd739c1cc5c186c834cb4cf4e9bc6e95bb9",
@@ -34,10 +34,10 @@
     "improvement_proposals.py": "59a5dec3e118a78719f3ba82041d70e12d28a1c9cee7f2ea4b56f2cbc6cc4f72",
     "improvement_skill_candidates.py": "881d402a3df0629aacfecac590b25f667043b1e7d6e0ef5cd7b6ba09c4886c9e",
     "improvement_role_workflow.py": "f29affd5dc98564fc7389536ecf5317d4b10daf7493cee3af439a9d2261af9c2",
-    "improvement_semantic_review.py": "8e3ff7e0b115fc124ddc5634a876a107a9c0b9bc91b1d994724d4a61822442ea",
+    "improvement_semantic_review.py": "852a31995a118943c8c98ee8a6901320416a75c6db544b3093fe32f5e2d280c1",
     "improvement_semantic_protocol.py": "4fe16034f9461cc15f624c3bfa8574b0de68dcdfe18d62b37b9e5a4fff684a98",
     "improvement_semantic_records.py": "7fb620313eacc8f4548e371face9c0698012cf7f48cca277a2aff34b6a6a0b79",
-    "improvement_dependency_evidence.py": "ab9252fb423d5a7b3a567a2b9502116d3884f537614ecbb2404c0429e0dd898b",
+    "improvement_dependency_evidence.py": "08df1576dfe0e146c5bdcb12cafc1e769c737565b1b49938e35aa7e7957dff09",
     "improvement_execution_limits.py": "1b1830df34b295408ffca49e5ea1f446c6a334d49d085ea79932bf3aa829c6cc",
     "improvement_native_lifetime.py": "bd9cd7cda7883814c22cbed2e6866adf097cefce923a22595eaa34d0722f415b"
   },
@@ -59,13 +59,13 @@
     "Incomplete process-generation inventory cannot grant cleanup."
   ],
   "raw_evidence_sha256": {
-    "task9-native-supervised-solver-evidence.json": "88ba103b995664bb673934f382e7e062868ae77d8c8eb2684ca13806d1cdca9f",
-    "task9-native-current-role-evidence.json": "d77846b76010e768401234e13995e19aca9e37afa6759340547bb9f9fb8fcaa8"
+    "task9-final-native-solver-evidence.json": "d004f3ca8277238e223bb531dcf5f03b6b26d8d2873d8641f8cf82270e9b3aba",
+    "task9-final-native-roles-evidence.json": "3a9de7adc8778d4477455037bbed13e3018cd80f95131da59bf68a744c92ca12"
   },
   "logs_sha256": {
-    "task9-native-supervised-solver.log": "3265b5cf51cd6941eb685ed59ec4cf4b15630f10b8eb9f851ca2901b6df0e4c6",
-    "task9-native-current-role.log": "484fd90936ad31d7db829b7e3269d68745c20e57b9da37f8b441e7f74f1f9f57",
-    "task9-supervisor-faults.log": "d05b75e7b5a7fce977a25162947ecd49eb5e2bcac383100a01083939a32132a7"
+    "task9-final-native-solver.log": "86196c83ee0c0e1f402251384616dfd37bc01bda9a126220715c5f11d04e7c8f",
+    "task9-final-native-roles.log": "425a086db7cb153a4d94dea4fc313facc1a586719f04223263ddcc9bf04fb16d",
+    "task9-final-supervisor-faults.log": "7d304bb750bd7bc370a39021bc9cd778c0cb60545ed4f8dfc3fedd5178272d2a"
   },
   "test_commands": [
     "python tests/python/test_improvement_runtime_qualification.py -v",
@@ -75,7 +75,7 @@
   "scenarios": [
     {
       "scenario": "synthetic/native-pending-query-cancellation",
-      "elapsed_s": 3.609,
+      "elapsed_s": 3.844,
       "production_billing": false,
       "query_count": 1,
       "owned_process_count": 5,
@@ -92,7 +92,7 @@
     },
     {
       "scenario": "synthetic/native-local-fake-provider",
-      "elapsed_s": 4.484,
+      "elapsed_s": 4.515,
       "production_billing": false,
       "runtime": {
         "version": "2.1.308",
@@ -274,9 +274,9 @@
       "kind": "propose",
       "production_billing": false,
       "cache_path_lengths": [
-        308
+        306
       ],
-      "profile_hash": "aa51b4b98341e27cb2ff5f2a78a42eda86265988066d3a39e79b96b8eef7fb63",
+      "profile_hash": "9dcf718470e70957d07454bb8b50fbde79575a3b23d8c06e24cc9b749051116b",
       "runtime": {
         "version": "2.1.308",
         "sha256": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
@@ -327,12 +327,12 @@
       "spawns": [
         {
           "kind": "version",
-          "pid": 23088,
+          "pid": 25020,
           "creationflags": 134217728
         },
         {
           "kind": "query",
-          "pid": 13928,
+          "pid": 25132,
           "creationflags": 134217728
         }
       ],
@@ -352,9 +352,9 @@
       "kind": "repair",
       "production_billing": false,
       "cache_path_lengths": [
-        307
+        305
       ],
-      "profile_hash": "aa51b4b98341e27cb2ff5f2a78a42eda86265988066d3a39e79b96b8eef7fb63",
+      "profile_hash": "9dcf718470e70957d07454bb8b50fbde79575a3b23d8c06e24cc9b749051116b",
       "runtime": {
         "version": "2.1.308",
         "sha256": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
@@ -405,12 +405,12 @@
       "spawns": [
         {
           "kind": "version",
-          "pid": 24992,
+          "pid": 21416,
           "creationflags": 134217728
         },
         {
           "kind": "query",
-          "pid": 8920,
+          "pid": 16972,
           "creationflags": 134217728
         }
       ],
@@ -430,9 +430,9 @@
       "kind": "semantic",
       "production_billing": false,
       "cache_path_lengths": [
-        309
+        307
       ],
-      "profile_hash": "aa51b4b98341e27cb2ff5f2a78a42eda86265988066d3a39e79b96b8eef7fb63",
+      "profile_hash": "9dcf718470e70957d07454bb8b50fbde79575a3b23d8c06e24cc9b749051116b",
       "runtime": {
         "version": "2.1.308",
         "sha256": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
@@ -483,12 +483,12 @@
       "spawns": [
         {
           "kind": "version",
-          "pid": 20972,
+          "pid": 6076,
           "creationflags": 134217728
         },
         {
           "kind": "query",
-          "pid": 18996,
+          "pid": 9300,
           "creationflags": 134217728
         }
       ],

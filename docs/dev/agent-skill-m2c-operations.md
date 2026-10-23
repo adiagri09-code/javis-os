@@ -1,6 +1,6 @@
 # M2C owner operations
 
-This document describes the unreleased 0.294.0 implementation. Published M2B is
+This document describes the unreleased 0.296.0 implementation. Published M2B is
 0.293.0. These controls do not enable candidate/final execution, activation,
 compose, arbitrary helper execution, or a business/live acceptance claim.
 
@@ -23,7 +23,7 @@ POST paths below are relative to `/improvement-experiments/{experiment_id}/`:
 | Action | Exact fields besides `event_key` | Result |
 | --- | --- | --- |
 | `preparation-freeze` | `expected_generation` | Freeze the host-derived tuning-only baseline schedule; phase becomes `preparing`. |
-| `preparation-next` | `expected_generation` | Admit the next actual baseline Trial and hand it to the shared Trial supervisor. It returns stored metadata without waiting for the model result. |
+| `preparation-next` | `expected_generation` | Admit the next actual baseline Trial and hand it to the shared Trial supervisor. It returns stored metadata without waiting for the model result; a pending prior cell or still-owned cleanup returns409 without reserving another call. |
 | `preparation-complete` | `expected_generation` | Seal exact published result references after all preparation workers/checkers and plaintext cleanup have settled; phase becomes `proposing`. Unknown results remain unknown. |
 | `propose` | `expected_generation` | Run the isolated improver on actual completed tuning evidence. Stage at most the remaining two A slots, atomically. A malformed batch gets at most one structural repair automatically. |
 | `semantic-review` | `candidate_id`, `expected_generation` | Run an isolated reviewer on this experiment's exact A before/after/provenance, protected context, and granted declared dependencies; store an immutable separate receipt. |
@@ -39,14 +39,24 @@ An executable dependency remains unsupported until its actual later isolation
 and runtime qualification exist. Declared-reference coverage is not a proof of
 all executable imports or dynamic dependencies.
 
-The current34-source profile aa51b4b9 is registered only for Windows CLI2.1.308
+Each declared dependency must match one exact already-granted file identity.
+Markdown links resolve relative to their declaring document; plain resource
+names beginning with `skills/`, `agents/`, `.claude/` or `.agents/` resolve within
+that document's bound root. Equal spellings retain both meanings. Missing files,
+relative escapes, external URLs, ambiguous grants and executable dependencies
+cannot receive a dependency pass; no fallback to an unrelated same-name file
+or broader source grant occurs.
+
+The current34-source profile9dcf7184 is registered only for Windows CLI2.1.308
 with binary SHA c9796ba2 and SDK0.2.116, bound to the complete hashes in the
 [native evidence](../superpowers/evidence/2026-10-23-m2c-native-qualification.json).
 Other source/runtime combinations refuse before version/auth/model probes.
 Qualification uses dummy authentication and local inference; actual selected
 account readiness is checked separately before execution.
-Qualification of the final stable profile and selected runtime belongs to Task9.
-Injected test engines and the installed SDK DTO library are not that evidence.
+Exact-source dummy qualification passed both complete5-test suites; separate
+readiness verification retained the persisted opus5-5/medium/subscription choice
+and made zero model calls. Injected test engines and the installed SDK DTO
+library are not native qualification evidence.
 
 ## Cold history and stopping
 
@@ -116,6 +126,15 @@ Usage retains actual call/attempt identities. Missing observations stay null or
 partial/unknown. A marked call is never refunded as if it had not started.
 Subscription-equivalent USD is not cash charged. Technical feasibility results
 do not establish business ROI or permit live activation.
+
+The retained real-model technical feasibility ran on ddec90ad/profile aa51b4b9:
+baseline, proposer, one structural repair and semantic reviewer made four actual
+marked calls and staged two proposals. The baseline's JSON shape criterion
+failed; business accuracy still requires owner confirmation. The semantic/native
+verdict stayed unknown and candidates stayed unreviewed. Observed usage was
+32,248 input /6,091 output tokens and USD0.3644214 subscription-equivalent, with
+partial coverage and no known cash charge. Later source corrections do not
+create fresh real-model receipts. See the [source-bound feasibility evidence](../superpowers/evidence/2026-10-23-m2c-real-feasibility.json).
 
 The owner delegated pilot selection: reconciliation first, document processing
 second, with Python bug-fix/testing as an additional technical pilot. Independent
