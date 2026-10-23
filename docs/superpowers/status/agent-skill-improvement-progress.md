@@ -102,6 +102,37 @@
 
 ## M2C engineering continuation
 
+### D1 independent review and lifetime repair, 23 October
+
+One whole-D1 independent review covered published C2727edcc through740c0c67.
+It found one Important/P2 and no Critical/additional permission or holdout bypass.
+An actual15.456s reproduction showed a rebuilt facade retaining a closed
+semantic resolver while its original Trial owner remained live, then failing
+current admission with role_workflow_closed. Constructor refusal RED failed
+as expected in14.312s. The narrow fix now refuses that half-closed facade and
+keeps the original resolver; only both exact successful close futures permit
+replacement. Missing/pending/cancelled/failed closure remains blocked.
+
+Actual lifetime4 plus five sequential affected commands passed29 tests,
+239.901s recorded. Successful later rebuild/admission and still-live semantic
+reuse are covered, along with owner/main/service controls and actual v4 handoff/
+cancel. AST/source proof shows the only product change is constructor refusal;
+the prior stop/current-source/materialization behavior is preserved. Evidence
+`../evidence/2026-10-23-m2d1-review-lifetime-fix.json`, SHA256
+fb8333f444f84ac85f03d3f0c71402eb30f599e1a025499802b860739e7d94b5.
+Same-reviewer scoped recheck is pending, not another whole review.
+
+Before the fix, profile81/2221a859 also passed full local/dummy solver5, roles5
+and quiescence9 in60.609s on one source map. Its source-bound artifact
+`../evidence/2026-10-23-m2d1-native-qualification.json`, SHA256
+96adabecf47773debc2988098a68cc3a9c592a00ad2ed9b0d8a6e4cab096936b,
+is historical after the constructor change and was never registered. Current
+profile81/d070550687af101c07094e1234c5988fae15af9318eb5f5277c4cb2e413324ba
+remains unregistered; requalify after fix stability. Exact740c LinuxCI39982218130
+is in progress and cannot prove the subsequent fix. Earlier ec6CI39976688967
+succeeded. No actual account query, genuine eligible final or business/live
+acceptance occurred. Task3/4/5, D2/E/F and M3–M8 remain OPEN.
+
 ### D1 paired native-view checkpoint, 23 October
 
 Owner controls are committed/pusheddaed0cf26872abe9d6e03f7d8bc59b04c39f8f83.

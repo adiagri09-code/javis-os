@@ -79,6 +79,14 @@ capacity release. Off/revoke does not prevent stop/recovery. A stopping state
 can remain pending while actual work/cleanup is still owned; a terminal SQL
 row by itself is not proof that all threads or native workers have ended.
 
+A replacement in-process experiment service refuses construction when the
+retained view's semantic workflow is closed but its exact original Trial owner
+has not completed successful closure. The old resolver remains bound. Complete
+both original service lifetimes through their owning shutdown/cleanup path
+before rebuilding; successful closure of both permits a fresh usable resolver.
+Missing, pending, cancelled or failed close futures cannot authorize replacement.
+Clearing a reference or forcing a rebind does not establish cleanup.
+
 ## Storage and evidence limits
 
 Schema 7 adds immutable view, asset, comparison-binding, Trial-link and final

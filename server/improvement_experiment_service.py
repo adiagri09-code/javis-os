@@ -54,6 +54,10 @@ class ExperimentService:
         self.views = plans.host._views
         if self.views is None or _retired(self.views):
             self.views = EffectiveViews(plans, self.semantic)
+        elif self.views.semantic._closed:
+            # Its original owner still holds retirement authority. Exposing a
+            # new facade with a closed semantic workflow cannot restore it.
+            raise IM.ConflictError('comparison_view_lifetime_unavailable')
         self.view_admission = ViewExperimentAdmission(plans, self.views, self.schedule)
         self.trials.bind_views(self.views)
         self._operations = {}

@@ -756,6 +756,44 @@ remain OPEN; this checkpoint does not complete Task3/4/5 or authorize rollout.
 
 ## Self-review and interface freeze
 
+Independent whole-D1 review2727edcc..740c0c67 completed: one Important/P2,
+no Critical or additional permission/holdout bypass. Confirmed real repro:
+closed semantic workflow + still-live original OwnerTrialService is deliberately
+not retired, but rebuilt ExperimentService constructor returns a facade retaining
+that unusable resolver; current admission then raises role_workflow_closed.
+Fix unit before code: explicitly refuse construction when retained resolver's
+semantic workflow is closed and BOTH exact close futures are not successfully
+complete. Preserve the original host/Trial resolver and every owner/cleanup fence;
+after original owner closes successfully, rebuild/admission must work. No force
+flag, earlier retirement, new store or automatic cleanup. Affected product:
+ExperimentService constructor only; callers: main lazy service factory and all
+same-host reconstruction. Focused RED/GREEN: real lifetime refusal, successful
+later rebuild/admission, still-live semantic reuse, missing/pending/cancelled/
+failed original-owner close. Then scoped service/owner API/view admission checks
+and same reviewer's fix recheck. Existing control/stop/materialization logic is
+unchanged; qualify reuse by AST/source hashes. Changing service invalidates the
+whole exact81-source native profile; preserve pre-fix native proof as historical,
+requalify final profile after fix stability, no native registration/model query
+beforehand. Do not request another whole-D1 review.
+
+Review repair checkpoint: original real reproduction15.456s failed with the
+closed-workflow error; focused RED14.312s proves constructor refusal was absent.
+The constructor now adds only explicit closed-resolver ConflictError refusal;
+AST proof preserves all other service code and all other product sources. Actual
+lifetime4 and five affected commands passed29 tests,239.901s recorded. They
+cover refusal before private/native work, unchanged bound resolver, successful
+later rebuild/admission, usable live semantic workflow with a new owner, all
+invalid owner-close futures, owner API/main/service and v4 handoff/cancel.
+Evidence `../evidence/2026-10-23-m2d1-review-lifetime-fix.json`, SHA256
+fb8333f444f84ac85f03d3f0c71402eb30f599e1a025499802b860739e7d94b5.
+Scoped independent recheck is pending. The earlier source-identical81/2221a859
+composite native solver5/roles5/quiescence9 passed60.609s, artifact
+`../evidence/2026-10-23-m2d1-native-qualification.json`, SHA256
+96adabecf47773debc2988098a68cc3a9c592a00ad2ed9b0d8a6e4cab096936b.
+That profile was never registered and is historical after this source change.
+Current81/d0705506 is unregistered and needs exact-source native requalification
+after the scoped fix review; no real account query or positive final is claimed.
+
 Task1 metadata fields, SQL names, bounds and test commands are frozen below.
 The probe-authority rule above retains all quality gates and old combined
 verdicts. Finalize later task-specific internal field projections from these

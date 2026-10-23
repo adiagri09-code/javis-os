@@ -40,16 +40,28 @@ class ViewLifetimeTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase)
         self.assertIs(self.host._views, rebuilt.views)
 
     async def test_closed_role_with_live_owner_cannot_replace_its_bound_resolver(self):
-        old, _ = self.owned_service()
+        old, metadata = self.owned_service()
         await old.close()
         self.assertFalse(old.trial_service._closed)
-        rebuilt = self.rebuild()
-        fresh = EffectiveViews(self.f.plans, rebuilt.semantic)
-        self.assertIs(rebuilt.views, old.views)
+        counts = self.counts()
+        with patch.object(self.assets.blobs, 'read', side_effect=AssertionError('Busy construction cannot decrypt')), \
+                patch.object(ClaudeTrialAdapter, 'verify', side_effect=AssertionError('Busy construction cannot probe')), \
+                self.assertRaisesRegex(IM.ConflictError, 'view_lifetime_unavailable'):
+            self.rebuild()
+        self.assertEqual(self.counts(), counts)
+        self.assertIs(self.host._views, old.views)
+        self.assertIs(self.f.plans.admission.trials._views, old.views)
+        fresh = EffectiveViews(self.f.plans, old.semantic)
         with self.assertRaisesRegex(IM.ConflictError, 'already_bound'):
             self.host.bind_views(fresh)
         with self.assertRaisesRegex(IM.ConflictError, 'already_bound'):
             self.f.plans.admission.trials.bind_views(fresh)
+        await old.trial_service.close()
+        rebuilt = self.rebuild()
+        with patch.object(ClaudeTrialAdapter, 'verify', return_value={'supported': True, 'capability_hash': 'c' * 64}):
+            admitted = self.admit(rebuilt, key='view-lifetime-admit-after-explicit-refusal')
+        self.assertEqual(admitted.request['view']['binding_hash'], metadata['binding_hash'])
+        self.assertIs(rebuilt.views.semantic, rebuilt.semantic)
 
     async def test_missing_pending_cancelled_or_failed_owner_close_never_allows_rebinding(self):
         old, _ = self.owned_service()
@@ -65,9 +77,11 @@ class ViewLifetimeTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase)
             for closing in (None, pending, cancelled, failed):
                 with self.subTest(closing=closing):
                     owner._closing = closing
-                    rebuilt = self.rebuild()
-                    self.assertIs(rebuilt.views, old.views)
-                    fresh = EffectiveViews(self.f.plans, rebuilt.semantic)
+                    with self.assertRaisesRegex(IM.ConflictError, 'view_lifetime_unavailable'):
+                        self.rebuild()
+                    self.assertIs(self.host._views, old.views)
+                    self.assertIs(self.f.plans.admission.trials._views, old.views)
+                    fresh = EffectiveViews(self.f.plans, old.semantic)
                     with self.assertRaisesRegex(IM.ConflictError, 'already_bound'):
                         self.host.bind_views(fresh)
                     with self.assertRaisesRegex(IM.ConflictError, 'already_bound'):
@@ -76,6 +90,16 @@ class ViewLifetimeTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase)
             owner._closing = complete
             pending.cancel()
             failed.exception()
+
+    async def test_live_semantic_remains_usable_when_only_original_owner_is_closed(self):
+        old, metadata = self.owned_service()
+        await old.trial_service.close()
+        self.assertFalse(old.semantic._closed)
+        rebuilt = self.rebuild()
+        self.assertIs(rebuilt.views, old.views)
+        with patch.object(ClaudeTrialAdapter, 'verify', return_value={'supported': True, 'capability_hash': 'c' * 64}):
+            admitted = self.admit(rebuilt, key='view-lifetime-live-semantic-new-owner')
+        self.assertEqual(admitted.request['view']['binding_hash'], metadata['binding_hash'])
 
 
 if __name__ == '__main__':
