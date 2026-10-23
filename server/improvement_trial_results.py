@@ -47,6 +47,12 @@ class TrialResults:
         with closing(self.trials.store._conn()) as connection:
             trial = self.trials._row(connection, brain, identifier)
             request = json.loads(trial["request_json"])
+            if request.get("version") == 3:
+                from improvement_preparation_lineage import load_preparation_lineage
+                if IM._hash(request) != trial["request_hash"]:
+                    raise AssetUnavailable("preparation_trial_request_changed")
+                load_preparation_lineage(connection, brain, request, blobs=self.trials.blobs,
+                                         current=False, require_link=True, trial_id=identifier)
             if request.get("version") == 2:
                 from improvement_experiment_lineage import load_lineage
                 if IM._hash(request) != trial["request_hash"]:
@@ -71,6 +77,10 @@ class TrialResults:
                     or report.get("attempt") != attempt or report.get("request_hash") != trial["request_hash"]
                     or report.get("experiment_lineage") != request["lineage"]):
                 raise AssetUnavailable("experiment_trial_result_changed")
+            if request.get("version") == 3 and (report.get("version") != 3 or report.get("trial_id") != identifier
+                    or report.get("attempt") != attempt or report.get("request_hash") != trial["request_hash"]
+                    or report.get("preparation_lineage") != request["preparation"]):
+                raise AssetUnavailable("preparation_trial_result_changed")
             return report
 
     def reevaluate(self, principal, identifier, attempt, *, expected_generation, event_key, checker_registry):
@@ -209,6 +219,8 @@ class TrialResults:
                             "hash": IM._hash([[record["sequence"], record["payload_hash"]] for record in records])}}
         if request.get("version") == 2:
             report.update(version=2, request_hash=IM._hash(request), experiment_lineage=request["lineage"])
+        elif request.get("version") == 3:
+            report.update(version=3, request_hash=IM._hash(request), preparation_lineage=request["preparation"])
         raw = IM._json(report).encode("utf-8")
         if len(raw) > MAX_ASSET_BYTES:
             raise ValueError("trial_result_too_large")

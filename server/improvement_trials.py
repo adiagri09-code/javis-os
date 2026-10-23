@@ -18,6 +18,12 @@ FAILURE_REASONS = frozenset({"unsupported_configuration", "authority_changed", "
 
 
 def _request(value):
+    if type(value) is dict and type(value.get("version")) is int and value["version"] == 3:
+        from improvement_preparation_protocol import validate_preparation_request_v3
+        request = validate_preparation_request_v3(value)
+        from improvement_claude import ClaudeTrialAdapter
+        ClaudeTrialAdapter(request["engine_config"])
+        return request
     if type(value) is dict and type(value.get("version")) is int and value["version"] == 2:
         from improvement_experiment_protocol import validate_request_v2
         request = validate_request_v2(value)
@@ -79,6 +85,11 @@ class TrialStore:
         require_experiment_version(connection, brain, request)
         pins = request["pins"]
         experiment = request.get("version") == 2
+        preparation = request.get("version") == 3
+        if preparation:
+            from improvement_preparation_lineage import load_preparation_lineage
+            load_preparation_lineage(connection, brain, request, blobs=self.blobs,
+                current=True, require_link=not allow_unlinked, trial_id=trial_id)
         if experiment:
             from improvement_experiment_lineage import load_lineage
             if request["variant"] == "candidate":
@@ -103,7 +114,7 @@ class TrialStore:
                 raise IM.ConflictError("stale_trial_source")
         bundle = None
         for variant, field in (("baseline", "base_bundle_hash"), ("candidate", "candidate_bundle_hash")):
-            if experiment and variant == "candidate":
+            if (experiment or preparation) and variant == "candidate":
                 continue  # Typed A envelope pin; never look it up as an installed bundle.
             row = connection.execute("SELECT * FROM improvement_bundles WHERE brain_id=? AND manifest_hash=?",
                                      (brain, pins[field])).fetchone()
@@ -158,15 +169,18 @@ class TrialStore:
         if request["version"] == 2:
             from improvement_experiment_protocol import logical_key_v2
             logical = logical_key_v2(request)
+        elif request["version"] == 3:
+            from improvement_preparation_protocol import logical_key_v3
+            logical = logical_key_v3(request)
         replay = self.assets._replay(connection, brain, event_key, "trial_reserve", request)
         if replay is not None:
             return replay
-        self._current(connection, brain, request, allow_unlinked=request["version"] == 2)
+        self._current(connection, brain, request, allow_unlinked=request["version"] in (2, 3))
         old = connection.execute("SELECT * FROM improvement_trials WHERE brain_id=? AND logical_key=?", (brain, logical)).fetchone()
         if old:
             if old["request_hash"] != IM._hash(request):
                 raise IM.ConflictError("trial_identity_conflict")
-            if request["version"] == 2:
+            if request["version"] in (2, 3):
                 self._current(connection, brain, request, trial_id=old["id"])
             result = self._public(connection, old)
         else:
@@ -188,6 +202,12 @@ class TrialStore:
                 connection.execute("INSERT INTO improvement_experiment_trial_links VALUES(?,?,?,?,?,?,?,?,?,?,?)", (
                     lineage["comparison_id"], brain, request["pins"]["experiment_id"], lineage["cell_position"], identifier,
                     IM._hash(request), lineage["pair_id"], request["case_id"], request["repeat"], request["variant"], now))
+                self._current(connection, brain, request, trial_id=identifier)
+            elif request["version"] == 3:
+                lineage = request["preparation"]
+                connection.execute("INSERT INTO improvement_preparation_trial_links VALUES(?,?,?,?,?,?,?,?,?)", (
+                    lineage["preparation_id"], brain, request["pins"]["experiment_id"], lineage["cell_position"], identifier,
+                    IM._hash(request), request["case_id"], request["repeat"], now))
                 self._current(connection, brain, request, trial_id=identifier)
             result = self._public(connection, self._row(connection, brain, identifier))
         self.assets._event(connection, principal, event_key, "trial_reserve", request, result)

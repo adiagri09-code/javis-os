@@ -27,7 +27,7 @@ def _same(expected, actual):
 
 def require_experiment_version(connection, brain, request):
     """A legacy shape cannot erase ownership by an existing B experiment."""
-    if request.get("version") != 2:
+    if request.get("version") not in (2, 3):
         from improvement_experiment_qualification import experiment_owned
         if experiment_owned(connection, brain, request.get("case_set_id"), request["pins"]):
             raise PermissionError("experiment_request_version_required")

@@ -12,9 +12,14 @@ M2C engineering checkpoint (unreleased): schema6 adds typed preparation schedule
 and genuine proposer/reviewer operation metadata. Known1–5 upgrade with a separate
 serialized `.pre-improvement-m2-generated.bak`; earlier backups/history are retained.
 Actual released0.293.0 refuses schema6 before writes. Metadata cannot call a model,
-declare native completion or activate a proposal. Positive preparation admission,
+declare native completion or activate a proposal. Public preparation controls,
 role execution, semantic evidence and complete shared stop ownership remain gated
-by the subsequent C tasks. Goal section12 governs impact-based verification;
+by the subsequent C tasks. The Task2 private engineering path now freezes real
+tuning membership, admits baseline-only v3 requests through the existing solver,
+and seals exact stored results after the actual brain lock and cleanup proofs.
+There is no candidate/arm placeholder and no paired/qualification report inferred
+from those preparation results. Public owner controls and shared experiment stop
+integration are still pending Task8. Goal section12 governs impact-based verification;
 early Linux and final exact-head CI remain required.
 
 Known improvement schemas1–4 upgrade transactionally to5. Only absent schema

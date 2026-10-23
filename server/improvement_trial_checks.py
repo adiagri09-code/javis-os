@@ -255,7 +255,10 @@ def execution_invariants(request, manifest, workspace_receipt, packets, capabili
     try:
         request, manifest, workspace, packets = map(_frozen, (request, manifest, workspace_receipt, packets))
         _manifest(manifest)
-        if request.get("version") == 2:
+        if request.get("version") == 3:
+            from improvement_preparation_protocol import validate_preparation_request_v3
+            request = validate_preparation_request_v3(request)
+        elif request.get("version") == 2:
             from improvement_experiment_protocol import validate_request_v2
             request = validate_request_v2(request)
             if request["variant"] != "baseline":
@@ -263,10 +266,11 @@ def execution_invariants(request, manifest, workspace_receipt, packets, capabili
         else:
             _fields(request, {"version", "pins", "case_set_id", "case_id", "variant", "repeat", "engine_config",
                 "baseline_context_hash", "target_generations", "deadline_at"}, {"qualification_id"})
-        CaseStore._pin_shape(request["pins"])
+        if request.get("version") != 3:
+            CaseStore._pin_shape(request["pins"])
         _digest(capability_hash)
         _fields(workspace, {"trial_id", "attempt", "path", "input_path", "output_root", "input_hash", "effective_hash"})
-        if (type(request["version"]) is not int or request["version"] not in (1, 2) or request["variant"] not in ("baseline", "candidate")
+        if (type(request["version"]) is not int or request["version"] not in (1, 2, 3) or request["variant"] not in ("baseline", "candidate")
                 or type(workspace["attempt"]) is not int or workspace["attempt"] < 1 or not isinstance(workspace["trial_id"], str)
                 or not _ID.fullmatch(workspace["trial_id"]) or not isinstance(packets, list) or len(packets) > 100000
                 or any(not isinstance(packet, dict) for packet in packets)):

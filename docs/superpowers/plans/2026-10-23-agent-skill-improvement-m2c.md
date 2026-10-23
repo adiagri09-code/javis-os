@@ -134,21 +134,37 @@ returns the existing AdmittedTrial shape backed by real rows. A preparation
 request has version3, baseline only, exact common source/config/definition pins,
 host schedule/cell identity and no candidate/arm/comparison fiction. Choose exact
 closed pins after auditing all consumers, retaining v1/v2 expressions unchanged.
+Impact regression: preparation/real execution/protocol; current operations schema,
+TrialStore/Host/checks/results/decisions/private/views, comparison plans and old B
+lineage/admission/execution/qualification/protocol. The new baseline uses actual
+TrialTasks. Owner HTTP admission/handoff supervision and experiment-wide stop
+integration remain Task8; these private functions do not expose a new route.
 
-- [ ] Behavioral RED: existing experiment/no candidate can prepare a real tuning
+- [x] Behavioral RED: existing experiment/no candidate can prepare a real tuning
   baseline; arbitrary cell/qualification/alias/role/pin substitutions reject.
-- [ ] Update every version consumer: TrialStore; Host binding/context/guard;
+- [x] Update every version consumer: TrialStore; Host binding/context/guard;
   materialization; engine markers/observations; TrialResults exact immutable refs;
   public/private/product/evidence views. A parser-only extension is insufficient.
-- [ ] Host chooses next complete frozen tuning slot without gaps/cherry-picking;
+- [x] Host chooses next complete frozen tuning slot without gaps/cherry-picking;
   native preflight precedes atomic actual admission and late deadline minting.
-- [ ] Use the SAME existing TrialTasks dispatcher/Runner/CallLedger/usage.
+- [x] Use the SAME existing TrialTasks dispatcher/Runner/CallLedger/usage.
   Preparation results are tuning evidence and cannot be paired v2 report cells.
-- [ ] Real synthetic-packet E2E proves workspace/output/result lineage and partial
+- [x] Real synthetic-packet E2E proves workspace/output/result lineage and partial
   usage; replay stays exact after stopping/revoke, not a fresh execution grant.
-- [ ] Test concurrent next, current-source/config/grant drift after slow IO,
-  interruption before/after reserve/handoff and no holdout allocation/exposure.
-- [ ] GREEN old v1/v2 parser/hash/authority/result regressions; commit.
+- [x] Test concurrent next, current-source/config/grant drift after slow IO,
+  actual stop before marker/after query/during checker, owned TrialTasks handoff
+  and no holdout allocation/exposure. HTTP cancellation ownership remains Task8.
+- [x] GREEN old v1/v2 parser/hash/authority/result regressions; commit.
+
+Task2 evidence:12 impacted scripts initially10 GREEN/2 failed328s. Real Windows
+encrypted publication conflict and incomplete old schema2 fixture were corrected
+with deterministic RED/GREEN, preserving error/permission/rollback assertions.
+Final affected4 scripts GREEN123s (operations21/preparation8/execution4/trials34),
+storage25 GREEN6.330s. Old v2 protocol4/.004s and v3 protocol3/.002s passed.
+Qualification14/58.135s and10 unchanged old paths are conditional scope evidence;
+the changed blob/evaluator identity is rechecked by the current E2E, never claimed
+to be proven by old snapshots. No full improvement sweep per patch, no independent
+task reviewer, no native/model call. Early/final Linux CI remain separate.
 
 ## Task 3 — distinct real role/usage identities
 

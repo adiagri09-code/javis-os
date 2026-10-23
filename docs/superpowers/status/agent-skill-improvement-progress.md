@@ -61,6 +61,23 @@
   Every consumer/result/stop/recovery scope and combined capacity bound must
   account for it. Proposer/reviewer calls need distinct actual operation identity,
   CallLedger/usage and native worker/workspace ownership; no fake solver Trials.
+- Task1 metadata/schema6 committed/pushed as c4d1c058 (62 focused local checks);
+  early LinuxCI39885490382 remains a separate pending snapshot. Task2 now has
+  actual host-derived complete tuning schedules, v3 baseline admission through
+  the existing CallLedger/TrialStore/Runner/TrialTasks, exact historical/result
+  lineage and completion under the real brain barrier/all-attempt cleanup/CAS.
+  Private synthetic-worker E2E verifies partial usage and unknown verdicts; no
+  native model or business acceptance. Public API/full stop integration is Task8.
+- Task2 impacted regression initially10/12 scripts GREEN328s; actual failures
+  were concurrent Windows encrypted-blob publication and a schema2 test fixture
+  leaving new C tables behind. Both were reproduced and corrected separately,
+  preserving permission/corruption rejection and rollback assertions. Targeted
+  fixes passed3 blob cases/.467s and schema2/.705s; full storage25 passed6.330s.
+  Final four affected scripts GREEN123s (operations21/preparation8/execution4/
+  trials34); ten unchanged successful paths and
+  qualification14/58.135s are conditional historical scope evidence, not final
+  commit CI. The blob guard change also changes evaluator source identity;
+  current E2E reruns the fresh pins. No blanket rerun of all improvement scripts.
 - Generated proposals remain A-unreviewed with separately pinned semantic and
   dependency assessments. No assessment/owner product confirmation waives source,
   runtime/view, qualification, activation or real business-data gates. Candidate/

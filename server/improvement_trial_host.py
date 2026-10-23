@@ -227,6 +227,9 @@ class HostContextStore(HostContextRecords):
         from improvement_experiment_lineage import require_experiment_version
         require_experiment_version(connection, brain, request)
         proof = None
+        if request.get("version") == 3:
+            from improvement_preparation_lineage import load_preparation_lineage
+            proof = load_preparation_lineage(connection, brain, request, blobs=self.blobs, current=True, require_link=not allow_unlinked)
         if request.get("version") == 2:
             if request.get("variant") != "baseline":
                 raise PermissionError("experiment_candidate_execution_unavailable")
@@ -253,6 +256,9 @@ class HostContextStore(HostContextRecords):
         if request.get("version") == 2:
             from improvement_experiment_lineage import current_fences
             current_fences(connection, brain, proof)
+        elif request.get("version") == 3:
+            from improvement_preparation_lineage import current_preparation_fences
+            current_preparation_fences(connection, brain, proof)
         return row, binding, proof
 
     def context_loader(self, principal, request):
@@ -360,7 +366,10 @@ class HostContextStore(HostContextRecords):
             # The final bound pass decrypts fixtures/context. Observe real sources
             # afterward, then refresh SQL fences without another slow blob read.
             self._snapshot_observe(principal, final_binding)
-            from improvement_experiment_lineage import current_fences
+            if request.get("version") == 3:
+                from improvement_preparation_lineage import current_preparation_fences as current_fences
+            else:
+                from improvement_experiment_lineage import current_fences
             with closing(self.store._conn()) as connection:
                 current_fences(connection, _brain(principal), proof)
         return {**{key: row[key] for key in ("scope_hash", "grant_hash", "engine_config_hash")},

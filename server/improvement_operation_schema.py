@@ -103,6 +103,10 @@ SCHEMA = (
     "AND json_extract(t.request_json,'$.preparation.schedule_hash')=p.schedule_hash "
     "AND json_extract(t.request_json,'$.preparation.cell_position')=NEW.cell_position) "
     "BEGIN SELECT RAISE(ABORT,'preparation_trial_scope_mismatch'); END",
+    "CREATE TRIGGER improvement_preparation_arm_fence BEFORE INSERT ON improvement_experiment_arms WHEN EXISTS "
+    "(SELECT 1 FROM improvement_experiments e JOIN improvement_preparations p ON p.experiment_id=e.id AND p.brain_id=e.brain_id "
+    "WHERE e.id=NEW.experiment_id AND e.brain_id=NEW.brain_id AND e.phase='preparing') "
+    "BEGIN SELECT RAISE(ABORT,'preparation_incomplete'); END",
     "CREATE TRIGGER improvement_operation_scope BEFORE INSERT ON improvement_operations WHEN "
     "NEW.status!='pending' OR NEW.generation!=1 OR NEW.attempt!=0 OR NOT EXISTS "
     "(SELECT 1 FROM improvement_experiments e WHERE e.id=NEW.experiment_id AND e.brain_id=NEW.brain_id "

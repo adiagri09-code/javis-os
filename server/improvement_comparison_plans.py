@@ -138,6 +138,8 @@ class ExperimentPlans:
 
     def _arm(self, connection, principal, row, prepared, candidate_id, authority_id):
         """Check original immutable proposal AND one explicitly chosen live edit grant."""
+        if row["phase"] == "preparing":
+            raise IM.ConflictError("preparation_incomplete")
         brain, value = _brain(principal), prepared[0]
         candidate = self.authoring.records._row(connection, brain, candidate_id)
         if any(candidate[key] != value[key] for key in
@@ -231,6 +233,8 @@ class ExperimentPlans:
             if replay is not None:
                 return replay
             row, prepared = self._state(connection, principal, experiment_id, expected_generation, unsealed=kind == "tuning")
+            if row["phase"] == "preparing":
+                raise IM.ConflictError("preparation_incomplete")
             if kind == "final":
                 selection = connection.execute("SELECT * FROM improvement_experiment_selections WHERE brain_id=? AND experiment_id=?",
                                                (brain, experiment_id)).fetchone()
