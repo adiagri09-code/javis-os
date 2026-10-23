@@ -102,6 +102,25 @@
 
 ## M2C engineering continuation
 
+### D1 Task3 checkpoint, 23 October
+
+Task1/Task2/legacy-fixture Linux CI39944212136 succeeded on exact d81606b5.
+Protocol-only676fe8a8 and additive-link ab5dc1ef were then pushed together;
+early Linux CI39949800035 is running on ab5dc1ef7d7113befe893618ff79fa1376d1ef91.
+The new SQL/format checkpoint passed92 tests in six sequential affected scripts,
+378.281s, with retained source/runtime/log hashes. Existing released B/C schema
+definitions and C34 native footprint remain byte-identical. Actual v3 Trial
+splicing into v4 links, legacy admission after view publication and direct view
+publication after legacy admission reject. No future Trial/Call was fabricated.
+
+Task3 remains OPEN: actual v4 Trial/CallLedger dispatch, current-host fences,
+bounded stop/recovery/report consumers and existing qualification-registry links
+still require implementation. SQL/blob historical view proof is being added
+separately; it cannot authorize current files, native execution or live scope.
+C's native registration must be invalidated in the same change that makes v4
+reachable and the exact final D footprint qualified before actual queries.
+The draft PR is not ready to integrate. Business/live/M3–M8 gates stay open.
+
 - Final affected regression21/21 GREEN,663.451s, qualified across two frozen
   segments: first15 passed scripts retain identical product/helper/test bytes;
   only the failed standalone task-drain test changed from a30ms scheduler sample

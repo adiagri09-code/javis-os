@@ -311,6 +311,20 @@ also include private_review, trial_host, trial_decisions, trial_results and
 trial_checks. Extend each deliberately; a second independent12000-cell allowance
 for new links would violate the shared14000/28000 bounds.
 
+Task3 historical-proof checkpoint: full v4 requests now traverse the shared
+immutable comparison proof without projection to v2. Separate SQL/blob history
+authenticates both manifests/assets, exact C semantic receipt/binding, actual
+publication and an exact pinned owner event when present. The v2 wrapper keeps
+its own validator/link/hash and rejects a view-bound comparison. Common cold
+metadata/publication checks are shared with EffectiveViews; current file/native
+authorization remains a separate mandatory boundary. Six new checks plus one
+added independent owner-history case and49 existing affected checks passed
+(56 total;492.648s of recorded unittest/subprocess time, with basis per row).
+Portable evidence `../evidence/2026-10-23-m2d1-task3-history.json`, SHA256
+170d0de3145bf6932c1d01b5040a55db71be3f3287d3d08b1fd3ba8bdea45d8a.
+No real v4 Trial/Call has yet been created; root dispatch still rejects4. Task3
+remains OPEN. No actual query, new native qualification or business/live proof.
+
 Next additive table contract (before SQL): `improvement_view_trial_links` columns
 are `comparison_id,brain_id,experiment_id,cell_position,trial_id,request_hash,
 pair_id,case_id,repeat,variant,view_id,view_hash,binding_hash,created_at`.
@@ -418,7 +432,7 @@ requested system and is not an acceptable replacement for D2/E/F.
   effective hash includes that view hash and all original context/contract/
   fixture/asset pins. Installation/result versions expose the same exact view.
 - v4 keeps explicit comparison lineage and adds a closed `view` object with
-  `{version:1,view_id,view_hash,binding_hash}`. The actual comparison binding maps
+  `{view_id,view_hash,binding_hash}` (the frozen Task3 protocol above). The actual comparison binding maps
   the correct baseline/candidate view. Pure shape validation is never authority;
   current SQL/blob/source checks, immutable links and kernel barriers remain
   mandatory. Preserve exact v2/v3 validators, hashes and actual historical gates.

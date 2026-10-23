@@ -14,6 +14,7 @@ from improvement_semantic_review import SemanticReview
 from improvement_trial_records import _brain
 from improvement_view_protocol import view_manifest, view_hash
 from improvement_view_sources import capture_sources, ResolvedView
+from improvement_view_history import metadata as view_metadata, require_publication
 
 
 class EffectiveViews:
@@ -26,19 +27,7 @@ class EffectiveViews:
 
     @staticmethod
     def _metadata(connection, brain, comparison_id):
-        binding = connection.execute('SELECT * FROM improvement_comparison_views WHERE comparison_id=? AND brain_id=?',
-            (comparison_id, brain)).fetchone()
-        if binding is None:
-            return None
-        views = {}
-        for variant, column in (('baseline', 'base_view_id'), ('candidate', 'candidate_view_id')):
-            row = connection.execute('SELECT * FROM improvement_effective_views WHERE id=? AND brain_id=? AND comparison_id=? AND variant=?',
-                (binding[column], brain, comparison_id, variant)).fetchone()
-            if row is None or row['semantic_receipt_id'] != binding['semantic_receipt_id']:
-                raise IM.ConflictError('comparison_view_metadata_changed')
-            views[variant] = {'view_id': row['id'], 'manifest_hash': row['manifest_hash']}
-        return {'evidence_class': 'technical', 'comparison_id': comparison_id, 'binding_hash': binding['binding_hash'],
-            'semantic_receipt_id': binding['semantic_receipt_id'], 'created_at': binding['created_at'], 'views': views}
+        return view_metadata(connection, brain, comparison_id)
 
     def read_existing(self, principal, comparison_id):
         brain = _brain(principal)
@@ -77,25 +66,7 @@ class EffectiveViews:
 
     @staticmethod
     def _published(connection, brain, metadata, current_generation):
-        matches = []
-        for row in connection.execute("SELECT request_hash,result_json FROM improvement_events WHERE brain_id=? "
-                "AND operation='comparison_views_freeze' ORDER BY id", (brain,)):
-            try:
-                result = json.loads(row['result_json'])
-            except (ValueError, TypeError) as error:
-                raise IM.ConflictError('comparison_view_publication_changed') from error
-            if type(result) is dict and result.get('comparison_id') == metadata['comparison_id']:
-                matches.append((row, result))
-        if len(matches) != 1:
-            raise PermissionError('comparison_view_publication_unavailable')
-        row, result = matches[0]
-        generation = result.get('generation')
-        if (type(generation) is not int or not 2 <= generation <= current_generation
-                or result != {**metadata, 'generation': generation}
-                or row['result_json'] != IM._json(result)
-                or row['request_hash'] != IM._hash({'comparison_id': metadata['comparison_id'],
-                    'expected_generation': generation - 1})):
-            raise IM.ConflictError('comparison_view_publication_changed')
+        return require_publication(connection, brain, metadata, current_generation)
 
     def _write_json(self, brain, value):
         digest = self.blobs.write(brain, IM._json(value).encode('utf-8'))
