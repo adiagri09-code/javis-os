@@ -479,6 +479,20 @@ owned through aclose. No ambiguous share/close/IO result becomes cleanup success
 Missing GuardianV2 produced11RED0.154s; focused real Windows inert implementation
 tests remain distinct from a full three-process host-death or genuine SDK proof.
 
+Correction to the initial root-kill setup order: a fresh creator thread cannot
+call DebugSetProcessKillOnExit before a debugging connection exists; the actual
+attempt refused with WinError6 before child creation. Microsoft's
+[primary contract](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-debugsetprocesskillonexit)
+requires an existing CreateProcess/DebugActiveProcess connection and documents TRUE
+as the default. Dedicated fresh guardian startup therefore uses that default for
+atomic debug creation, explicitly sets/checks TRUE immediately afterward and before
+any Resume/private release, and retains raw process/job ownership on failure. No
+attach/detach workaround or preexisting thread with disabled default is allowed.
+One actual inert root case now passes1.231s (root CREATE/file gate, transferred
+stdio/socket offers, sealing, root EXIT/signal/job0/fence/control drain); remaining
+image/negative cases and independent review are still pending. This single case
+does not qualify full three-actor/death behavior or genuine SDK startup.
+
 In parallel, actual bare-to_thread verification cancellation was reproduced in both
 adapters and both runners. Reuse existing settled operations rather than abandon
 version/auth threads on cancellation; retain brain/execution ownership until they

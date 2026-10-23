@@ -48,6 +48,12 @@ parents, with ancestry checks; authenticating those parents is a host-consumer
 precondition. No missing broad parents, ACL subprocess or new security framework.
 Author owns lifetime source/v2tests and has the sole test/native process slot;
 parent/reviewer have no active tests. Corrected implementation/review remain open.
+Fresh-thread DebugSetProcessKillOnExit(TRUE) also refused WinError6 before creation;
+primary Microsoft documentation confirms an existing debugging connection is
+required and TRUE is the default. Approved order uses a fresh dedicated creator's
+default at creation, then explicitly enables TRUE before any Resume/private release.
+First actual inert root case now passes1.231s with stdio sealing and root/debug/job/
+fence/control drain; remaining image/negative cases and review are still underway.
 
 ## Prior continuation — canonical capture/bootstrap committed; metadata channel verified
 
