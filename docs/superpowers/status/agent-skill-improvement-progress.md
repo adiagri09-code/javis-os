@@ -88,6 +88,15 @@
   historical version/data assertions and rollback checks intact. Older
   protocol-only LinuxCI39936301937 on d91cc25b succeeded. Neither run proves the
   newly implemented Task2 source path. PR803 remains draft and not mergeable.
+- The three legacy migration fixtures are now corrected locally: exact third
+  views-backup entry and child-first removal of view tables when constructing a
+  real schema2 fixture. All74 tests in those three scripts pass sequentially,
+ 34.537s of unittest time. No production bytes changed; AST comparison proves
+  every import, fixture helper and other test method stayed identical to the
+  Task2 verified commit68dc6c26507841f30e5ead93fe5281aad2afb4e5. This qualifies
+  reuse of Task2's76-test proof; it does not replace fresh current-head Linux CI.
+  Correction evidence `../evidence/2026-10-23-m2d1-legacy-fixture-correction.json`,
+  SHA256641a71c203e8e42d2a09ee51c17195bcf2b1ce2af999fe2f8dc043a73bdaa5e0.
 - Earlier pending/failure
   checkpoints remain historical; complete M2/business/rollout gates remain open.
 

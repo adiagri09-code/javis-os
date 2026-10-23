@@ -230,6 +230,14 @@ passed the new schema15/protocol11 but failed three older migration fixtures;
 correct those exact fixture expectations/drop lists next, before pushing this
 checkpoint. No branch integration, new native qualification or live claim.
 
+The three Linux-feedback fixtures are now corrected locally and their74 tests
+passed sequentially34.537s. Evidence SHA256
+641a71c203e8e42d2a09ee51c17195bcf2b1ce2af999fe2f8dc043a73bdaa5e0.
+Only three named test methods changed; AST comparison verifies all imports,
+fixture helpers and other methods unchanged from verified Task2 commit68dc6c26.
+Application and all Task2 selected source bytes remain exact. Reuse its scoped
+76-test evidence; require fresh Linux CI after this checkpoint is pushed.
+
 Task2 completion scope: run the two new source/authority scripts, pure view
 protocol, existing dependency-identity and comparison-plan regression sequentially.
 Reuse Task1's exact schema7/migration/store evidence and C's source-qualified
