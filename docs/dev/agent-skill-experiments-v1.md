@@ -8,6 +8,15 @@ genuine C+D semantic/effective-view support and the full M2 gates remain open.
 
 ## Schema5 and recovery
 
+M2C engineering checkpoint (unreleased): schema6 adds typed preparation schedules
+and genuine proposer/reviewer operation metadata. Known1–5 upgrade with a separate
+serialized `.pre-improvement-m2-generated.bak`; earlier backups/history are retained.
+Actual released0.293.0 refuses schema6 before writes. Metadata cannot call a model,
+declare native completion or activate a proposal. Positive preparation admission,
+role execution, semantic evidence and complete shared stop ownership remain gated
+by the subsequent C tasks. Goal section12 governs impact-based verification;
+early Linux and final exact-head CI remain required.
+
 Known improvement schemas1–4 upgrade transactionally to5. Only absent schema
 blocks run: schema3 trial DDL and schema4 candidate DDL/triggers are not replayed.
 Unknown/newer versions fail before backup or migration. Before an existing

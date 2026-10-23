@@ -4,9 +4,10 @@
 > to implement this plan task-by-task. The Goal explicitly selects inline
 > execution with self-reviewed plans and an independent final review.
 
-Status: design refinement / release reservation. No C product code has been
-written. Complete the concrete schema/protocol/ownership contract audit and
-self-review before taking Task1; an unfinished plan is not implementation.
+Status: canonicalized and self-reviewed for inline execution. Release reserved
+before product code at50406532e3b349c4e04c4320e73bbfa6d86a9cdc / draft PR801.
+Concrete contracts below resolve the pre-flight audit. Task completion requires
+actual RED/GREEN evidence; a plan or reservation is not implementation.
 
 **Goal:** Produce bounded real model-generated skill proposals and separately
 pinned semantic/dependency assessments from authorized tuning evidence, with
@@ -31,6 +32,12 @@ No deployment/restart/activation or complete M2/business/rollout acceptance.
 
 ## Global Constraints
 
+- Apply Goal section12 (2026-10-23 owner process addendum) from this Task1 onward:
+  RED/GREEN within fixes, impact regression at task end, independent whole review
+  when stable and complete required exact-final CI before merge. Record reusable
+  source-bound evidence and invalidation; no reruns merely for resume/compaction.
+  Validate Linux early for SQLite/filesystem/process changes; parallel scripts
+  only after verifying resource isolation. Keep every quality/authority gate.
 - Keep the owner's selected engine/model/reasoning and existing quality gates.
   No monetary cap, alternate model or reduced source/validation to save usage.
 - No qualification/regression/private answer material in improver input. Distinct
@@ -95,18 +102,29 @@ reads, existing writer-owned transitions. Add immutable host-derived preparation
 schedule/actual Trial links and role operation requests/attempts/results/evidence;
 reuse agent_calls IDs. Exact schema/column names are finalized after reading the
 current schema/CallLedger transaction contract, before writing migration code.
+Use the frozen concrete contracts below. Impact: schema migration and cold B/A/M1
+history consumers; no native profile/worker change. Fix loop: new operation test
+case(s). Task regression: operations, experiments, store; old-reader source fetch.
+Early Linux CI tests actual SQLite/backup/path behavior before later native work.
 
-- [ ] Read current schema5, B final publication and source rules; reserve release.
-- [ ] Write migration/old-reader/rollback/immutable-scope tests; run expected RED.
-- [ ] Implement schema6 in existing DB with one serialized pre-migration backup,
+- [x] Read current schema5, B final publication and source rules; reserve release.
+- [x] Write migration/old-reader/rollback/immutable-scope tests; run expected RED.
+- [x] Implement schema6 in existing DB with one serialized pre-migration backup,
   safe fresh schema path and actual released B old-reader refusal before writes.
-- [ ] Preparation state uses B proposed→preparing CAS and retains brain capacity.
+- [x] Preparation state uses B proposed→preparing CAS and retains brain capacity.
   Freeze complete tuning membership/repeats into a real schedule; no arm/candidate.
-- [ ] Actual preparation-Trial links are immutable and atomic with real trial,
-  attempt, CallLedger reservation and event. Don't UPDATE immutable schedule rows
-  to attach later trials. Operation records reference actual call attempts.
-- [ ] Close role/status/ordinal/repair constraints; cold GET cannot migrate/probe.
-- [ ] GREEN scoped migration/permission/replay tests; commit with evidence.
+- [x] Schema enforces immutable typed preparation links and actual role call FKs;
+  immutable schedules never UPDATE to attach trials. Positive atomic Trial/call/
+  link/event admission is Task2; genuine operation reservation is Task3. Neither
+  path is advertised ready by this metadata task.
+- [x] Close role/status/ordinal/repair constraints; cold GET cannot migrate/probe.
+- [x] GREEN scoped migration/permission/replay tests; commit with evidence.
+
+Task1 local evidence: operations21/21 GREEN48.856s, experiments19/19 GREEN43.686s,
+store22/22 GREEN5.232s. Migration RED4 missing-feature failures; metadata RED8;
+SQL pending-completed and signed seed RED→GREEN2/2. Actual released B old-reader,
+known1..5, concurrent backup/rollback and unchanged history checked. No native
+profile code changed. Commit/early Linux verification follows; whole C remains open.
 
 ## Task 2 — genuine preparation baseline through existing solver
 
@@ -292,8 +310,169 @@ T4→T9: profile footprint includes new role-native code, not old proof inherita
 T7→D: exact current semantic/source/dependency evidence cannot waive actual view,
 runtime/config, qualification secrecy or owner activation prerequisites.
 
-Before code, resolve concrete schema columns/parser fields/file names against
-published source, freeze signatures in the canonical plan, self-review it under
-the Goal's explicit inline/self-review authorization, then take Task1 with the
-actual task-start script and a C-scoped ledger. No C implementation is complete
-merely because this draft exists.
+## Frozen concrete contracts (pre-flight self-review, 2026-10-23)
+
+### Storage and preparation
+
+Schema6 is additive in the existing resonance DB. Known versions1..5 migrate;
+unknown versions reject before backup/write. Preserve earlier backup contracts;
+known older schemas additionally receive one serialized, byte-preserved
+`.pre-improvement-m2-generated.bak`, keyed by absence of improvement_preparations.
+Fresh databases retain their original pre-M0 backup. Released B47f50f70 must
+refuse schema6; CI fetches that actual source in addition to the old A reader.
+DDL failure rolls back every new table/trigger/version. Cold readers do neither
+migration nor decryption/probe.
+
+`improvement_operation_schema.py` owns the following new tables. All scope FKs
+include brain_id; append-only rows reject UPDATE/DELETE. SQL scope triggers must
+check the actual parent relationships, not merely the existence of separate FKs.
+
+| Table | Concrete columns and constraints |
+| --- | --- |
+| improvement_preparations | id,brain_id,experiment_id,context_id,definition_hash,schedule_hash,schedule_blob_hash,cell_count(1..2000),created_at; unique experiment/brain and id/brain; immutable |
+| improvement_preparation_trial_links | preparation_id,brain_id,experiment_id,cell_position(0..1999),trial_id,request_hash,case_id,repeat(1/2),created_at; primary preparation/brain/position, unique trial/brain; exact v3 request and preparation identity; immutable |
+| improvement_operations | id,brain_id,experiment_id,context_id,kind(propose/repair/semantic),role,purpose,candidate_id(nullable),parent_id(nullable),request_hash,request_json,input_hash,input_blob_hash,status,generation,attempt,created_at,updated_at; initial pending/gen1/attempt0; immutable request/identity, generation+1 transitions; no DELETE; unique one propose and one repair per experiment, one semantic per candidate |
+| improvement_operation_attempts | operation_id,brain_id,attempt(1/2),status,call_id(unique FK agent_calls),lease_token,lease_until,writer_hash,engine_at,materialization_hash,workspace_json,result_json,failure_reason,created_at,updated_at; primary operation/brain/attempt; immutable identity/call, bounded lease/state transitions; actual ledger role/purpose/reason/mirror/brain/attempt checks |
+| improvement_operation_observations | operation_id,brain_id,attempt,sequence,kind,payload_hash,blob_hashes_json,late(0/1),created_at; primary operation/brain/attempt/sequence; immutable |
+| improvement_operation_results | id,operation_id,brain_id,attempt,result_hash,blob_hash,created_at; unique id/brain and operation/attempt/result_hash; immutable |
+| improvement_proposal_publications | experiment_id,brain_id,operation_id,result_id,batch_hash,created_at; primary experiment/brain; exact successful propose/repair result; immutable |
+| improvement_generated_candidates | experiment_id,brain_id,ordinal(1/2),candidate_id,operation_id,result_id,created_at; unique candidate/brain and experiment/brain/ordinal; exact publication/A candidate experiment/ordinal/result; immutable |
+| improvement_semantic_receipts | id,brain_id,experiment_id,candidate_id,operation_id,result_id,binding_hash,binding_blob_hash,assessment_hash,blob_hash,created_at; unique operation/result/candidate; exact semantic operation and candidate/result scope; immutable |
+
+Operation mutable statuses: pending -> reserved -> prepared -> running ->
+completed|failed|interrupted|cancelled|not_run; intermediate states may settle
+to interrupted/cancelled/not_run; terminal rows stay terminal. An infrastructure
+retry may return interrupted/not_run to reserved only once (attempt2), only with
+host-observed retryable reason and a new actual call; a completed/invalid product
+never retries for a better answer. This retry transition is introduced/tested
+with the runner, not exposed by Task1 metadata. Attempt statuses match their real
+lifecycle; marked calls never refund. Terminal DB rows do not prove cleanup.
+
+Pure `operation_request(value)` has exact keys version(1),experiment_id,context_id,
+definition_hash,kind,role,purpose,candidate_id,parent_id,input_hash. The final two
+IDs are explicit null except semantic candidate and repair parent respectively.
+Input hash binds encrypted role input; request JSON contains no text, credential,
+CLI path or caller-issued grant. Kind fixes role/purpose: propose/repair ->
+improver/improve_propose; semantic -> semantic_reviewer/improve_evaluate.
+Repair parent must be the same experiment's original propose operation.
+`OperationRecords(assets)` supports cold `get/list` and transaction-owned
+`_create_in(c,owner,request,input_blob_hash,expected_generation,event_key)` only;
+it validates current experiment/context authority. It creates no call, lease,
+native readiness or successful assessment. Positive attempt reservation waits
+for Task3's genuine CallLedger purposes; using improve_probe is forbidden.
+
+`preparation_schedule(definition,case_ids,case_seed)` yields exact keys version1,
+experiment_id,definition_hash,context_id,case_set_id,case_set_hash,repeat_policy,
+schedule_seed,cells. Cells are {case_id,repeat}, complete canonical tuning IDs
+in deterministic hash order and every declared repeat; no arm/candidate fields.
+`PreparationRecords(assets)` cold get/list and transaction-owned `_freeze_in`
+persist an already host-derived exact schedule/blob/hash, current definition CAS,
+and proposed -> preparing in the same writer/event. It does not authorize source
+or native work. Task2's concrete `PreparationService(plans)` derives membership
+from actual bound cases, compares the pure schedule, performs actual source
+observations before/after slow native preflight, and atomically admits next slot
+through SAME TrialStore/TrialTasks. No HTTP slot selector. Immutable links attach
+actual v3 trials atomically; schedule rows never change to add links.
+
+V3 has exact v2 common request fields, mandatory `preparation` instead of lineage,
+baseline only, no qualification_id. Pins are the eight common pins (all v2 pins
+except candidate_bundle_hash). Preparation is {version:1,context_id,
+definition_hash,preparation_id,schedule_hash,cell_position}. Logical key includes
+the full preparation identity plus actual case/repeat; no v1/v2 projection.
+All Trial/Host/results/views/evidence consumers explicitly branch on version3.
+Historical v1/v2 validators and hashes are retained, not generalized to accept
+missing fields. No preparation result can satisfy a v2 comparison link.
+
+Task2 completes preparing -> proposing only after every scheduled cell has an
+exact published terminal result and no still-owned worker/checker. Unknown and
+infrastructure outcomes remain visible; they do not become target deficiencies.
+Arm binding/freezing is forbidden while preparation is incomplete; experiments
+using the released manual path without preparation preserve existing behavior.
+Manual staging still consumes A's global two proposal slots. Complete preparation
+does not dispatch a proposer automatically.
+
+### Real role boundary, usage and publication
+
+Closed operation execution metadata branch precedes trial matching and detects
+even malformed operation_id presence. Allowlist: experiment_id,operation_id,
+attempt,execution_id,role,purpose,learning_origin,cli_session_id,cli_session_new.
+Reject mixed Team/trial keys. execution_id is improvement_operation:<id>, origin
+compose is learning exclusion provenance, not an implemented compose feature.
+CallLedger context=improvement:<experiment>, mirror=that execution_id, reason=
+improvement_operation:<id>:attempt:<n>. Reserve/attempt/event share one writer;
+marker commits before worker ACK. Recorder rechecks actual brain/purpose/reason/
+mirror/attempt/engine/model/marker, not caller metadata alone.
+
+Extend existing usage recorder/store/index/reconciliation together. Add nullable
+operation_id projection/index; keep old observation hashes and trial behavior.
+`improvement_events(experiment_id,trial_id=None,*,operation_id=None)` rejects
+mixed filters; recovery filters execution_id+attempt+source. Missing telemetry
+for marked operations and operation-specific write errors remain partial/unknown.
+No second money ledger. Actual effort/model observation and selected pins remain
+distinct. Current isolated solver path never invokes conversation/self-lesson/
+job hooks; preserve that isolation for operations and verify zero production
+learning effects. No shared-conversation persistence is introduced in C. If later
+added, durable trusted provenance must guard digest and delayed reaction replay,
+not just a transient ContextVar or enqueue call.
+
+`OperationWorkspace` uses operation IDs in receipts/journals/packets; its runner
+receives the concrete SAME `TrialService.trials.workspace` brain barrier rooted
+under trials/.executions. Sibling operations/.executions is prohibited. Profile
+source footprint includes every new operation worker/renderer/workspace/native
+adapter implementation. Operation profile keeps fixture-only native capability,
+empty hooks/plugins/settings/skills and no arbitrary command/evaluator execution.
+One actual operation supervisor owns preflight through final cleanup, including
+repeated HTTP cancellation; no detached cleanup-ready callback.
+
+Tuning inputs bind exact preparation result IDs/artifact/receipt/observation refs,
+authorized snapshots/public contract/baseline/protected context and selected
+config/source/recipe closure. Private answers and any qualification/regression
+fingerprint aliases reject before model input. Full encrypted input is immutable;
+bounded renderer rejects oversize required input rather than silently truncating.
+
+Closed proposal output version1 is either {kind:patches,patches:[A manifests]} or
+{kind:not_a_target_defect,reason:<bounded text>,evidence_refs:[actual input refs]}.
+Max remaining A slots (two total including manual). Structural validation of the
+whole batch occurs before any stage. One immutable repair operation for the whole
+batch may see original authorized input + invalid output + fixed validation code;
+it receives no new data or slot allowance. Publish A stage/event + publication +
+generated links in ONE transaction, final source/grant/generation CAS. Concurrent
+manual staging rejects the entire generated batch; no partial third candidate.
+
+Semantic input pins exact A before/after bytes, deterministic dependency closure,
+protected context, evaluator/config/source/grants, operation input/output refs.
+Strict output version1: verdict pass|fail|unknown|owner_required, findings with
+actual source/evidence refs and bounded rationale. No model-issued accepted
+status/grant/native flag. Deterministic dependency result and model assessment
+are separately represented within the append-only receipt blob; missing native
+coverage cannot become semantic eligibility. A semantic_status/provenance stays
+unreviewed forever. Future D consumption must revalidate exact current receipt,
+actual view/runtime/source/config; a model pass cannot enable a candidate.
+
+### Ownership, verification and self-review
+
+Derived bounds: max comparison trials12000 + preparation2000 =14000, max solver
+attempts28000. Max role operations4 (propose,repair,two semantic), max attempts8.
+All drain/recovery/snapshot validators share these constants. Final stop holds
+actual shared brain lock across scoped cleanup proofs and short writer CAS;
+snapshot includes all immutable comparison/preparation links, actual attempts,
+role identities/calls and live supervisors. Never broad-recover unrelated rows.
+Source/off/revoked prevents new work, still permits settlement. Recovery/resume
+does not dispatch or regrant. Existing stop acknowledgments stay historical.
+
+Task1 verification: standalone test_improvement_operations.py and existing
+test_improvement_experiments.py / test_improvement_store.py. Expected RED first:
+schema6/preparation/role metadata absent. Expected GREEN: real migration/history/
+old-reader/rollback/concurrent backup + scope/CAS/replay/cold denial tests pass.
+Later task commands are their focused standalone scripts plus the relevant
+existing consumers listed in each task; whole exact-head Linux CI remains final.
+
+Self-review: verified published schema5, actual transaction-owned CallLedger,
+HostContextStore/ExperimentPlans, strict v2 and all downstream version consumers.
+Independent read-only usage audit confirmed operation identity would otherwise
+be rejected/dropped in turn_context, recorder, index and reconciliation; all are
+included. Resolved baseline dependency with typed preparation, shared lock-root
+hazard with actual concrete barrier, immutable A evidence with separate receipts,
+and aggregate stop bounds. No alternate model, readiness stub, fake trial, hidden
+holdout input, activation or reduced Goal scope. Native capability and business
+effect remain unproven until their actual subsequent checks.

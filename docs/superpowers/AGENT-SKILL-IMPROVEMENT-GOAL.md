@@ -141,3 +141,47 @@ Báo cáo cuối phải tách **đã triển khai**, **đã kiểm bằng model 
 
 [OpenAI Docs: Using Goals in Codex](https://developers.openai.com/cookbook/examples/codex/using_goals_in_codex) mô tả `/goal <outcome>` và mục tiêu có điều kiện kiểm chứng qua nhiều lượt. Tài liệu này dùng cấu trúc đó; không bảo đảm một Goal có thể vượt quyền, quota, gián đoạn môi trường hoặc rút ngắn thời gian canary thật.
 
+## 12. Bổ sung quy trình từ M2C đến M8 — 23/10/2026
+
+Đây là chỉ dẫn bổ sung của chủ, chuyển từ chat “Xác định bước harness2 tốn thời gian”
+(`01a16662-a77c-72e2-9c40-265c5659d5cc`) trong lúc M2C Task1 đang làm. Áp dụng ngay,
+không khởi động Goal khác, không làm lại M0–M2B và bảo toàn test đang chạy hữu ích.
+Bản nguồn trước bổ sung có SHA-256
+`67061573b8c584d65d0ecf1daa4c56b536c78c07fcc5158cfa090d40ea299afd`;
+hash này và toàn bộ lineage/bằng chứng lịch sử giữ nguyên. Hash của tài liệu sau
+bổ sung được ghi riêng trong hồ sơ tiến độ, không thay hash nguồn ban đầu.
+
+1. Trước mỗi task, ghi ngắn gọn thành phần đổi, bên gọi/phụ thuộc và tập test.
+   Trong vòng sửa chạy bài tái hiện/RED→GREEN; cuối task chạy regression theo ảnh
+   hưởng; trước tích hợp chạy regression tích hợp cần thiết và đầy đủ CI bắt buộc
+   trên commit cuối. Không quét toàn bộ improvement sau mỗi bản vá nhỏ nếu không
+   có rủi ro hoặc thay đổi mới đòi hỏi.
+2. Mỗi finding ghi phạm vi, commit đã review và trạng thái. Sau vá, reviewer kiểm
+   diff, tái hiện gốc và đường bị ảnh hưởng. Chỉ mở lại toàn nhánh khi đổi kiến
+   trúc/interface/schema/quyền/vòng đời hoặc có bằng chứng thiếu sót hệ thống;
+   không giao nhiều reviewer đọc lại cùng phạm vi không đổi. Giữ review tổng thể
+   độc lập khi triển khai ổn định trước tích hợp, và xác minh phù hợp cho mọi sửa
+   sau đó trên bản cuối.
+3. Tái dùng bằng chứng khi có commit/source hashes, lệnh, môi trường/runtime/config
+   và phạm vi, và phần chứng minh không đổi hoặc bị ảnh hưởng gián tiếp. Không
+   chắc thì mở rộng kiểm. Nguồn cũ hoặc lượt chạy qua nhiều snapshot không chứng
+   minh commit cuối. Không chạy lại chỉ vì compaction/resume hay để báo tiến độ.
+4. Kiểm Linux sớm cho filesystem/quyền/subprocess/SQLite/đường dẫn. Không chờ cuối
+   nhánh mới phát hiện khác biệt Windows/Linux; không đổi môi trường đích/nới assert.
+5. Chỉ chạy song song script đã xác minh cách ly thư mục tạm, HOME/config, DB,
+   cổng và tài nguyên khác. Nhóm chia sẻ state hoặc chưa rõ vẫn tuần tự. Tối ưu
+   runner/CI cần kiểm riêng, không mở thành dự án refactor làm chậm M2C.
+6. Không thêm vòng spec/plan/review hình thức ngoài nhu cầu thật. Plan đủ dùng,
+   tự review theo quyền đã có và tiếp tục không hỏi lại quyền chủ đã cấp. Các plan
+   từ M2C đến M8 phải kế thừa mục bổ sung này.
+7. Giữ nguyên gate owner/grant/scope, luật chủ, dữ liệu/holdout, migration/old-reader,
+   native isolation/effective-view/qualification, cancellation/crash/cleanup/
+   concurrency/recovery, lineage/usage/unknown, atomic apply/revert/rollback,
+   nghiệm thu nghiệp vụ và live canary thật. Khi đổi có thể ảnh hưởng bất biến nào
+   thì kiểm bất biến đó. Kiểm toàn bộ theo quy ước repo vẫn bắt buộc trước merge.
+   Không giảm model/reasoning, bỏ test bắt buộc, hạ ngưỡng, che failure hoặc đổi
+   định nghĩa hoàn thành để tăng tốc.
+8. Checkpoint ghi gọn test/review đã chạy, bằng chứng tái dùng và lý do, bằng
+   chứng bị vô hiệu bởi thay đổi mới, thời gian thực đo được nếu có. Không hứa
+   tỷ lệ tăng tốc chưa đo. Tiếp tục Goal từ checkpoint hiện tại sau khi lưu bổ sung.
+

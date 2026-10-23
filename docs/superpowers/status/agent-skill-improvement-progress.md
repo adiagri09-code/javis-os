@@ -4,6 +4,10 @@
 
 - Goal: execute the complete M0–M8 contract in `../AGENT-SKILL-IMPROVEMENT-GOAL.md`.
 - Goal source SHA-256: `67061573b8c584d65d0ecf1daa4c56b536c78c07fcc5158cfa090d40ea299afd`.
+- Owner process addendum2026-10-23: Goal section12, relayed from chat
+  `01a16662-a77c-72e2-9c40-265c5659d5cc`. Applies M2C–M8; original source/hash and
+  historical evidence remain intact. Amended Goal SHA-256 (separate identity):
+  `558e91848624c2dbc5daf1d5decb64b43b960285ce0416e40099ca63863b2ec8`.
 - Agent/skill spec SHA-256: `fceea3d375388eeb0f0e3eada48cc2c74a611b2bfcad9978441a683052b108bc`.
 - Team dependency spec SHA-256: `e01014f05bf3e090cc63a52e581049833b292dfe5e77a094bd75d8941504f2ff`.
 - Authoritative baseline: `a9ee52ff0d3a1ce0eaa61d18c1b9c83081e21b26`, main 0.286.0.
@@ -37,9 +41,21 @@
 - Reuse attached managed M2 worktree on `codex/agent-skill-improvement-m2c` from
   actual published main47f50f70/0.293.0. Fresh open-PR inspection found no other
   reservation;0.294.0 is reserved before C product code with both changelogs.
-- Plan: `../plans/2026-10-23-agent-skill-improvement-m2c.md`. Design refinement,
-  concrete schema/protocol/ownership contract audit and self-review remain open;
-  no C implementation or accepted semantic evidence exists yet.
+- Plan: `../plans/2026-10-23-agent-skill-improvement-m2c.md`. Concrete contracts
+  canonicalized/self-reviewed; actual Task1 started from50406532e3b349c4e04c4320e73bbfa6d86a9cdc.
+  Schema6/preparation/role metadata under test; no enabled C model execution or
+  accepted semantic evidence. Draft PR801 reserves0.294.0 before product code.
+- Current checkpoint follows Goal section12: fix-loop new focused cases; Task1
+  regression operations/experiments/store, then early Linux CI for SQLite/backup/
+  paths. Full required final CI and independent stable-branch review remain.
+  Migration5 and metadata8 first passed together13/13 in33.041s. Additional
+  pending-to-completed SQL fence and signed case-seed compatibility reproduced
+  RED, then2/2 GREEN5.204s. Expanded task regression passed: operations21/21 in
+  48.856s, experiments19/19 in43.686s, store22/22 in5.232s. These are source-
+  scoped interim results, not final-head CI. Reuse released B only for unchanged
+  behavior; its schema5 evidence does not validate new schema6. No native profile
+  source changed, so prior native qualification remains historical evidence for
+  that unchanged profile; no redundant auth/model call. No speedup ratio claimed.
 - Baseline-first investigation favors a genuine typed preparation solver Trial
   inside the durable experiment, without fake candidate/arm or a v1 downgrade.
   Every consumer/result/stop/recovery scope and combined capacity bound must
@@ -49,8 +65,8 @@
   dependency assessments. No assessment/owner product confirmation waives source,
   runtime/view, qualification, activation or real business-data gates. Candidate/
   final execution stays closed until genuine C+D support. Broader UI is F.
-- M2B publication is verified; mainCI39882926358 runs on the identical merge tree
-  and has not yet been claimed passed. No deploy/restart/live activation occurred.
+- M2B publication is verified; mainCI39882926358 also completed SUCCESS on actual
+  merge47f50f70 (fresh read, no rerun). No deploy/restart/live activation occurred.
 
 ## M2B engineering continuation
 

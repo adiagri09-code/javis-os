@@ -17,7 +17,7 @@ from pathlib import Path
 
 from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES, RevisionBlobs  # noqa: F401
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 _SOURCE = re.compile(r"(?:skills/[a-z0-9][a-z0-9_-]*/SKILL\.md|agents/[a-z0-9][a-z0-9_-]*\.md)")
 _SCHEMA = (
     "CREATE TABLE improvement_schema(id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL)",
@@ -91,7 +91,7 @@ def _schema_version(store) -> int:
         if not row:
             return 0
         version = connection.execute("SELECT version FROM improvement_schema WHERE id=1").fetchone()
-        if not version or version["version"] not in (1, 2, 3, 4, SCHEMA_VERSION):
+        if not version or version["version"] not in (1, 2, 3, 4, 5, SCHEMA_VERSION):
             raise SchemaError("unsupported_improvement_schema")
         return version["version"]
 
@@ -127,13 +127,15 @@ def ensure(store) -> None:
     with store._Tx(store) as connection:
         exists = connection.execute("SELECT name FROM sqlite_master WHERE name='improvement_schema'").fetchone()
         installed = connection.execute("SELECT version FROM improvement_schema WHERE id=1").fetchone() if exists else None
-        if exists and (not installed or installed["version"] not in (1, 2, 3, 4, SCHEMA_VERSION)):
+        if exists and (not installed or installed["version"] not in (1, 2, 3, 4, 5, SCHEMA_VERSION)):
             raise SchemaError("unsupported_improvement_schema")
         if installed and installed["version"] == SCHEMA_VERSION:
             return
         # Serialize the backup with the migration; two first writers otherwise race on its .tmp file.
         if exists:
-            store._backup_before("improvement_experiments", ".pre-improvement-m2-experiments.bak")
+            if installed["version"] < 5:
+                store._backup_before("improvement_experiments", ".pre-improvement-m2-experiments.bak")
+            store._backup_before("improvement_preparations", ".pre-improvement-m2-generated.bak")
         else:
             store._backup_before("improvement_schema", ".pre-improvement-m0.bak")
         if not exists:
@@ -158,6 +160,11 @@ def ensure(store) -> None:
             _immutable_triggers(connection, IMMUTABLE)
         if not installed or installed["version"] < 5:
             from improvement_experiment_schema import SCHEMA, IMMUTABLE
+            for statement in SCHEMA:
+                connection.execute(statement)
+            _immutable_triggers(connection, IMMUTABLE)
+        if not installed or installed["version"] < 6:
+            from improvement_operation_schema import SCHEMA, IMMUTABLE
             for statement in SCHEMA:
                 connection.execute(statement)
             _immutable_triggers(connection, IMMUTABLE)
