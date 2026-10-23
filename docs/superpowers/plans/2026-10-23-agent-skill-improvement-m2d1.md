@@ -974,3 +974,42 @@ RED must prove the view protocol/schema are absent; GREEN must exercise real
 SQL/encrypted metadata, old-reader refusal, exact backup/rollback, cross-scope and
 immutable guards. No native/auth/model calls in Task1. The CI workflow must fetch
 published C2727edcc for its actual schema6 reader just as it fetches A/B today.
+
+## Selected-account feasibility follow-up — 23 October
+
+The exact registered81/4d346a3a source at54210807 ran one actual baseline
+TrialRunner call and one actual semantic role, with the configured Opus5.5/medium
+subscription. The real reviewer artifact was fenced JSON and lacked required
+`findings`; the strict parser refused it. No receipt, view, pair, selection or
+qualification claim was created. Preserve this failed attempt and its usage
+in `../evidence/2026-10-23-m2d1-real-feasibility.json` (SHA90ecc20b), with
+canonical unchanged and plaintext cleanup complete. Do not normalize it, infer
+acceptance from its inner pass string, impersonate an owner or rerun until win.
+
+Actual operator defect: this failure surfaced as generic503, and a retry exposed
+only operation_recorded. A scoped follow-up adds a durable invalid_output outcome
+under the same semantic_review event, referencing the original native product.
+It grants no receipt or assessment, cannot enable a probe, and never retries the
+model. Source/grant/generation/stop and exact product fences still apply before
+recording; exact historical replay stays cold after stop/off/revoke.
+
+Impact recorded before production edits in the retained task ledger: sole
+production component SemanticReview._publish/new rejection helper; callers
+owned ExperimentService.workflow, owner API and stopped cold replay. Strict
+validator/prompt/native checks/eligibility/schema remain unchanged. Three
+workflow RED tests reproduced two parser errors and one successful source-fence
+refusal; one actual owner HTTP RED test reproduced503. An earlier wrong class
+selector failed before tests and is excluded from this evidence.
+
+- [x] Complete GREEN semantic workflow/protocol/dependency and actual owner
+  workflow API suites, scoped view source/policy, view API and adapter guards
+  sequentially on one fixed source map. Keep malformed raw products and unknowns.
+  Passed63 tests in349.720s; source/AST/log proof is recorded in
+  `../evidence/2026-10-23-m2d1-semantic-invalid-output.json` (SHA4a8d10e9).
+- [ ] Scoped independent new-delta review, retaining the completed whole-D1
+  and earlier lifetime/runtime reviews. No repeat whole review.
+- [ ] Qualify the final changed81-source native footprint before any further
+  actual native/account query; prior4d evidence is historical and cannot match
+  the new profile. Preserve all original failures and exact registration rules.
+- [ ] Final-head full CI, genuine account pair/final acceptance and remaining
+  D1/D2/E/F/M3–M8 work stay open. No Task3/4/5 completion marker from this fix.

@@ -112,8 +112,25 @@ dummy local provider: exact baseline/candidate prompts and receipts, distinct
 sessions, denied ambient tools and plaintext cleanup after native job drain.
 Its preparation/reviewer fixtures remain simulated. This proves direct native
 profile enforcement, without asserting a native TrialRunner/account call.
-Genuine selected-final positive execution and native TrialRunner/account
-feasibility remain open. Production router/lazy/hub/task integration belongs
+The selected-account feasibility at commit `54210807` made two actual calls:
+one baseline TrialRunner execution and one semantic role. The baseline completed
+with a failed JSON shape check and unknown owner accuracy. The reviewer returned
+fenced JSON without required `findings`; strict validation rejected it before
+any semantic receipt, paired view, selection or qualification claim existed.
+Canonical bytes stayed unchanged and all plaintext workspaces were removed.
+The [feasibility record](../superpowers/evidence/2026-10-23-m2d1-real-feasibility.json)
+preserves the failed result and partial usage. No model retry was performed.
+
+Malformed semantic output now has an explicit `invalid_output` workflow result
+with the original operation/result references. It creates no semantic receipt
+or review authority and does not repair, normalize or retry the model output.
+The same event key replays that recorded outcome after stop/off/revoke. New
+work still requires current source and native evidence. This workflow change
+creates profile `958527ac`, currently unregistered; the earlier exact `4d346a3a`
+qualification remains historical and cannot authorize calls on changed source.
+
+Genuine selected-final positive execution and the native TrialRunner/account
+pair remain open. Production router/lazy/hub/task integration belongs
 to D2; atomic activation/rollback and the complete operator flow belong to
 later E/F work. Business pilots and live rollout require their own evidence
 and scope. No deployment, restart, live activation or business acceptance is

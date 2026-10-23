@@ -44,8 +44,9 @@
 - Current engineering continuation is M2D1, branch
   `codex/agent-skill-improvement-m2d1` in the SAME isolated worktree
   `C:/Users/admin/.codex/worktrees/agent-skill-improvement-m2a/Javis-OS`.
-  DraftPR803 reserves0.297.0 before code, c4991ec8. Its bilingual changelog
-  reservation test passed. Plan is `../plans/2026-10-23-agent-skill-improvement-m2d1.md`.
+  DraftPR803 now reserves0.299.0 after rebasing onto main0.298.0; original
+  reservation0.297.0 at c4991ec8 remains historical. Plan is
+  `../plans/2026-10-23-agent-skill-improvement-m2d1.md`.
   D1 builds shared immutable view identity/source resolution and actual isolated
   candidate probes; full D remains open until production router/lazy/hub/native
   task/resume integration is actually verified. E/F and M3–M8 remain open.
@@ -102,6 +103,42 @@
 
 ## M2C engineering continuation
 
+### D1 selected-account feasibility and invalid-output follow-up, 23 October
+
+At54210807, exact qualified profile81/4d346a3a made two real selected-account
+calls with unchanged Opus5.5/medium/subscription: baseline TrialRunner and
+semantic reviewer,117.817s from prepared scope to final accounting. The baseline
+completed but failed JSON shape; owner accuracy stayed unknown. Its full18
+integrity checks retained reasoning/asset-use and event/side-effect unknowns.
+The reviewer produced fenced JSON missing required `findings`. Strict parsing
+refused it, with no receipt, view, selection or qualification claim. The inner
+model word `pass` is not an accepted assessment. Canonical bytes stayed exact;
+all plaintext workspaces were removed. No model retry or owner arbitration.
+
+Evidence `../evidence/2026-10-23-m2d1-real-feasibility.json`, SHA256
+90ecc20bfc31c581292e654f8a4ff68192e77e56ec6caba8f3a1600e536321a0.
+Observed usage8569 input/877 output tokens, subscription-equivalent USD0.0707254;
+cash and request counts are unavailable and coverage remains partial. These
+are technical synthetic calls, with no business efficacy or live authority.
+Actual native TrialRunner baseline is demonstrated; the account pair and
+genuine eligible final remain unproven.
+
+The failed review exposed a separate operator defect: malformed output surfaced
+as generic HTTP503 instead of a stable typed outcome. Actual workflow RED3
+reproduced two strict validation errors while the source-revocation test passed;
+actual HTTP RED1 reproduced503. A narrow follow-up records `invalid_output` with
+the original native result, no receipt and no automatic retry. Parser, prompt,
+assessments, native checks and eligibility are unchanged. Five sequential focused
+and affected scripts passed63 tests in349.720s on one complete source map.
+Artifact `../evidence/2026-10-23-m2d1-semantic-invalid-output.json`, SHA256
+4a8d10e966a7931410093822f8b1261f8ecef7c0d01042c8ba27dc36286d9464.
+AST proof preserves all other product code and prior test methods; the scoped
+independent static review reports no finding, exact-commit confirmation pending.
+Changed profile
+81/958527ac69c3b5728044b22cf6d3bdebb920da7cbe46a9da261e899568ced1ef
+is unregistered. Prior exact qualification is historical for this changed source.
+Task3/4/5, D2/E/F and M3–M8 remain open; final CI/publication are not complete.
+
 ### D1 fresh-main and runtime309 checkpoint, 23 October
 
 Current draftPR803 reserves0.299.0, rebased onto main d3d7cb36/0.298.0.
@@ -129,8 +166,17 @@ dummy auth and local providers, observed reasoning/asset use remain unknown.
 Reuse/source/recheck checkpoint
 `../evidence/2026-10-23-m2d1-source-checkpoint.json`, SHA256
 99c01d1afdc91f2516b57a12cecfb81bec13dd184295cfd934a37fd502661253.
-The new runtime tuple/test-version probe/registration delta needs scoped review;
-final-head CI and genuine native TrialRunner/account feasibility remain open.
+The runtime tuple/test-version probe/registration delta was independently
+approved at5421080714f78c653e2ab10c17a5e8ee4a613a55, with no actionable finding.
+The reviewer verified all81 source pins, retained evidence/log hashes and the
+narrow AST delta; two independent registration tests passed0.048s. Retained log
+`review-runtime309-registration.log` SHA256
+30f47d7034bdb0b1ae42ced51a1e81d221a64bb267df84e0f5819d0749e11b82.
+Earlier LinuxCI39982218130 succeeded on740c0c67; final-head CI is still required.
+Current selected-account readiness was verified read-only with unchanged
+Opus5.5/medium/fastfalse/subscription. Native TrialRunner feasibility is running
+in a new encrypted disposable synthetic reconciliation scope; no accepted
+business dataset or human semantic arbitration is inferred from pilot choice.
 No eligible selected-final, business win, activation, deployment or restart.
 Task3/4/5, D2/E/F and M3–M8 remain OPEN; previous native proofs stay historical.
 
