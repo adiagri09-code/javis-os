@@ -82,10 +82,20 @@ def _manifest(value):
     manifest = _frozen(value)
     if redact(manifest) != manifest:
         raise ValueError("insufficient_source: trial_input_contains_credentials")
-    _fields(manifest, {"version", "brain_id", "bundle_hash", "engine_config_hash", "contract_hash", "grant_hash",
-                       "baseline_context", "public_contract", "assets", "case", "learning_origin"})
-    if type(manifest["version"]) is not int or manifest["version"] != 1:
+    required = {"version", "brain_id", "bundle_hash", "engine_config_hash", "contract_hash", "grant_hash",
+                "baseline_context", "public_contract", "assets", "case", "learning_origin"}
+    if type(manifest.get('version')) is int and manifest['version'] == 2:
+        required.add('effective_view')
+    _fields(manifest, required)
+    if type(manifest["version"]) is not int or manifest["version"] not in (1, 2):
         raise ValueError("unsupported_trial_input")
+    if manifest['version'] == 2:
+        view = manifest['effective_view']
+        _fields(view, {'view_id', 'view_hash', 'binding_hash'})
+        if type(view['view_id']) is not str or not _IDENTITY.fullmatch(view['view_id']):
+            raise ValueError('invalid_trial_view')
+        _digest(view['view_hash'])
+        _digest(view['binding_hash'])
     _text(manifest["brain_id"], 1000)
     for field in ("bundle_hash", "engine_config_hash", "contract_hash", "grant_hash"):
         _digest(manifest[field])
@@ -107,6 +117,9 @@ def _manifest(value):
     assets = manifest["assets"]
     if not isinstance(assets, list) or not assets or len(assets) > 100:
         raise ValueError("invalid_trial_assets")
+    if manifest['version'] == 2 and (len(assets) != 1 or type(assets[0]) is not dict
+            or type(assets[0].get('path')) is not str or not assets[0]['path'].startswith('skills/')):
+        raise ValueError('invalid_trial_view_assets')
     paths, identities = set(), set()
     for asset in assets:
         _fields(asset, {"id", "path", "hash", "content"})
@@ -160,8 +173,11 @@ def trial_system_prompt(input_manifest):
 
 
 def _effective_hash(manifest):
-    return _hash({"context": manifest["baseline_context"]["hash"], "bundle": manifest["bundle_hash"],
-                  "assets": [{key: asset[key] for key in ("id", "path", "hash")} for asset in manifest["assets"]]})
+    value = {"context": manifest["baseline_context"]["hash"], "bundle": manifest["bundle_hash"],
+             "assets": [{key: asset[key] for key in ("id", "path", "hash")} for asset in manifest["assets"]]}
+    if manifest['version'] == 2:
+        value['effective_view'] = manifest['effective_view']
+    return _hash(value)
 
 
 def _atomic(path, content):

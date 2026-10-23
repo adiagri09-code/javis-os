@@ -338,7 +338,8 @@ class TrialStore:
     def _materialization(self, connection, row, baseline_context, *, principal=None):
         request = json.loads(row["request_json"])
         if request.get('version') == 4:
-            raise PermissionError('view_materialization_unavailable')
+            from improvement_view_materialization import materialize_view
+            return materialize_view(self, connection, row, baseline_context, principal)
         if IM._hash(baseline_context) != request["baseline_context_hash"]:
             raise IM.ConflictError("trial_context_drift")
         brain = row["brain_id"]

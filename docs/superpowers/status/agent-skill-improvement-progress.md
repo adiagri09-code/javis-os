@@ -179,6 +179,18 @@ Linux39957029202 failed on olderdad605c3, before the fixture correction; current
 Linux39959675109 remains in progress on254a90ca, preceding this report change.
 No real model query or business/live acceptance is claimed.
 
+Tuning workspace checkpoint:69 checks passed in171.812s across actual view
+materialization4, sandbox, TrialStore, view reservation and worker footprint.
+The real linked pair materializes/prepares exact baseline revision/A candidate
+bytes with common inputs, without modifying canonical or manufacturing a bundle.
+Source edits during solver read roll back the materialization and retain exact
+prior exposure rows. V1 prompt/hash stays unchanged; v2 binds its view descriptor.
+Evidence `../evidence/2026-10-23-m2d1-task4-materialization.json`, SHA256
+87d9d7306dc3226ac3f2a68860bc4277eec699c08535e4ba4892c5aed38d76d3.
+Current79-source profilebeddb902 is unregistered. Native v4 receipt/check/result
+integration, final qualification ownership and public controls remain open.
+No actual native query, successful result, eligibility or business/live proof.
+
 - Final affected regression21/21 GREEN,663.451s, qualified across two frozen
   segments: first15 passed scripts retain identical product/helper/test bytes;
   only the failed standalone task-drain test changed from a30ms scheduler sample

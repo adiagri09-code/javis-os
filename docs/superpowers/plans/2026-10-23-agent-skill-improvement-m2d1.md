@@ -457,6 +457,31 @@ Cold partial7 prototypes remain readable but cannot acquire new view authority.
 
 ### Task 4 — actual workspace/native view and result evidence
 
+Dependency ordering: implement tuning materialization now as the prerequisite
+for genuine result/selection evidence. Task3 final-registry ownership remains
+open; no fabricated eligible report or selected candidate may unlock it. This
+unit changes sandbox manifest validation/effective hashing and TrialStore's
+explicit v4 materialization through a new concrete view-materialization module.
+Workspace v2 is precisely v1 plus `effective_view` with the request's closed
+`view_id,view_hash,binding_hash`; asset ID is the real baseline revision or A
+candidate, never a manufactured M0 bundle/revision. V1 prompt/hash bytes stay
+unchanged. Native readiness remains denied on the changed profile. Test scope:
+new real-reservation/materialization tests, sandbox, TrialStore, view reservation
+and native-footprint fixtures; actual native/result integration is a later unit.
+
+Tuning workspace checkpoint: actual linked pair now materializes/prepares v2
+workspaces through the existing TrialStore and encrypted source/solver inputs.
+Exact baseline revision/A candidate IDs and body bytes, common context/case,
+canonical preservation and final source-race rollback are checked. V1 prompt and
+effective hash are byte preserving; v2 effective hash includes its exact view
+descriptor. All5 affected scripts passed69 tests sequentially in171.812s on one
+frozen source map. Evidence `../evidence/2026-10-23-m2d1-task4-materialization.json`
+SHA25687d9d7306dc3226ac3f2a68860bc4277eec699c08535e4ba4892c5aed38d76d3.
+New79-source native profilebeddb90238b1b8d1fd21f0e547c0ecff12cb677e5a76f9ceaec6d48add23bfdd
+is unregistered. Actual v4 receipts/checks/results, native qualification and final
+registry remain open. No native query/result/eligibility was manufactured. Task3
+and Task4 remain OPEN; no task-done marker.
+
 **Files:** new `server/improvement_view_materialization.py`; extend actual
 TrialStore.materialize, sandbox/worker/TrialProfile, receipts/checks/results/
 views/products/comparison projection. Add all new native-path sources to the

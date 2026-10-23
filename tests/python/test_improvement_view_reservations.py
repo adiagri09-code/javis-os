@@ -83,15 +83,16 @@ class ViewReservationTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCa
         with closing(self.assets.store._conn()) as connection:
             self.assertEqual(connection.execute('SELECT count(*) FROM improvement_view_trial_links').fetchone()[0], 0)
 
-    async def test_new_reservation_cannot_fall_through_legacy_materialization_before_task4(self):
+    async def test_view_materialization_rejects_wrong_context_before_plaintext(self):
         trials, metadata = self.bound()
         request = self.live_request(metadata)
         reserved = trials.reserve(self.owner, request, event_key='view-reserve-materialization-closed')
         claimed = trials.claim(self.owner, reserved['trial_id'], expected_generation=reserved['generation'])
         context = self.host.context_loader(self.owner, request)
-        with self.assertRaisesRegex(PermissionError, 'view_materialization_unavailable'):
+        with patch.object(self.assets.blobs, 'read', side_effect=AssertionError('Wrong context cannot decrypt')), \
+                self.assertRaisesRegex(IM.ConflictError, 'trial_context_drift'):
             trials.materialize(self.owner, reserved['trial_id'], expected_generation=claimed['generation'],
-                lease_token=claimed['lease_token'], baseline_context=context)
+                lease_token=claimed['lease_token'], baseline_context=context | {'content': 'Wrong context'})
         with closing(self.assets.store._conn()) as connection:
             attempt = connection.execute('SELECT * FROM improvement_trial_attempts WHERE trial_id=?', (reserved['trial_id'],)).fetchone()
         self.assertIsNone(attempt['engine_at'])
@@ -135,7 +136,8 @@ class NativeFootprintTests(unittest.TestCase):
         self.assertTrue({'improvement_trials.py', 'improvement_trial_host.py', 'improvement_views.py',
             'improvement_view_sources.py', 'improvement_view_history.py', 'improvement_view_lineage.py',
             'improvement_view_trial_protocol.py', 'improvement_view_protocol.py',
-            'improvement_comparison_schedule.py', 'improvement_view_admission.py'} <= set(PROFILE_SOURCES))
+            'improvement_comparison_schedule.py', 'improvement_view_admission.py',
+            'improvement_view_materialization.py'} <= set(PROFILE_SOURCES))
 
 
 if __name__ == '__main__':
