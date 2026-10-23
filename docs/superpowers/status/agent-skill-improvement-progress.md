@@ -49,12 +49,23 @@
   D1 builds shared immutable view identity/source resolution and actual isolated
   candidate probes; full D remains open until production router/lazy/hub/native
   task/resume integration is actually verified. E/F and M3–M8 remain open.
-  Task1 started at d00312d5. Its closed pure view protocol now passes11 tests
-  after observed missing-module RED; a further event-reference RED exposed the
-  actual8..160 owner event-key bound and is fixed. Schema7/real scoped SQL,
-  migration/backup/old-reader gates remain pending; Task1 is not complete.
-  Existing C runtime closure remains unchanged and retains its source-qualified
-  CI/native baseline. The new protocol alone grants no runtime authority.
+  Task1 started at d00312d5. Closed pure identity and additive schema7 now pass
+  the six affected scripts sequentially:104 tests,221.921s. Actual released C
+  reader refuses7, while its backup restores exact schema6 history, including
+  settled role results/semantic receipts/calls and encrypted bytes. Composite
+  scope/immutable guards reject splicing individually valid candidate/receipt/
+  comparison rows. Cold metadata neither decrypts nor migrates; canonical skill
+  bytes and target pointers stay unchanged. Evidence:
+  `../evidence/2026-10-23-m2d1-task1-verification.json`, SHA256
+  fd76fe8e8cf40d39b68ba5ed845de2439dd63a4db77ea3e17f47f1932306529e.
+  Task1 local foundation is verified; task-done checks committed bytes/logs.
+  Checkpoint Linux CI remains pending. WSL is unavailable; the PR workflow now
+  fetches actual C2727edcc for its reader test. No real provider/account inference
+  or new D native qualification occurred. C's exact34-source native profile is
+  unchanged9dcf7184, verified against released C; this does not qualify future D.
+  Task2 still owns authenticating encrypted manifests and current source/semantic
+  authority plus atomic pair publication/CAS/replay; Task3 owns actual v4 lineage
+  and legacy-format exclusion. No metadata row grants execution or live authority.
 - Earlier pending/failure
   checkpoints remain historical; complete M2/business/rollout gates remain open.
 

@@ -122,7 +122,8 @@ approval from the existence of this plan.
 
 **Files:** new `server/improvement_view_protocol.py`,
 `server/improvement_view_schema.py`; modify `server/improvement_store.py`;
-new `tests/python/test_improvement_views.py`.
+new `tests/python/test_improvement_views.py` and
+`tests/python/test_improvement_view_schema.py` (actual SQL/backup/old reader).
 
 **Interfaces:** `view_manifest(value)->dict` validates closed version1 data and
 `view_hash(value)->str` hashes that canonical projection. It contains exact brain,
@@ -148,13 +149,23 @@ runtime format, never double its allowed cells or omit its new actual links.
 Do not fake a v4 Trial row to make Task1's metadata tests positive; genuine
 Trial/call/link publication is Task3's completion gate.
 
-- [ ] RED: schema6 lacks view tables; forged body/hash/source/variant identity,
-  mutable/foreign links, duplicate comparison runtime and unknown schema reject.
-- [ ] GREEN: real encrypted metadata save/cold read, concurrent
+- [x] RED: schema6 lacks view tables; forged body/hash/source/variant identity,
+  mutable/foreign links, duplicate view variants/bindings and unknown schema reject.
+  Legacy/v4 runtime exclusion remains Task3 as explicitly separated above.
+- [x] GREEN: real encrypted metadata save/cold read, concurrent
   one-time byte-preserved migration backup, crash rollback and old-reader refusal.
-- [ ] Verify actual published C reader refuses schema7 and its backup restores
+- [x] Verify actual published C reader refuses schema7 and its backup restores
   exact historical schema6. Preserve all earlier backup boundaries.
-- [ ] Commit verified task; record exact source/test/command/runtime evidence.
+- [x] Commit verified task; record exact source/test/command/runtime evidence.
+
+Task1 local implementation evidence: six sequential affected scripts passed104
+tests in221.921s, source/runtime/log-bound in
+`../evidence/2026-10-23-m2d1-task1-verification.json` (SHA256
+fd76fe8e8cf40d39b68ba5ed845de2439dd63a4db77ea3e17f47f1932306529e).
+The actual task-done verifier checks committed bytes against the full retained
+dependency/log evidence, without repeating already-passed tests. This is local
+foundation completion; checkpoint Linux CI and full D1 review/runtime/final CI
+remain open. WSL is unavailable; use the existing PR's automatic Linux workflow.
 
 Task boundary ruling: positive atomic pair publication/CAS/event replay belongs
 to Task2's concrete host publisher, which owns current source/semantic authority.
@@ -368,6 +379,21 @@ actual semantic receipt, and stores one encrypted binding hash/blob. Composite
 FKs plus actual join triggers prevent matching individually valid foreign rows.
 The extra v4 link table/legacy-link exclusion guards are Task3.
 
+Task1 SQL columns are frozen before implementation: views store `id,brain_id,
+experiment_id,target_id,context_id,comparison_id,variant,candidate_id,
+base_revision_id,base_hash,base_generation,source_authority_hash,
+semantic_receipt_id,manifest_hash,manifest_blob_hash,created_at`. Both variants
+identify the comparison's actual A candidate and semantic receipt. Assets store
+`view_id,brain_id,position,asset_id,canonical_ref,before_hash,content_hash,identity,
+authority_hash,origin`. Bindings store `comparison_id,brain_id,base_view_id,
+candidate_view_id,semantic_receipt_id,binding_hash,binding_blob_hash,created_at`.
+Content-addressed manifest/binding hashes equal their encrypted blob addresses.
+SQL joins enforce actual comparison/arm/candidate/base/context/receipt lineage
+and asset identity/hash/origin, plus complete matching assets before binding.
+SQL cannot authenticate encrypted plaintext: Task2 must revalidate exact manifest,
+blob bytes, current grants/source/semantic authority and pair proof before use.
+No runtime version, Trial link, eligibility or live activation flag is stored here.
+
 Migration7 adds `.pre-improvement-m2-views.bak`, keyed by absence of
 `improvement_effective_views`. Run it through the SAME writer serialization;
 retain all prior backups and accepted known versions1..6 explicitly. Fresh DBs
@@ -380,9 +406,13 @@ count. Preserve C's same-number-prototype refusal before any role/view authority
 
 Task1 commands, sequential:
 `python tests/python/test_improvement_views.py -v`,
+`python tests/python/test_improvement_view_schema.py -v`,
 `python tests/python/test_improvement_store.py -v`,
 `python tests/python/test_improvement_operations.py -v`, and
-`python tests/python/test_improvement_experiments.py -v`.
+`python tests/python/test_improvement_experiments.py -v`, and
+`python tests/python/test_improvement_operation_execution.py -v`.
+The sixth script is affected because its future-schema test used literal7;
+schema7 is now known, so the same refusal test must exercise actual future8.
 RED must prove the view protocol/schema are absent; GREEN must exercise real
 SQL/encrypted metadata, old-reader refusal, exact backup/rollback, cross-scope and
 immutable guards. No native/auth/model calls in Task1. The CI workflow must fetch
