@@ -259,3 +259,57 @@ class NativeWorkerSessionV2:
 
     async def __aenter__(self): return await self.adopt()
     async def __aexit__(self, *args): await self.aclose()
+
+
+async def prepare_native_runtime(session, payload, *, kind):
+    """Admit before any CLI, then verify actual guarded child observations."""
+    from improvement_native_protocol import _canonical
+    if (type(session) is not NativeWorkerSessionV2 or session._namespace != kind
+            or session._packet['kind'] != kind
+            or _canonical(payload) != _canonical(session._packet['request'])):
+        raise ValueError('native_worker_request_unbound')
+    runtime = session.runtime  # Also requires completed adoption on the same owner.
+    from improvement_claude import ClaudeTrialAdapter
+    adapter = ClaudeTrialAdapter(payload['config_pin'])
+    admission = adapter.admit_preflight()
+    if admission.get('admitted') is not True: raise ValueError('native_preflight_not_admitted')
+    observed = await runtime.preflight(managed_policy=admission['runtime']['managed_policy'])
+    verified = adapter.verify_observed(observed)
+    if (verified.get('supported') is not True or (kind != 'preflight'
+            and verified.get('capability_hash') != payload['capability_hash'])):
+        raise ValueError('native_worker_capability_drift')
+    return verified, observed
+
+
+async def run_startup2(raw, *, entrypoint):
+    """Fixed entrypoint consumer; initial raw bytes retain strict wire grammar."""
+    from improvement_native_protocol import decode_startup2
+    packet = decode_startup2(raw)
+    kind = packet['kind']
+    if (entrypoint not in ('trial', 'operation') or kind not in
+            (('trial', 'preflight') if entrypoint == 'trial' else ('operation',))):
+        raise ValueError('native_worker_entrypoint_mismatch')
+    owner = NativeWorkerSessionV2(packet, namespace=kind)
+    try:
+        await owner.adopt()  # Installs exact environment before application imports.
+        if kind == 'preflight':
+            _, observed = await prepare_native_runtime(owner, packet['request'], kind=kind)
+            await owner.runtime.aclose()
+            await owner.send({'type': 'preflight_complete', 'runtime': observed})
+        else:
+            if kind == 'trial':
+                from improvement_worker import run_request
+            else:
+                from improvement_operation_worker import run_request
+            await run_request(packet['request'], owner.receive, owner.send, native_session=owner)
+    except Exception as error:
+        if owner._adopted and not owner.closed:
+            try:
+                await owner.send({'type': 'worker_error', 'reason': kind + '_worker_failed',
+                    'error_type': type(error).__name__})
+            except Exception:
+                pass  # Never invent delivery; outer owner still must close.
+        raise
+    finally:
+        await owner.aclose()
+    return 0

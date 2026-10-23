@@ -326,7 +326,7 @@ class WorkerGroup:
             time.sleep(.01)
 
 
-async def run_request(payload, read_control, emit, *, adapter_factory=None, engine_factory=None):
+async def run_request(payload, read_control, emit, *, adapter_factory=None, engine_factory=None, native_session=None):
     """Validate host materialization before creating an engine; model text is always data."""
     from improvement_cases import _digest, _fields, _frozen
     from improvement_store import _hash, _json
@@ -342,7 +342,14 @@ async def run_request(payload, read_control, emit, *, adapter_factory=None, engi
     pin = payload["config_pin"]
     if manifest["engine_config_hash"] != _hash(pin):
         raise ValueError("trial_configuration_drift")
-    verified = (adapter_factory or ClaudeTrialAdapter)(pin).verify()
+    if native_session is None:
+        if manifest['version'] == 4: raise ValueError('trial_native_worker_required')
+        verified = (adapter_factory or ClaudeTrialAdapter)(pin).verify()
+    else:
+        if manifest['version'] != 4: raise ValueError('trial_native_input4_required')
+        from improvement_native_worker import prepare_native_runtime
+        verified, _ = await prepare_native_runtime(native_session, payload, kind='trial')
+        read_control, emit = native_session.receive, native_session.send
     if not verified.get("supported") or verified.get("capability_hash") != payload["capability_hash"]:
         raise ValueError("trial_capability_drift")
     identity = {"trial_id": receipt["trial_id"], "attempt": receipt["attempt"], "input_hash": receipt["input_hash"]}
@@ -351,7 +358,8 @@ async def run_request(payload, read_control, emit, *, adapter_factory=None, engi
     async def before_query():
         await emit({"type": "engine_start_requested", **identity})
         acknowledgement = await read_control()
-        if acknowledgement != {"type": "engine_start_ack", **identity}:
+        expected = {"type": "engine_start_ack", **identity}
+        if (_json(acknowledgement) != _json(expected) if native_session is not None else acknowledgement != expected):
             raise ValueError("trial_engine_start_not_acknowledged")
 
     broker = FixtureBroker(manifest["case"]["fixtures"], manifest["grant_hash"])
@@ -368,13 +376,18 @@ async def run_request(payload, read_control, emit, *, adapter_factory=None, engi
     engine.trial_profile = profile
     prompt = _json({"task": manifest["case"]["task"], "fixtures": [
         {"snapshot_id": item["snapshot_id"], "source": item["source"]} for item in manifest["case"]["fixtures"]]})
+    if native_session is not None:
+        profile.bind_native_runtime(native_session.runtime, environment=native_session._packet['environment'], user_prompt=prompt)
     fixture_sequence = 0
-    with _sdk_hidden_processes():
+    with (_sdk_hidden_processes() if native_session is None else nullcontext()):
         async for event in engine.query(prompt):
             await emit({"type": "engine_event", **identity, "event": event})
             for observation in broker.events[fixture_sequence:]:
                 await emit({"type": "fixture_event", **identity, "event": observation})
             fixture_sequence = len(broker.events)
+    if native_session is not None:
+        # Common engine disconnect suppresses errors; this owned close cannot.
+        await native_session.runtime.aclose()
     await emit({"type": "worker_complete", **identity, "fixture_events": broker.events, "tool_denials": profile.denials})
 
 
@@ -387,11 +400,16 @@ def main():
     maximum = 8 * 1024 * 1024
     output = sys.stdout.buffer
     sequence = 0
+    native_route = False
 
-    def read_packet():
+    def read_raw():
         raw = sys.stdin.buffer.readline(maximum + 1)
         if not raw or len(raw) > maximum or not raw.endswith(b"\n"):
             raise ValueError("invalid_trial_worker_packet")
+        return raw
+
+    def read_packet():
+        raw = read_raw()
         value = json.loads(raw)
         if not isinstance(value, dict):
             raise ValueError("invalid_trial_worker_packet")
@@ -411,11 +429,19 @@ def main():
         return await asyncio.to_thread(read_packet)
 
     try:
-        payload = read_packet()
+        raw = read_raw()
+        payload = json.loads(raw)
+        if not isinstance(payload, dict): raise ValueError('invalid_trial_worker_packet')
+        if payload.get('version') == 2 or payload.get('type') == 'startup2':
+            native_route = True
+            from improvement_native_worker import run_startup2
+            with contextlib.redirect_stdout(sys.stderr):
+                return asyncio.run(run_startup2(raw, entrypoint='trial'))
         # Logs from regular engine code must never become protocol messages.
         with contextlib.redirect_stdout(sys.stderr):
             asyncio.run(run_request(payload, read_control, emit))
     except Exception as error:
+        if native_route: return 1  # Private owner reports/cleans; never emit V1 on a V2 route.
         asyncio.run(emit({"type": "worker_error", "reason": "trial_worker_failed", "error_type": type(error).__name__}))
         return 1
     return 0
