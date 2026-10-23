@@ -41,7 +41,13 @@ QUALIFIED_PROFILES = {('win32', '2.1.308',
     ('win32', '2.1.309',
     '5441781f2b6bbd07354b4a74560ee88c68c9bf05d6db3c7e24c452c91673dc53', '0.2.116',
     'claude-isolated-roles-v2', 'be4a5866a411fdcbb68bc7728d6cec9418fac19132ca4a46dce40ac1cb45ca0b'):
-    'fd52de7a70862b3b04d7b79c257bc11ca77262b78d85157531c3b8aabcdbc96c'}
+    'fd52de7a70862b3b04d7b79c257bc11ca77262b78d85157531c3b8aabcdbc96c',
+    # Exact preparation-heartbeat footprint; all20 native enforcement checks.
+    # docs/superpowers/evidence/2026-10-24-m2d1-native-qualification-preparation-heartbeat.json
+    ('win32', '2.1.309',
+    '5441781f2b6bbd07354b4a74560ee88c68c9bf05d6db3c7e24c452c91673dc53', '0.2.116',
+    'claude-isolated-roles-v2', '972175a29309295afc596902ef711ea51400ba77c2f39e27aab1141f9a0f6a10'):
+    'a84d266da09b3d4bd029eaa99a5ef3821e86e7439a7517197994cc6d89e7d109'}
 
 
 def profile_qualification(pin, platform):

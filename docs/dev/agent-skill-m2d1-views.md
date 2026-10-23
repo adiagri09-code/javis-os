@@ -196,4 +196,6 @@ The current guard subsequently passes read-only; a controlled short-lease test
 separately reproduces heartbeat starvation during filesystem preparation. A
 scheduling fix passes3 new checks,36 affected regression checks and independent
 scoped review (3 checks). It does not lengthen leases/deadlines or relax source
-authority. Changed source needs its own native qualification.
+authority. New exact profile972175a2 passes20 native checks94.829s with local
+dummy providers; registration has6 metadata checks and independent exact
+audit approval (6PASS0.100s). This supplies no new selected-account pair or business proof.

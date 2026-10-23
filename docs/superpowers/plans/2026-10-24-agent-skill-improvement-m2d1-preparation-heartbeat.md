@@ -37,7 +37,7 @@ source/permission checks and outer request deadline remain authoritative.
 - [x] Targeted GREEN then existing24 runner and affected v4 reservation/
   materialization/lifetime regressions sequentially on frozen source maps.
   Reuse unchanged view/selection/reader/role proof by exact source.
-- [ ] Independent scoped scheduling review. Changed native footprint needs exact
+- [x] Independent scoped scheduling review. Changed native footprint needs exact
   qualification/registration before another bounded fresh account attempt.
 - [ ] Update evidence/docs/PR/CI; continue native observations/full D2/E/F/M3-M8.
   Do not call a synthetic reproduction the recovered historical exception.
@@ -58,3 +58,13 @@ RED3 (1 failure/2 pass)8.029s; GREEN3/8.786s. Frozen affected regression
 Independent scoped review approved;3PASS8.917s, log SHA
 2ca533ae5f4d3180392b78c92baaa29361fd1f696ff5a31bcfdc084d478b6a8c.
 No native/account calls. Exact new footprint qualification remains next.
+
+Exact profile972175a2 now passes20 native enforcement checks94.829s. Public
+qualificationa84d266d uses dummy providers/empty HOME;0 account calls. Metadata
+6RED0.103s (one missing registration) ->6GREEN0.096s; old5 entries retained.
+Independent exact registration audit and final-head CI remain required.
+
+Independent exact registration approved:6PASS0.100s; all81sourcepins,5
+qualification-test pins,3raw/4logs/fullrecord match. Audit SHAda67327e;
+testlogSHAad2d0be5. Five prior entries/lookup AST/paired fixture AST unchanged.
+No new account query; actual pair and observations remain open.

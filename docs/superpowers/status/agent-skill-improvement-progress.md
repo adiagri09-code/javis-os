@@ -23,7 +23,14 @@ Scoped independent review APPROVED exact runner6c708940/test31cf3f60:3PASS8.917s
 Sequential affected regression36PASS151.454s on frozen full source maps: runner24,
 actual synthetic-adapter v4 pair1, owner-service11. Public scheduling evidence
 `../evidence/2026-10-24-m2d1-preparation-heartbeat.json`. Changed native footprint
-is not registered: historicalbe4 cannot authorize the working source. No new account attempt or unchanged retry.
+now has20PASS94.829s exact native enforcement at profile972175a2,
+CLI309/hash5441781f/SDK116. Public qualificationa84d266d. Metadata6RED
+(1 missing registration)0.103s ->6GREEN0.096s; all5 historical entries and
+nonmetadata fixture AST remain unchanged. Independent registration audit APPROVED against7e63c26c:6PASS0.100s;
+81pins/5qual-testpins/3raw/4logs/fullrecord and all5prior entries/lookup AST
+verified. Audit logda67327e, testlogad2d0be5; only2 expected registration/test
+files differ after qualification. Final-head CI remains required.
+No new account attempt or unchanged retry.
 Native observations remain a later engineering unit; actual success tool_result
 is_error=null additionally leaves event/side-effect coverageUNKNOWN. No telemetry
 default or all18 gate has been weakened.
