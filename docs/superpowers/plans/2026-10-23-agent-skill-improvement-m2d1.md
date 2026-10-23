@@ -1006,10 +1006,15 @@ selector failed before tests and is excluded from this evidence.
   sequentially on one fixed source map. Keep malformed raw products and unknowns.
   Passed63 tests in349.720s; source/AST/log proof is recorded in
   `../evidence/2026-10-23-m2d1-semantic-invalid-output.json` (SHA4a8d10e9).
-- [ ] Scoped independent new-delta review, retaining the completed whole-D1
+- [x] Scoped independent new-delta review, retaining the completed whole-D1
   and earlier lifetime/runtime reviews. No repeat whole review.
-- [ ] Qualify the final changed81-source native footprint before any further
+  Approved exact330501fa, no finding; independent actual owner HTTP recheck
+  passed1 test in12.336s, log SHA8a21a9b0.
+- [x] Qualify the final changed81-source native footprint before any further
   actual native/account query; prior4d evidence is historical and cannot match
   the new profile. Preserve all original failures and exact registration rules.
+  Profile958527ac passed20 native tests94.890s on identical full source maps;
+  artifact `../evidence/2026-10-23-m2d1-native-qualification-outcome.json`, SHA1f3391cf.
+  Exact registration followed metadata RED→GREEN3,0.068s; no account query.
 - [ ] Final-head full CI, genuine account pair/final acceptance and remaining
   D1/D2/E/F/M3–M8 work stay open. No Task3/4/5 completion marker from this fix.

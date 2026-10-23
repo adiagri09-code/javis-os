@@ -128,7 +128,7 @@ class NativeFootprintTests(unittest.TestCase):
         import hashlib
         from improvement_claude import PROFILE_SOURCES, PROFILE_VERSION, profile_hash
         from improvement_native_qualifications import profile_qualification
-        raw = (ROOT / 'docs/superpowers/evidence/2026-10-23-m2d1-native-qualification-final.json').read_bytes()
+        raw = (ROOT / 'docs/superpowers/evidence/2026-10-23-m2d1-native-qualification-outcome.json').read_bytes()
         evidence = json.loads(raw)
         pin = {key: evidence[key] for key in ('cli_version', 'cli_hash', 'sdk_version', 'profile_version', 'profile_hash')}
         self.assertEqual(pin['profile_hash'], profile_hash())
@@ -141,6 +141,17 @@ class NativeFootprintTests(unittest.TestCase):
         for key in pin:
             self.assertIsNone(profile_qualification(pin | {key: 'unqualified'}, 'win32'), key)
         self.assertIsNone(profile_qualification(pin, 'linux'))
+
+    def test_prior_309_qualification_remains_exact_historical_evidence(self):
+        import hashlib
+        from improvement_claude import profile_hash
+        from improvement_native_qualifications import profile_qualification
+        raw = (ROOT / 'docs/superpowers/evidence/2026-10-23-m2d1-native-qualification-final.json').read_bytes()
+        evidence = json.loads(raw)
+        pin = {key: evidence[key] for key in ('cli_version', 'cli_hash', 'sdk_version', 'profile_version', 'profile_hash')}
+        self.assertEqual(profile_qualification(pin, 'win32'), hashlib.sha256(raw).hexdigest())
+        self.assertNotEqual(pin['profile_hash'], profile_hash())
+        self.assertIsNone(profile_qualification(pin | {'profile_hash': '0' * 64}, 'win32'))
 
     def test_old_308_registration_does_not_qualify_reachable_v4(self):
         from improvement_claude import PROFILE_SOURCES, PROFILE_VERSION, profile_hash

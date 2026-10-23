@@ -133,10 +133,19 @@ and affected scripts passed63 tests in349.720s on one complete source map.
 Artifact `../evidence/2026-10-23-m2d1-semantic-invalid-output.json`, SHA256
 4a8d10e966a7931410093822f8b1261f8ecef7c0d01042c8ba27dc36286d9464.
 AST proof preserves all other product code and prior test methods; the scoped
-independent static review reports no finding, exact-commit confirmation pending.
+independent review approved exact330501fa, with no finding. Its actual HTTP
+invalid-output/stop/off/revoke/cold-replay recheck passed1 test in12.336s; log
+`review-semantic-invalid-http-recheck.log` SHA256
+8a21a9b0c8d756098faa0c00fca79c79cbea40a2860705b016d95d583901327e.
 Changed profile
 81/958527ac69c3b5728044b22cf6d3bdebb920da7cbe46a9da261e899568ced1ef
-is unregistered. Prior exact qualification is historical for this changed source.
+passed20 actual native enforcement tests in94.890s on one source map: paired1,
+solver5, typed roles5 and quiescence9. The exact309/5441781f/SDK116 tuple is now
+registered against `../evidence/2026-10-23-m2d1-native-qualification-outcome.json`,
+SHA2561f3391cf9c1bf621d3ef2de44dd181acf17dd7d922fed4a80ae66bef36c8fab4.
+Metadata RED→GREEN3 passed0.068s; prior C and D registrations remain exact.
+These native suites used only dummy auth/local providers, with no new selected
+account calls or quality/owner waiver. Prior source qualification stays historical.
 Task3/4/5, D2/E/F and M3–M8 remain open; final CI/publication are not complete.
 
 ### D1 fresh-main and runtime309 checkpoint, 23 October

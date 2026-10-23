@@ -98,9 +98,9 @@ procedure; pointing it at the schema 7 database is not a downgrade. Earlier
 unreleased schema 7 prototypes with incomplete guards are not repaired into
 execution authority. Unknown future schemas are refused.
 
-The D1 profile `4d346a3a` is registered only for Windows CLI 2.1.309, binary
+The current D1 profile `958527ac` is registered only for Windows CLI 2.1.309, binary
 SHA `5441781f`, and SDK 0.2.116, with full source/runtime hashes in the
-[qualification artifact](../superpowers/evidence/2026-10-23-m2d1-native-qualification-final.json).
+[qualification artifact](../superpowers/evidence/2026-10-23-m2d1-native-qualification-outcome.json).
 Its 20-test enforcement proof uses dummy authentication and local providers.
 The actual CLI version is checked inside the owned hidden qualification job.
 Changing source/runtime requires matching new qualification; historical C
@@ -126,8 +126,10 @@ with the original operation/result references. It creates no semantic receipt
 or review authority and does not repair, normalize or retry the model output.
 The same event key replays that recorded outcome after stop/off/revoke. New
 work still requires current source and native evidence. This workflow change
-creates profile `958527ac`, currently unregistered; the earlier exact `4d346a3a`
-qualification remains historical and cannot authorize calls on changed source.
+creates profile `958527ac`, qualified by the new exact 20-test native evidence.
+The earlier `4d346a3a` qualification remains historical and cannot authorize
+calls on changed source. Registration tests preserve both historical entries
+and refuse altered source/runtime/platform combinations.
 
 Genuine selected-final positive execution and the native TrialRunner/account
 pair remain open. Production router/lazy/hub/task integration belongs

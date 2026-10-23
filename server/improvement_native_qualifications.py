@@ -23,7 +23,13 @@ QUALIFIED_PROFILES = {('win32', '2.1.308',
     ('win32', '2.1.309',
     '5441781f2b6bbd07354b4a74560ee88c68c9bf05d6db3c7e24c452c91673dc53', '0.2.116',
     'claude-isolated-roles-v2', '4d346a3ae4f1afa99784fc51307258ad99a8d470ac6a0c46f1d330e6b0e656fa'):
-    '012d9e37690e8711da75a344dfee0677df8d6c690b90f689ddbb14574c82f295'}
+    '012d9e37690e8711da75a344dfee0677df8d6c690b90f689ddbb14574c82f295',
+    # Exact changed semantic-outcome footprint, same native runtime and full enforcement suites.
+    # docs/superpowers/evidence/2026-10-23-m2d1-native-qualification-outcome.json
+    ('win32', '2.1.309',
+    '5441781f2b6bbd07354b4a74560ee88c68c9bf05d6db3c7e24c452c91673dc53', '0.2.116',
+    'claude-isolated-roles-v2', '958527ac69c3b5728044b22cf6d3bdebb920da7cbe46a9da261e899568ced1ef'):
+    '1f3391cf9c1bf621d3ef2de44dd181acf17dd7d922fed4a80ae66bef36c8fab4'}
 
 
 def profile_qualification(pin, platform):
