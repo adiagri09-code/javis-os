@@ -98,9 +98,9 @@ procedure; pointing it at the schema 7 database is not a downgrade. Earlier
 unreleased schema 7 prototypes with incomplete guards are not repaired into
 execution authority. Unknown future schemas are refused.
 
-The current D1 profile `958527ac` is registered only for Windows CLI 2.1.309, binary
+The current D1 profile `e7aaa5bd` is registered only for Windows CLI 2.1.309, binary
 SHA `5441781f`, and SDK 0.2.116, with full source/runtime hashes in the
-[qualification artifact](../superpowers/evidence/2026-10-23-m2d1-native-qualification-outcome.json).
+[qualification artifact](../superpowers/evidence/2026-10-24-m2d1-native-qualification-format.json).
 Its 20-test enforcement proof uses dummy authentication and local providers.
 The actual CLI version is checked inside the owned hidden qualification job.
 Changing source/runtime requires matching new qualification; historical C
@@ -153,3 +153,15 @@ presentation cap and lazy body limit remain. Per-read verification does not pin 
 whole task or enable scoped production overlays. The isolated D1 native profile
 is unchanged. Full D2 task/session binding, native policy parity and E activation
 remain open; the separate synthetic plugin/hook experiment is design evidence.
+
+
+The role system prompt now explicitly requests the final artifact as one raw JSON
+object, without Markdown or commentary, with all required supplied-contract keys
+and types. This is an instruction, not a parser repair or success guarantee.
+Original bytes still pass through strict validation; malformed output keeps its
+invalid_output outcome. No StructuredOutput tool/SDK option or automatic retry is
+introduced. Profile e7aaa5bd is qualified on20 native tests94.078s for this prompt
+change. Prior958527ac/4d346a3a/C registrations remain historical exact evidence.
+The new bounded selected-account effectiveness run is not yet executed at this
+checkpoint; unit tests and dummy-provider qualification do not prove that the
+model will comply with the artifact contract or produce a business improvement.

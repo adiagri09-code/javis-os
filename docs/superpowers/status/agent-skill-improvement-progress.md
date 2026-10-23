@@ -1,5 +1,26 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — raw role artifact boundary, 24 October
+
+Role system instructions now explicitly request final raw JSON artifact bytes.
+Strict parser, raw artifact preservation, semantics, owner/grant, unknown, tool
+inventory and retry behavior are unchanged. Actual-worker2RED then59GREEN/four
+sequential suites226.922s. Prompt delta independently approved atb7a81542; new2
+worker checks independentlyPASS1.023s. Evidence:
+`../evidence/2026-10-24-m2d1-artifact-format.json` SHA c6a696b3.
+
+The prompt changes the exact81-source footprint: current profilee7aaa5bd has
+new native20PASS94.078s on identical full source maps, WindowsCLI309/hash5441781f/
+SDK116. Artifact `../evidence/2026-10-24-m2d1-native-qualification-format.json`
+SHA c5e0acc9. The prior958 qualification is historical for changed source. One
+exact registry entry follows4 metadataRED/GREEN; prior3 registrations/lookup and
+qualification fixture helpers remain unchanged. Scoped registration review is
+pending. No selected-account call has run on this new profile yet; prepared
+feasibility uses a new synthetic brain/history and at most4 calls with no retry.
+All old failed history/usage stays intact. Source-qualified final-head full CI
+and full D1/D2/E/F/M3-M8/business/live gates remain open. Reader fixed5CI39996033610
+is running and is historical for the later prompt change, not final-head proof.
+
 ## Current checkpoint — 24 October, D2 prerequisite continuation
 
 - Worktree/branch remain M2D1/PR803, reserved0.299.0; main d3d7cb36/0.298.0.
