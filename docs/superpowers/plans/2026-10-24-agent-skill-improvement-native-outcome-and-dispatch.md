@@ -182,3 +182,103 @@ controls. Register exact evidence only after it passes. Final-head CI and scoped
 independent review precede integration. Only then assess one bounded configured-
 account pipeline under existing Goal authority/current selected configuration.
 Continue independent full D2/E/F/M3–M8 work; business/live gates stay open.
+
+## Dispatch consumer audit and next pure component
+
+Read against committed df0e24b1 and installed SDK116. Adapter.verify runs native
+`--version` and `auth status --json` in the host and again in the worker, before
+worker_ready. SDK connect separately runs `-v`, then spawns the query process
+before TrialProfile.before_query requests the existing inference ACK. A query
+image gate alone cannot cover those other invocations. Keep separate explicit
+purposes for bounded version/auth preflight and query, with no query capability
+or reasoning proof inferred from a successful version check. Each actual native
+invocation needs owned image/lifetime verification at integration.
+
+SDKClient replaces permission_prompt_tool_name with stdio when can_use_tool is
+present. The actual query grammar therefore includes --permission-prompt-tool
+stdio, --permission-mode default, empty --tools, the exact allowedTools list,
+literal --system-prompt, selected --model/--effort, inline --settings with exactly
+fastMode:false/disableAllHooks:true, inline --mcp-config containing only the
+fixture/skill SDK server descriptors, --strict-mcp-config, --setting-sources=,
+and the existing five restrictive extra flags. SDK116 strips the in-process
+server instance; each CLI descriptor is exactly type:sdk/name:<server>. It ends
+with --input-format stream-json. Reject unknown/duplicate/override flags,
+file/preset prompts, ambient setting sources, extra servers, resume/fallback,
+partial/hook output, plugins and thinking overrides. Do not silently repair
+an unsupported argument shape.
+
+Next standalone component: a pure closed query-dispatch validator, unreachable
+from execution and outside PROFILE_SOURCES until integration. Its input includes
+the actual argument vector captured around SDK open_process and the actual raw
+Windows CreateProcess command line, executable parameter, cwd and creationflags.
+Require exact subprocess.list2cmdline agreement and an explicit expected pin
+(CLI path, selected model/effort, prompt hash, workspace cwd and exact two-tool
+inventory). Validate inline JSON with duplicate-key rejection and strict boolean
+types. Preserve only sanitized selected values/hashes in its result; never emit
+argv, prompt, raw settings/environment, auth or paths to guardian control IPC.
+The result proves argument consistency only, not that this function ran at an
+OS boundary, that an image was loaded, or that the provider accepted reasoning.
+
+RED/GREEN cases cover actual SDK116 command construction without connect or a
+native child, two efforts, raw-command mismatch, executable/cwd/flag drift,
+duplicates/foreign flags, changed prompt/model/effort, JSON duplicate keys and
+boolean-number confusion, external MCP servers and nonempty source lists.
+No account/native qualification is justified by this unreachable parser alone.
+
+The ready-state protocol also needs explicit evolution. Existing engine_event
+requires a usage recorder and is illegal before inference ACK; do not encode
+native launch controls as early engine events. Use a closed new packet/control
+state for input4, persist its raw host evidence, and keep operation/legacy packet
+semantics unchanged. A parent image allow decision must precede native execution;
+the separate before_engine_start callback still marks exposure/accounting before
+query submission. Cancellation or storage failure cannot discard ownership.
+
+The first two-process V4 probe refused the venv redirector: retained launcher PID
+15128 differed from actual trusted worker PID23332. No remote duplication or ACK
+was attempted. Exact outer job drain preceded image-guard release; failed report
+e9e73a48 and its separate frozen manifest54ed1d8a remain preserved. A distinct V5
+probe will test direct hash-pinned base Python with -I -S and a fixed explicit
+trusted site-package bootstrap. Never accept a receipt-supplied worker PID or
+reopen a bare PID to bypass this refusal. This is not yet production transport.
+
+V5 failed before any valid worker receipt. Its stderr was DEVNULL and the rejected
+frame/exit code was not saved, so the historical startup cause is UNKNOWN.
+The outer job drained before guard release. Subsequent static tracing establishes
+an unsupported dependency in that bootstrap: SDK imports mcp, whose package
+initializer imports client.stdio and then mcp.os.win32.utilities. That module
+imports pywintypes, win32api, win32con and win32job. Installed pywin32.pth normally
+adds win32 and win32/lib and runs its DLL bootstrap; the V5 fixed -S path list
+omits them. The next diagnostic is import-only, with early startup/error capture,
+fixed explicit paths/DLL directory and process creation disabled inside the
+imported worker. It tests a concrete import hypothesis without another native
+image run. Preserve V5 unchanged; no automatic follow-up image probe.
+
+Future three-actor transport must transfer a retained worker capability into the
+guardian while both source/target processes are retained, rather than pass a
+receipt-supplied PID for reopen. The guardian retains only native runtime/image
+identity and closed handle/nonce metadata. Host-to-worker input remains direct.
+Treat the direct-base bootstrap and its DLL/import dependencies as a changed
+runtime boundary requiring qualification, not an alias for old venv execution.
+Never patch CreateProcess globally in the shared server; creator instrumentation
+belongs in an isolated fixed worker or a purpose-specific owned preflight helper.
+
+The separate import-only diagnostic V1 also stopped before SDK imports: early
+direct-base worker PID/birth matched the retained process, but native job
+accounting reported total2/active2 rather than its assumed total1. Parent refused
+the import ACK, drained the exact job (active0), and saved exit91/stderr0 plus the
+first raw frame. The second variant was not run. No SDK import outcome or second
+member identity was observed. Preserve report c4b5d553 and the failed assumption.
+Do not label the extra member conhost or an SDK child without actual evidence.
+
+This now requires revising the experimental measurement boundary before another
+run, rather than another bootstrap guess. The actual requirement is no SDK
+process creation during imports; a fixed total1 was an added experimental
+assumption. A bounded next diagnostic can capture the exact native-job startup
+member set with retained process identities, birth times and observed image
+paths before import ACK, then verify cumulative birth count/membership do not
+change during imports and the rejecting CreateProcess counter remains0.
+Inventory originates in the actual owned job, never a worker-supplied PID; any
+query-opened member handle must be rechecked for exact job/incarnation and held
+through terminal drain. Unknown identity or incomplete inventory stays unknown
+and never authorizes a native image ACK. This is not a relaxation of the final
+query process/image/guardian identity or lifetime requirements.

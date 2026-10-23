@@ -2,9 +2,11 @@
 
 ## Current continuation — read-outcome foundations and actual anyio gate, 24 October
 
-Versioned native skill reads are committed/pushed ea74d62e on PR803. Its exact
-83-source profile04c8c77b remains unchanged. CI40012063416 is running; Docker
-size check passed, full Python check pending. No deployment or account retry.
+Versioned native skill reads are committed/pushed ea74d62e and unreachable
+read-outcome foundations df0e24b1 on PR803. The exact83-source profile04c8c77b
+remains unchanged. Latest CI40013889560 at df0e24b1 is running; Docker size,
+byte compilation, actual main import and dashboard JS passed, full Python check
+pending. No deployment or account retry.
 
 The next plan preserves input/receipt3 UNKNOWN semantics and introduces future
 input/receipt4 only when complete dispatch/outcome integration is ready. New
@@ -32,6 +34,41 @@ pins and unchanged83 source pins. Public sdk-anyio-image-gate retains original
 V1 failure and V2 bootstrap-resume distinction. No SDK client/query, selected
 CLI/account/provider or guardian IPC ran. Guardian receipt/ACK/drain, worker death,
 full SDK/configuration proof and all18 eligibility remain unqualified.
+
+The separate two-process V4 probe failed its exact-source-worker check: retained
+venv launcher15128 differed from executing worker23332. No remote duplication or
+ACK occurred. Actual outer job drain completed before guard release; independent
+static review verified29 frozen entries and83 unchanged qualified source pins.
+The failed report e9e73a48 and manifest54ed1d8a remain immutable. A separately
+planned V5 direct-base -I/-S bootstrap also failed before its first worker receipt;
+report33c3c92d preserves that failure. Stderr was discarded, so its historical
+startup cause and worker exit code are UNKNOWN. Job drain preceded guard release.
+Independent static review verified41 V5 frozen entries and83 unchanged qualified
+pins. Public guardian-image-probe-failures records both runs. Neither run proves
+a successful guardian handshake/death case.
+
+Static dependency tracing found that MCP imports pywintypes/win32api/win32con/
+win32job, normally resolved through pywin32.pth paths and DLL bootstrap. V5's
+explicit site-package root does not include those paths. A separate import-only
+diagnostic with startup/error capture is being prepared to test this hypothesis;
+no further native image run or automatic account retry is authorized by a guess.
+The new pure query-dispatch parser passes16 author checks after16 missing-module
+REDs (0.002s then0.424s; invocation1471/1777ms). Independent scoped review approves
+the exact source9831cd30/testf53eb9fd with16PASS0.420s and11 unchanged dependency
+pins. Actual bound3 options and SDK116 command construction pass at medium/high;
+fixed Windows paths are synthetic serialization fixtures, not actual dispatch.
+Closed raw-command/configuration/JSON/override and mutation checks pass. Public
+query-dispatch-foundation records the evidence. It remains unreachable, outside
+PROFILE_SOURCES, and all OS/image/provider/internal reasoning coverage is UNKNOWN.
+No native20 or unchanged39 read-outcome rerun was needed. Final-head Linux CI
+remains required. The import-only diagnostic V1 subsequently stopped before SDK
+imports: direct-base PID/birth matched the retained worker, but actual job
+accounting was total2/active2 rather than the experiment's assumed total1. No
+import ACK was sent, second variant was not run, exact job drained to active0,
+worker exit91/stderr0 were saved. Report c4b5d553 retains the failure; the extra
+member identity and historical V5 startup cause stay UNKNOWN. Next step is actual
+job startup-member identification and a pre/post import birth/membership
+measurement, preserving exact worker/image/guardian checks. No blind rerun.
 
 Full Goal M0–M8 stays active. Pilot work types remain reconciliation, document
 processing and Python technical control; business-source/owner/live gates stay
