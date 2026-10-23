@@ -16,6 +16,7 @@ from improvement_trial_records import _brain
 from improvement_view_protocol import view_manifest, view_hash
 from improvement_view_sources import capture_sources, ResolvedView
 from improvement_view_history import metadata as view_metadata, require_publication
+from improvement_trial_selection import _bounded_binary_reads
 
 
 class EffectiveViews:
@@ -179,6 +180,7 @@ class EffectiveViews:
             ViewQualification(self.plans, self).validate_current(connection, principal, request, proof)
         return resolved, proof
 
+    @_bounded_binary_reads
     def _load_current(self, principal, comparison_id, variant, *, request=None, connection=None, require_link=False, trial_id=None):
         brain = _brain(principal)
         _identifier(comparison_id)

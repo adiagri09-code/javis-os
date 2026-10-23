@@ -162,6 +162,27 @@ Original bytes still pass through strict validation; malformed output keeps its
 invalid_output outcome. No StructuredOutput tool/SDK option or automatic retry is
 introduced. Profile e7aaa5bd is qualified on20 native tests94.078s for this prompt
 change. Prior958527ac/4d346a3a/C registrations remain historical exact evidence.
-The new bounded selected-account effectiveness run is not yet executed at this
-checkpoint; unit tests and dummy-provider qualification do not prove that the
-model will comply with the artifact contract or produce a business improvement.
+The fresh bounded selected-account run made two actual calls. Its semantic role
+returned valid raw JSON with passing meaning/dependency checks; observational
+native checks remain unknown. The baseline still failed its output shape check.
+After views froze, the first scheduled candidate cell timed out before workspace
+materialization or native query; its reservation was refunded, and the second
+cell was not admitted. No genuine pair, selection or selected-final exists.
+The [run record](../superpowers/evidence/2026-10-24-m2d1-real-format-feasibility.json)
+preserves partial usage and cleanup. One read-only view profile then measured
+10.266s, including twelve repeated hashes of the298624160-byte CLI. A preparation
+performance fix is required before another qualified account attempt; this one
+valid role output does not prove a general compliance or business improvement.
+
+Current view validation now bounds repeated CLI observations within one
+synchronous load. Only create_pin opts into reuse; ordinary source hashes remain
+fresh. Each reuse still opens the binary and verifies read access and descriptor/
+path identity. Before returning a resolved view, the host reads and hashes every
+CLI byte again and requires the same digest and identity. No memo survives the
+call, thread boundary, exception or cancellation. Source/grant/settings/SDK/
+profile checks still run at their original boundaries. This scope does not
+contain native execution or semantic publication. A read-only component measure
+on the configured CLI reduced twelve pin captures from9.172s to1.796s (12 full
+reads to2), returning identical pins. This does not establish whole-pipeline
+latency, a genuine account pair or business gain. Changed source requires its
+own exact native qualification; historical e7 proof is insufficient.

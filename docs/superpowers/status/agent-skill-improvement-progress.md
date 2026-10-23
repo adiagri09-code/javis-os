@@ -1,5 +1,24 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — bounded CLI observation, 24 October
+
+Working delta on29f5bdd5 addresses repeated CLI hashing in current view reads.
+Only create_pin opts into bounded CLI reuse; ordinary source digests remain
+fresh. Each hit still opens the file and checks read access, ancestry, size and
+descriptor/path identity. Before the view returns, a fresh whole-file hash and
+identity must match the original. Scope is synchronous and private per call and
+thread, with no native execution or semantic publication. Every original source,
+grant, settings, SDK and profile fence remains at its existing site.
+
+New component9RED then11GREEN0.318s; two actual view/capture tests with an inert
+observerPASS28.805s (12 observations/two full reads; end-of-capture runtime edit
+refused). These are technical fixtures, not native or business proof. Static
+independent review found no actionable issue; independent verification and seven
+sequential affected scripts are pending/in progress. Current source changes the
+native footprint and is deliberately unregistered: do not authorize native or
+account execution from historicale7 proof. No unchanged account retry or deadline
+increase. Plan: `../plans/2026-10-24-agent-skill-improvement-m2d1-view-observation.md`.
+
 ## Current continuation — raw role artifact boundary, 24 October
 
 Role system instructions now explicitly request final raw JSON artifact bytes.
@@ -14,9 +33,26 @@ new native20PASS94.078s on identical full source maps, WindowsCLI309/hash5441781
 SDK116. Artifact `../evidence/2026-10-24-m2d1-native-qualification-format.json`
 SHA c5e0acc9. The prior958 qualification is historical for changed source. One
 exact registry entry follows4 metadataRED/GREEN; prior3 registrations/lookup and
-qualification fixture helpers remain unchanged. Scoped registration review is
-pending. No selected-account call has run on this new profile yet; prepared
-feasibility uses a new synthetic brain/history and at most4 calls with no retry.
+qualification fixture helpers remain unchanged. Registration independently
+approved29f5bdd5, metadata4PASS0.076s. Final-source CI39997792693 is running.
+
+The fresh bounded selected-account feasibility is terminal: two actual calls,
+baseline shapeFAIL/ownerUNKNOWN and valid raw semantic JSON (meaning/dependencies
+PASS, native observations UNKNOWN). Views froze. The first scheduled v4 cell
+(candidate) timed out180s before materialization/native query; its reservation
+was refunded. The second cell was not admitted. No genuine pair, comparison,
+selection, selected-final or qualification claim exists. Usage8659in/839out,
+USD0.0707556 subscription-equivalent partial; cash/request totals remain unknown.
+Canonical bytes stayed unchanged and plaintext workspaces were removed. Evidence:
+`../evidence/2026-10-24-m2d1-real-format-feasibility.json` SHA ddc5af2c.
+
+One subsequent read-only profile of current baseline view resolved in10.266s,
+without model/native queries or writes: twelve create_pin calls rehashed the
+298624160-byte CLI; selection capture took9.246s. This is a measured preparation
+bottleneck, not evidence of business gain. Preserve both runs; do not repeat the
+account attempt unchanged or increase its deadline. The next unit addresses
+redundant binary reads while preserving fresh byte validation and all authority
+checks. Prompt compliance improved in this one observation only.
 All old failed history/usage stays intact. Source-qualified final-head full CI
 and full D1/D2/E/F/M3-M8/business/live gates remain open. Reader fixed5CI39996033610
 is running and is historical for the later prompt change, not final-head proof.
