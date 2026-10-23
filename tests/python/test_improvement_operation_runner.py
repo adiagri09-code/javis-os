@@ -3,6 +3,7 @@ from _paths import ROOT, SERVER  # noqa: F401
 
 import asyncio
 import importlib.util
+import hashlib
 import json
 import threading
 import unittest
@@ -61,10 +62,14 @@ class OperationRunnerTests(unittest.IsolatedAsyncioTestCase):
                     self.trial_profile.options(self)
                     await self.trial_profile.before_query()
                     test.acked.set()
+                    test.native_queries = getattr(test, "native_queries", 0) + 1
+                    statuses = getattr(test, "native_statuses", [])
+                    status = statuses.pop(0) if statuses else None
                     for message in (SystemMessage("init", {"tools": ["mcp__fixture__fixture_read"], "session_id": "runner-native"}),
                             AssistantMessage([], pin["model"], session_id="runner-native", message_id="runner-request",
                                 usage={"input_tokens": 7, "output_tokens": 3, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}),
-                            ResultMessage("success", 1, 1, False, 1, "runner-native", result=test.body,
+                            ResultMessage("error_during_execution" if status else "success", 1, 1, bool(status), 1, "runner-native",
+                                result=None if status else test.body, api_error_status=status,
                                 usage={"input_tokens": 7, "output_tokens": 3, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0})):
                         for event in self.trial_profile.observe(message):
                             yield event
@@ -272,7 +277,50 @@ class OperationRunnerTests(unittest.IsolatedAsyncioTestCase):
     async def test_recovered_role_output_never_enters_actual_production_learning_or_jobs(self):
         await self._production_isolation("recover")
 
-    async def _production_isolation(self, mode):
+    async def test_semantic_reviewer_never_enters_actual_production_learning_or_jobs(self):
+        await self._production_isolation("complete", semantic=True)
+
+    async def test_cancelled_semantic_reviewer_never_enters_production_learning_or_jobs(self):
+        await self._production_isolation("cancel", semantic=True)
+
+    async def test_recovered_semantic_reviewer_never_enters_production_learning_or_jobs(self):
+        await self._production_isolation("recover", semantic=True)
+
+    def _select_reviewer(self):
+        from improvement_operation_records import OperationRecords
+        from improvement_operation_adapter import ClaudeOperationAdapter
+        definition = self.execution.guard(self.owner, self.row["operation_id"])[0]
+        self.execution.cancel(self.owner, self.row["operation_id"], expected_generation=self.row["generation"], event_key="cancel-unused-proposer-fixture")
+        authoring = self.f.f.plans.authoring
+        with closing(self.f.store._conn()) as connection:
+            target = self.f.assets._target(connection, self.owner.brain_id, definition["target_id"])
+        _, raw = authoring.observe(self.owner, target)
+        start = raw.index(b"Retain owner rules.")
+        replacement = "Retain owner rules.\nCheck every subtotal.\n"
+        authoring.declare_region(self.owner, definition["experiment_id"], definition["base_revision_id"], start, len(raw),
+            expected_target_generation=definition["base_generation"], event_key="reviewer-fixture-owner-region")
+        candidate = authoring.stage(self.owner, definition["experiment_id"], {"version": 1, "target_id": definition["target_id"],
+            "base_revision_id": definition["base_revision_id"], "before_hash": hashlib.sha256(raw).hexdigest(),
+            "operation": "replace_body_region", "start": start, "end": len(raw), "replacement": replacement,
+            "hypothesis": "Count authorized rows.", "failure_signature": "Synthetic omitted row.",
+            "expected_behavior": "Each row counted once.", "possible_regressions": ["Duplicate row."], "evidence_refs": [], "angle": "execution"},
+            event_key="reviewer-fixture-real-staged-candidate")
+        data = {"task": "Review exact staged candidate; synthetic technical input only", "candidate_id": candidate["candidate_id"],
+                "before": raw.decode(), "after": (raw[:start] + replacement.encode()).decode()}
+        blob = self.f.assets.blobs.write(self.owner.brain_id, IM._json(data).encode())
+        request = {"version": 1, "experiment_id": definition["experiment_id"], "context_id": definition["context_id"],
+            "definition_hash": IM._hash(definition), "kind": "semantic", "role": "semantic_reviewer", "purpose": "improve_evaluate",
+            "candidate_id": candidate["candidate_id"], "parent_id": None, "input_hash": blob}
+        with self.f.store._Tx(self.f.store) as connection:
+            current = self.execution.plans.records._row(connection, self.owner.brain_id, definition["experiment_id"])
+            self.row = OperationRecords(self.f.assets)._create_in(connection, self.owner, request, blob,
+                expected_generation=current["generation"], event_key="reviewer-fixture-actual-operation")
+        with patch.object(ClaudeOperationAdapter, "verify", return_value={"supported": True, "capability_hash": "c" * 64}):
+            self.row = self.execution.reserve(self.owner, self.row["operation_id"], expected_generation=1, event_key="reviewer-fixture-actual-call")
+
+    async def _production_isolation(self, mode, *, semantic=False):
+        if semantic:
+            self._select_reviewer()
         import agent_lessons
         import learn
         import sessions
@@ -335,6 +383,8 @@ class OperationRunnerTests(unittest.IsolatedAsyncioTestCase):
             self_lessons.assert_not_called()
             enqueue.assert_not_called()
             enqueue_job.assert_not_called()
+        call = self.execution.ledger.get(self.execution.get(self.owner, self.row["operation_id"])["attempts"][-1]["call_id"])
+        self.assertEqual(call["purpose"], "improve_evaluate" if semantic else "improve_propose")
         self.assertEqual(semantic_rows(), before)
         with conversations._lock:
             self.assertEqual([tuple(row) for row in conversations._conn.execute("SELECT * FROM messages ORDER BY id")], before_messages)

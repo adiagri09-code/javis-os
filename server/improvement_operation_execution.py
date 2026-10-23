@@ -16,13 +16,13 @@ from improvement_experiments import _generation
 from improvement_operation_adapter import ClaudeOperationAdapter
 from improvement_operation_protocol import operation_materialization
 from improvement_operation_records import OperationRecords
-from improvement_operation_schema import TERMINAL
+from improvement_operation_schema import TERMINAL, assert_installed
 from improvement_operation_workspace import OperationWorkspace
 from improvement_trial_records import _brain
 from improvement_trial_service import OwnerTrialService
 
 FAILURE_REASONS = {"cancelled", "timeout", "authority_changed", "worker_failed", "runner_failed", "telemetry_failed",
-                   "evidence_failed", "capacity_unavailable", "unsupported_configuration"}
+                   "evidence_failed", "capacity_unavailable", "unsupported_configuration", "native_transient_error"}
 
 
 class OperationExecution:
@@ -53,7 +53,15 @@ class OperationExecution:
         experiment = self.plans.records._row(connection, row["brain_id"], row["experiment_id"])
         value = definition(json.loads(experiment["definition_json"]))
         return {**self.records._public(row), "brain_id": row["brain_id"], "request": json.loads(row["request_json"]),
-                "attempts": attempts, "deadline_at": attempts[-1]["created_at"] + value["timeout_seconds"] if attempts else None}
+                "attempts": attempts, "deadline_at": attempts[0]["created_at"] + value["timeout_seconds"] if attempts else None}
+
+    @staticmethod
+    def deadline(connection, row, timeout_seconds):
+        first = connection.execute("SELECT created_at FROM improvement_operation_attempts WHERE operation_id=? AND brain_id=? "
+                                   "ORDER BY attempt LIMIT 1", (row["id"], row["brain_id"])).fetchone()
+        if first is None:
+            raise IM.ConflictError("operation_attempt_unavailable")
+        return first["created_at"] + timeout_seconds
 
     def get(self, principal, identifier):
         self.records.get(principal, identifier)
@@ -61,6 +69,7 @@ class OperationExecution:
             return self._public(connection, self._row(connection, principal, identifier))
 
     def _current(self, connection, principal, row):
+        assert_installed(connection)
         experiment = self.plans.records._row(connection, row["brain_id"], row["experiment_id"])
         experiment, prepared = self.plans._state(connection, principal, row["experiment_id"], experiment["generation"], unsealed=True)
         phases = ("proposing", "probing", "comparing") if row["kind"] == "semantic" else ("proposing",)
@@ -134,7 +143,7 @@ class OperationExecution:
             attempt = self._attempt(connection, row)
             _generation(expected_generation)
             now = time.time()
-            deadline = attempt["created_at"] + prepared[0]["timeout_seconds"]
+            deadline = self.deadline(connection, row, prepared[0]["timeout_seconds"])
             if (row["generation"] != expected_generation or row["status"] != "reserved"
                     or attempt["lease_token"] is not None or deadline <= now):
                 raise IM.ConflictError("operation_claim_stale")
@@ -182,7 +191,7 @@ class OperationExecution:
             self._current(connection, principal, row)
             stamp = time.time()
             self._leased(connection, principal, identifier, expected_generation, lease_token, stamp)
-            deadline = attempt["created_at"] + prepared[0]["timeout_seconds"]
+            deadline = self.deadline(connection, row, prepared[0]["timeout_seconds"])
             if deadline <= stamp:
                 raise IM.ConflictError("operation_lease_stale")
             connection.execute("UPDATE improvement_operation_attempts SET lease_until=?,updated_at=? "
@@ -322,7 +331,15 @@ class OperationExecution:
             row = self._row(connection, principal, identifier)
             if row["generation"] != expected_generation:
                 raise IM.ConflictError("operation_state_stale")
-            if row["status"] not in TERMINAL:
+            if row["status"] in ("not_run", "interrupted"):
+                # Preserve immutable attempt outcome while fencing a retry that
+                # has not yet reserved its next call. The SQL fence requires this
+                # actual owner event in the same transaction, not a raw status edit.
+                predicted = self._public(connection, {**dict(row), "status": "cancelled", "generation": row["generation"] + 1})
+                self.assets._event(connection, principal, event_key, "operation_owner_cancel", payload, predicted)
+                self._advance(connection, row, "cancelled", time.time())
+                return self._public(connection, self._row(connection, principal, identifier))
+            elif row["status"] not in TERMINAL:
                 if row["attempt"]:
                     self._stop_in(connection, row, self._attempt(connection, row), time.time(), "cancelled", "cancelled")
                 else:
@@ -330,3 +347,7 @@ class OperationExecution:
             result = self._public(connection, self._row(connection, principal, identifier))
             self.assets._event(connection, principal, event_key, "operation_owner_cancel", payload, result)
             return result
+
+    def retry(self, principal, identifier, *, expected_generation, event_key):
+        from improvement_operation_retry import OperationRetry
+        return OperationRetry(self).reserve(principal, identifier, expected_generation=expected_generation, event_key=event_key)

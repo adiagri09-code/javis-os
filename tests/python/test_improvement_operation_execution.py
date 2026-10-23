@@ -201,6 +201,26 @@ class OperationExecutionTests(unittest.TestCase):
                 service.start_engine(self.owner, row["operation_id"], expected_generation=row["generation"], lease_token=token, now=now)
         self.assertIsNone(service.ledger.get(row["attempts"][-1]["call_id"])["engine_at"])
 
+    def test_same_schema_number_with_stale_role_guards_cannot_be_native_authority(self):
+        service = self.execution()
+        with self.store._Tx(self.store) as connection:
+            connection.execute("DROP TRIGGER improvement_operation_attempt_scope")
+        with patch("improvement_operation_adapter.ClaudeOperationAdapter.verify", side_effect=AssertionError("Stale schema probed native")), \
+                self.assertRaisesRegex(IM.ConflictError, "operation_schema_changed"):
+            service.reserve(self.owner, self.operation["operation_id"], expected_generation=1, event_key="forbidden-stale-schema-start")
+        self.assertEqual(service.get(self.owner, self.operation["operation_id"])["attempts"], [])
+        self.assets.set_policy(self.owner, "off", expected_version=0, event_key="off-despite-stale-draft-schema")
+        self.assertEqual(service.cancel(self.owner, self.operation["operation_id"], expected_generation=1,
+                                        event_key="cancel-despite-stale-draft-schema")["status"], "cancelled")
+
+    def test_unknown_future_schema_never_becomes_native_authority_even_if_old_guards_exist(self):
+        service = self.execution()
+        with self.store._Tx(self.store) as connection:
+            connection.execute("UPDATE improvement_schema SET version=7 WHERE id=1")
+        with patch("improvement_operation_adapter.ClaudeOperationAdapter.verify", side_effect=AssertionError("Unknown schema probed native")), \
+                self.assertRaisesRegex(IM.SchemaError, "unsupported_improvement_schema"):
+            service.reserve(self.owner, self.operation["operation_id"], expected_generation=1, event_key="forbidden-future-schema-query")
+
 
 if __name__ == "__main__":
     unittest.main()

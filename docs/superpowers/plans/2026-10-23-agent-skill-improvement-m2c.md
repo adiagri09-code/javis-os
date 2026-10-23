@@ -208,36 +208,43 @@ Interfaces: concrete OperationRunner/OperationTasks over actual operation rows,
 with typed operation-ID receipts/events. Share the real brain execution lock
 with TrialWorkspace; keep distinct actual operation attempt lifetime locks.
 
-- [ ] RED: prepare/launch/drain/recover real synthetic role operations using the
+- [x] RED: prepare/launch/drain/recover real synthetic role operations using the
   existing selected engine adapter; arbitrary host/code/tool capability rejects.
-- [ ] Implement bounded role input/output/event schema and native start handshake.
+- [x] Implement bounded role input/output/event schema and native start handshake.
   Commit CallLedger engine marker before allowing actual query data through.
-- [ ] Own preflight→reserve→handoff through repeated HTTP cancellation and shutdown;
+- [x] Own preflight→reserve→handoff through repeated HTTP cancellation and shutdown;
   refund only genuine unused reservations, settle observed starts interrupted.
-- [ ] No ambient hooks/plugins/skills/native Read/Bash/web/connectors; only actual
+- [x] No ambient hooks/plugins/skills/native Read/Bash/web/connectors; only actual
   preloaded fixture capability and immutable role input. No arbitrary evaluator
   code/script/registry from a model or HTTP body.
-- [ ] Actual isolated proposer/reviewer output containing JAVIS_LESSON, memory
+- [x] Actual isolated proposer/reviewer output containing JAVIS_LESSON, memory
   instructions and job suggestions produces zero production conversation/lesson/
   job effects, including cancellation/recovery. Trusted origin metadata alone
   from Task3 is not evidence of this runtime exclusion. Shared display persistence
   would additionally require durable digest/reaction replay provenance guards.
-- [ ] Include every new role worker/renderer/workspace source in explicit native
+- [x] Include every new role worker/renderer/workspace source in explicit native
   profile footprint; version the profile. Historical results remain historical.
-- [ ] Test malformed packets, foreign live brain lock, lease expiry, cleanup
+- [x] Test malformed packets, foreign live brain lock, lease expiry, cleanup
   failure, engine/checker/live-task after DB terminal and late result publication.
-- [ ] GREEN lifecycle/legacy native boundary tests; commit; no real account yet.
+- [x] GREEN lifecycle/legacy native boundary tests; commit; no real account yet.
 
-Task4 checkpoint: real worker/profile/IPC, SQL lease/marker/refund/late trace,
-encrypted result checks, owned Runner/Tasks/cancellation and selected recovery
-are implemented and under impact regression. Actual SDK messages in these tests
-are synthetic; production sessions/lessons/jobs remain unchanged on completion,
-cancellation and recovery. Native qualification registration now binds complete
-profile source + runtime and denies probes until qualified. The registration
-authority remains separate from the profile digest to avoid self-reference.
-The single host-observed infrastructure retry below is still required before
-Task4 completion. An interim tested-core commit enables early Linux feedback
-per Goal section12, without marking Task4 complete or enabling public C roles.
+Task4 component complete: actual isolated operation worker/profile/IPC, original
+writer-owned call/marker/trace/results, shared kernel barrier, owned cancellation/
+shutdown/result threads and selected recovery. Real proposer and semantic reviewer
+with synthetic SDK messages leave production sessions/lessons/jobs unchanged on
+completion/cancel/recovery. Single infra retry uses actual attempt2, immutable
+native error evidence, original deadline and durable owner-cancel fence; marked
+first-attempt usage is retained. Same-number stale schema6 triggers reject before
+native preflight; future schema rejection uses the existing store SchemaError.
+
+Evidence: core13-script impact GREEN213s (conditional LF normalization proof),
+retry11 GREEN282s, final changed lifecycle/schema6 scripts GREEN247s; future-schema
+and positive actual lease2 GREEN5.241s. Retry races2 GREEN10.534s; aggregate usage
+14in/6out across both marked attempts. Exact a1acaa99 LinuxCI39896580083 succeeded
+for core only; new retry commit needs Linux CI. This is source-scoped component
+evidence, not exact-final-C proof. Native qualification registration stays empty:
+Task9 must qualify the complete stable profile/runtime before any real model call.
+Public API/full stop and actual proposals/semantic evidence remain Tasks5–8.
 
 ## Task 5 — actual tuning projection and generation contract
 

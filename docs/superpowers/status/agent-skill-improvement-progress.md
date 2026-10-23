@@ -115,6 +115,18 @@
   The planned single infrastructure retry and exact-current native qualification
   remain open. An interim Task4 commit/early Linux run may capture tested core
   ownership while those are implemented; it does not complete Task4 or enable C.
+- Task4 isolated lifecycle component is complete locally: core13 scripts GREEN213s,
+  retry11 GREEN282s, final changed lifecycle/schema6 scripts GREEN247s and final
+  future-schema/positive lease2 GREEN5.241s. Real proposer and reviewer worker paths
+  with synthetic SDK messages preserve actual production sessions/lessons/jobs in
+  completion/cancel/recovery. One infra retry retains original deadline and first
+  marked usage, cannot revive owner-cancelled work, and has real writer/native
+  evidence. Same-number stale schema6 guards cannot authorize new work. The current
+  profile includes22 actual source files; its reviewed qualification registry is
+  empty, so no native preflight/model call is enabled. Task9 qualifies stable C.
+  Exact core a1acaa99 LinuxCI39896580083 succeeded (test and Docker-size jobs);
+  new retry changes need fresh Linux feedback. Tasks5–9, independent stable whole-C
+  review and exact-final-C CI remain open; no business/semantic/native readiness.
 - Generated proposals remain A-unreviewed with separately pinned semantic and
   dependency assessments. No assessment/owner product confirmation waives source,
   runtime/view, qualification, activation or real business-data gates. Candidate/

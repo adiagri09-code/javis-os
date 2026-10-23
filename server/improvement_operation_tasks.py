@@ -94,7 +94,7 @@ class OperationTasks:
                     expected_generation=current["generation"], reason="cancelled")
             return current
         attempt_key = (*key, current["attempt"])
-        if current["status"] == "reserved" and attempt_key not in self._started:
+        if current["status"] == "reserved" and attempt_key not in self._started and key not in self._tasks:
             self._started.add(attempt_key)
             task = asyncio.create_task(self._run(principal, reserved))
             self._tasks[key] = principal, task
@@ -115,7 +115,31 @@ class OperationTasks:
             self._leases[key] = row["lease_token"]
 
         try:
-            return await self.runner.run(principal, reserved["operation_id"], on_claimed=claimed)
+            while True:
+                result = await self.runner.run(principal, reserved["operation_id"], on_claimed=claimed)
+                attempts = result["attempts"]
+                if (self._closed or result["attempt"] != 1 or result["status"] not in ("not_run", "interrupted")
+                        or not attempts or attempts[-1]["failure_reason"] not in ("capacity_unavailable", "native_transient_error")):
+                    return result
+                # The first runner has closed its worker/result/cleanup lifetime.
+                # Retain the actual retry reservation through repeated cancellation.
+                self._leases.pop(key, None)
+                retry = asyncio.create_task(asyncio.to_thread(self.execution.retry, principal, reserved["operation_id"],
+                    expected_generation=result["generation"], event_key="operation-auto-retry:" + reserved["operation_id"]))
+                values, cancelled = await _drain(asyncio.gather(retry, return_exceptions=True))
+                retried = values[0]
+                if isinstance(retried, dict):
+                    reserved = retried
+                    self._started.add((*key, retried["attempt"]))
+                if cancelled is not None:
+                    if isinstance(retried, dict):
+                        await _settled_call(self.execution.reject_unclaimed, principal, reserved["operation_id"],
+                            expected_generation=reserved["generation"], reason="cancelled")
+                    raise cancelled
+                if isinstance(retried, BaseException):
+                    if isinstance(retried, (PermissionError, IM.ConflictError, ValueError)):
+                        return await self.runner._response(principal, reserved["operation_id"])
+                    raise retried
         except BaseException as error:
             if isinstance(error, OperationWorkspaceCleanupError):
                 self._cleanup_failed = True

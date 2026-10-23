@@ -7,6 +7,13 @@ TERMINAL = ("completed", "failed", "interrupted", "cancelled", "not_run")
 STATUSES = ("pending", "reserved", "prepared", "running", *TERMINAL)
 _STATUSES = ",".join("'" + value + "'" for value in STATUSES)
 _TERMINAL = ",".join("'" + value + "'" for value in TERMINAL)
+_RETRYABLE_PREVIOUS = (
+    "((p.status='not_run' AND p.failure_reason='capacity_unavailable' AND p.engine_at IS NULL "
+    "AND pc.engine_at IS NULL AND pc.status='refunded') OR "
+    "(p.status='interrupted' AND p.failure_reason='native_transient_error' AND p.engine_at IS NOT NULL "
+    "AND pc.engine_at=p.engine_at AND pc.status='interrupted' AND EXISTS "
+    "(SELECT 1 FROM improvement_operation_observations ob WHERE ob.operation_id=p.operation_id "
+    "AND ob.brain_id=p.brain_id AND ob.attempt=p.attempt AND ob.kind='engine_event' AND ob.late=0)))")
 
 SCHEMA = (
     "CREATE TABLE improvement_preparations("
@@ -125,10 +132,20 @@ SCHEMA = (
     "OR NEW.request_hash IS NOT OLD.request_hash OR NEW.request_json IS NOT OLD.request_json "
     "OR NEW.input_hash IS NOT OLD.input_hash OR NEW.input_blob_hash IS NOT OLD.input_blob_hash "
     "OR NEW.created_at IS NOT OLD.created_at OR NEW.generation!=OLD.generation+1 "
-    f"OR OLD.status IN ({_TERMINAL}) "
+    f"OR (OLD.status IN ({_TERMINAL}) AND NOT (OLD.status IN ('not_run','interrupted') AND "
+    "((OLD.attempt=1 AND NEW.status='reserved' AND NEW.attempt=2) OR (NEW.status='cancelled' AND NEW.attempt=OLD.attempt AND EXISTS "
+    "(SELECT 1 FROM improvement_events ev WHERE ev.brain_id=OLD.brain_id AND ev.operation='operation_owner_cancel' "
+    "AND json_extract(ev.result_json,'$.operation_id')=OLD.id AND json_extract(ev.result_json,'$.status')='cancelled' "
+    "AND json_extract(ev.result_json,'$.generation')=NEW.generation))))) "
     "OR NOT ((NEW.status=OLD.status AND NEW.attempt=OLD.attempt) "
     "OR (OLD.status='pending' AND NEW.status='reserved' AND NEW.attempt=1 AND EXISTS "
     "(SELECT 1 FROM improvement_operation_attempts a WHERE a.operation_id=OLD.id AND a.brain_id=OLD.brain_id AND a.attempt=1)) "
+    "OR (OLD.status IN ('not_run','interrupted') AND OLD.attempt=1 AND NEW.status='reserved' AND NEW.attempt=2 AND EXISTS "
+    "(SELECT 1 FROM improvement_operation_attempts a JOIN improvement_operation_attempts p "
+    "ON p.operation_id=a.operation_id AND p.brain_id=a.brain_id AND p.attempt=1 "
+    "JOIN agent_calls pc ON pc.id=p.call_id JOIN agent_calls nc ON nc.id=a.call_id "
+    "WHERE a.operation_id=OLD.id AND a.brain_id=OLD.brain_id AND a.attempt=2 AND a.status='reserved' "
+    f"AND p.status=OLD.status AND nc.status='reserved' AND nc.engine_at IS NULL AND {_RETRYABLE_PREVIOUS})) "
     "OR (OLD.status='reserved' AND NEW.status='prepared' AND NEW.attempt=OLD.attempt) "
     "OR (OLD.status='prepared' AND NEW.status='running' AND NEW.attempt=OLD.attempt) "
     "OR (NEW.status IN ('cancelled','not_run','interrupted','failed') AND NEW.attempt=OLD.attempt) "
@@ -143,7 +160,11 @@ SCHEMA = (
     "NEW.status!='reserved' OR NEW.engine_at IS NOT NULL OR NOT EXISTS "
     "(SELECT 1 FROM improvement_operations o JOIN agent_calls c ON c.id=NEW.call_id "
     "WHERE o.id=NEW.operation_id AND o.brain_id=NEW.brain_id AND NEW.attempt=o.attempt+1 "
-    "AND o.status='pending' AND c.brain_id=o.brain_id AND c.purpose=o.purpose "
+    "AND ((o.status='pending' AND o.attempt=0 AND NEW.attempt=1) OR "
+    "(o.status IN ('not_run','interrupted') AND o.attempt=1 AND NEW.attempt=2 AND EXISTS "
+    "(SELECT 1 FROM improvement_operation_attempts p JOIN agent_calls pc ON pc.id=p.call_id "
+    "WHERE p.operation_id=o.id AND p.brain_id=o.brain_id AND p.attempt=1 AND p.status=o.status "
+    f"AND {_RETRYABLE_PREVIOUS}))) AND c.brain_id=o.brain_id AND c.purpose=o.purpose "
     "AND c.context_ref='improvement:'||o.experiment_id AND c.mirror_ref='improvement_operation:'||o.id "
     "AND c.reason_ref='improvement_operation:'||o.id||':attempt:'||NEW.attempt "
     "AND c.attempt=NEW.attempt AND c.status='reserved' AND c.engine_at IS NULL) "
@@ -180,3 +201,24 @@ SCHEMA = (
 IMMUTABLE = ("improvement_preparations", "improvement_preparation_trial_links", "improvement_operation_observations",
              "improvement_operation_results", "improvement_proposal_publications", "improvement_generated_candidates",
              "improvement_semantic_receipts")
+
+
+def assert_installed(connection):
+    """Same-number draft schemas are readable, but are not current role authority.
+
+    Schema6 has not shipped; its prototype guards changed during implementation.
+    Refuse missing/older guards before new work without rewriting history or
+    blocking cancellation, policy-off and settlement. No cached ready verdict.
+    """
+    import re
+    from improvement_store import ConflictError
+    statements = list(SCHEMA)
+    statements.extend(f"CREATE TRIGGER {table}_{action.lower()} BEFORE {action} ON {table} "
+                      "BEGIN SELECT RAISE(ABORT,'immutable_improvement_history'); END"
+                      for table in IMMUTABLE for action in ("UPDATE", "DELETE"))
+    installed = {row["name"]: " ".join((row["sql"] or "").split()).rstrip(";")
+                 for row in connection.execute("SELECT name,sql FROM sqlite_master WHERE name LIKE 'improvement_%'")}
+    for statement in statements:
+        name = re.match(r"CREATE (?:UNIQUE )?(?:TABLE|INDEX|TRIGGER) ([a-z_][a-z_0-9]*)", statement)[1]
+        if installed.get(name) != " ".join(statement.split()).rstrip(";"):
+            raise ConflictError("operation_schema_changed")

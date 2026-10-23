@@ -10,6 +10,7 @@ from improvement_operation_adapter import ClaudeOperationAdapter
 from improvement_operation_evidence import OperationEvidence
 from improvement_operation_execution import OperationExecution
 from improvement_operation_results import OperationResults
+from improvement_operation_retry import native_transient
 from improvement_operation_schema import TERMINAL
 from improvement_operation_workspace import OperationWorkspaceCleanupError
 from improvement_telemetry import NativeUsageRecorder
@@ -164,7 +165,7 @@ class OperationRunner:
                     expected_generation=current["generation"], lease_token=token, receipt=receipt[0])
             native_request = {"version": 1, **{key: current[key] for key in ("operation_id", "attempt", "role", "purpose")},
                 "deadline_at": current["deadline_at"], "engine_config_hash": manifest["engine_config_hash"], "capability_hash": verified["capability_hash"]}
-            phase, terminal = "worker_failed", None
+            phase, terminal, transient = "worker_failed", None, False
             async with aclosing(adapter.execute(native_request, receipt[0])) as packets:
                 async for packet in packets:
                     async with lock:
@@ -175,8 +176,12 @@ class OperationRunner:
                             await observe(packet)
                             raise
                         await observe(packet)
+                        if packet["type"] == "engine_event" and native_transient(packet["event"]):
+                            transient = True
                         if packet["type"] == "engine_event" and packet["event"].get("type") == "terminal":
                             terminal = packet["event"]
+            if transient:
+                raise _RunFailure("native_transient_error")
             if recorder is None or terminal is None:
                 raise _RunFailure("worker_failed")
             phase = "telemetry_failed"

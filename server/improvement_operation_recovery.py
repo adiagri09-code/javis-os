@@ -40,7 +40,7 @@ class OperationRecovery:
                         raise IM.ConflictError("operation_attempt_unavailable")
                     if attempt["status"] not in TERMINAL:
                         experiment = self.execution.plans.records._row(connection, row["brain_id"], row["experiment_id"])
-                        deadline = attempt["created_at"] + definition(json.loads(experiment["definition_json"]))["timeout_seconds"]
+                        deadline = self.execution.deadline(connection, row, definition(json.loads(experiment["definition_json"]))["timeout_seconds"])
                         expired = (attempt["lease_until"] is not None and attempt["lease_until"] <= cutoff) or (
                             attempt["lease_until"] is None and deadline <= cutoff)
                         if row["attempt"] != number or row["status"] in TERMINAL or not expired:
