@@ -15,6 +15,7 @@ from improvement_experiment_protocol import comparison_hash
 from improvement_trial_records import _brain
 from improvement_view_protocol import view_manifest
 from improvement_view_schema import assert_installed
+from improvement_result_domain import NATIVE_GATES, require_product_report
 
 _NATIVE_CHECKS = frozenset({'materialization', 'worker_protocol', 'installation', 'tool_inventory',
     'side_effects', 'completion', 'actual_model', 'actual_reasoning', 'native_session', 'actual_input_use'})
@@ -24,6 +25,11 @@ _OBSERVATIONAL = {'actual_reasoning': 'native_reasoning_unobserved',
 
 def _probe_observations(evidence):
     """Internal gate over actual current C evidence; never rewrite its verdict."""
+    require_product_report(evidence)
+    version = evidence.get('native_result_version', 1)
+    if type(version) is not int or version not in (1, 2):
+        raise PermissionError('view_native_inventory_incomplete')
+    expected_checks = _NATIVE_CHECKS | (NATIVE_GATES if version == 2 else set())
     assessment, owner = evidence['assessment'], evidence['owner_assessment']
     if (assessment['verdict'] == 'fail' or any(f['verdict'] == 'fail' for f in assessment['findings'])
             or owner is not None and owner['verdict'] == 'fail'):
@@ -36,10 +42,10 @@ def _probe_observations(evidence):
     if evidence.get('native_verdict') not in ('pass', 'unknown'):
         raise PermissionError('view_native_evidence_rejected')
     checks = evidence['native_checks']
-    if (type(checks) is not list or len(checks) != len(_NATIVE_CHECKS)
+    if (type(checks) is not list or len(checks) != len(expected_checks)
             or any(type(row) is not dict or type(row.get('id')) is not str
                 or row.get('verdict') not in ('pass', 'fail', 'unknown') or type(row.get('reason')) is not str for row in checks)
-            or {row['id'] for row in checks} != _NATIVE_CHECKS):
+            or {row['id'] for row in checks} != expected_checks):
         raise PermissionError('view_native_inventory_incomplete')
     unknowns = []
     for row in checks:

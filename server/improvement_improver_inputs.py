@@ -20,6 +20,7 @@ from improvement_preparation_lineage import load_preparation_lineage
 from improvement_skill_patch import body_layout
 from improvement_trial_evidence import decode_trace
 from improvement_trial_records import _brain
+from improvement_result_domain import require_product_report
 
 
 def _bytes(blobs, brain, digest):
@@ -30,6 +31,7 @@ def _bytes(blobs, brain, digest):
 
 
 def _assessment(report):
+    require_product_report(report)
     # Checker reasons/evidence can contain evaluator-private answers. Expose only
     # typed verdicts, never arbitrary checker feedback or private contract config.
     criteria = [{**{key: row[key] for key in ('id', 'category', 'critical', 'verdict')},
@@ -54,6 +56,18 @@ _EVENT_FIELDS = {
 
 def project_packet(packet):
     """Retain observable tool/error/timing/result metadata; never reasoning text."""
+    if type(packet.get('version')) is int and packet['version'] == 2:
+        # Caller authenticates complete stored history and result/trace hashes.
+        # This is a derived model-input projection, never a legacy wire record.
+        source, body = packet.get('source'), packet.get('body')
+        if (source not in ('worker', 'guardian') or type(body) is not dict
+                or any(type(packet.get(k)) is not int or packet[k] < 1 for k in ('sequence', 'source_sequence'))):
+            raise ValueError('invalid_improver_native_projection')
+        allowed = source == 'worker' and body.get('type') in ('engine_event', 'fixture_event',
+            'worker_ready', 'engine_start_requested', 'worker_complete', 'worker_error')
+        observation = project_packet(body) if allowed else {'type': 'withheld', 'reason': 'native_control_metadata'}
+        return {'type': 'native_observation2_projection', 'sequence': packet['sequence'],
+            'source': source, 'source_sequence': packet['source_sequence'], 'observation': observation}
     kind = packet['type']
     if kind == 'engine_event':
         event = packet['event']
@@ -139,6 +153,7 @@ class ImproverInputs:
             # _solver loads only the exact case snapshots; it never opens answers.
             solver = trials.cases._solver(connection, brain, case)
             report = trials.read_result(principal, ref['trial_id'], ref['attempt'], result_id=ref['result_id'])
+            require_product_report(report)
             if IM._hash(report) != ref['result_hash'] or ref['blob_hash'] != ref['result_hash']:
                 raise IM.ConflictError('improver_result_changed')
             records = evidence['trace']

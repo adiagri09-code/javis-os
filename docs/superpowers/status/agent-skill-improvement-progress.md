@@ -1,5 +1,30 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — four actual downstream native blockers repaired
+
+Audit found RoleWorkflow old10 refused native14, semantic paired-view gate old10
+likewise, improver projection raised KeyError on raw observation2, and comparison
+old18 made native22 always UNKNOWN. Actual callers now select exact inventories
+from authenticated report/evidence format, retaining all old requirements plus
+four mandatory native gates. Semantic evidence binds actual report format/checks/
+verdict on publication and current read; two permitted observational UNKNOWN stay.
+Improver derives labelled sequence/source-aware projection, whitelists worker
+metadata and withholds guardian/control/text/tool payload; stored raw unchanged.
+
+Explicit execution_domain markers refuse at product/promotion inputs (even None,
+false or labelled production). This is only a preliminary fence: future M0
+qualification run/subject/attempt/call links must prevent omission/downgrade on
+publish and cold read before qualifier can run. No such authority is enabled yet.
+
+Author8 PASS6.272s; independent21 PASS29.700s total, all15 pins stable, no findings.
+Includes actual encrypted op2 RoleWorkflow and targeted legacy proposal/improver/
+semantic async paths. Public native-downstream records RED/GREEN/source/logs.
+Complete native baseline→improver→semantic→paired chain remains separate proof;
+dummy results cannot be promoted to fake it. Next concrete QualificationSession,
+typed engineering verification and explicit startup3, then final-source actual
+same-pipeline qualification/registration/account feasibility/final CI. Goal open.
+
+
 ## Current continuation — pure dummy qualification environment approved
 
 Canonical pure helper accepts only literal dummy key and exact numeric

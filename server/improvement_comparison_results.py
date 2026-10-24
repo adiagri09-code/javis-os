@@ -183,6 +183,8 @@ def project_result(value, contract, request, trial_id, attempt, report):
     trial and attempt. Missing native checks cannot become successful integrity.
     """
     from improvement_experiment_protocol import validate_request_v2
+    from improvement_result_domain import NATIVE_GATES, require_product_report
+    require_product_report(report)
     from improvement_view_trial_protocol import validate_request_v4
     import re
     value = definition(value)
@@ -232,7 +234,15 @@ def project_result(value, contract, request, trial_id, attempt, report):
                 or type(row.get("verdict")) is not str or row["verdict"] not in _VERDICTS):
             raise ValueError("invalid_comparison_execution_checks")
         native[row["id"]] = row["verdict"]
-    integrity = _summary(native.values()) if set(native) == _NATIVE_CHECKS else "unknown"
+    expected_checks = _NATIVE_CHECKS | (NATIVE_GATES if 'native_decisions' in report else set())
+    if 'native_decisions' in report:
+        decisions = report['native_decisions']
+        if (type(decisions) is not list or len(decisions) != 4 or any(type(row) is not dict
+                or set(row) != {'decision', 'durable_evidence_hash'} or row.get('decision') != 'allow'
+                or type(row.get('durable_evidence_hash')) is not str
+                or re.fullmatch('[0-9a-f]{64}', row['durable_evidence_hash']) is None for row in decisions)):
+            raise ValueError('invalid_comparison_native_decisions')
+    integrity = _summary(native.values()) if set(native) == expected_checks else "unknown"
     if report["execution_status"] != "completed":
         integrity = "fail"
     return {"integrity": integrity, "criteria": criteria}

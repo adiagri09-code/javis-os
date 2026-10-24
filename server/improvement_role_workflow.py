@@ -7,10 +7,27 @@ from improvement_operation_execution import OperationExecution
 from improvement_operation_results import OperationResults
 from improvement_operation_tasks import OperationTasks
 from improvement_trial_records import _brain
+from improvement_result_domain import NATIVE_GATES, require_product_report
 
 _REQUIRED = {'materialization', 'worker_protocol', 'installation', 'tool_inventory', 'side_effects',
              'completion', 'actual_model', 'native_session'}
 _UNOBSERVED = {'actual_reasoning', 'actual_input_use'}
+
+
+def _product_checks(report):
+    """Exact report inventory; the concrete result reader authenticates history."""
+    require_product_report(report)
+    if type(report.get('version')) is not int or report['version'] not in (1, 2):
+        raise PermissionError('proposal_native_evidence_unavailable')
+    required = _REQUIRED | (NATIVE_GATES if report['version'] == 2 else set())
+    rows = report.get('checks')
+    if type(rows) is not list or any(type(row) is not dict or type(row.get('id')) is not str for row in rows):
+        raise PermissionError('proposal_native_evidence_unavailable')
+    checks = {item['id']: item.get('verdict') for item in rows}
+    if (len(checks) != len(rows) or set(checks) != required | _UNOBSERVED
+            or any(checks[key] != 'pass' for key in required)
+            or any(checks[key] not in ('pass', 'unknown') for key in _UNOBSERVED)):
+        raise PermissionError('proposal_native_evidence_unavailable')
 
 
 class RoleWorkflow:
@@ -58,11 +75,7 @@ class RoleWorkflow:
         if (IM._hash(report) != records[0]['result_hash'] or attempt['result_json'] != IM._json(report)
                 or report['materialization_hash'] != attempt['materialization_hash'] or report['engine_config_hash'] != IM._hash(pin)):
             raise IM.ConflictError('proposal_result_changed')
-        checks = {item['id']: item['verdict'] for item in report['checks']}
-        if (len(checks) != len(report['checks']) or set(checks) != _REQUIRED | _UNOBSERVED
-                or any(checks[key] != 'pass' for key in _REQUIRED)
-                or any(checks[key] not in ('pass', 'unknown') for key in _UNOBSERVED)):
-            raise PermissionError('proposal_native_evidence_unavailable')
+        _product_checks(report)
         trace = [dict(item) for item in connection.execute('SELECT * FROM improvement_operation_observations '
             'WHERE operation_id=? AND brain_id=? AND attempt=? ORDER BY sequence', (identifier, row['brain_id'], row['attempt']))]
         if any(item['late'] for item in trace) or [item['payload_hash'] for item in trace] != report['trace_hashes']:

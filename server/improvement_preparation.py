@@ -244,6 +244,8 @@ class PreparationService:
                     if type(pointer) is not dict or set(pointer) != {"result_id", "result_hash", "blob_hash"}:
                         raise IM.ConflictError("preparation_result_changed")
                     report = self.trials.read_result(principal, link["trial_id"], link["current_attempt"], result_id=pointer["result_id"])
+                    from improvement_result_domain import require_product_report
+                    require_product_report(report)
                     if IM._hash(report) != pointer["result_hash"]:
                         raise IM.ConflictError("preparation_result_changed")
                     refs.append({"trial_id": link["trial_id"], "attempt": link["current_attempt"],
