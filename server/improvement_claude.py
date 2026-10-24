@@ -161,9 +161,36 @@ class ClaudeTrialAdapter:
                 _text(value)
         self.workspace_root = Path(workspace_root) if workspace_root is not None else None
         self.before_engine_start = before_engine_start
+        self._native_boundary = None
+
+    def bind_native_authority(self, assets, principal, *, scope_hash, current, lock=None):
+        if self._native_boundary is not None:
+            raise ValueError('native_parent_already_bound')
+        from improvement_native_parent import NativeParentBoundary
+        self._native_boundary = NativeParentBoundary(self.pin, assets, principal,
+            scope_hash=scope_hash, current=current, lock=lock)
 
     def verify(self):
+        if self._native_boundary is not None:
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                return asyncio.run(self.verify_async())
+            raise RuntimeError('native_sync_preflight_in_async_context')
+        # A release qualified for the owned boundary cannot silently return to
+        # legacy subprocess probes when a service forgot its actual authority.
+        from improvement_native_qualifications import REVIEWED_RELEASES
+        prefix = (sys.platform, self.pin['cli_version'], self.pin['cli_hash'], self.pin['sdk_version'],
+                  self.pin['profile_version'], self.pin['profile_hash'])
+        if any(type(key) is tuple and len(key) == 7 and key[:6] == prefix for key in REVIEWED_RELEASES):
+            return {'supported': False, 'reason': 'native_host_authority_unbound',
+                'requested': {key: self.pin[key] for key in ('provider', 'engine_id', 'model', 'reasoning')}}
         return self._verify_with_observer(lambda: _runtime_observation(self.pin))
+
+    async def verify_async(self):
+        if self._native_boundary is not None:
+            return await self._native_boundary.verify(self)
+        return await _verify_owned(self)
 
     def admit_preflight(self):
         """Permit guarded observation, never account/query or live capability.
@@ -255,7 +282,7 @@ class ClaudeTrialAdapter:
         return {"supported": True, "reason": None, "requested": requested,
                 "capability_hash": _hash({"pin": self.pin, "runtime": observed}), "runtime": observed}
 
-    async def execute(self, request, workspace):
+    async def execute(self, request, workspace, *, on_closing_observations=None):
         """The parent persists engine start before releasing a query in a clean process."""
         from improvement_sandbox import TrialWorkspace
         if self.workspace_root is None or not callable(self.before_engine_start):
@@ -275,6 +302,19 @@ class ClaudeTrialAdapter:
                 or request["engine_config_hash"] != manifest["engine_config_hash"]
                 or request["engine_config_hash"] != _hash(self.pin)):
             raise ValueError("trial_configuration_drift")
+        if manifest['version'] == 4:
+            if self._native_boundary is None:
+                raise ValueError('trial_native_parent_unbound')
+            from improvement_sandbox import trial_system_prompt
+            from contextlib import aclosing
+            async with aclosing(self._native_boundary.execute('trial', request, receipt, adapter=self,
+                    workspace_root=self.workspace_root, brain_id=manifest['brain_id'],
+                    before_engine_start=self.before_engine_start, system_prompt=trial_system_prompt(manifest),
+                    tool_policy='pinned_skill', on_closing_observations=on_closing_observations)) as packets:
+                async for packet in packets: yield packet
+            return
+        if self._native_boundary is not None:
+            raise ValueError('trial_native_parent_legacy_input')
         verified = await _verify_owned(self)
         if not verified.get("supported") or verified.get("capability_hash") != request["capability_hash"]:
             raise ValueError("trial_capability_drift")
