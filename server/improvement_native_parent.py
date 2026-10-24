@@ -183,8 +183,9 @@ class NativeParentBoundary:
 
     async def execute(self, kind, request, receipt, *, adapter, workspace_root, brain_id,
             before_engine_start, system_prompt, tool_policy, on_closing_observations):
-        if type(kind) is not str or kind not in ('trial', 'operation') or tool_policy != (
-                'pinned_skill' if kind == 'trial' else 'fixture_only'):
+        if (type(kind) is not str or type(tool_policy) is not str or not (
+                (kind == 'trial' and tool_policy in ('pinned_skill', 'baseline_inline'))
+                or (kind == 'operation' and tool_policy == 'fixture_only'))):
             raise ValueError('native_parent_query_policy_invalid')
         if self._query_started: raise ValueError('native_parent_query_already_used')
         self._query_started = True

@@ -1,5 +1,22 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — baseline guarded worker/parent routes approved
+
+Explicit baseline5 now follows actual worker/adapter/parent guarded routes with
+fixture-only baseline_inline policy, exact typed private ACK and runtime drain
+before completion. Legacy entry refuses5 before unguarded verifier; bound old
+inputs still refuse legacy launch. Parent keeps four exact durable M0 decisions
+under actual attempt scope; operation/unknown policies refuse before admission.
+Author focused7 PASS2.687s after precise RED checks and fixture corrections;
+independent31 PASS10.057s total (new7/startup14/parent10), all12 pins unchanged,
+no findings. Public native-baseline-routes records full lineage and narrow scope.
+
+No product emitter or account/runtime activation. Next baseline5 consumers extend
+whole V2 history, exact receipt/delivery, final-transaction durable decision reread,
+cold result authentication and runner cancellation/usage. Asset reading/provider/
+comprehension remain UNKNOWN; full final-source qualification and final CI due.
+
+
 ## Current continuation — native baseline profile independently approved
 
 Explicit manifest5 now binds the same owned runtime/client/transport/original

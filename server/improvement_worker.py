@@ -343,10 +343,10 @@ async def run_request(payload, read_control, emit, *, adapter_factory=None, engi
     if manifest["engine_config_hash"] != _hash(pin):
         raise ValueError("trial_configuration_drift")
     if native_session is None:
-        if manifest['version'] == 4: raise ValueError('trial_native_worker_required')
+        if manifest['version'] in (4, 5): raise ValueError('trial_native_worker_required')
         verified = (adapter_factory or ClaudeTrialAdapter)(pin).verify()
     else:
-        if manifest['version'] != 4: raise ValueError('trial_native_input4_required')
+        if manifest['version'] not in (4, 5): raise ValueError('trial_native_input4_or5_required')
         from improvement_native_worker import prepare_native_runtime
         verified, _ = await prepare_native_runtime(native_session, payload, kind='trial')
         read_control, emit = native_session.receive, native_session.send

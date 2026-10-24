@@ -302,7 +302,7 @@ class ClaudeTrialAdapter:
                 or request["engine_config_hash"] != manifest["engine_config_hash"]
                 or request["engine_config_hash"] != _hash(self.pin)):
             raise ValueError("trial_configuration_drift")
-        if manifest['version'] == 4:
+        if manifest['version'] in (4, 5):
             if self._native_boundary is None:
                 raise ValueError('trial_native_parent_unbound')
             from improvement_sandbox import trial_system_prompt
@@ -310,7 +310,8 @@ class ClaudeTrialAdapter:
             async with aclosing(self._native_boundary.execute('trial', request, receipt, adapter=self,
                     workspace_root=self.workspace_root, brain_id=manifest['brain_id'],
                     before_engine_start=self.before_engine_start, system_prompt=trial_system_prompt(manifest),
-                    tool_policy='pinned_skill', on_closing_observations=on_closing_observations)) as packets:
+                    tool_policy='pinned_skill' if manifest['version'] == 4 else 'baseline_inline',
+                    on_closing_observations=on_closing_observations)) as packets:
                 async for packet in packets: yield packet
             return
         if self._native_boundary is not None:
