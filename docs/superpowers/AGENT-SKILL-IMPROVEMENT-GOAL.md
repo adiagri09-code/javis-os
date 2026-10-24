@@ -377,3 +377,58 @@ quyết định/evidence cũ, không refactor rộng chỉ để giống Google 
     chủ đã cấp. Tự quyết kỹ thuật thường lệ theo tiêu chí này, tiếp tục từ
     checkpoint, không hỏi lại xác nhận thường lệ.
 
+## 17. Bổ sung ưu tiên compose và experience library trực tiếp qua adapter — 24/10/2026
+
+Chủ chốt trực tiếp qua chat `01a16662-a77c-72e2-9c40-265c5659d5cc`: ưu tiên
+dùng implementation compose và thư viện kinh nghiệm Google Harness² qua adapter,
+sau đó so thay lõi điều phối nếu tổng công ít hơn/giá trị tốt hơn. Goal trước
+mục17 có SHA-256 `76e349119bd3f7148204b2e57800d9769aac4f7cb73c271e6f8541ff0a6c5b18`.
+Kế thừa mục12–16, bảo toàn hash/history/lineage, không reset/audit toàn repo hay
+bỏ ownership đang chạy. Áp dụng từ đơn vị phù hợp gần nhất sau điểm nối an toàn.
+
+1. **Compose trước:** pin `1cfe254e8d25b15f37048c3730134686abe60335`; đối chiếu
+   `core/prompts.py:aggregate/compose_round`, chỗ gọi trong `core/recursion.py`
+   và dependency trực tiếp. Ưu tiên import/vendor phần implementation thật dùng
+   được, adapter hẹp vào input/evidence/runner/patch hoặc bundle validator Javis;
+   được trích phần độc lập nếu cả module kéo executor/benchmark không cần. Không
+   chỉ viết lại lời mô tả rồi gọi dùng trực tiếp. Giữ surface được chủ cho phép,
+   tuning data và giới hạn candidate/repair/compose. Compose tạo candidate/bundle
+   mới phải kiểm riêng, không thừa hưởng pass/qualification; KEEP_BASE/unknown giữ.
+2. **Experience library kế tiếp:** kiểm `core/library.py` và tree/context/spec
+   liên quan, ưu tiên cấu trúc/serialization/index/entry trực tiếp qua adapter
+   brain/scope/evidence/revision. `rmtree/copy/write` và mutable index chỉ chạm
+   root riêng đã kiểm/thuộc quyền. Dùng snapshot/index dẫn xuất thì nguồn chuẩn
+   Javis vẫn bất biến, encrypted, có quyền/retention/revocation/trace links. Không
+   tạo filesystem canonical/authority song song hay nạp cả thư viện mọi scope.
+   Hàm không giữ nguyên được cần ghi xung đột thật và tận dụng phần còn phù hợp.
+3. **Điều phối sau hai phần trên:** so `run_parallel/run_sequential/_run_stage`,
+   BenchmarkAdapter/RunView/Proposer với ExperimentService/Trial/Operation. Tính
+   đủ dependency, synchronous ThreadPoolExecutor/filesystem lifetime, cancellation,
+   lease/restart/replay, ledger/usage, consumer migration/qualification/test/review.
+   Nếu thay toàn lõi tăng công, giữ owner/state machine Javis và lấy thuật toán
+   độc lập; không giữ hai executor/ledger authoritative trùng nhau.
+4. Mỗi đơn vị ghi bảng ngắn trước code: file/hàm/SHA, phần nguyên/vendor/adapter,
+   phần Javis giữ, consumer, tổng công/lợi ích và test/gate. Không phân tích vô hạn
+   làm chậm tích hợp hiện tại. Sớm làm lát cắt fixture chạy được để kiểm adapter;
+   scaffold không được tính tích hợp.
+5. Tận dụng source/test upstream kèm kiểm contract/adapter/hành vi Javis có ý
+   nghĩa. Giữ license/copyright/NOTICE/provenance/modifications; không tự lấy
+   benchmark/dataset/third_party ngoài nhu cầu và giấy phép.
+6. Baseline luôn trong quyết định, thua/inconclusive giữ bản cũ; không lấy
+   finals-only selection_pool. Không mở mặt sửa luật chủ/model/reasoning/quyền/
+   system guardrails hay tăng số vòng/candidate vượt giới hạn. Nhiều rollout
+   không mặc nhiên tiết kiệm token vận hành.
+7. Giữ gate owner/grant/brain/scope/source/protected content; holdout/private
+   answer/secret; immutable version/config/evidence; actual Trial/Call usage và
+   unknown; native source/profile/qualification; cancellation/crash/cleanup/
+   concurrency/recovery; migration/old readers/history; atomic apply/revert;
+   review độc lập và full required CI commit cuối. Đổi footprint phải invalidate/
+   requalify, không dùng proof sai nguồn.
+8. Phase1 vẫn hoàn thiện code M0–M8/kiểm kỹ thuật/mô phỏng/localhost fake được
+   phép; model/account/business pilot/live canary vẫn Phase2. Reuse code không
+   chứng minh chất lượng nghiệp vụ/native readiness hay cấp quyền activation.
+9. Checkpoint phân biệt đã đối chiếu / dùng trực tiếp upstream / adapter /
+   fixture / review và CI / gate còn mở. Chỉ báo tiết kiệm có cơ sở đo, không
+   tối ưu tỷ lệ dòng copy. Lưu Goal/progress/checkpoint/code-first/reuse map,
+   tự quyết kỹ thuật trong quyền hiện có, tiếp tục không hỏi lại xác nhận.
+

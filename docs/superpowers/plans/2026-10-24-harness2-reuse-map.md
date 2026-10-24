@@ -1,5 +1,16 @@
 # Incremental Harness² reuse decisions
 
+Goal§17 sets the next integration priority after the owned upper-domain unit:
+actual compose implementation (`prompts.aggregate/compose_round` and relevant
+recursion call), then library structure/serialization/index/entry, then evaluate
+orchestration algorithm replacement. Keep upstream code unchanged or extract
+independent pieces where feasible, with explicit adapter/provenance. Do not count
+the previous adapted diagnosis method as direct compose/library implementation.
+Library is a private authorized derived snapshot, never canonical authority or
+a second store; root writes/copies/deletes must remain owned. A working fixture
+slice must precede integration claims. All candidate/repair/compose limits and
+baseline/unknown/evidence/privacy/lifecycle/source qualification gates remain.
+
 Goal§16 supersedes any earlier blanket restriction on replacing completed Javis
 implementation: selective replacement is authorized when concrete correctness/
 maintainability/reuse benefits justify total transition/compatibility/qualification/

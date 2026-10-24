@@ -17,6 +17,12 @@ concrete benefit justifies adapter/consumer/migration/compatibility/qualificatio
 regression/review effort, including infrastructure when justified. It supersedes
 the earlier blanket no-rewrite phrasing only to that extent, with all gates and
 history preserved. No restart, full-repo audit or copy-percentage refactor.
+Goal§17 now prioritizes actual upstream compose implementation through a narrow
+adapter, then experience-library entry/index/serialization through an authorized
+derived snapshot adapter, before deciding whether orchestration replacement pays
+for all lifecycle/compatibility/qualification costs. Preserve current upper-domain
+unit first, then build a functioning compose fixture slice; do not relabel prompt
+paraphrase as direct upstream code reuse. Keep limits/authority/quality gates.
 It supersedes older plan instructions to run a real account feasibility next.
 No account inference is currently owned/running: recent tests are fixture/local
 preparation and isolated CI only. No restart, deployment or activation occurs.

@@ -1,5 +1,23 @@
 # Agent and skill improvement Goal progress
 
+## Owner direct compose/library priority — Goal§17
+
+Owner directive from the same authorized chat is saved in Goal§17. Next safe
+unit after current engineering-product boundaries: inspect exact pinned
+prompts.aggregate/compose_round and recursion compose call/direct dependencies,
+then actually import/vendor functioning independent implementation through a
+narrow Javis adapter. Follow with actual library entry/index/serialization via
+private authorized derived snapshots, retaining Javis immutable encrypted source,
+brain/scope/revocation/retention/trace authority. Assess whole orchestration only
+after those, counting executor/lease/cancel/restart/replay/ledger/migration/tests/
+qualification costs; do not duplicate authoritative runtimes/ledgers. No scaffold
+or prompt paraphrase counts as direct compose/library reuse. Keep baseline,
+limits, every gate and Phase1/Phase2 ordering. Current upper-domain test/source
+ownership is preserved; no full audit/restart or real inference.
+Post§17 Goal SHA-256 b9466f98fff57c032a6c82132fe57d3beef2e187c7d963fbfc8bf60e5c1ee749;
+pre§17 76e349119bd3f7148204b2e57800d9769aac4f7cb73c271e6f8541ff0a6c5b18.
+All original/historical hashes and scoped evidence remain unchanged.
+
 ## Current proposer/evidence guidance — scoped implementation approved
 
 Existing render_proposer_input now adapts Google Harness² propose/_INV/_DOM/
