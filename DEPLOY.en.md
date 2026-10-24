@@ -115,14 +115,25 @@ you **must set a `DOMAIN_NAME` variable**:
    `CLAUDE_CWD` have been cleared from the form; the Docker image still uses the right defaults.
 4. **Deploy**, wait 1-3 minutes for Traefik to issue SSL, then open `https://<DOMAIN_NAME>`.
 
+> **Hostinger VPS on Ubuntu 26 (or any plain OS without Traefik), since 0.300.0:** paste the SAME link, nothing to
+> change. The compose now carries a `javis-gateway` container (Caddy): when ports 80/443 are free it requests and
+> renews the Let's Encrypt certificate for `DOMAIN_NAME` itself; on a VPS with Hostinger's Traefik it stays idle and
+> leaves HTTPS to Traefik. Two requirements: Docker installed (Docker Manager does it, or
+> `curl -fsSL https://get.docker.com | sh`), and ports 80 + 443 open in the firewall. Before deploying, check the
+> name points at the VPS: `ping javis.<vps-hostname>.hstgr.cloud` must show the VPS IP (for your own domain, an A
+> record to the VPS IP). The `javis-gateway` log says what it is doing.
+>
+> **Traefik does not handle updates.** Traefik (or Caddy) only provides HTTPS for the domain. Updates are done by the
+> bundled `javis-watchtower` container, so the **⬆ Update now** button works the same on Ubuntu 24 and 26.
+
 > Without `DOMAIN_NAME` it still deploys (running temporarily on `:7777` with no HTTPS). No Environment
 > box? Click **Manage → edit the .yaml** and change the `Host(...)` line directly to
 > `Host(\`javis.srv1782015.hstgr.cloud\`)`.
 > **The key point:** the Traefik labels attach straight to the service, with **NO
 > `networks:` / `external: traefik-proxy` declaration** (that is what used to make the deploy report
 > "network not found").
-> **Caddy (`docker-compose.https.yml`) is NOT used on Hostinger** because ports 80/443 are already held
-> by their Traefik.
+> **Do not add `docker-compose.https.yml` on Hostinger**: it publishes ports 80/443 and clashes with their
+> Traefik. The Hostinger compose already carries a Caddy gateway that turns itself on when there is no Traefik.
 > Not confident? Use a **Cloudflare Tunnel** (below), which gives an HTTPS URL without touching
 > Hostinger's proxy at all.
 

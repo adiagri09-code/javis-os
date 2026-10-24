@@ -8,7 +8,9 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 ## [0.300.0] - 2026-10-24
 ### Sửa lỗi
-- **Cài trên Hostinger Ubuntu 26 (không có Traefik) vẫn có HTTPS.** (đang viết)
+- **Một link cài Hostinger dùng được cho cả Ubuntu 24 lẫn Ubuntu 26.** Mẫu Ubuntu 26 trắng không có Traefik, nên trước đây dán link là Javis chạy nhưng tên miền không bao giờ có HTTPS. Giờ link đi kèm một cổng HTTPS (Caddy) tự bật khi máy không có Traefik và tự cấp SSL cho `DOMAIN_NAME`; máy có Traefik thì nó nhường, không đụng gì.
+### Cải thiện
+- Tài liệu cài đặt nói rõ: Traefik chỉ lo HTTPS, còn cập nhật là việc của Watchtower đi kèm, nên nút **Cập nhật ngay** chạy như nhau trên mọi bản Ubuntu.
 
 ## [0.298.0] - 2026-10-23
 ### Sửa lỗi

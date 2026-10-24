@@ -109,11 +109,22 @@ link riêng chạy HTTPS mà không cần mua tên miền. **Lưu ý (đã kiể
    `CLAUDE_CWD` đã được dọn khỏi form; Docker image vẫn tự dùng đúng giá trị mặc định.
 4. **Deploy** → đợi 1-3 phút Traefik cấp SSL → mở `https://<DOMAIN_NAME>`.
 
+> **VPS Hostinger cài Ubuntu 26 (hoặc hệ điều hành trắng, không có Traefik) - từ 0.300.0:** vẫn dán ĐÚNG link trên,
+> không phải đổi gì. Compose có thêm container `javis-gateway` (Caddy): thấy cổng 80/443 trống là nó tự xin và tự gia
+> hạn SSL Let's Encrypt cho `DOMAIN_NAME`; máy có Traefik của Hostinger thì nó đứng yên nhường Traefik. Cần hai điều:
+> máy đã có Docker (Docker Manager cài sẵn, hoặc `curl -fsSL https://get.docker.com | sh`), và tường lửa mở cổng
+> 80 + 443. Trước khi Deploy, kiểm tra tên miền đã trỏ về VPS: `ping javis.<hostname-vps>.hstgr.cloud` phải ra
+> đúng IP VPS (tên miền riêng thì tạo bản ghi A về IP VPS). Xem log `javis-gateway` để biết nó đang làm gì.
+>
+> **Traefik không lo việc cập nhật.** Traefik (hay Caddy) chỉ lo HTTPS cho tên miền. Cập nhật là việc của container
+> `javis-watchtower` đi kèm, nên nút **⬆ Cập nhật ngay** trong app chạy như nhau trên Ubuntu 24 lẫn 26.
+
 > Thiếu `DOMAIN_NAME` thì vẫn deploy được (chạy tạm ở `:7777`, chưa có HTTPS). Không thấy ô Environment?
 > Bấm **Manage → sửa .yaml**, đổi thẳng dòng `Host(...)` thành `Host(\`javis.srv1782015.hstgr.cloud\`)`.
 > **Điểm mấu chốt:** nhãn Traefik gắn thẳng vào service, **KHÔNG khai báo
 > `networks:` / `external: traefik-proxy`** (chỗ này trước đây làm deploy báo "network not found").
-> **Caddy (`docker-compose.https.yml`) KHÔNG dùng trên Hostinger** vì cổng 80/443 đã bị Traefik của họ chiếm.
+> **Đừng ghép thêm `docker-compose.https.yml` trên Hostinger**: nó publish cổng 80/443, đụng Traefik của họ. Compose
+> Hostinger đã có sẵn gateway Caddy tự bật khi máy không có Traefik.
 > Không rành? Dùng **Cloudflare Tunnel** (mục dưới) - cho URL HTTPS mà không đụng gì tới proxy của Hostinger.
 
 **VPS có tên miền riêng - auto Let's Encrypt, đặt NGAY TRONG APP (khuyên dùng):**

@@ -258,7 +258,7 @@ Set `DOMAIN_NAME` so Hostinger's Traefik issues HTTPS:
 - **Free link** (no domain purchase): `DOMAIN_NAME=javis.<vps-hostname>.hstgr.cloud` (hostname under hPanel → VPS, e.g. `javis.srv1562015.hstgr.cloud`).
 - **Your own domain:** `DOMAIN_NAME=example.com` and point an A record at the VPS IP.
 
-Wait 1-3 minutes for the certificate, then open `https://<DOMAIN_NAME>`.
+Wait 1-3 minutes for the certificate, then open `https://<DOMAIN_NAME>`. No Traefik on the VPS (a plain Ubuntu 26 image)? Use the same link: the bundled `javis-gateway` (Caddy) issues the certificate itself when ports 80/443 are free.
 
 **Three one-time steps:**
 1. **Make the GHCR image Public:** GitHub → repo → **Packages** → `javis-os` → *Package settings* → Visibility = **Public**.
