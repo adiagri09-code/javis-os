@@ -1,5 +1,22 @@
 # Agent and skill improvement Goal progress
 
+## Current technical continuation — actual operation binding branch verified
+
+New independently authored fixture tests reuse genuine private Session, actual
+selected owner/source files, HostContextStore/CaseStore/ExperimentPlans and
+OperationExecution materialize/prepared/ledger. Root independently reviewed and
+ran3 PASS9.359s: encrypted exact link/replay/unstarted call, cold authenticated
+read after actual workspace cleanup_proven, durable default read/finish refusal
+before+after link, and protected owner-file edit rejection before binding.
+Public qualification-operation-binding records hashes/command/scope.
+
+No production changes. Candidate/static observer and historical input_version1
+fixture seams plus explicit real OperationRecords fixture reservation do not
+claim ordinary native admission/full input2 qualification. No verifier/auth pass
+was fabricated and no SDK/native/account ran. This closes the earlier static-only
+operation binding records gap; all runtime/typed provenance/report/upper-promotion
+integration work remains Phase1, actual account/business trials remain Phase2.
+
 ## Owner scheduling update — all M0–M8 code first, real trials second
 
 Direct owner update relayed2026-10-24 from chat
@@ -2632,4 +2649,3 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   passes3/3 in61s. No actual model/native-auth query or runtime
   profile change occurred. Fresh final-head Linux CI, merge and publication remain
   mandatory; this technical correction supplies no business or rollout evidence.
-
