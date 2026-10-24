@@ -1,5 +1,24 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — first two actual admission callers bound
+
+Trial owner admission and operation reserve now bind existing M0/owner authority
+before native verification. Original SQL/plan/available-slot/source checks repeat
+inside decision transactions; no synthetic attempt/call is created for preflight.
+Operation stale generation, nonpending state or prior attempt refuses before
+native observation. Historical replay remains cold. Meaningful RED5 FAIL10.378s,
+final author5 PASS13.571s and directly affected legacy39 PASS106.280s. One earlier
+expected-exception fixture mismatch is retained in evidence; existing Trial
+ValueError(trial_native_unavailable) contract is unchanged. Public
+native-admission-first2 pins the three files and all logs. Independent caller
+review and seven remaining synchronous caller bindings are still due.
+
+Earlier four implementation units are committed locally as35997184,03ce75f0,
+52a68927,3d0a02da. PR803 is still on historical4ba9624a; neither early portable
+CI nor the old native registration qualifies this branch. Parent final execution
+review is handed to the available independent reviewer under the sole serial
+app/native slot. No native/account retry, activation or deploy occurred.
+
 ## Current continuation — guarded parent, result consumers and closing evidence
 
 Release inventory has scoped independent approval10 PASS2.507s after two real

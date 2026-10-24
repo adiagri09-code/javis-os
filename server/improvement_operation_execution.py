@@ -93,9 +93,24 @@ class OperationExecution:
             if replay is not None:
                 return replay
             row = self._row(connection, principal, identifier)
+            if row["generation"] != expected_generation or row["status"] != "pending" or row["attempt"] != 0:
+                raise IM.ConflictError("operation_state_stale")
             prepared = self._current(connection, principal, row)
+            original = dict(row)
         self.host._snapshot_observe(principal, prepared[1])
-        capability = ClaudeOperationAdapter(prepared[1]["engine_config"]).verify()
+        def native_current(connection, joined):
+            for _ in range(2):
+                current = self._row(connection, principal, identifier)
+                if dict(current) != original or self._current(connection, principal, current) != prepared:
+                    raise IM.ConflictError("operation_authority_changed")
+                self.host._snapshot_observe(principal, prepared[1])
+            return "allow"
+
+        adapter = ClaudeOperationAdapter(prepared[1]["engine_config"])
+        adapter.bind_native_authority(self.assets, principal, scope_hash=IM._hash({
+            "version": 1, "kind": "operation_reserve", "brain_id": _brain(principal),
+            "request_hash": IM._hash(payload), "authority_hash": IM._hash([original, prepared])}), current=native_current)
+        capability = adapter.verify()
         if type(capability) is not dict or capability.get("supported") is not True:
             raise ValueError("operation_native_unavailable")
         from improvement_experiment_protocol import _digest

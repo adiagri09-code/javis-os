@@ -190,8 +190,22 @@ class TrialAdmission:
             plan, request, split, registry = prepared
             self._available(connection, brain, public, plan, request)
         self.host.live_guard(principal, IC._frozen(request))
+        def native_current(connection, joined):
+            # The preflight owns no attempt yet. Keep the original admission
+            # plan, available slot and actual source authority current instead.
+            for _ in range(2):
+                if self._prepare(connection, principal, public) != prepared:
+                    raise IM.ConflictError("trial_admission_authority_changed")
+                self._available(connection, brain, public, plan, request)
+                self.host.live_guard(principal, IC._frozen(request))
+            return "allow"
+
         try:
-            verified = ClaudeTrialAdapter(request["engine_config"]).verify()
+            adapter = ClaudeTrialAdapter(request["engine_config"])
+            adapter.bind_native_authority(self.assets, principal, scope_hash=IM._hash({
+                "version": 1, "kind": "trial_owner_admission", "brain_id": brain,
+                "request_hash": IM._hash(public), "authority_hash": IM._hash(prepared)}), current=native_current)
+            verified = adapter.verify()
             if type(verified) is not dict or verified.get("supported") is not True:
                 raise ValueError("trial_native_unavailable")
             IC._digest(verified.get("capability_hash"))
