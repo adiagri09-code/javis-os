@@ -32,9 +32,12 @@ actual historical SQL/Fernet rollback/concurrency proof and exact12pin early Lin
 46PASS (40058375830). Distinct permission/publication rows and gated composed
 slot3 are constraints, not enabled compose dispatch. Preserve original proposal
 cap2. Native dependency list86 invalidates older qualification; registries stay
-closed. Next bounded plan2026-10-24-compose-permission-role-contract.md connects
-explicit owner consent/current saved-input authority and existing role contracts;
-actual composer/publisher/API/UI/new-candidate checks follow before integration.
+closed. The bounded role contract is now scoped approved: compose-only requestv2,
+nativeformat2 workspace/profile/actual upstream renderer and existing ledger/usage,
+independent7PASS/14stablepins. PROFILE_SOURCES is now88; no new qualification.
+Plan2026-10-24-compose-permission-role-contract.md next connects explicit owner
+consent/current saved-input authority; compose admission, actual publisher/API/UI/
+new-candidate checks still follow before integration. Transport is not consent.
 
 ## Phase 1 — complete functioning code and technical checks for every milestone
 

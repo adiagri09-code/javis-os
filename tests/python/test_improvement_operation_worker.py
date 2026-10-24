@@ -248,6 +248,7 @@ class OperationWorkerTests(unittest.TestCase):
                     "improvement_operation_checks.py", "improvement_operation_results.py", "improvement_trial_checks.py",
                     "improvement_operation_runner.py", "improvement_operation_tasks.py", "improvement_operation_recovery.py",
                     "improvement_operation_retry.py", "improvement_operation_schema.py", "improvement_operation_records.py",
+                    "improvement_compose_schema.py", "improvement_compose_protocol.py", "improvement_harness2_compose.py",
                     "improvement_improver_inputs.py", "improvement_generation_protocol.py", "improvement_comparison_plans.py",
                     "improvement_proposals.py", "improvement_skill_candidates.py", "improvement_role_workflow.py",
                     "improvement_semantic_review.py", "improvement_semantic_protocol.py", "improvement_semantic_records.py",
@@ -267,7 +268,8 @@ class OperationWorkerTests(unittest.TestCase):
                     "improvement_candidate_records.py", "improvement_candidate_schema.py", "improvement_skill_patch.py",
                     "improvement_comparison_schedule.py", "improvement_view_admission.py", "improvement_view_materialization.py",
                     "improvement_view_qualification.py", "improvement_view_qualification_history.py",
-                    "improvement_skill_asset_broker.py", "improvement_skill_asset_proof.py"}
+                    "improvement_skill_asset_broker.py", "improvement_skill_asset_proof.py", "improvement_native_formats.py",
+                    "improvement_qualification_session.py"}
         self.assertEqual(set(IC.PROFILE_SOURCES), expected)
         self.assertEqual(len(IC.PROFILE_SOURCES), len(expected))
         import hashlib

@@ -1,5 +1,34 @@
 # Agent and skill improvement Goal progress
 
+## Compose role contract — scoped component approved
+
+Closed compose requestv2 requires composer/improve_compose and authorization ID;
+old propose/repair/semantic stay exactclosedv1. Actual workspace/worker identity
+and profile now transport compose only in nativeformat2. Actual OperationProfile
+renderer calls unchanged pinned compose_roundt=k1 through the existing closed
+adapter. Existing CallLedger purpose and actual-call usage references recognize
+compose. Actual legacy worker refuses before verifier/engine/ACK/readiness.
+
+Root RED6:historical1PASS/new1FAIL4ERROR/.179s, then GREEN6/.627s plus actual
+legacy-worker refusal1/.357s. Scoped5-script regression: shared ledger manual
+scriptPASS0errors; workspace8/profile7/worker11/usage8. Initial worker inventory
+test omitted5actual dependencies; add explicit names while preserving exact
+set/length/rawhash assertions, focusedGREEN1/.055s. Actual309 native qualification
+test remains untouched/open. Independent root7PASS1.174s/14stablepins/no findings,
+report0f260a2f44ac06ac9607fcb699369a8484ce808b7ae64a179bdf0a743eb1b8ab.
+Public2026-10-24-compose-role-contract.json SHA
+c7d30ef146d5b39e1fa1c63b3f3800128d9a886149aadc39a000cef1bf1436c5.
+
+PROFILE_SOURCES88/staticrawprofilee995019a433b3ddf65fdc63b30751a25038e9b24901ee01007ce8cbefdc7fca8
+has no new qualification/registration. Reuse unchanged upstream AST/license and
+schema46 Linux evidence; no repeated portable run for this bounded transport
+delta. Final exact-head full required CI and native dummy qualification stay
+mandatory. No compose consent/current-source service or OperationRecords/Execution
+compose-phase admission connected yet; transport/ledger support is not enabled
+dispatch, query permission, typed publication, new bundle, business gain or live
+activation. Next explicit owner permission/revocation/current saved-input guard,
+then actual owned admission/publisher/new checks/API/UI, library thereafter.
+
 ## Schema8 compose foundation — scoped approved, runtime still open
 
 Four-table checked rebuild preserves actual schema7 prepared operation/lease/

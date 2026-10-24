@@ -1,5 +1,12 @@
 # Explicit compose permission and the existing owned role contract
 
+Transport checkpoint: closed compose requestv2/worker/nativeformat2 workspace and
+actual profile→upstream renderer, existing ledger purpose/usage references are
+scoped approved; independent7PASS/14stablepins. Existing3roles remain closedv1.
+No OperationRecords/Execution phase admission or permission/current-source service
+has been enabled. Public evidence2026-10-24-compose-role-contract.json retains
+RED/GREEN/regression, exact dependency test correction and native limitations.
+
 Goal12–17 and owned-compose-runtime plan apply. Complete/review the current
 schema8 foundation before this unit's production edits. This is the next
 bounded runtime connection, not completed compose publication or M0–M8.

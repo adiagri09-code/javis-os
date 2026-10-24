@@ -30,6 +30,13 @@ def operation_system_prompt(manifest):
 
 
 def operation_user_prompt(manifest):
+    if manifest['request']['kind'] == 'compose':
+        from improvement_operation_protocol import operation_request
+        from improvement_compose_protocol import render_compose_input
+        operation_request(manifest['request'])
+        if manifest['version'] != 2:
+            raise ValueError('compose_native_input2_required')
+        return _json({'request': manifest['request'], 'compose_task': json.loads(render_compose_input(manifest['data']))})
     if manifest['request']['kind'] == 'semantic' and manifest['data'].get('kind') == 'authorized_semantic_review':
         from improvement_semantic_protocol import render_semantic_input
         return _json({'request': manifest['request'], 'semantic_task': json.loads(render_semantic_input(manifest['data']))})
