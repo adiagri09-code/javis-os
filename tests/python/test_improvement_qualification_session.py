@@ -98,6 +98,19 @@ class QualificationSessionTests(unittest.TestCase):
         self.assertNotIn('CLAUDE_CONFIG_DIR', first)
         self.assertNotIn('host-key-never-copy', str(first))
 
+    def test_private_environment_supplies_closed_wire_paths_when_posix_base_omits_appdata(self):
+        session = self.open(); cwd = session.root / 'portable-trial'; cwd.mkdir()
+        original = self.m.worker_environment
+        def posix_base(*args, **kwargs):
+            return {name: value for name, value in original(*args, **kwargs).items()
+                if name not in ('APPDATA', 'LOCALAPPDATA')}
+        with patch.object(self.m, 'worker_environment', side_effect=posix_base):
+            environment = session.environment(cwd)
+        home = Path(environment['HOME'])
+        self.assertEqual(environment['APPDATA'], str(home / 'AppData' / 'Roaming'))
+        self.assertEqual(environment['LOCALAPPDATA'], str(home / 'AppData' / 'Local'))
+        self.assertEqual(list(home.iterdir()), [], 'preparation leaves the actual private HOME empty')
+
     def test_foreign_workspace_and_closed_session_never_get_an_environment(self):
         session = self.open()
         outside = Path(tempfile.mkdtemp()); self.addCleanup(lambda: outside.rmdir())
