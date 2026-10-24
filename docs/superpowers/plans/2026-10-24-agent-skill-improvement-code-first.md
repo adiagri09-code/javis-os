@@ -51,9 +51,13 @@ unknown that needs a real engine without repeatedly attempting real inference.
 
 Immediate continuation: finish the concrete Session/owned host/worker/runtime
 integration using actual same Trial/Operation runners and localhost dummy-only
-provider. Operation binding execution proof is being authored as a focused real
-private-store fixture test; production source/lease/materialization/ledger checks
-are not patched. Follow with D2/E/F and the remaining milestone technical plans.
+provider. Operation binding proof is preserved56046f66; ordinary named-skill D2
+snapshot/private API lifecycle7ee04de5 and narrow upstream proposer method90821020
+have scoped technical approval, with their explicit native/helper/quality limits.
+Next close upper engineering-store comparison/selection/role replay/publication
+fences using the existing authenticated domain helper, then resume typed owned
+qualifier and the remaining D2/E/F and later milestone technical dependencies.
+Source/lease/materialization/ledger gates remain real and unpatched.
 Do not reuse historical native qualification for changed source or mistake pure
 startup3 parsing for native provenance. Integration remains a reviewed exact-head
 deliverable, not approval to activate on a real brain.
