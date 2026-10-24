@@ -281,3 +281,48 @@ Giữ hash nguồn gốc, toàn bộ lineage và bằng chứng cũ; ghi hash m�
     và phần phải viết riêng. Bảo toàn công việc đang chạy, tiếp tục Goal và
     không hỏi lại xác nhận thường lệ.
 
+## 15. Bổ sung tận dụng prompt và cấu trúc bằng chứng cho phần đã viết — 24/10/2026
+
+Chỉ dẫn trực tiếp tiếp theo của chủ từ cùng chat
+`01a16662-a77c-72e2-9c40-265c5659d5cc`, mở rộng có mục tiêu mục14, không cho
+refactor diện rộng. Goal trước mục15 có SHA-256
+`77310e4c4635b012efb8f565bd842d314c82d6e2d168b90dd1ef006f484a2b2b`;
+nguồn/hash/evidence lịch sử giữ nguyên. Nguồn Harness² vẫn pin
+`1cfe254e8d25b15f37048c3730134686abe60335`.
+
+1. Sau khi bảo toàn đơn vị đang làm, chọn delta nhỏ ở
+   `server/improvement_generation_protocol.py:render_proposer_input` và consumer
+   thật, đối chiếu `harness2/core/prompts.py`. Tăng hướng dẫn tìm lỗi sớm nhất
+   có bằng chứng, giữ hai góc `execution/domain_process`, sửa nhỏ đúng nguyên
+   nhân, nêu tác dụng dự kiến/rủi ro, KEEP_BASE/no-change khi thiếu căn cứ.
+   Giữ JSON/patch contract, giới hạn candidate/repair, byte offsets và luật chủ;
+   không lấy các quyền sửa system prompt/guardrails/plugins của upstream.
+2. Dùng cấu trúc reflection: chỉnh sửa cụ thể → run/trace/nguồn được phép →
+   khác biệt hành vi quan sát → helped/hurt/no observed effect/confounded.
+   Không suy nguyên nhân từ selection win, nhiều sửa cùng lúc hoặc một rollout.
+   Kết quả tổng thể và đánh giá ý nghĩa/luật chủ là bằng chứng riêng.
+3. Recipe/report còn thiếu dùng bài học có điều kiện áp dụng và evidence,
+   cho phép không tạo bài học. Không nạp cả thư viện. Phần đã có ưu tiên
+   projection/renderer/adapter hẹp; giữ lịch sử/schema/format đã phát hành,
+   chỉ version/migrate khi có nhu cầu thật, không để giống upstream.
+4. Pure anonymization/seeded order của `selection.py` là ưu tiên sau, chỉ khi
+   có điểm nối rõ. Giữ baseline, comparator/ngưỡng độc lập; không lấy
+   finals-only selection_pool hoặc thay bằng phán xét model.
+5. Chỉ dùng nguồn được cấp, không thêm raw CoT/secret/holdout/đáp án hay
+   checker-private vào input. Giữ native/provider/asset-use unknown và giới
+   hạn quan sát; khác giả định evidence thì chỉ lấy cấu trúc lập luận phù hợp.
+6. Không làm lại store/sandbox/worker/native qualification/ledger/usage/quyền/
+   lifecycle để reuse prompt. Không nghiên cứu/review lại toàn nhánh. Ghi đúng
+   function/SHA upstream, delta, callers và test ảnh hưởng trong reuse map.
+7. Khi trích code/prompt giữ Apache-2.0/copyright/NOTICE và provenance/sửa đổi.
+   Review contract, kiểm hành vi renderer/evidence/boundary/output compatibility
+   và regression ảnh hưởng; không chỉ assert một câu literal. Đổi nguồn thuộc
+   native footprint phải làm mất hiệu lực/tái qualification theo cơ chế thật.
+8. Giữ review độc lập theo delta và full CI commit cuối. Giai đoạn1 chỉ code/
+   kiểm kỹ thuật/mô phỏng; model/account/nghiệp vụ/canary ở Giai đoạn2. Không
+   tuyên bố prompt nâng chất lượng hay tiết kiệm token khi chưa đo.
+9. Lưu bổ sung vào Goal/progress/checkpoint/plan/reuse map, bảo toàn việc đang
+   làm và lineage. Tiếp tục từ checkpoint thuận tiện, không restart hay xin
+   lại xác nhận thông thường. Mục tiêu là cải thiện đề xuất/bằng chứng cụ thể,
+   không kéo dài việc bằng viết lại hạ tầng.
+

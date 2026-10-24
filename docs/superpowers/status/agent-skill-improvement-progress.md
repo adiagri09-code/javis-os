@@ -1,5 +1,23 @@
 # Agent and skill improvement Goal progress
 
+## Owner prompt/evidence update — narrow existing renderer improvement next
+
+Goal§15 persists the next direct owner directive from the same authorized chat:
+after preserving the in-progress D2 snapshot unit, inspect pinned upstream
+prompts/context/selection as relevant and adapt a narrow useful proposer/evidence
+renderer delta. Keep execution/domain_process, JSON/patch/repair/byte-offset/owner
+contracts, privacy/holdout and all gates. Use explicit edit→allowed source/trace→
+observed behavior→helped/hurt/no effect/confounded reasoning, KEEP_BASE if evidence
+is insufficient; no causal inference from winner/one rollout, no full-library
+loading or infrastructure/schema rewrite. Actual prompt extraction must preserve
+Apache-2.0/copyright/provenance. Record changed source footprint and invalidate
+qualification as applicable, never reuse mismatched evidence. No quality/token
+savings claim before actual Phase2 measurement. Next unit remains queued until
+the current D2 integration is preserved and reviewed; no repeat broad audit.
+Post§15 Goal SHA-256 e868339ebd3ad1a73fe9faea13b74e2af959c8b3f8148eb4c2ddbae63ac8fc20;
+pre§15 77310e4c4635b012efb8f565bd842d314c82d6e2d168b90dd1ef006f484a2b2b.
+All previous source/spec/evidence hashes stay historical.
+
 ## Current owner reuse update and D2 ordinary task integration
 
 Goal§14 persists the direct2026-10-24 owner instruction from chat

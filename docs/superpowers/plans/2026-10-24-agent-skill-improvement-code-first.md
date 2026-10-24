@@ -8,6 +8,10 @@ each unwritten component at Harness²1cfe254e8d25b15f37048c3730134686abe60335.
 Use [the incremental reuse map](2026-10-24-harness2-reuse-map.md); inherit both
 addenda in later plans. Preserve Javis baseline policy/authority/ledger and all
 gates; no rewrite of completed components for a reuse percentage.
+Goal section15 permits a narrow useful prompt/evidence improvement in existing
+render_proposer_input after preserving the in-progress D2 unit. Inspect pinned
+upstream proposer/reflection prompt functions first; preserve JSON/patch/owner/
+privacy contracts and historical/source qualification. Do not rebuild infrastructure.
 It supersedes older plan instructions to run a real account feasibility next.
 No account inference is currently owned/running: recent tests are fixture/local
 preparation and isolated CI only. No restart, deployment or activation occurs.

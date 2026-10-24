@@ -6,6 +6,13 @@ and its immediate dependencies; append an actionable decision before writing it.
 No code has been copied/imported by the first decision below. A future vendor
 must retain Apache-2.0/copyright/NOTICE as applicable plus exact provenance and
 changes; separately assess dependencies and never implicitly copy datasets.
+Goal§15 additionally authorizes a narrow useful delta to existing proposer
+prompt/evidence rendering, after the current D2 task unit is preserved. Inspect
+the exact prompt functions before coding, preserve execution/domain_process,
+JSON/patch/limits/owner and authorized-data boundaries. Link edit→permitted
+evidence→observed difference→helped/hurt/no effect/confounded; allow KEEP_BASE.
+No rewrite of infrastructure, schema/history or whole-library prompt loading.
+This is the next targeted reuse assessment, not an integration claim.
 
 | Needed Javis behavior | Inspected upstream file/function and Git blob SHA | Decision | Reason and contract checks |
 |---|---|---|---|
