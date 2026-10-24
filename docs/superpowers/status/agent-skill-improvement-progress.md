@@ -1,5 +1,15 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — parent final independent execution approved
+
+Independent reviewer m2d1_whole_review completed parent10 PASS4.312s and actual
+isolated SDK-env1 PASS1.259s with all five source/test pins and driver unchanged.
+No skips, native child or account calls. Scoped parent/adapters review is clean;
+it excludes that reviewer's own runner code and all new admission callers.
+Public native-parent-adapters now records these exact independent log/report
+hashes. Earlier pending-agent statements below are historical. Root retains the
+serial test slot for the three frozen-plan admission callers' RED/GREEN work.
+
 ## Current continuation — first two actual admission callers bound
 
 Trial owner admission and operation reserve now bind existing M0/owner authority

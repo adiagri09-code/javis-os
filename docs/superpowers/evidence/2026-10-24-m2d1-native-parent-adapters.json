@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "status": "author_verified_independent_static_review_resolved_execution_review_pending",
+  "status": "scoped_independent_approval",
   "pins": {
     "server/improvement_native_parent.py": "f8ca3bc092d24a2dca577c8231f8c3067826456676fac6266b85641e7e135c1a",
     "server/improvement_claude.py": "2f69c489040e56db6875567b1ff45ddd49268aebfa90b3dcabe9bb40e6445c82",
@@ -39,10 +39,10 @@
     }
   ],
   "review": {
-    "reviewer": "debug_image_handle_probe",
-    "finding": "Query environment must include three actual SDK-added keys; corrected and actual SDK reproduction passes",
-    "static_open_findings": 0,
-    "independent_execution": "pending_agent_usage_limit"
+    "reviewer": "m2d1_whole_review",
+    "open_scoped_findings": 0,
+    "report_sha256": "651e86079d841e6f4cdc9e2d483461a6a8d5cead9bd639288aaf166439f0bc05",
+    "scope": "Actual parent and adapters only; excludes self-authored runners and new admission callers"
   },
   "behavior": [
     "Actual adapters bind concrete M0/principal/current authority and same-loop lock; no matching reviewed release can fall back to unbound legacy observer",
@@ -54,8 +54,23 @@
   "limits": [
     "Parent ten tests use engineering guardian/release seams with actual SQLite and encrypted blobs",
     "Actual SDK116 builder uses fake Capture/IO, no native child; test aligns declared source-policy pin only, raw SDK dispatch unchanged",
-    "Independent static reviewer stopped at account usage limit before final execution; author tests are not independent execution",
     "Admission/reserve callers, materializer flip and actual whole-pipeline qualification remain pending; no account retry or activation"
   ],
-  "local_ledger": ".superpowers/sdd/2026-10-24-agent-skill-improvement-native-parent"
+  "local_ledger": ".superpowers/sdd/2026-10-24-agent-skill-improvement-native-parent",
+  "independent": [
+    {
+      "tests": 10,
+      "seconds": 4.312,
+      "exit": 0,
+      "log": ".superpowers/sdd/2026-10-24-agent-skill-improvement-native-parent/whole-review-parent10.log",
+      "log_sha256": "d92c87ddb5bca92cb0a78c8a5670f5ccd07b2d7f2dd3f37124fefe8d684a6767"
+    },
+    {
+      "tests": 1,
+      "seconds": 1.259,
+      "exit": 0,
+      "log": ".superpowers/sdd/2026-10-24-agent-skill-improvement-native-parent/whole-review-sdk-env1.log",
+      "log_sha256": "30288842504db7f3b9fb7406bb6c9996d8da6c17a6cbdf65a4be577776a65335"
+    }
+  ]
 }
