@@ -8,6 +8,10 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.300.0] - 2026-10-24
+### Fixed
+- **Hostinger on Ubuntu 26 (no Traefik) still gets HTTPS.** (in progress)
+
 ## [0.298.0] - 2026-10-23
 ### Fixed
 - **A voice picked on one device now applies everywhere.** The reading voice used to live only in the open browser, so picking a female voice on the laptop left the phone on its old voice however many times you saved. It is now saved in Javis, so every device and the voice notes sent through Telegram and Zalo use it.
