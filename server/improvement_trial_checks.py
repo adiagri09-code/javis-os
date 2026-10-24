@@ -113,10 +113,12 @@ def _receipt(events, workspace, manifest, request, capability):
         view_trial = request.get('version') == 4
         asset_reads = manifest['version'] == 3
         native_reads = manifest['version'] == 4
+        native_baseline = manifest['version'] == 5
         _fields(receipt, _RECEIPT_FIELDS | ({'effective_view'} if view_trial else set())
                 | ({'asset_read_proofs'} if asset_reads else set())
-                | ({'read_outcome_proofs', 'native_input_delivery'} if native_reads else set()))
-        if (type(receipt["version"]) is not int or receipt["version"] != (4 if native_reads else 3 if asset_reads else 2 if view_trial else 1)
+                | ({'read_outcome_proofs'} if native_reads else set())
+                | ({'native_input_delivery'} if native_reads or native_baseline else set()))
+        if (type(receipt["version"]) is not int or receipt["version"] != (5 if native_baseline else 4 if native_reads else 3 if asset_reads else 2 if view_trial else 1)
                 or type(receipt["attempt"]) is not int or event.get("hash") != _hash(receipt)
                 or (receipt["session_id"] is not None and not isinstance(receipt["session_id"], str))
                 or (asset_reads and type(receipt['asset_read_proofs']) is not list)
@@ -325,8 +327,10 @@ def execution_invariants(request, manifest, workspace_receipt, packets, capabili
                 "baseline_context_hash", "target_generations", "deadline_at"}, {"qualification_id"})
         if request.get("version") != 3:
             CaseStore._pin_shape(request["pins"])
-        if request['version'] != 4 and manifest['version'] != 1:
+        if request['version'] != 4 and manifest['version'] not in (1, 5):
             raise ValueError('legacy_workspace_required')
+        if manifest['version'] == 5 and request['variant'] != 'baseline':
+            raise ValueError('native_baseline_variant_required')
         _digest(capability_hash)
         _fields(workspace, {"trial_id", "attempt", "path", "input_path", "output_root", "input_hash", "effective_hash"})
         if (type(request["version"]) is not int or request["version"] not in (1, 2, 3, 4) or request["variant"] not in ("baseline", "candidate")
@@ -339,14 +343,15 @@ def execution_invariants(request, manifest, workspace_receipt, packets, capabili
             if not isinstance(engine.get(key), str) or not engine[key]:
                 raise ValueError("invalid_execution_configuration")
         native = None
-        if manifest['version'] == 4:
+        if manifest['version'] in (4, 5):
             from improvement_native_trace_checks import validate_native_trace
             from improvement_store import _json
             prompt = _json({'task': manifest['case']['task'], 'fixtures': [
                 {key: item[key] for key in ('snapshot_id', 'source')} for item in manifest['case']['fixtures']]})
             native = validate_native_trace(packets, kind='trial', receipt=workspace, pin=engine,
                 capability_hash=capability_hash, system_prompt=trial_system_prompt(manifest), user_prompt=prompt,
-                data_hash=workspace['input_hash'], read_decision=read_decision)
+                data_hash=workspace['input_hash'], read_decision=read_decision,
+                tool_policy='baseline_inline' if manifest['version'] == 5 else 'pinned_skill')
             packets = native['worker_bodies']
         elif any(packet.get('version') == 2 for packet in packets):
             raise ValueError('legacy_workspace_native_trace_mismatch')

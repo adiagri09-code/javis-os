@@ -31,7 +31,7 @@ def _row(identifier, verdict, reason, **evidence):
 def _refuse(): raise ValueError('invalid_native_execution_trace')
 
 
-def _dispatch(value, *, purpose, kind, pin, receipt, system_prompt):
+def _dispatch(value, *, purpose, kind, pin, receipt, system_prompt, tool_policy):
     _fields(value, {'version', 'purpose', 'basis', 'argument_consistency', 'environment_hash', 'source_policy_hash'})
     if (type(value['version']) is not int or value['version'] != 1 or value['purpose'] != purpose
             or value['basis'] != 'native_argument_consistency'): _refuse()
@@ -48,11 +48,11 @@ def _dispatch(value, *, purpose, kind, pin, receipt, system_prompt):
     else:
         _fields(actual, common | {'verdict', 'basis', 'model', 'reasoning', 'prompt_hash', 'tools', 'tool_policy',
             'cli_path_hash', 'settings_hash', 'mcp_config_hash', 'expected_hash', 'coverage'})
-        tools = ['mcp__fixture__fixture_read'] + (['mcp__skill__skill_asset_read'] if kind == 'trial' else [])
-        servers = ('fixture', 'skill') if kind == 'trial' else ('fixture',)
+        tools = ['mcp__fixture__fixture_read'] + (['mcp__skill__skill_asset_read'] if tool_policy == 'pinned_skill' else [])
+        servers = ('fixture', 'skill') if tool_policy == 'pinned_skill' else ('fixture',)
         policy = {'version': 2, **{key: pin[key] for key in ('cli_path', 'model', 'reasoning')},
             'prompt_hash': _sha(system_prompt), 'cwd': receipt['path'], 'tools': tools,
-            'tool_policy': 'pinned_skill' if kind == 'trial' else 'fixture_only'}
+            'tool_policy': tool_policy}
         expected = {'version': 2, 'verdict': 'pass', 'basis': 'query_argument_consistency',
             **{key: policy[key] for key in ('model', 'reasoning', 'prompt_hash', 'tools', 'tool_policy')},
             'cli_path_hash': _sha(pin['cli_path']), 'cwd_hash': _sha(receipt['path']),
@@ -66,7 +66,7 @@ def _dispatch(value, *, purpose, kind, pin, receipt, system_prompt):
 
 
 def validate_native_trace(packets, *, kind, receipt, pin, capability_hash, system_prompt,
-        user_prompt, data_hash, read_decision=None):
+        user_prompt, data_hash, read_decision=None, tool_policy=None):
     """Validate complete raw V2 records and return defensive bodies/joins/checks.
 
     ``read_decision(joined)`` must independently reread the actual durable M0
@@ -78,6 +78,10 @@ def validate_native_trace(packets, *, kind, receipt, pin, capability_hash, syste
     hashes must agree. Hashes alone cannot reconstruct the query derivation:
     the qualified parent must check its actual frozen values before persisting.
     """
+    if tool_policy is None: tool_policy = 'pinned_skill' if kind == 'trial' else 'fixture_only'
+    if (type(kind) is not str or type(tool_policy) is not str or not (
+            (kind == 'trial' and tool_policy in ('pinned_skill', 'baseline_inline'))
+            or (kind == 'operation' and tool_policy == 'fixture_only'))): _refuse()
     if type(packets) is not list or not 1 <= len(packets) <= 100000: _refuse()
     _digest(capability_hash); _digest(data_hash)
     binding = observation_binding(packets[0], kind=kind, receipt=receipt)
@@ -116,7 +120,8 @@ def validate_native_trace(packets, *, kind, receipt, pin, capability_hash, syste
         elif event == 'dispatch_observed':
             purpose = body['purpose']
             if len(dispatches) >= 4 or purpose != PURPOSES[len(dispatches)]: _refuse()
-            _dispatch(body['dispatch'], purpose=purpose, kind=kind, pin=pin, receipt=receipt, system_prompt=system_prompt)
+            _dispatch(body['dispatch'], purpose=purpose, kind=kind, pin=pin, receipt=receipt,
+                system_prompt=system_prompt, tool_policy=tool_policy)
             current = body['dispatch']
             if environment is None: environment, source_policy = current['environment_hash'], current['source_policy_hash']
             if (purpose != 'query' and current['environment_hash'] != environment) or current['source_policy_hash'] != source_policy:

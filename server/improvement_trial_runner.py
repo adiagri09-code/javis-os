@@ -388,7 +388,7 @@ class TrialRunner:
                 "capability_hash": verified["capability_hash"]}
             phase = "worker_failed"
             terminal = None
-            if manifest['version'] == 4:
+            if manifest['version'] in (4, 5):
                 native_evidence = _NativeRunnerEvidence(append=self.trials.append_observation, get=self.trials.get,
                     principal=principal, identifier=trial_id, attempt=claimed['attempt'], token=token,
                     lock=lock, authority=closing_authority, observe=observe)

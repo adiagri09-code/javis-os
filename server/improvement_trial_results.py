@@ -225,7 +225,7 @@ class TrialResults:
             packets = [reader._decode(brain, record) for record in records]
             native = None
             decision_reader = None
-            if manifest['version'] == 4:
+            if manifest['version'] in (4, 5):
                 from improvement_native_trace_checks import validated_history, validate_native_trace, require_durable_allow
                 from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
                 from improvement_sandbox import trial_system_prompt
@@ -239,7 +239,8 @@ class TrialResults:
                     {key: item[key] for key in ('snapshot_id', 'source')} for item in manifest['case']['fixtures']]})
                 native = validate_native_trace(packets, kind='trial', receipt=workspace, pin=request['engine_config'],
                     capability_hash=capability_hash, system_prompt=trial_system_prompt(manifest), user_prompt=prompt,
-                    data_hash=workspace['input_hash'], read_decision=lambda joined: image_decisions.read(principal, joined, scope_hash=scope, connection=connection))
+                    data_hash=workspace['input_hash'], read_decision=lambda joined: image_decisions.read(principal, joined, scope_hash=scope, connection=connection),
+                    tool_policy='baseline_inline' if manifest['version'] == 5 else 'pinned_skill')
                 require_durable_allow(native)
             artifact_hash = self._artifact_hash(connection, row, workspace, contract)
             private = {"id": case["id"], "answer": json.loads(self.trials.blobs.read(brain, case["answer_hash"])),

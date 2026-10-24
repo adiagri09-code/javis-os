@@ -1,5 +1,23 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — baseline native result/runner consumers approved
+
+Validated baseline5 now reaches exact receipt/delivery checks, whole V2 product
+and result publication, four durable decisions with final transaction reread,
+cold authentication after cleanup, and native runner closing/late/usage handling.
+Policy derives from actual validated manifest, not receipt; request1/2/3 baseline
+only, no paired-view downgrade. Missing delivery/decisions and asset reading/
+reasoning/provider stay UNKNOWN. No invented view or read-outcome fields accepted.
+Author10 PASS13.183s; independent58 PASS80.353s total (new10/trace12/checks29/
+results7), all10 pins stable, no findings. Public native-baseline-consumers records
+RED/GREEN/fixture correction lineage and review's narrow runner-guard scope.
+
+Producers/global runtime selection/registration remain unchanged. Next actual
+materializers choose explicit5/4/2 from exact host-pinned planned new profile,
+preserve old formats and recheck source after native baseline read. No native
+child/account activation; final-source qualification/full final CI still due.
+
+
 ## Current continuation — baseline guarded worker/parent routes approved
 
 Explicit baseline5 now follows actual worker/adapter/parent guarded routes with

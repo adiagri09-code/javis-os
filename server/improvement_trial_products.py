@@ -93,11 +93,13 @@ class TrialProducts:
                 (row['id'], row['attempt'])).fetchone()
             workspace = json.loads(attempt['workspace_json'])
             manifest = self.trials.workspace.validate(workspace)
-            if manifest['version'] != 4 or IM._hash(manifest) != attempt['materialization_hash']:
+            if manifest['version'] not in (4, 5) or IM._hash(manifest) != attempt['materialization_hash']:
                 raise IM.ConflictError('trial_native_materialization_mismatch')
             decoded = {item['sequence']: packet for item, packet in zip(records, packets)}
             validated_history(records, lambda item: decoded[item['sequence']], kind='trial', receipt=workspace)
             request = json.loads(row['request_json']); pin = request['engine_config']
+            if manifest['version'] == 5 and (request['version'] == 4 or request['variant'] != 'baseline'):
+                raise IM.ConflictError('trial_native_baseline_request_mismatch')
             ready = [packet['body'] for packet in packets if packet['body']['type'] == 'worker_ready']
             if len(ready) != 1 or principal is None: raise IM.ConflictError('trial_native_product_boundary_missing')
             capability = ready[0]['capability_hash'] if capability_hash is None else capability_hash
@@ -107,7 +109,8 @@ class TrialProducts:
                 {key: item[key] for key in ('snapshot_id', 'source')} for item in manifest['case']['fixtures']]})
             native = validate_native_trace(packets, kind='trial', receipt=workspace, pin=pin, capability_hash=capability,
                 system_prompt=trial_system_prompt(manifest), user_prompt=prompt, data_hash=workspace['input_hash'],
-                read_decision=lambda joined: decisions.read(principal, joined, scope_hash=scope, connection=connection))
+                read_decision=lambda joined: decisions.read(principal, joined, scope_hash=scope, connection=connection),
+                tool_policy='baseline_inline' if manifest['version'] == 5 else 'pinned_skill')
             require_durable_allow(native)
             packets = native['worker_bodies']
         elif records[-1]['kind'] != 'worker_complete':
