@@ -1,0 +1,10 @@
+{
+  "server/improvement_compose_permissions.py": "5bbb0441916f4d28c06316e929359c9a3e13501d2683af01d4cb5f525384efd6",
+  "server/improvement_operation_records.py": "0f1cdd4ef35cc4b365323c9b3172f94c2aff30f6b482dde18a691ef3f5ec7af5",
+  "server/improvement_operation_execution.py": "2abe4eb918e60990713b0093ebcb200d67aa0270f62d83a356227a9b3ab4fdfd",
+  "server/improvement_native_protocol.py": "655caf3a44920fbdf89b6b9c58174914e041f8259133e62a283a7e8d53822f6f",
+  "server/improvement_claude.py": "e1e7da2fdcf812090a0493a40fd422248ce1d06cbc8826212803540b36e6969b",
+  "tests/python/test_improvement_compose_admission.py": "d86cf36e720a157c0d4108d5198988ff0c19da73246b4ac42f37d9a5f10c4c42",
+  "tests/python/test_improvement_compose_admission_races.py": "7bd3c537dc57cc81bb39887021a81e6cdf12fab98e8f759aa75e0be52fa99671",
+  "tests/python/test_improvement_operation_worker.py": "660fe6fbce0030d2cd70ccd013761419046b2eb53e70a13fa331b78bda8dd535"
+}

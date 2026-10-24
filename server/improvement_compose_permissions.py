@@ -3,7 +3,8 @@
 Consent is immutable M0-linked history with a separately revocable grant. This
 service never dispatches an operation/model or grants edit/activation authority.
 Current checks reuse the complete existing input-basis hash rather than copying
-the trial ledger into another authority store. Operation admission follows later.
+the trial ledger into another authority store. Only authenticated operation
+creation may account for the host's own experiment generation mutation.
 """
 from __future__ import annotations
 
@@ -27,6 +28,71 @@ from improvement_trial_records import _brain
 
 _META = {'authorization_id', 'experiment_id', 'context_id', 'input_hash', 'basis_hash',
          'guard_blob_hash', 'experiment_generation', 'generation', 'status'}
+
+
+def _permission_metadata(assets, connection, row):
+    events = list(connection.execute("SELECT * FROM improvement_events WHERE brain_id=? AND operation='compose_authorize' "
+        "AND json_extract(result_json,'$.authorization_id')=? LIMIT 2", (row['brain_id'], row['id'])))
+    if len(events) != 1:
+        raise AssetUnavailable('compose_permission_history_unavailable')
+    event = events[0]
+    value = json.loads(event['result_json'])
+    if type(value) is not dict or set(value) != _META:
+        raise AssetUnavailable('compose_permission_history_changed')
+    _generation(value['experiment_generation'])
+    for key in ('input_hash', 'basis_hash', 'guard_blob_hash'): _digest(value[key])
+    expected = {'authorization_id': row['id'], **{key: row[key] for key in
+        ('experiment_id', 'context_id', 'input_hash', 'basis_hash')}, 'generation': 1, 'status': 'active'}
+    if any(value.get(key) != item for key, item in expected.items()) or event['actor'] != row['actor']:
+        raise AssetUnavailable('compose_permission_history_changed')
+    payload = {'experiment_id': row['experiment_id'], 'expected_generation': value['experiment_generation']}
+    if assets._replay(connection, row['brain_id'], event['event_key'], 'compose_authorize', payload) != value:
+        raise AssetUnavailable('compose_permission_history_changed')
+    return {**value, 'generation': row['generation'], 'status': row['status']}
+
+
+def operation_permission(connection, assets, principal, request, *, operation=None):
+    """SQL-only compose admission shared with the actual metadata owner.
+
+    This is not the source/blob guard: the concrete host must also call current.
+    No caller-supplied operation row or ambiguous creation history is accepted.
+    """
+    from improvement_operation_protocol import operation_request
+    from improvement_operation_records import OperationRecords
+    request = operation_request(request)
+    if request['kind'] != 'compose':
+        raise ValueError('compose_operation_required')
+    brain = _brain(principal)
+    require_product_store(assets, principal, connection=connection)
+    row = ComposePermissions._row(connection, brain, request['compose_authorization_id'])
+    metadata = _permission_metadata(assets, connection, row)
+    if row['status'] != 'active' or row['generation'] != 1:
+        raise PermissionError('compose_permission_revoked')
+    if any(request[key] != row[key] for key in ('experiment_id', 'context_id', 'definition_hash', 'input_hash')):
+        raise IM.ConflictError('compose_operation_permission_changed')
+    experiment = connection.execute('SELECT * FROM improvement_experiments WHERE id=? AND brain_id=?',
+        (row['experiment_id'], brain)).fetchone()
+    if experiment is None:
+        raise PermissionError('compose_experiment_unavailable')
+    generation = metadata['experiment_generation']
+    if operation is not None:
+        actual = connection.execute('SELECT * FROM improvement_operations WHERE id=? AND brain_id=?',
+            (operation['id'], brain)).fetchone()
+        if actual is None or dict(actual) != dict(operation) or json.loads(actual['request_json']) != request:
+            raise IM.ConflictError('compose_operation_changed')
+        public = OperationRecords._public(actual)
+        initial = {**public, 'status': 'pending', 'generation': 1, 'attempt': 0}
+        events = list(connection.execute("SELECT * FROM improvement_events WHERE brain_id=? AND operation='operation_create' "
+            "AND json_extract(result_json,'$.operation_id')=? LIMIT 2", (brain, actual['id'])))
+        payload = {'request': request, 'input_blob_hash': actual['input_blob_hash'], 'expected_generation': generation}
+        if (len(events) != 1 or assets._replay(connection, brain, events[0]['event_key'], 'operation_create', payload) != initial
+                or experiment['updated_at'] != actual['created_at']):
+            raise IM.ConflictError('compose_operation_history_changed')
+        generation += 1
+    if (experiment['generation'] != generation or experiment['phase'] not in ('probing', 'comparing')
+            or experiment['context_id'] != row['context_id'] or experiment['definition_hash'] != row['definition_hash']):
+        raise IM.ConflictError('compose_operation_state_changed')
+    return row, metadata
 
 
 class ComposePermissions:
@@ -59,24 +125,7 @@ class ComposePermissions:
         return dict(row)
 
     def _metadata(self, connection, row):
-        events = list(connection.execute("SELECT * FROM improvement_events WHERE brain_id=? AND operation='compose_authorize' "
-            "AND json_extract(result_json,'$.authorization_id')=? LIMIT 2", (row['brain_id'], row['id'])))
-        if len(events) != 1:
-            raise AssetUnavailable('compose_permission_history_unavailable')
-        event = events[0]
-        value = json.loads(event['result_json'])
-        if type(value) is not dict or set(value) != _META:
-            raise AssetUnavailable('compose_permission_history_changed')
-        _generation(value['experiment_generation'])
-        for key in ('input_hash', 'basis_hash', 'guard_blob_hash'): _digest(value[key])
-        expected = {'authorization_id': row['id'], **{key: row[key] for key in
-            ('experiment_id', 'context_id', 'input_hash', 'basis_hash')}, 'generation': 1, 'status': 'active'}
-        if any(value.get(key) != item for key, item in expected.items()) or event['actor'] != row['actor']:
-            raise AssetUnavailable('compose_permission_history_changed')
-        payload = {'experiment_id': row['experiment_id'], 'expected_generation': value['experiment_generation']}
-        if self.assets._replay(connection, row['brain_id'], event['event_key'], 'compose_authorize', payload) != value:
-            raise AssetUnavailable('compose_permission_history_changed')
-        return {**value, 'generation': row['generation'], 'status': row['status']}
+        return _permission_metadata(self.assets, connection, row)
 
     def get(self, principal, authorization_id):
         brain = _brain(principal); _identifier(authorization_id); self._installed()
@@ -173,7 +222,7 @@ class ComposePermissions:
         self.plans.authoring._guard(connection, principal, before['authoring'], observed)
         self.inputs._fence(connection, principal, before)
 
-    def current(self, connection, principal, authorization_id):
+    def current(self, connection, principal, authorization_id, *, operation=None):
         brain = _brain(principal); _identifier(authorization_id); self._connection(connection)
         require_product_store(self.assets, principal, connection=connection)
         assert_installed(connection)
@@ -181,20 +230,37 @@ class ComposePermissions:
         if row['status'] != 'active' or row['generation'] != 1:
             raise PermissionError('compose_permission_revoked')
         metadata = self._metadata(connection, row)
-        before = self._capture(connection, principal, row['experiment_id'], metadata['experiment_generation'])
+        generation = metadata['experiment_generation']
+        request = None
+        if operation is not None:
+            request = json.loads(operation['request_json'])
+            if request.get('compose_authorization_id') != authorization_id:
+                raise IM.ConflictError('compose_operation_permission_changed')
+            operation_permission(connection, self.assets, principal, request, operation=operation)
+            generation += 1
+        before = self._capture(connection, principal, row['experiment_id'], generation)
         data, basis, guard = (self._load(brain, metadata[key]) for key in ('input_hash', 'basis_hash', 'guard_blob_hash'))
         self._input_history(connection, brain, metadata)
         observed, baseline = self.plans.authoring.observe(principal, before['authoring']['target'])
-        self._links(row, metadata, guard, basis, data, before, observed, baseline)
+        authority = before
+        if operation is not None:
+            original = guard.get('experiment')
+            if (type(original) is not dict or before['experiment'] !=
+                    {**original, 'generation': generation, 'updated_at': operation['created_at']}):
+                raise IM.ConflictError('compose_operation_experiment_changed')
+            authority = {**before, 'experiment': original}
+        self._links(row, metadata, guard, basis, data, authority, observed, baseline)
         # Capturing includes policy-file reads. Finish all such reads before
         # the source guards and final SQL-only consent/state checks.
-        if self._capture(connection, principal, row['experiment_id'], metadata['experiment_generation']) != before:
+        if self._capture(connection, principal, row['experiment_id'], generation) != before:
             raise IM.ConflictError('compose_authority_changed')
         self._fence(connection, principal, before, observed)
         self.inputs._fence(connection, principal, before)
         # No further policy/blob/host observations after this final SQL fence.
         if self._row(connection, brain, authorization_id) != row:
             raise IM.ConflictError('compose_permission_changed')
+        if operation is not None:
+            operation_permission(connection, self.assets, principal, request, operation=operation)
         require_product_store(self.assets, principal, connection=connection)
         return {'authorization': metadata, 'data': data, 'basis': basis, 'prepared': before['prepared']}
 
