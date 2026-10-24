@@ -164,6 +164,22 @@ class ComposeProtocolTests(unittest.TestCase):
         self.assertEqual([len(group['observations']) for group in rendered['evidence_projection']['tuning']], [48, 24, 24])
         self.assertEqual(rendered['evidence_projection'], data)
 
+    def test_original_patch_refs_remain_history_without_becoming_new_compose_citation_authority(self):
+        data = copy.deepcopy(self.data)
+        data['candidates'][0]['patch']['evidence_refs'] = []  # actual manual A shape
+        historical = [{'kind': 'owner_request', 'id': 'old-owner-event'},
+                      {'kind': 'tuning_trial', 'id': 'earlier-preparation-trial'}]
+        data['candidates'][1]['patch']['evidence_refs'] = historical
+        rendered = json.loads(self.p.render_compose_input(data))
+        self.assertEqual(rendered['evidence_projection'], data, 'do not rewrite immutable original manifests')
+        self.assertIn('historical provenance', rendered['contract_mapping'])
+        self.parse(self.output(), data)
+        for ref in historical:
+            value = self.output(); value['patch']['evidence_refs'] = [ref]
+            with self.subTest(ref=ref), self.assertRaises(PermissionError): self.parse(value, data)
+        value = self.output(); value['decisions'][0]['observations'] = [{'ref': historical[1], 'location': 'not-supplied'}]
+        with self.assertRaises(PermissionError): self.parse(value, data)
+
     def test_conflicting_original_regions_cannot_both_be_claimed_kept(self):
         data = copy.deepcopy(self.data)
         second = self.body_patch('Use only the controlling source.\r\n', angle='domain_process')

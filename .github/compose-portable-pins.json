@@ -1,0 +1,10 @@
+{
+  "server/improvement_harness2_compose.py": "a8192f15f226348f3485883a80b7ebe3cb215caa2d3084845f4a050b0def71b9",
+  "server/improvement_compose_protocol.py": "7c829bfeec4ad38a45b980db09e75d8e3f778fc880ecd1767f86d5559c9be326",
+  "server/improvement_compose_inputs.py": "4bfcd69c96696fc8dad6d4478a8edbc319ce9313114f1aff3b85f5417a40046b",
+  "tests/python/test_improvement_compose_protocol.py": "1b94a495ebcb55e85fa5f1146d3d341db7ee5fd35b3ef49ac42472098cb41a47",
+  "tests/python/test_improvement_compose_inputs.py": "d0831be1eb7c024715a2e1e66697b218535a82fb3bd9921aae06591151709f65",
+  "tests/python/test_improvement_compose_input_races.py": "ed6870152786d590bd79b13fb71caa3ab59db3eeb2ccd8f099e9711b5c3ac4a2",
+  "third_party/harness2/COMPOSE-PROVENANCE.json": "ce7839f1a378502caeb5c06af54a66727761f0223bdc336f549cbf0b003fb11c",
+  "third_party/harness2/LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+}
