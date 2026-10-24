@@ -26,6 +26,7 @@ PROFILE_SOURCES = ("improvement_claude.py", "improvement_sandbox.py", "improveme
                    "improvement_operation_checks.py", "improvement_operation_results.py", "improvement_trial_checks.py",
                    "improvement_operation_runner.py", "improvement_operation_tasks.py", "improvement_operation_recovery.py",
                    "improvement_operation_retry.py", "improvement_operation_schema.py", "improvement_operation_records.py",
+                   "improvement_compose_schema.py",
                    "improvement_improver_inputs.py", "improvement_generation_protocol.py", "improvement_comparison_plans.py",
                    "improvement_proposals.py", "improvement_skill_candidates.py", "improvement_role_workflow.py",
                    "improvement_semantic_review.py", "improvement_semantic_protocol.py", "improvement_semantic_records.py",

@@ -1,5 +1,52 @@
 # Agent and skill improvement Goal progress
 
+## Schema8 compose foundation — scoped approved, runtime still open
+
+Four-table checked rebuild preserves actual schema7 prepared operation/lease/
+workspace/CallLedger history and separate selected candidate/arm/result history,
+all IDs/values/Fernet bytes and historical schema1–7 literals. Actual GoalStore
+writer transaction owns backup/create/copy/drop/rename/guard restoration/FKcheck;
+only its fresh migration connection uses FKOFF before BEGIN. Ordinary connections
+retain FKON. Unknown schema7 guards refuse before backup; two writers serialize
+one backup; mid-copy and invalid child FK errors roll back exact old history.
+
+Distinct immutable compose permission/publication and revocable grant records,
+composer/improve_compose and one operation total are schema constraints. Candidate3
+needs typed composition provenance, no inherited edit/semantic authority; original
+manual/generated proposal caps stay two. Sealed selection refuses new consent.
+Final publication rechecks actual completed operation/result/attempt/call and
+brain/purpose/attempt/context/mirror/reason. output_hash is the encrypted RESULT
+REPORT blob; later publisher must authenticate raw artifact and decisions.
+
+Author RED6missingmodule/.008s before private fixtures; root independently GREEN6
+26.607s and again22.090s. Root extra sealed-selection RED and four settled-call
+identity subtest failures preceded fixes; GREEN5/23.489s. Initial118-test Windows
+cohort retained115PASS/2FAIL/1ERROR: stale extra-backup expectation, future-version
+exception and view diagnostic. All three corrected with focused GREEN checks;
+full new migration/role/view validation stayed enabled. Final independent root5
+PASS21.636s/12stablepins/no findings, original reviewer-authored6 excluded from
+self-approval. Report9416129700e71677164fad7ee9b3c77ccc02031c9a2ddc26ae5b9900bfd72ca9.
+
+Early isolated [Linux40058375830](https://github.com/blogminhquy/javis-os/actions/runs/40058375830)
+SUCCESS46/46: migration6/boundaries5/execution13/profile7/view15, exact12rawpins,
+commit4a2877aedbdd45e7978f65aa7d6d1757a543c631. Earlier40058040941 retained
+future-version exception failure after103PASS/104tested; unchanged candidate12/
+cases28/experiments19/operations21 proof reused. Final delta restores original
+SchemaError and view-specific diagnostics; no full unchanged cohort repetition.
+Public evidence:2026-10-24-compose-schema-foundation.json SHA
+87ef707685ca7ca20a507f09e71cbe0ec29ffeb9a2c248824c85ee86195105cc.
+
+Actual new schema dependency is now in PROFILE_SOURCES86. Static raw profile hash
+823a1434000fa3eabeafbd44ea92d704e60498491519f88bb702ff1aee5f514b matches no
+historical qualification; both release/candidate registries remain empty. Preserve
+the exact current native-evidence test: it is still an open requalification gate.
+This unit enables no compose dispatch, owner query permission, typed positive
+composed candidate/bundle, real model/account/business result or activation.
+Next: explicit owner permission/current authenticated saved-input guard and typed
+role/profile/ledger/workspace/usage connection, then actual publication/API/UI/
+independent new-candidate checks. Library follows actual compose, orchestration
+assessment after library; full M0–M8/final-head fullCI/Phase2 remain active/open.
+
 ## Authenticated host compose inputs — scoped component approved
 
 Actual current two-arm candidate/report/lineage, authorized solver/artifact/

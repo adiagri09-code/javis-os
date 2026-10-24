@@ -27,6 +27,15 @@ It supersedes older plan instructions to run a real account feasibility next.
 No account inference is currently owned/running: recent tests are fixture/local
 preparation and isolated CI only. No restart, deployment or activation occurs.
 
+Current compose milestone: backed-up schema8 foundation now has scoped review,
+actual historical SQL/Fernet rollback/concurrency proof and exact12pin early Linux
+46PASS (40058375830). Distinct permission/publication rows and gated composed
+slot3 are constraints, not enabled compose dispatch. Preserve original proposal
+cap2. Native dependency list86 invalidates older qualification; registries stay
+closed. Next bounded plan2026-10-24-compose-permission-role-contract.md connects
+explicit owner consent/current saved-input authority and existing role contracts;
+actual composer/publisher/API/UI/new-candidate checks follow before integration.
+
 ## Phase 1 — complete functioning code and technical checks for every milestone
 
 Reuse published M0/M1/M2A/B/C and their unchanged evidence. Each remaining unit

@@ -211,7 +211,17 @@ def assert_installed(connection):
     blocking cancellation, policy-off and settlement. No cached ready verdict.
     """
     import re
-    from improvement_store import ConflictError
+    from improvement_store import ConflictError, SchemaError, SCHEMA_VERSION
+    version = connection.execute('SELECT version FROM improvement_schema WHERE id=1').fetchone()
+    if not version or version[0] not in (1, 2, 3, 4, 5, 6, 7, SCHEMA_VERSION):
+        raise SchemaError('unsupported_improvement_schema')
+    if version and version[0] == 8:
+        from improvement_compose_schema import assert_roles_installed as assert_compose
+        try:
+            assert_compose(connection)
+        except ConflictError as exc:
+            raise ConflictError('operation_schema_changed') from exc
+        return
     statements = list(SCHEMA)
     statements.extend(f"CREATE TRIGGER {table}_{action.lower()} BEFORE {action} ON {table} "
                       "BEGIN SELECT RAISE(ABORT,'immutable_improvement_history'); END"

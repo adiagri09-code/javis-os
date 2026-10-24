@@ -1,5 +1,14 @@
 # One owned compose operation and a separately checked composition
 
+Schema foundation checkpoint: schema8 four-table checked overlays and separate
+permission/grant/composition records are scoped approved; source/history/rollback/
+concurrency tests and early isolated Linux46PASS are retained in
+2026-10-24-compose-schema-foundation.json. This is not enabled compose execution
+or a typed positive publication. Next bounded connection is recorded in
+2026-10-24-compose-permission-role-contract.md. output_hash binds the existing
+operation RESULT REPORT blob, not its raw model artifact. The future publisher
+must independently authenticate raw artifact, parsed decisions and current gates.
+
 Goal12–17/code-first. Preserve79e5985c authenticated input and its scoped reviews/
 early Linux proof. Compose native execution is still absent. This unit connects
 the actual upstream method to the existing authoritative Operation/CallLedger;
@@ -17,8 +26,8 @@ runtime/ledger/stop/recovery rather than importing a second executor/ledger or
 upstream broad edit/autotrigger/extra repair. Full orchestration comparison is
 still deferred until actual library reuse, as Goal17 requires.
 
-Actual compatibility work is necessary: Operation schema currently accepts only
-propose/repair/semantic; agent_calls API only improve_propose/improve_evaluate;
+Actual compatibility work is necessary: historical Operation schema accepted only
+propose/repair/semantic; agent_calls API still lacks improve_compose;
 original A candidate, arm and selection constraints allow only ordinal1/2. Do not
 misclassify compose as proposal or silently increase the original two slots.
 
