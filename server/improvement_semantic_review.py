@@ -116,7 +116,20 @@ class SemanticReview(RoleWorkflow):
             assert_installed(connection)
         snapshot = self._snapshot(principal, payload['candidate_id'], payload['expected_generation'])
         self._open()
-        available = ClaudeOperationAdapter(snapshot['prepared'][1]['engine_config']).verify()
+        def native_current(connection, joined):
+            for _ in range(2):
+                self._fence(connection, principal, snapshot, payload['expected_generation'])
+                if self._snapshot(principal, payload['candidate_id'], payload['expected_generation']) != snapshot:
+                    raise IM.ConflictError('semantic_input_changed')
+                self._fence(connection, principal, snapshot, payload['expected_generation'])
+            return 'allow'
+
+        adapter = ClaudeOperationAdapter(snapshot['prepared'][1]['engine_config'])
+        adapter.bind_native_authority(self.assets, principal, scope_hash=IM._hash({
+            'version': 1, 'kind': 'semantic_review_admission', 'brain_id': brain,
+            'event_key_hash': IM._hash(event_key), 'request_hash': IM._hash(payload),
+            'authority_hash': IM._hash([snapshot['binding'], IM._hash(snapshot['data'])])}), current=native_current)
+        available = adapter.verify()
         if type(available) is not dict or available.get('supported') is not True:
             raise ValueError('operation_native_unavailable')
         blob = self.blobs.write(brain, input_bytes(snapshot['data']))

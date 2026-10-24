@@ -565,8 +565,26 @@ class ExperimentService:
             for arm in connection.execute("SELECT ordinal FROM improvement_experiment_arms WHERE brain_id=? AND experiment_id=?",
                                           (brain, experiment_id)):
                 self.plans._frozen_arm(connection, principal, row, prepared, arm["ordinal"])
+            original = dict(row)
         self.plans.host._snapshot_observe(principal, prepared[1])
-        available = ClaudeTrialAdapter(prepared[1]["engine_config"]).verify()
+        def native_current(connection, joined):
+            for _ in range(2):
+                current = self.records._row(connection, brain, experiment_id)
+                self.records._public(current)
+                if dict(current) != original or self.plans._prepare(connection, principal, public) != prepared:
+                    raise IM.ConflictError("experiment_resume_authority_changed")
+                for arm in connection.execute("SELECT ordinal FROM improvement_experiment_arms WHERE brain_id=? AND experiment_id=?",
+                                              (brain, experiment_id)):
+                    self.plans._frozen_arm(connection, principal, current, prepared, arm["ordinal"])
+                self.plans.host._snapshot_observe(principal, prepared[1])
+            return "allow"
+
+        adapter = ClaudeTrialAdapter(prepared[1]["engine_config"])
+        adapter.bind_native_authority(self.assets, principal, scope_hash=IM._hash({
+            "version": 1, "kind": "experiment_owner_resume", "brain_id": brain,
+            "event_key_hash": IM._hash(event_key), "request_hash": IM._hash(payload),
+            "authority_hash": IM._hash(original)}), current=native_current)
+        available = adapter.verify()
         if type(available) is not dict or available.get("supported") is not True:
             raise PermissionError("experiment_runtime_unavailable")
         from improvement_cases import _digest

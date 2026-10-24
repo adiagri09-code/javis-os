@@ -124,8 +124,23 @@ class ViewExperimentAdmission:
             self.schedule.require_idle(connection, brain, payload['experiment_id'])
             prepared = self._prepare(connection, principal, payload, position)
         self.host._snapshot_observe(principal, prepared[1][1])
+        def native_current(connection, joined):
+            for _ in range(2):
+                self.schedule.require_idle(connection, brain, payload['experiment_id'])
+                if (self.schedule.next_slot(principal, payload['experiment_id'], payload['comparison_id'],
+                        payload['expected_generation'], event_key) != position
+                        or self._prepare(connection, principal, payload, position) != prepared):
+                    raise IM.ConflictError('view_admission_authority_changed')
+                self.host._snapshot_observe(principal, prepared[1][1])
+            return 'allow'
+
         try:
-            available = ClaudeTrialAdapter(prepared[0]['engine_config']).verify()
+            adapter = ClaudeTrialAdapter(prepared[0]['engine_config'])
+            adapter.bind_native_authority(self.assets, principal, scope_hash=IM._hash({
+                'version': 1, 'kind': 'view_cell_admission', 'brain_id': brain,
+                'event_key_hash': IM._hash(event_key), 'request_hash': IM._hash(payload),
+                'authority_hash': IM._hash(prepared[0])}), current=native_current)
+            available = adapter.verify()
             if type(available) is not dict or available.get('supported') is not True:
                 raise ValueError('trial_native_unavailable')
             _digest(available.get('capability_hash'))

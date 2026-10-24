@@ -1,5 +1,31 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — all nine native admission callers independently approved
+
+All nine audited synchronous caller bindings now pass one independent combined18
+in82.937s, no skips, all13 source/test pins unchanged. Root's affected legacy39
+(first2) and selected legacy12 (next7) pass106.280s/178.021s. Public
+native-admission-callers records exact source/log hashes, intermediate RED/GREEN
+lineage and honest engineering coverage. Original calls/attempts are never
+created for preflight; existing worker-thread ownership and cold replay remain.
+
+Review caught an absolute retry deadline crossing the final slow source read:
+RED1 FAIL3.472s, corrected by final SQL/time eligibility check before image allow.
+Self-review caught eager historical V1 first-record decrypt: RED1 FAIL4.523s,
+corrected by detecting V2 only from already-selected engine events. Actual
+encrypted observation2 transient503 proof now supports the existing single
+bounded retry with original deadline. Final focused3 PASS13.722s and independent
+combined18 include both fixes. Artifact text still cannot invent retry authority.
+
+Next source audit found baseline preparation still emits manifest1, while the
+new guarded Trial path supports native4 with a real paired view. Preparation
+precedes candidate/view creation; it cannot use an invented view or legacy
+fallback. Explicit native baseline support is outstanding before materializer
+activation/whole-pipeline qualification. Read-only plan is in the native-admission
+ledger/materializer-next.md. Actual default installed closure inventory is next;
+then baseline/view/role materializers and closed dummy-only qualification policy.
+No source activation, account retry, deploy, registration or M2 completion.
+
 ## Current continuation — parent final independent execution approved
 
 Independent reviewer m2d1_whole_review completed parent10 PASS4.312s and actual
