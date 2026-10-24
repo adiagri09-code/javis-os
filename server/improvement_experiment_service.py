@@ -115,7 +115,7 @@ class ExperimentService:
     def _snapshot(self, connection, brain, experiment_id):
         links = []
         # Preserve each format's immutable fields. Both comparison formats share
-        # one bound of12,000 cells; preparation retains its separate2,000 bound.
+        # one bound of16,000 cells; preparation retains its separate2,000 bound.
         schema = connection.execute("SELECT version FROM improvement_schema WHERE id=1").fetchone()[0]
         comparison_formats = comparison_tables(connection)
         scopes = [(table, MAX_COMPARISON_TRIALS) for table in comparison_formats]
@@ -138,7 +138,7 @@ class ExperimentService:
             links.extend(selected)
         if len({link['trial_id'] for link in links}) != len(links):
             raise IM.ConflictError('experiment_trial_history_changed')
-        # UNION avoids SQLite's host parameter limit at the valid 14000-cell
+        # UNION avoids SQLite's host parameter limit at the valid 18000-cell
         # bound and scopes before reading attempts or interpreting reservations.
         selected_sql, parameters = experiment_trial_scope(connection, brain, experiment_id)
         attempts = [dict(row) for row in connection.execute(

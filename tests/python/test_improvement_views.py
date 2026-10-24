@@ -79,7 +79,7 @@ class ViewProtocolTests(unittest.TestCase):
             for bad in (True, 1.0, -1, 2 ** 63):
                 with self.subTest(key=key, bad=bad):
                     self.reject({**manifest(), key: bad})
-        self.reject({**manifest(), 'arm_ordinal': 3})
+        self.reject({**manifest(), 'arm_ordinal': 4})
         value = manifest()
         value['target']['base_generation'] = True
         self.reject(value)

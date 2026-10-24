@@ -32,8 +32,14 @@ class ExperimentPlans:
     @staticmethod
     def _create_request(value):
         value = IC._frozen(value)
-        IC._fields(value, {"experiment_id", "contract_id", "case_set_id", "base_bundle_id",
-                           "expected_context_generation", "repeat_policy", "timeout_seconds"})
+        fields = {"experiment_id", "contract_id", "case_set_id", "base_bundle_id",
+                  "expected_context_generation", "repeat_policy", "timeout_seconds"}
+        if type(value) is dict and set(value) == fields | {"candidate_policy"}:
+            if (type(value['candidate_policy']) is not str
+                    or value['candidate_policy'] != 'two_proposals_and_one_compose'):
+                raise ValueError('invalid_experiment_candidate_policy')
+        else:
+            IC._fields(value, fields)
         for key in ("experiment_id", "contract_id", "case_set_id", "base_bundle_id"):
             _identifier(value[key])
         _generation(value["expected_context_generation"])
@@ -88,7 +94,8 @@ class ExperimentPlans:
             "context_generation": grant["generation"], "repeat_policy": {"kind": public["repeat_policy"],
                 "repeats": 2 if public["repeat_policy"] == "pilot" else 1}, "timeout_seconds": public["timeout_seconds"],
             "endpoint": {"kind": "binary_all_pass", "criterion_id": metric["criterion_id"], "direction": "higher"},
-            "decision_policy": {"id": "paired-skill-v1", "version": 1, "multiple_tests": 2},
+            "decision_policy": {"id": "paired-skill-v1", "version": 1,
+                "multiple_tests": 3 if public.get('candidate_policy') == 'two_proposals_and_one_compose' else 2},
             "evaluator": contract["evaluator"], "evidence_class": "technical"})
         self.records._bound_in(connection, brain, value, public["expected_context_generation"])
         for case in actual:
@@ -136,6 +143,8 @@ class ExperimentPlans:
         value = definition(json.loads(row["definition_json"]))
         public = {key: value[key] for key in ("experiment_id", "contract_id", "case_set_id", "base_bundle_id", "timeout_seconds")}
         public.update(expected_context_generation=value["context_generation"], repeat_policy=value["repeat_policy"]["kind"])
+        if value['decision_policy']['multiple_tests'] == 3:
+            public['candidate_policy'] = 'two_proposals_and_one_compose'
         prepared = self._prepare(connection, principal, public, source_split=source_split)
         if prepared[0] != value:
             raise IM.ConflictError("experiment_definition_changed")
@@ -147,6 +156,8 @@ class ExperimentPlans:
             raise IM.ConflictError("preparation_incomplete")
         brain, value = _brain(principal), prepared[0]
         candidate = self.authoring.records._row(connection, brain, candidate_id)
+        if candidate['ordinal'] == 3 and value['decision_policy']['multiple_tests'] != 3:
+            raise PermissionError('experiment_composed_arm_budget_unreserved')
         if any(candidate[key] != value[key] for key in
                ("experiment_id", "context_id", "target_id", "base_revision_id", "base_hash", "base_generation")):
             raise PermissionError("experiment_arm_scope_changed")
@@ -154,6 +165,8 @@ class ExperimentPlans:
         observed, raw = self.authoring.observe(principal, state["target"])
         self.authoring.read_proposal(connection, principal, candidate, state, observed, raw)
         authority = self.authoring.records._authority(connection, brain, authority_id)
+        if candidate['ordinal'] == 3 and authority['kind'] != 'exact_diff':
+            raise PermissionError('experiment_composed_exact_diff_required')
         if authority["status"] != "active" or authority["generation"] != 1:
             raise PermissionError("experiment_arm_authority_unavailable")
         expected = {key: value[key] for key in ("context_id", "target_id", "base_revision_id", "base_hash", "base_generation", "context_generation")}
@@ -229,7 +242,7 @@ class ExperimentPlans:
         brain = _brain(principal)
         _identifier(experiment_id)
         _generation(expected_generation)
-        if type(ordinal) is not int or ordinal not in (1, 2) or type(kind) is not str or kind not in ("tuning", "final"):
+        if type(ordinal) is not int or ordinal not in (1, 2, 3) or type(kind) is not str or kind not in ("tuning", "final"):
             raise ValueError("invalid_comparison_request")
         self.records._available()
         payload = {"experiment_id": experiment_id, "ordinal": ordinal, "kind": kind, "expected_generation": expected_generation}
@@ -281,7 +294,7 @@ class ExperimentPlans:
         _generation(expected_generation)
         if (type(choice) is not str or choice not in ("keep_base", "candidate")
                 or (choice == "keep_base" and ordinal is not None)
-                or (choice == "candidate" and (type(ordinal) is not int or ordinal not in (1, 2)))):
+                or (choice == "candidate" and (type(ordinal) is not int or ordinal not in (1, 2, 3)))):
             raise ValueError("invalid_experiment_selection")
         self.records._available()
         payload = {"experiment_id": experiment_id, "choice": choice, "ordinal": ordinal, "expected_generation": expected_generation}

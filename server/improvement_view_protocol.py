@@ -67,7 +67,7 @@ def view_manifest(value):
         _digest(value[key])
     _integer(value['context_generation'])
     _integer(value['policy_version'], 0)
-    _integer(value['arm_ordinal'], 1, 2)
+    _integer(value['arm_ordinal'], 1, 3)
 
     target = value['target']
     _fields(target, _TARGET)
