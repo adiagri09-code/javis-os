@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import time
 from collections.abc import Mapping
-from contextlib import aclosing
+from contextlib import aclosing, closing
 
 import improvement_cases as IC
 import improvement_store as IM
@@ -50,6 +51,122 @@ async def _settled_call(callback, *args, **kwargs):
     if isinstance(values[0], BaseException):
         raise values[0]
     return values[0]
+
+
+def _runner_body(packet):
+    """Project for interpretation only; evidence always receives the envelope."""
+    if type(packet) is dict and type(packet.get('version')) is int and packet['version'] == 2:
+        return packet['body']
+    return packet
+
+
+class _NativeRunnerEvidence:
+    """One original writer's pending evidence, never an execution capability."""
+    def __init__(self, *, append, get, principal, identifier, attempt, token, lock, authority, observe,
+                 transient_check=None):
+        self.append, self.get, self.principal, self.identifier = append, get, principal, identifier
+        self.attempt, self.token, self.lock = attempt, token, lock
+        self.authority, self.observe, self.transient_check = authority, observe, transient_check
+        self.pending, self.observed = {}, set()
+        self.failed, self.terminal, self.transient = False, None, False
+
+    def _retain(self, packet):
+        snapshot = IC._frozen(packet)
+        if (type(snapshot) is not dict or type(snapshot.get('version')) is not int or snapshot['version'] != 2
+                or type(snapshot.get('body')) is not dict or type(snapshot.get('sequence')) is not int):
+            raise _RunFailure('evidence_failed')
+        key = IM._hash(snapshot)
+        entry = self.pending.setdefault(key, {'packet': snapshot, 'stored': False})
+        return key, entry
+
+    async def _observe_owned(self, key, packet):
+        if key in self.observed:
+            return
+        values, cancelled = await _drain(asyncio.gather(
+            # Recorder implementations may consume/mutate their input. They
+            # cannot change the original failed envelope awaiting late storage.
+            asyncio.create_task(self.observe(IC._frozen(packet))), return_exceptions=True))
+        if not isinstance(values[0], BaseException):
+            # Retain only a digest after successful consumption, never a parsed
+            # successful task/result or its raw plaintext across the stream.
+            self.observed.add(key)
+            body = _runner_body(packet)
+            if body.get('type') == 'engine_event':
+                event = body['event']
+                if event.get('type') == 'terminal': self.terminal = IC._frozen(event)
+                if self.transient_check is not None and self.transient_check(event): self.transient = True
+        if cancelled is not None: raise cancelled
+        if isinstance(values[0], BaseException): raise values[0]
+
+    async def _accept_locked(self, key, entry, *, active=True):
+        packet, error = entry['packet'], None
+        try:
+            if not active: raise _RunFailure('evidence_failed')
+            latest = await _settled_call(self.get, self.principal, self.identifier)
+            if latest['attempt'] != self.attempt or latest['status'] not in ('prepared', 'running'):
+                raise _RunFailure('evidence_failed')
+            await _settled_call(self.append, self.principal, self.identifier, packet,
+                expected_generation=latest['generation'], lease_token=self.token, attempt=self.attempt)
+            entry['stored'] = True
+        except BaseException as failure:
+            self.failed, error = True, failure
+        try:
+            await self._observe_owned(key, packet)
+        except BaseException as failure:
+            self.failed = True
+            if error is None or isinstance(failure, asyncio.CancelledError): error = failure
+        if entry['stored'] and key in self.observed: self.pending.pop(key, None)
+        if error is not None:
+            if isinstance(error, asyncio.CancelledError): raise error
+            if isinstance(error, _RunFailure): raise error
+            raise _RunFailure('evidence_failed') from error
+
+    async def accept(self, packet):
+        key, entry = self._retain(packet)
+        async with self.lock:
+            await self._accept_locked(key, entry)
+
+    async def _closing_owned(self, packets):
+        error, active = None, True
+        async with self.lock:
+            try:
+                await self.authority()
+            except BaseException as failure:
+                self.failed, error, active = True, failure, False
+            for packet in packets:
+                try:
+                    key, entry = self._retain(packet)
+                    await self._accept_locked(key, entry, active=active)
+                except BaseException as failure:
+                    self.failed = True
+                    if error is None or isinstance(failure, asyncio.CancelledError): error = failure
+        if error is not None: raise error
+
+    async def closing(self, packets):
+        # The adapter can be closing because its caller is being cancelled.
+        # Own the whole batch, not merely its first SQLite or telemetry thread.
+        values, cancelled = await _drain(asyncio.gather(
+            asyncio.create_task(self._closing_owned(tuple(packets))), return_exceptions=True))
+        if cancelled is not None:
+            self.failed = True
+            raise cancelled
+        if isinstance(values[0], BaseException): raise values[0]
+
+    async def flush_late_locked(self):
+        """Called after abort with the generation lock already held."""
+        for key, entry in sorted(tuple(self.pending.items()), key=lambda item: item[1]['packet']['sequence']):
+            try:
+                if not entry['stored']:
+                    await _settled_call(self.append, self.principal, self.identifier, entry['packet'],
+                        lease_token=self.token, attempt=self.attempt, late=True)
+                    entry['stored'] = True
+            except Exception:
+                self.failed = True  # Missing anchor/foreign writer never mints an allow.
+            try:
+                await self._observe_owned(key, entry['packet'])
+            except Exception:
+                self.failed = True
+            if entry['stored'] and key in self.observed: self.pending.pop(key, None)
 
 
 class TrialRunner:
@@ -144,6 +261,7 @@ class TrialRunner:
         current, recorder = claimed, None
         phase = "runner_failed"
         evaluation = None
+        native_evidence, workspace_receipt = None, None
 
         def live_guard():
             return self.live_guard(principal, IC._frozen(request))
@@ -181,11 +299,12 @@ class TrialRunner:
                 # The adapter releases its worker ACK only after this callback returns.
 
         async def observe(packet):
-            if packet.get("type") == "engine_event":
+            body = _runner_body(packet)
+            if body.get("type") == "engine_event":
                 if recorder is None:
                     raise _RunFailure("worker_failed")
                 try:
-                    await _settled_call(recorder.observe, packet["event"], sequence=packet["sequence"])
+                    await _settled_call(recorder.observe, body["event"], sequence=packet["sequence"])
                 except Exception as error:
                     raise _RunFailure("telemetry_failed") from error
 
@@ -205,8 +324,29 @@ class TrialRunner:
 
         manifest = None
 
+        def native_current(connection, joined):
+            row, attempt = self.trials._leased(connection, principal, trial_id, current['generation'], token, time.time())
+            if row['attempt'] != claimed['attempt'] or row['request_hash'] != IM._hash(request):
+                raise IM.ConflictError('trial_native_owner_changed')
+            self.trials._current(connection, current['brain_id'], request, trial_id=trial_id, principal=principal)
+            _guard(live_guard, request)
+            if workspace_receipt is not None:
+                if not attempt['workspace_json'] or json.loads(attempt['workspace_json']) != workspace_receipt:
+                    raise IM.ConflictError('trial_native_workspace_changed')
+                self.trials.workspace.validate(workspace_receipt)
+            self.trials._current(connection, current['brain_id'], request, trial_id=trial_id, principal=principal)
+            _guard(live_guard, request)
+            self.trials._leased(connection, principal, trial_id, current['generation'], token, time.time())
+            return 'allow'
+
+        async def closing_authority():
+            def check():
+                with closing(self.trials.store._conn()) as connection:
+                    native_current(connection, None)
+            await _settled_call(check)
+
         async def process():
-            nonlocal current, manifest, phase, evaluation
+            nonlocal current, manifest, phase, evaluation, native_evidence, workspace_receipt
             def acquire():
                 lifetime[0] = self.trials.workspace.acquire_execution(current["brain_id"], trial_id, current["attempt"])
                 if lifetime[0] is None:
@@ -216,7 +356,14 @@ class TrialRunner:
             phase = "unsupported_configuration"
             adapter = self.adapter_factory(request["engine_config"], workspace_root=self.trials.workspace.root,
                                            before_engine_start=before_start)
-            verified = await _settled_call(adapter.verify)
+            if type(adapter) is ClaudeTrialAdapter:
+                scope = IM._hash({'version': 1, 'kind': 'trial', 'brain_id': current['brain_id'],
+                    'subject_id': trial_id, 'attempt': claimed['attempt'], 'request_hash': IM._hash(request),
+                    'engine_config_hash': request['pins']['engine_config_hash']})
+                adapter.bind_native_authority(self.trials.assets, principal, scope_hash=scope, current=native_current, lock=lock)
+                verified = await adapter.verify_async()
+            else:
+                verified = await _settled_call(adapter.verify)
             if not isinstance(verified, dict) or verified.get("supported") is not True:
                 raise _RunFailure("unsupported_configuration")
             IC._digest(verified.get("capability_hash"))
@@ -235,13 +382,22 @@ class TrialRunner:
                 await authority()
                 current = await _settled_call(self.trials.prepared, principal, trial_id,
                     expected_generation=current["generation"], lease_token=token, receipt=workspace)
+                workspace_receipt = IC._frozen(workspace)
             native_request = {"version": 1, "trial_id": trial_id, "attempt": current["attempt"],
                 "deadline_at": request["deadline_at"], "engine_config_hash": request["pins"]["engine_config_hash"],
                 "capability_hash": verified["capability_hash"]}
             phase = "worker_failed"
             terminal = None
-            async with aclosing(adapter.execute(native_request, workspace)) as packets:
+            if manifest['version'] == 4:
+                native_evidence = _NativeRunnerEvidence(append=self.trials.append_observation, get=self.trials.get,
+                    principal=principal, identifier=trial_id, attempt=claimed['attempt'], token=token,
+                    lock=lock, authority=closing_authority, observe=observe)
+            options = {} if native_evidence is None else {'on_closing_observations': native_evidence.closing}
+            async with aclosing(adapter.execute(native_request, workspace, **options)) as packets:
                 async for packet in packets:
+                    if native_evidence is not None:
+                        await native_evidence.accept(packet)
+                        continue
                     async with lock:
                         try:
                             await _settled_call(self.trials.append_observation, principal, trial_id, packet,
@@ -258,6 +414,9 @@ class TrialRunner:
                         if packet.get("type") == "engine_event" and packet["event"].get("type") == "terminal":
                             terminal = packet["event"]
             # aclosing has finished process-group cleanup before any product/evaluator call.
+            if native_evidence is not None:
+                if native_evidence.failed: raise _RunFailure('evidence_failed')
+                terminal = native_evidence.terminal
             if recorder is None or terminal is None:
                 raise _RunFailure("worker_failed")
             phase = "telemetry_failed"
@@ -310,6 +469,8 @@ class TrialRunner:
                                 expected_generation=latest["generation"], lease_token=token, reason=reason)
                         except IM.ConflictError:
                             pass  # Never close a lease now owned by another host attempt.
+                        if native_evidence is not None:
+                            await native_evidence.flush_late_locked()
                         latest = await asyncio.to_thread(self.trials.get, principal, trial_id)
                         if recorder is not None:
                             status = latest["status"] if latest["status"] in {"completed", "failed", "cancelled"} else "unknown"

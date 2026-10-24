@@ -1,5 +1,42 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — guarded parent, result consumers and closing evidence
+
+Release inventory has scoped independent approval10 PASS2.507s after two real
+parsed-METADATA/RECORD mutation reproductions were corrected. It binds declared
+source/import/runtime bytes; the external reviewed registry remains empty.
+This is neither an import sandbox nor full installed-closure qualification.
+Public native-release-inventory records exact hashes and evidence limitations.
+
+Actual parent/adapters pass final author10 (3.985s), isolated actual-SDK builder1
+(1.040s, engineering Capture/IO), affected legacy adapter7+2. Independent static
+review's query-environment finding is fixed: only query has the three SDK-added
+keys. Its final independent execution remains pending because that agent hit
+the account usage limit; author execution is not relabeled as independent.
+Static admission precedes any guarded preflight; actual M0 authority and full
+attempt receipt/config/capability bind all four image decisions. Bound older
+inputs refuse before fallback. Public native-parent-adapters states this boundary.
+
+Actual result/check consumers have independent root19 PASS68.323s on final pins
+and affected legacy7 PASS12.305s. They require complete observation2 history and
+all four exact encrypted M0 decisions, reread inside final publication, and retain
+cold historical reads after cleanup. Pure historical query-environment relation,
+provider acceptance, comprehension and internal reasoning remain UNKNOWN.
+Public native-result-consumers preserves source-policy and lazy-reader fixes.
+
+Actual runners have clean independent static review and independent root19
+PASS74.671s on final pins; affected legacyTrial3/Operation2 pass. Original raw
+envelopes, sequence and usage survive storage error, revocation and repeated
+cancellation. Late retry uses original writer/attempt after abort, never a new
+lease or image allow. Recorder mutation is isolated by a separate copy.
+Public native-runner-evidence records exact fixture/native coverage limits.
+
+No source activation, account retry, deployment, registration or milestone
+completion occurred. Next: bind actual admission/reserve preflight callers to
+fresh M0 authority, then materializer4/2 and closed dummy-only qualification.
+Final exact source closure/native qualification and final-head full CI remain
+mandatory. Goal M0–M8 stays active; business and rollout gates remain open.
+
 ## Current continuation — actual profiles, startup2 routes and exit status approved
 
 Historical native decision reader is independently approved4 PASS.891s after
