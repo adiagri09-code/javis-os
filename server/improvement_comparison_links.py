@@ -49,3 +49,10 @@ def has_view_binding(connection, brain, comparison_id):
 def require_legacy_comparison(connection, brain, comparison_id):
     if has_view_binding(connection, brain, comparison_id):
         raise PermissionError('view_trial_version_required')
+    # A composed arm always needs its own reviewed view, including its baseline
+    # counterpart before any view has been published. Legacy baseline admission
+    # must not turn missing independent checks into a native probe or call.
+    if _installed(connection, 'improvement_comparisons') and connection.execute(
+            'SELECT 1 FROM improvement_comparisons WHERE id=? AND brain_id=? AND ordinal=3',
+            (comparison_id, brain)).fetchone():
+        raise PermissionError('view_trial_version_required')

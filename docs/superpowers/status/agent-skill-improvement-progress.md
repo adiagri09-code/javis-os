@@ -1,5 +1,39 @@
 # Agent and skill improvement Goal progress
 
+## Reserved compose arm — scoped component approved
+
+Explicit new candidate_policy reserves three hypotheses before observations;
+old closed requests/history keep two. Typed candidate3 requires its own current
+exact-diff grant, fresh semantic/dependency/native views and actual Trial/Call
+preparation. Actual controlled integration reaches PREPARED then abort/refund/
+cleanup; no inherited qualification. Legacy baseline comparison refuses arm3
+before verification. Selection requires its own tuning evidence; KEEP_BASE and
+cold off replay remain available. All three arms use multiplicity denominator60
+instead of40. Bounded stop/drain reads include18000trials/sixroles, not new rights.
+Historical ownership authenticates separate consent and execution actors against
+actual immutable events/Operation/Result/Attempt/Call/publication links.
+
+Meaningful policy/protocol/bounds/runtime/actor REDs preceded fixes; diagnostic
+fixture errors are recorded separately. Local impact137PASS/16scripts, fresh
+independent15PASS/192.949s/15stablepins/no open P0/P1/P2. Review report SHA
+4aab1d8d7af57c4216e478e8c1dc9d6de4228ccdc561a5e1f58ffd81958a0eee.
+Early isolated Linux40064018472/job120783344859 SUCCESS145PASS/17scripts,
+snapshota3934037bc0e5442cf2aa4005a60eae1e2a49549/15exactpins. Public proof
+2026-10-24-compose-checked-arms.json SHA
+a4532ac0fef6678e222c64f3c492865aae675d36eca4c9037a6d059c7f026f82 (UTF8/LF).
+
+Positive SDK/verifier/format/qualification and shared-source host DI are labelled
+synthetic controls; no actual CLI/SDKClient/account/model/business proof. Actual
+source/product/readers/current/view/ledger gates remain active; observational
+unknowns stay unknown. PROFILE95/static raw hash
+70f584395f5d91cf9d265c712178dfe420d9db8e9cc41f7808b9afc9075769cb is UNQUALIFIED;
+registries closed and actual309 evidence test untouched. Full qualified selected
+final, same-pipeline dummy, final task-head full CI and Phase2 remain open.
+Next: 2026-10-24-compose-owner-controls.md actual facade/API/cold replay and
+explicit preview/consent/run/revoke panel, then actual upstream experience library.
+Full M0–M8 Goal remains active. User-delegated pilots remain reconciliation
+primary, document processing secondary, Python bugfix/test technical control.
+
 ## Owned compose workflow/publication — scoped component approved
 
 ComposerService now runs one explicit current-consent compose through the actual

@@ -75,7 +75,7 @@ class ViewTrialProtocolTests(unittest.TestCase):
         for changes in ({'version': True}, {'version': 2}, {'version': 3}, {'repeat': True}, {'variant': 'live'},
                 {'deadline_at': float('inf')}, {'deadline_at': True}):
             self.reject({**request(), **changes})
-        for changes in ({'cell_position': 4000}, {'cell_position': True}, {'arm_ordinal': 3}, {'arm_hash': 'a' * 64}):
+        for changes in ({'cell_position': 4000}, {'cell_position': True}, {'arm_ordinal': 4}, {'arm_hash': 'a' * 64}):
             value = request()
             value['lineage'].update(changes)
             self.reject(value)

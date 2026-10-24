@@ -52,3 +52,21 @@ product claim that a draft or a reserved statistical budget is ready to activate
 Actual derived upstream experience library follows the functioning compose slice.
 Same-pipeline localhost dummy qualification, exact final task-head full required
 CI and Phase2 real account/model/business/pilot/canary remain separate open gates.
+
+Ruling after inspecting immediate consumers: arm binding/comparison freeze retain
+their existing metadata-only role. They authenticate reserved3, typed provenance
+and the candidate's fresh exact-diff grant; semantic/dependency/native gates run
+through actual EffectiveViews.capture_sources before view publication/admission
+and trial execution. This preserves the existing dependency direction (SemanticReview
+depends on ExperimentPlans), avoids a second review authority, and never treats an
+unreviewed frozen arm as executable. _probe_observations already distinguishes the
+two observational unknowns from mandatory native gates; preserve that distinction.
+
+Ruling: the SQL-only historical lineage reader must authenticate the typed compose
+publication/authorization/Operation/Result links instead of requiring an invented
+ordinary owner-request event for candidate3. Keep the ordinary1/2 path unchanged;
+current source/proposal/native checks remain the actual host/view consumers.
+Stop/drain/recovery's finite structural scope must also cover three tuning
+comparisons plus one selected final (16000 cells), preparation2000, and six role
+operations (propose/repair/compose/three reviewers), each at most two attempts.
+These are scope-read bounds, not permissions to create extra work or retries.

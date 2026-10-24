@@ -1,5 +1,21 @@
 # M0–M8: code and technical verification before real trials
 
+Latest checked-arm component scoped approved: explicit immutable reserve3 policy,
+actual typed3/current exact-diff/fresh semantic/dependency/native views and actual
+Trial/Call PREPARED→abort/refund/cleanup; old two-slot history exact. Independent
+SQL ownership authenticates actual consent/operation/publication actors and links.
+Actual selection still requires fresh tuning; multiplicity60 applies to all3arms;
+KEEP_BASE/cold off replay retained; common legacy baseline gate refuses before
+native verification. Local137PASS, fresh independent15PASS/15stablepins/no findings,
+early isolated Linux145PASS/17scripts40064018472. Publiccompose-checked-arms SHA
+a4532ac0fef6678e222c64f3c492865aae675d36eca4c9037a6d059c7f026f82.
+PROFILE95 raw70f584395f5d91cf9d265c712178dfe420d9db8e9cc41f7808b9afc9075769cb
+remains unqualified, registries closed/actual309 test intact. Positive controls
+are synthetic, not actual native/account/model/business proof. Next actual owned
+facade/API/panel plan2026-10-24-compose-owner-controls.md, then upstream library.
+Full qualified selected final/same-pipeline dummy/final task-head full CI/Phase2
+and remaining M0–M8 code stay open; no deploy/restart or quality/savings claim.
+
 Latest owned publication component is scoped approved: actual one-shot shared
 RoleWorkflow/tasks/native2 result reader, atomic composition/optional candidate3
 and actual SkillCandidates v2 provenance consumer. Current consent/source/domain
