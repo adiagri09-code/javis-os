@@ -1,5 +1,24 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — concrete qualification session foundation approved
+
+Separate empty engineering-candidate authority validates exact static runtime and
+observed closure before scratch allocation. Concrete host session owns fresh
+private root, generated fixture-only encryption key, actual encrypted immutable
+M0 run scope and same-DB CallLedger. Each environment gets a fresh empty HOME;
+no ambient auth copied. Foreign/traversal/expired/closed/corrupted scope refuses.
+Close retains forensic records; explicit cleanup refuses unsettled placeholders.
+
+Independent source-closure P2 repaired: owner seeds PROFILE_SOURCES85, actual
+offline observe_release proves owner mutation refuses profile/helper mutation
+changes fingerprint. Root property is read-only. Independent16 PASS7.566s, all11
+pins stable; public qualification-session records exact scope/logs/review. No
+CLI/native/account/default inventory. This is preparation only: maximum_queries
+metadata, actual owner attach/drain, typed verification/startup3/attempt-call links
+and durable publication/cold-read domain fences remain pending. No qualification
+or account readiness claim. Continue those integrations, final-source owned
+pipeline proof/registration/account feasibility and exact-head CI. Goal open.
+
 ## Current continuation — four actual downstream native blockers repaired
 
 Audit found RoleWorkflow old10 refused native14, semantic paired-view gate old10

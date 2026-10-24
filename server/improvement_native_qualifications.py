@@ -18,6 +18,12 @@ import re
 # Value: SHA-256 of retained reviewed qualification evidence.
 REVIEWED_RELEASES = {}
 
+# Reviewed candidates may be exercised only by the separate local-dummy
+# QualificationSession. This is not live profile registration or account
+# readiness. Same exact seven-part key; value pins the candidate review evidence.
+# Remains empty until a final candidate closure has been independently reviewed.
+REVIEWED_QUALIFICATION_CANDIDATES = {}
+
 # Exact dummy-auth/native enforcement evidence; this does not attest account
 # readiness, actual call usage, business quality or final eligibility.
 # docs/superpowers/evidence/2026-10-23-m2c-native-qualification.json
