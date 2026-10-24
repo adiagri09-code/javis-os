@@ -233,3 +233,51 @@ và mọi lineage/bằng chứng lịch sử giữ nguyên; hash sau bổ sung �
    bảo toàn hash nguồn gốc và lineage như mục12. Tiếp tục từ checkpoint hiện
    tại, không làm lại phần đã đạt và không hỏi lại xác nhận thông thường.
 
+## 14. Bổ sung ưu tiên tái sử dụng Harness² cho phần chưa viết — 24/10/2026
+
+Chỉ dẫn trực tiếp của chủ được chuyển từ chat “Xác định bước harness2 tốn thời
+gian” (`01a16662-a77c-72e2-9c40-265c5659d5cc`), áp dụng từ checkpoint hiện tại.
+Goal trước mục14 có SHA-256
+`f683ff6abba61e110ef8034fe1451d80390d6688866c2def5f2f964ec4fcd356`.
+Giữ hash nguồn gốc, toàn bộ lineage và bằng chứng cũ; ghi hash mới riêng.
+
+1. Ưu tiên tái sử dụng mã [Google Harness²](https://github.com/google-research/harness2)
+   ở các phần **chưa viết**, để giảm công thực tế. Nguồn chuẩn đã pin trong spec
+   là `1cfe254e8d25b15f37048c3730134686abe60335`. Nếu cần nguồn mới, pin SHA riêng
+   và ghi chênh lệch liên quan; không âm thầm đổi snapshot chuẩn.
+2. Trước mỗi thành phần mới, đối chiếu upstream có mục tiêu, ghi bảng ngắn:
+   chức năng Javis cần → file/hàm/SHA upstream → dùng nguyên / adapter / viết
+   riêng → lý do và test hợp đồng cần. Chỉ đọc dependency trực tiếp đủ quyết
+   định, không audit lại toàn repo hoặc mở đợt refactor lớn.
+3. Ưu tiên prompt Propose/Compose/Reflection và ranh giới evidence trong
+   `core/prompts.py`, điều phối Propose–Probe–Compose trong `core/recursion.py`,
+   selection độc lập trong `core/selection.py`, kinh nghiệm/chỉ mục trong
+   `core/library.py`, cùng helper/context/tree/protocol/test thực sự liên quan.
+   Compose, recipe/library và bundle còn thiếu phải kiểm upstream trước.
+4. Chọn import/dependency pin hoặc vendor một phần có nguồn gốc rõ và adapter
+   hẹp theo tổng công tích hợp/bảo trì. Kiểm dependency, side effect, ownership
+   và interface thật; không tạo runtime, usage ledger hay executor trùng Javis.
+5. Không thay phần Javis đã hoàn thiện chỉ để tăng tỷ lệ reuse. Chỉ đổi khi có
+   lỗi hoặc lợi ích cụ thể đủ bù chi phí, có phạm vi/bằng chứng. Không hứa phần
+   trăm tiết kiệm chưa đo; không thêm hồ sơ/review hình thức.
+6. Khi thực sự lấy code, giữ Apache-2.0, copyright/attribution và NOTICE nếu
+   áp dụng; ghi SHA và sửa đổi trong nguồn/manifest. Kiểm riêng giấy phép của
+   dependency/third_party/dataset được lấy; không tự copy benchmark/dataset.
+7. Không lấy policy upstream trái hợp đồng Javis: `selection_pool` snapshot
+   chuẩn chỉ chọn finals và loại baseline; Javis luôn giữ baseline trong so
+   sánh/quyết định, candidate thua hoặc inconclusive thì giữ bản cũ. Khả năng
+   sửa system prompt/guardrails/plugins của upstream không cấp quyền sửa luật
+   chủ, quyền hay model của Javis. Prompt không thay host enforcement.
+8. Giữ mọi gate source/owner/grant/scope, protected content, holdout kín,
+   lineage/config/version, native isolation/effective view, cancellation/crash/
+   cleanup/concurrency/recovery, usage/unknown, migration/old-reader, atomic
+   apply/revert, review độc lập và full CI trên commit cuối. Test upstream
+   không thay kiểm adapter/Javis; chỉ lặp regression theo ảnh hưởng thực tế.
+9. Giữ mục13: Giai đoạn1 hoàn thiện code M0–M8 với kiểm kỹ thuật, mô phỏng và
+   localhost fake provider; thử model/tài khoản/nghiệp vụ, pilot và live canary
+   vẫn ở Giai đoạn2. Reuse không cho phép thử thật hoặc rollout sớm.
+10. Lưu chỉ dẫn vào Goal và tham chiếu progress/checkpoint/plan hiện tại;
+    plan sau kế thừa. Checkpoint ghi gọn module đã tận dụng, phần cần adapter
+    và phần phải viết riêng. Bảo toàn công việc đang chạy, tiếp tục Goal và
+    không hỏi lại xác nhận thường lệ.
+

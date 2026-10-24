@@ -3,6 +3,11 @@
 Owner Goal sections12/13 apply from checkpoint d13ecb48 on existing M2 worktree,
 branch codex/agent-skill-improvement-m2d1, draft PR803/reserved0.299.0. This plan
 changes scheduling, not scope, acceptance thresholds, evidence or live authority.
+Goal section14 additionally requires targeted upstream reuse assessment before
+each unwritten component at Harness²1cfe254e8d25b15f37048c3730134686abe60335.
+Use [the incremental reuse map](2026-10-24-harness2-reuse-map.md); inherit both
+addenda in later plans. Preserve Javis baseline policy/authority/ledger and all
+gates; no rewrite of completed components for a reuse percentage.
 It supersedes older plan instructions to run a real account feasibility next.
 No account inference is currently owned/running: recent tests are fixture/local
 preparation and isolated CI only. No restart, deployment or activation occurs.

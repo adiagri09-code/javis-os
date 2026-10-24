@@ -1,5 +1,31 @@
 # Agent and skill improvement Goal progress
 
+## Current owner reuse update and D2 ordinary task integration
+
+Goal§14 persists the direct2026-10-24 owner instruction from chat
+`01a16662-a77c-72e2-9c40-265c5659d5cc`: assess targeted upstream reuse before
+each unwritten component, pin Harness²1cfe254e8d25b15f37048c3730134686abe60335,
+prefer narrow import/vendor+adapter where it reduces actual integration work.
+No completed component rewrite for reuse percentage; preserve license, baseline,
+quality/authority/ownership/usage/recovery gates and Goal§13 code-first ordering.
+Post§14 raw Goal SHA-25677310e4c4635b012efb8f565bd842d314c82d6e2d168b90dd1ef006f484a2b2b;
+pre§14 f683ff6abba61e110ef8034fe1451d80390d6688866c2def5f2f964ec4fcd356 and
+all older original/spec/lineage hashes remain historical, never replaced.
+[The incremental reuse map](../plans/2026-10-24-harness2-reuse-map.md) records
+the first targeted decision: inspected actual upstream substrate protocols and
+context builder are benchmark staging, lack Javis private live-turn ownership,
+and delete/copy mutable destinations. Keep the narrow Javis task lifecycle using
+its completed M0/runtime/core; no upstream code copied/imported for this unit.
+Upcoming prompt/compose/selection/recipe/bundle units must inspect upstream first.
+
+D2 core authored13 tests:12 passed/1 Windows symlink privilege skip3.318s;
+independent integration review/execution is in progress. Actual lazy/hub/router
+consumer RED7 had3 failures/1 error (mutable metadata, bound empty-body fallback,
+missing encrypted pin); correctionGREEN7 passed2.274s. These are private fixture
+tests without model/native/account calls. Actual host lifecycle integration,
+independent review, impacted regression and final exact-head full CI remain open.
+No ordinary task/activation/native/HTTP/resume production-readiness claim yet.
+
 ## Current technical continuation — actual operation binding branch verified
 
 New independently authored fixture tests reuse genuine private Session, actual
