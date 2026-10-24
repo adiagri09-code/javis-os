@@ -14,6 +14,7 @@ from improvement_operation_checks import execution_checks
 from improvement_operation_execution import OperationExecution
 from improvement_trial_evidence import decode_trace
 from improvement_trial_records import _brain
+from improvement_qualification_records import require_product_store
 
 
 class OperationResults:
@@ -25,6 +26,7 @@ class OperationResults:
     def read(self, principal, identifier, attempt):
         if type(attempt) is not int or attempt not in (1, 2):
             raise ValueError("invalid_operation_result_attempt")
+        require_product_store(self.execution.assets, principal)
         self.execution.records.get(principal, identifier)
         brain = _brain(principal)
         with closing(self.execution.store._conn()) as connection:
@@ -85,6 +87,7 @@ class OperationResults:
         _digest(capability_hash)
         brain = _brain(principal)
         with closing(self.execution.store._conn()) as connection:
+            require_product_store(self.execution.assets, principal, connection=connection)
             row, attempt = self.execution._leased(connection, principal, identifier, expected_generation, lease_token, time.time())
             prepared = self.execution._current(connection, principal, row)
             if row["status"] != "running" or attempt["engine_at"] is None or attempt["workspace_json"] is None:
@@ -149,6 +152,7 @@ class OperationResults:
         status = "completed" if call_status == "ok" and report["verdict"] != "fail" else "failed"
         self.execution.host._snapshot_observe(principal, prepared[1])
         with self.execution.store._Tx(self.execution.store) as connection:
+            require_product_store(self.execution.assets, principal, connection=connection)
             row, attempt = self.execution._leased(connection, principal, identifier, expected_generation, lease_token, time.time())
             if (row["status"] != "running" or self._trace(connection, row) != trace
                     or attempt["materialization_hash"] != materialization_hash or attempt["workspace_json"] != IM._json(workspace)

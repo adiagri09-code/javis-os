@@ -104,6 +104,7 @@ class _ReadDatabase:
     """Read the existing shared file without running GoalStore initialization."""
 
     def __init__(self, path: Path):
+        self.path = path.absolute()
         self.uri = path.resolve().as_uri() + "?mode=ro"
 
     def _conn(self):
@@ -112,12 +113,12 @@ class _ReadDatabase:
         return connection
 
 
-def read_existing(path: Path, blobs: RevisionBlobs):
+def read_existing(path: Path, blobs: RevisionBlobs, *, qualification_anchor=None):
     """Return metadata access only when an installed compatible schema exists."""
     if not path.is_file():
         return None
     database = _ReadDatabase(path)
-    return ImprovementStore(database, blobs) if has_schema(database) else None
+    return ImprovementStore(database, blobs, qualification_anchor=qualification_anchor) if has_schema(database) else None
 
 
 def ensure(store) -> None:
@@ -189,9 +190,18 @@ def _immutable_triggers(connection, tables):
 
 
 class ImprovementStore:
-    def __init__(self, goal_store, blobs: RevisionBlobs):
+    def __init__(self, goal_store, blobs: RevisionBlobs, *, qualification_anchor=None):
+        if qualification_anchor is not None:
+            from improvement_native_protocol import _digest
+            _digest(qualification_anchor)
+        self._qualification_anchor = qualification_anchor
         self.store = goal_store
         self.blobs = blobs
+
+    @property
+    def qualification_anchor(self):
+        """Expected engineering run identity supplied by its trusted factory."""
+        return self._qualification_anchor
 
     @staticmethod
     def _replay(connection, brain: str, key: str, operation: str, payload):

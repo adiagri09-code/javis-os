@@ -16,6 +16,7 @@ from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable
 from improvement_trial_checks import execution_invariants
 from improvement_trial_evidence import TrialEvidence
 from improvement_trial_products import TrialProducts
+from improvement_qualification_records import require_product_store
 
 
 def _guard(callback, request):
@@ -45,6 +46,7 @@ class TrialResults:
         if IM._schema_version(self.trials.store) < 3:
             raise PermissionError("trial_result_unavailable")
         with closing(self.trials.store._conn()) as connection:
+            require_product_store(self.trials.assets, principal, connection=connection)
             trial = self.trials._row(connection, brain, identifier)
             request = json.loads(trial["request_json"])
             if request.get('version') == 4:
@@ -121,6 +123,7 @@ class TrialResults:
         payload = {"trial_id": identifier, "attempt": attempt, "expected_generation": expected_generation}
         owners = OwnerDecisionStore(self.trials)
         with self.trials.store._Tx(self.trials.store) as connection:
+            require_product_store(self.trials.assets, principal, connection=connection)
             replay = self.trials.assets._replay(connection, brain, event_key, "trial_reevaluate", payload)
             if replay is not None:
                 return replay
@@ -154,6 +157,7 @@ class TrialResults:
         if len(raw) > MAX_ASSET_BYTES:
             raise ValueError("trial_result_too_large")
         with self.trials.store._Tx(self.trials.store) as connection:
+            require_product_store(self.trials.assets, principal, connection=connection)
             replay = self.trials.assets._replay(connection, brain, event_key, "trial_reevaluate", payload)
             if replay is not None:
                 return replay
@@ -203,9 +207,11 @@ class TrialResults:
         """
         brain = IM._brain(principal)
         IC._digest(capability_hash)
+        require_product_store(self.trials.assets, principal)
         request = self.trials.get(principal, identifier)["request"]
         guard = _guard(live_guard, request)
         with self.trials.store._Tx(self.trials.store) as connection:
+            require_product_store(self.trials.assets, principal, connection=connection)
             row, attempt = self.trials._leased(connection, principal, identifier, expected_generation, lease_token, time.time())
             if row["status"] != "evaluating" or attempt["engine_at"] is None:
                 raise IM.ConflictError("trial_evaluation_stale")
@@ -277,6 +283,7 @@ class TrialResults:
             raise ValueError("trial_result_too_large")
         digest = IM._hash(report)
         with self.trials.store._Tx(self.trials.store) as connection:
+            require_product_store(self.trials.assets, principal, connection=connection)
             row, attempt = self.trials._leased(connection, principal, identifier, expected_generation, lease_token, time.time())
             if row["status"] != "evaluating" or row["attempt"] != number:
                 raise IM.ConflictError("trial_evaluation_stale")

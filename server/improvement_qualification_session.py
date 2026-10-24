@@ -2,7 +2,7 @@
 
 Candidate review permits preparation of this disposable engineering domain. It
 does not register a native release or prove account readiness. Native launch,
-typed verification, attempt/call joins and mandatory domain authentication at
+typed verification and mandatory domain authentication at
 publication/cold read must be integrated before any qualifier can execute.
 """
 from __future__ import annotations
@@ -76,10 +76,6 @@ class QualificationSession:
             blobs = RevisionBlobs(self.root / 'assets',
                 encrypt=lambda text: 'enc:' + codec.encrypt(text.encode()).decode(),
                 decrypt=lambda text: codec.decrypt(text.removeprefix('enc:').encode()).decode())
-            self.assets = IM.ImprovementStore(GoalStore(self.root / 'state' / 'resonance.sqlite3'), blobs)
-            IM.ensure(self.assets.store)
-            from agent_ledger import CallLedger
-            self.ledger = CallLedger(self.assets.store)
             created = time.time()
             self._scope = {'version': 1, 'domain': 'qualification', 'account_ready': False,
                 'run_nonce': secrets.token_hex(32), 'root': str(self.root), 'brain_id': self.principal.brain_id,
@@ -87,6 +83,11 @@ class QualificationSession:
                 'endpoint': endpoint, 'maximum_queries': maximum_queries,
                 'created_at': created, 'deadline_at': created + lifetime_seconds}
             self.run_hash = IM._hash(self._scope)
+            self.assets = IM.ImprovementStore(GoalStore(self.root / 'state' / 'resonance.sqlite3'), blobs,
+                qualification_anchor=self.run_hash)
+            IM.ensure(self.assets.store)
+            from agent_ledger import CallLedger
+            self.ledger = CallLedger(self.assets.store)
             self._event_key = 'native-qualification:' + self.run_hash
             self._pin = _parse(_canonical(pin))
             self._release = release
@@ -122,6 +123,97 @@ class QualificationSession:
         if (hashlib.sha256(raw).hexdigest() != self.run_hash or raw != _canonical(self._scope)):
             raise AssetUnavailable('qualification_session_changed')
         return _parse(raw)
+
+    @staticmethod
+    def open_forensic(root, *, expected_run_hash):
+        """Explicit anchored read-only reopen; never migrations, launch or auth."""
+        from improvement_qualification_records import read_run
+        _digest(expected_run_hash)
+        supplied = Path(root)
+        if not supplied.is_absolute() or '..' in supplied.parts:
+            raise PermissionError('qualification_archive_root_invalid')
+        root = supplied.absolute(); check_ancestry(root)
+        key_path = root / 'fixture-encryption.key'; check_ancestry(key_path)
+        with key_path.open('rb') as handle: key_bytes = handle.read(65)
+        if len(key_bytes) != 44: raise AssetUnavailable('qualification_archive_key_invalid')
+        codec = Fernet(key_bytes)
+        blobs = RevisionBlobs(root / 'assets',
+            encrypt=lambda text: 'enc:' + codec.encrypt(text.encode()).decode(),
+            decrypt=lambda text: codec.decrypt(text.removeprefix('enc:').encode()).decode())
+        path = root / 'state' / 'resonance.sqlite3'; check_ancestry(path)
+        assets = IM.read_existing(path, blobs, qualification_anchor=expected_run_hash)
+        if assets is None: raise AssetUnavailable('qualification_archive_unavailable')
+        principal = Principal('owner', 'owner', str(root / 'brain'))
+        if read_run(assets, principal) is None: raise AssetUnavailable('qualification_archive_unavailable')
+        return assets, principal
+
+    def bind_attempt(self, owner, principal, identifier, *, expected_generation, lease_token, capability_hash):
+        """Count and bind a prepared real attempt before its first query launch.
+
+        Exact replay is historical identity only; it still requires an active
+        pre-engine lease and does not permit relaunch or refresh a closed run.
+        """
+        from improvement_trials import TrialStore
+        from improvement_operation_execution import OperationExecution
+        from improvement_qualification_records import _key, _ATTEMPT, actual_binding, read_attempt, read_run
+        _digest(capability_hash)
+        if (type(owner) not in (TrialStore, OperationExecution) or owner.assets is not self.assets
+                or principal != self.principal):
+            raise PermissionError('qualification_attempt_owner_foreign')
+        kind = 'trial' if type(owner) is TrialStore else 'operation'
+        with self.assets.store._Tx(self.assets.store) as connection:
+            if self._closed or self._cleaned: raise PermissionError('qualification_session_closed')
+            scope = read_run(self.assets, principal, connection=connection)
+            if scope != self._scope: raise AssetUnavailable('qualification_session_changed')
+            if time.time() >= scope['deadline_at']: raise PermissionError('qualification_session_expired')
+            row, attempt = owner._leased(connection, principal, identifier, expected_generation, lease_token, time.time())
+            call = connection.execute('SELECT * FROM agent_calls WHERE id=?', (attempt['call_id'],)).fetchone()
+            if (row['status'] != 'prepared' or attempt['status'] != 'prepared' or attempt['engine_at'] is not None
+                    or call is None or call['status'] != 'reserved' or call['engine_at'] is not None):
+                raise IM.ConflictError('qualification_attempt_already_started')
+            workspace = _parse(attempt['workspace_json'].encode())
+            manifest = owner.workspace.validate(workspace)
+            if (IM._hash(manifest) != attempt['materialization_hash']
+                    or attempt['materialization_hash'] != workspace['input_hash']
+                    or manifest['brain_id'] != principal.brain_id
+                    or manifest['engine_config_hash'] != IM._hash(self._pin)):
+                raise IM.ConflictError('qualification_materialization_changed')
+            if kind == 'trial':
+                expected = owner._materialization(connection, row, manifest['baseline_context'], principal=principal)
+                if expected != manifest: raise IM.ConflictError('qualification_materialization_changed')
+            else:
+                prepared = owner._current(connection, principal, row)
+                owner.host._snapshot_observe(principal, prepared[1])
+                from improvement_operation_protocol import operation_materialization
+                from improvement_native_formats import input_version
+                expected = operation_materialization({'version': input_version(self._pin, 'operation'),
+                    'brain_id': principal.brain_id, 'operation_id': identifier,
+                    'request': _parse(row['request_json'].encode()), 'engine_config_hash': IM._hash(self._pin),
+                    'data': _parse(self.assets.blobs.read(principal.brain_id, row['input_blob_hash'])),
+                    'learning_origin': 'compose'})
+                if expected != manifest: raise IM.ConflictError('qualification_materialization_changed')
+            link = actual_binding(self.assets, principal, kind=kind, subject_id=identifier, attempt=attempt['attempt'],
+                capability_hash=capability_hash, run_hash=self.run_hash, connection=connection)
+            key = _key(kind, identifier, attempt['attempt'])
+            previous = self.assets._replay(connection, principal.brain_id, key, _ATTEMPT, {'run_hash': self.run_hash})
+            if previous is not None:
+                if previous.get('link_hash') != IM._hash(link): raise IM.ConflictError('qualification_attempt_changed')
+                link = read_attempt(self.assets, principal, kind=kind, subject_id=identifier, attempt=attempt['attempt'],
+                    capability_hash=capability_hash, connection=connection)
+            else:
+                count = connection.execute('SELECT COUNT(*) FROM improvement_events WHERE brain_id=? AND operation=?',
+                    (principal.brain_id, _ATTEMPT)).fetchone()[0]
+                if count >= scope['maximum_queries']: raise PermissionError('qualification_query_budget_exhausted')
+                raw = _canonical(link)
+                blob = self.assets.blobs.write(principal.brain_id, raw)
+                self.assets._event(connection, principal, key, _ATTEMPT, {'run_hash': self.run_hash},
+                    {'version': 1, 'run_hash': self.run_hash, 'link_hash': IM._hash(link), 'blob_hash': blob})
+            # Blob encryption and callbacks may be slow. No expired lease/run
+            # can publish a newly counted attempt merely from its early check.
+            if self._closed or time.time() >= scope['deadline_at']:
+                raise PermissionError('qualification_session_expired')
+            owner._leased(connection, principal, identifier, expected_generation, lease_token, time.time())
+            return link
 
     def environment(self, cwd):
         if self._closed or self._cleaned:

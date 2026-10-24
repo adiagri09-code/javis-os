@@ -75,6 +75,12 @@ class TrialProducts:
             return json.loads(self.trials.blobs.read(brain, row["content_hash"]))
 
     def _products(self, connection, row, *, principal=None, capability_hash=None):
+        from improvement_qualification_records import require_product_store
+        from resonance_store import Principal
+        # Historical internal callers omitted principal; this only determines
+        # the durable domain and confers no execution/product authority.
+        require_product_store(self.trials.assets, principal if principal is not None else
+            Principal('owner', 'owner', row['brain_id']), connection=connection)
         records = list(connection.execute("SELECT * FROM improvement_trial_observations WHERE trial_id=? AND attempt=? ORDER BY sequence",
                                           (row["id"], row["attempt"])))
         if (not records or records[-1]["kind"] not in ("worker_complete", "drained")

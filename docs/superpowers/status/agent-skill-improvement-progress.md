@@ -1,5 +1,27 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — durable engineering run/attempt domain approved
+
+Concrete session now supplies a read-only expected run anchor to actual M0 store;
+explicit forensic reopen requires it and uses SQLite read-only mode. Missing root
+fails; unanchored reopen seeing engineering events refuses. Prepared trial links
+bind actual request/workspace/materialization/config/capability/ledger call in one
+immutable encrypted event, with atomic query budget and exact idempotent replay.
+Historical link reads survive workspace cleanup/close without live lease checks.
+
+Default TrialResults read/finish/reevaluate, TrialProducts._products and
+OperationResults read/finish refuse durable engineering stores before data or
+evaluators and final publication Tx. Canonical report bytes remain unchanged.
+Two static findings (materialization mismatch, slow replay passing final fences)
+were reproduced then repaired. Independent42 PASS50.472s, all16 pins unchanged;
+public qualification-records contains scope and logs. No native/account/inventory.
+
+Still no launch authority: operation bind runtime proof, explicit typed
+engineering publication/forensic result and upper comparison/selection/replay
+fences remain due before qualifier activation. Next explicit startup3 wire and
+concrete host/worker permit integration, then actual exact-source owned pipeline
+qualification, registration/account feasibility and final-head CI. Goal open.
+
 ## Current continuation — concrete qualification session foundation approved
 
 Separate empty engineering-candidate authority validates exact static runtime and
