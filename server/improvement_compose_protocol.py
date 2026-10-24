@@ -83,7 +83,7 @@ def _input(data):
         if type(variant) is not str or variant not in ['base', *identities] or variant in groups:
             raise ValueError('invalid_compose_tuning_variant')
         observations = group['observations']
-        if type(observations) is not list or not 1 <= len(observations) <= 1000:
+        if type(observations) is not list or not 1 <= len(observations) <= 4000:
             raise ValueError('compose_observed_tuning_required')
         locations = set()
         for observation in observations:
@@ -100,7 +100,9 @@ def _input(data):
                 raise ValueError('compose_duplicate_observation')
             locations.add(location)
         groups[variant] = locations
-    if len(refs) > 32:
+    # Two existing comparison matrices, each bounded at4000 cells. Patch and
+    # decision citations stay32; the complete tuning projection has its own cap.
+    if len(refs) > 8000:
         raise ValueError('compose_evidence_limit')
     angles, hashes = set(), set()
     for candidate in candidates:

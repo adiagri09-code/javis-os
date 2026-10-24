@@ -152,6 +152,18 @@ class ComposeProtocolTests(unittest.TestCase):
         oversized = copy.deepcopy(self.data); oversized['public_contract'] = {'text': 'x' * (1024 * 1024)}
         with self.assertRaises(ValueError): self.p.render_compose_input(oversized)
 
+    def test_full_pilot_projection_keeps_all_two_repeat_trial_refs_without_patch_ref_cap(self):
+        # Twelve tuning cases *two repeats per arm; comparisons have separate
+        # baseline runs. The32 patch-citation cap must not truncate96 trial refs.
+        data = copy.deepcopy(self.data)
+        for group, count in zip(data['tuning'], (48, 24, 24)):
+            seed = group['observations'][0]
+            group['observations'] = [seed] + [{'ref': {'kind': 'tuning_trial', 'id': group['variant'] + '-trial-' + str(i)},
+                'location': 'artifact:line1', 'observed': 'Authorized observed artifact.'} for i in range(1, count)]
+        rendered = json.loads(self.p.render_compose_input(data))
+        self.assertEqual([len(group['observations']) for group in rendered['evidence_projection']['tuning']], [48, 24, 24])
+        self.assertEqual(rendered['evidence_projection'], data)
+
     def test_conflicting_original_regions_cannot_both_be_claimed_kept(self):
         data = copy.deepcopy(self.data)
         second = self.body_patch('Use only the controlling source.\r\n', angle='domain_process')

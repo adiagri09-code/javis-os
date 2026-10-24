@@ -1,5 +1,18 @@
 # Agent and skill improvement Goal progress
 
+## Compose full pilot projection bound — scoped correction approved
+
+Consumer inspection found the initial pure adapter mistakenly reused32 patch
+citation slots for all tuning trial refs. A12-case/two-repeat/two-comparison
+projection needs96 separate refs. New actual96ref fixture RED1ERROR (other9green)
+→GREEN10. Trial projections now use existing schedule bounds (≤4000observations/
+group,≤8000unique trials) while1MiB fail-closed/no-truncation and32citations per
+patch/decision remain. Independent focused1PASS.036s,9stable pins; report
+6f76a33a87bb919ffc52395065ace2b042b234b14c3b8056325e493ead308ff3.
+Prior upstream9-definition/license proof is unchanged/reused. This is projection
+capacity, not an actual pilot or support for unlimited context. Durable host and
+runtime consumers remain next. [Additive evidence](../evidence/2026-10-24-compose-pilot-projection-bound.json).
+
 ## Actual upstream compose adapter — scoped pure component approved
 
 Goal17's first functioning fixture slice now calls actual compose_round at t=k=1
