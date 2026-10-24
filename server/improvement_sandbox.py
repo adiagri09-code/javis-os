@@ -87,7 +87,7 @@ def _manifest(value):
     if type(manifest.get('version')) is int and manifest['version'] in (2, 3, 4):
         required.add('effective_view')
     _fields(manifest, required)
-    if type(manifest["version"]) is not int or manifest["version"] not in (1, 2, 3, 4):
+    if type(manifest["version"]) is not int or manifest["version"] not in (1, 2, 3, 4, 5):
         raise ValueError("unsupported_trial_input")
     if manifest['version'] in (2, 3, 4):
         view = manifest['effective_view']

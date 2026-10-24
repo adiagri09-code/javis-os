@@ -1,5 +1,23 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — explicit native baseline manifest foundation approved
+
+Readonly manifest5 now carries the real baseline bundle/context/assets/fixtures
+without an invented paired view. Its inline prompt/effective hash equal legacy1;
+full canonical input hash distinguishes5. Historical1/2/3/4 behavior stays exact,
+multi skill/agent assets retain old protected validation, paired-view brokers
+refuse5 and unchanged read correlators stay UNKNOWN. Focused6 RED2ERROR/1FAIL.011s,
+author6 PASS.020s; independent21 PASS.057s includes final assertion correction,
+legacy manifest4 eleven and four affected sandbox checks, all nine pins stable.
+Public native-baseline-foundation records exact scope and logs.
+
+No materializer or runtime emits/executes5 yet. Next is owned native baseline
+factory/input-delivery receipt plus exact distinct baseline tool policy, then
+worker/parent/runner/result/materializer integration. Keep actual baseline asset
+read/provider/comprehension coverage UNKNOWN and preserve final eligibility gates.
+Current local head after ancillary fix isfcf265db; parent/callers remain approved
+in their recorded scope, full source/native qualification and final-head CI due.
+
 ## Current continuation — actual default inventory observed; ancillary fix approved
 
 Readonly default inventory initially refused native_release_path in6.078s.
