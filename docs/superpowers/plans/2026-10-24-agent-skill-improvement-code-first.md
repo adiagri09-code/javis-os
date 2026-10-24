@@ -12,6 +12,11 @@ Goal section15 permits a narrow useful prompt/evidence improvement in existing
 render_proposer_input after preserving the in-progress D2 unit. Inspect pinned
 upstream proposer/reflection prompt functions first; preserve JSON/patch/owner/
 privacy contracts and historical/source qualification. Do not rebuild infrastructure.
+Goal§16 now permits selective replacement of existing implementation where the
+concrete benefit justifies adapter/consumer/migration/compatibility/qualification/
+regression/review effort, including infrastructure when justified. It supersedes
+the earlier blanket no-rewrite phrasing only to that extent, with all gates and
+history preserved. No restart, full-repo audit or copy-percentage refactor.
 It supersedes older plan instructions to run a real account feasibility next.
 No account inference is currently owned/running: recent tests are fixture/local
 preparation and isolated CI only. No restart, deployment or activation occurs.

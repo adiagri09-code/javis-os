@@ -1,5 +1,23 @@
 # Agent and skill improvement Goal progress
 
+## Owner selective replacement update — Goal§16
+
+Direct owner update from the same authorized chat permits replacing existing
+Javis code/structure with pinned upstream when concrete benefits justify total
+adapter/consumer/migration/backward-compatibility/qualification/test/review cost.
+This supersedes prior blanket no-rewrite restrictions only within that scope;
+database/authority/native lifecycle can also be replaced when justified with a
+compatibility/recovery plan. Keep all gates/history/baseline/unknown/ownership,
+no parallel duplicate runtime/ledger, no full audit/restart or copy-percentage
+refactor. Ordinary technical choices are already authorized. Phase1/Phase2 stay.
+Goal§16 SHA-25676e349119bd3f7148204b2e57800d9769aac4f7cb73c271e6f8541ff0a6c5b18;
+pre§16 e868339ebd3ad1a73fe9faea13b74e2af959c8b3f8148eb4c2ddbae63ac8fc20,
+all earlier source/evidence lineage preserved. Active code-first plan/reuse map
+carry this rule. Current proposer adaptation already uses real upstream method
+via a small renderer while preserving Javis output/authority validators; no
+additional infrastructure replacement is justified by this unit. Ongoing serial
+fixture regression ownership is preserved; no account/model or activation starts.
+
 ## Current D2 ordinary named-skill snapshot unit — scoped technical approval
 
 Actual final Dashboard API branch now privately carries the original host turn

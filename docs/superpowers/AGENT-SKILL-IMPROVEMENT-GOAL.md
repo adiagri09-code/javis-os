@@ -326,3 +326,54 @@ nguồn/hash/evidence lịch sử giữ nguyên. Nguồn Harness² vẫn pin
    lại xác nhận thông thường. Mục tiêu là cải thiện đề xuất/bằng chứng cụ thể,
    không kéo dài việc bằng viết lại hạ tầng.
 
+## 16. Bổ sung cho phép thay có chọn lọc phần đã viết bằng Harness² — 24/10/2026
+
+Chỉ dẫn trực tiếp mới của chủ từ chat
+`01a16662-a77c-72e2-9c40-265c5659d5cc`. Goal trước mục16 có SHA-256
+`e868339ebd3ad1a73fe9faea13b74e2af959c8b3f8148eb4c2ddbae63ac8fc20`;
+bảo toàn hash nguồn gốc và mọi lineage lịch sử. Mục này nới các hạn chế ở mục14–15
+đúng phạm vi sau: **cho phép thay phần đã viết khi chứng minh phù hợp hơn và đáng
+tổng công chuyển đổi**, không giữ thiết kế chỉ vì đã tốn công. Không sửa hồi tố
+quyết định/evidence cũ, không refactor rộng chỉ để giống Google hay tăng tỷ lệ copy.
+
+1. Áp dụng tại đơn vị hiện tại hoặc kế tiếp; không restart, không bỏ ownership
+   việc đang chạy, không khảo sát lại toàn bộ code. Khi upstream có lõi tốt hơn,
+   ghi so sánh trước/sau ngắn với file/hàm/SHA cụ thể trước khi thay.
+2. Lợi ích cần cụ thể: giảm logic/nhánh/dependency tự duy trì; tách propose/probe/
+   compose/selection/reflection tốt hơn; tăng kiểm chứng/tái lập/truy vết; hoặc
+   reuse implementation thật. Không mặc định Google tốt hơn hay suy chất lượng
+   nghiệp vụ cao hơn khi chưa thử thật.
+3. Ưu tiên prompt phân tích/đề xuất/compose/reflection; cấu trúc chỉnh sửa →
+   run/trace được phép → khác biệt quan sát → helped/hurt/no observed effect/
+   confounded; hàm thuần và lõi điều phối; recipe/library/bundle khi đến phần ấy.
+4. So tổng công adapter, consumer, migration, backward compatibility,
+   qualification, regression và review với lợi ích bảo trì/độ đúng dài hạn.
+   Đáng làm thì tự thực hiện trong quyền đã có. Phương án rộng/tốn nhiều công
+   hoặc đổi chính sách thì ghi trade-off, tiếp tục phần độc lập; không audit vô hạn.
+5. Ưu tiên upstream nguyên hoặc vendor có provenance và adapter hẹp. Giữ pin
+   `1cfe254e8d25b15f37048c3730134686abe60335`; snapshot khác cần pin/lý do/chênh
+   lệch riêng. Giữ Apache-2.0/copyright/NOTICE, ghi sửa đổi và kiểm third-party dùng.
+6. Giữ boundary source/owner/grant/brain/scope, luật chủ, baseline trong quyết
+   định và inconclusive/thua giữ baseline; holdout/private answers kín; giới hạn
+   candidate/repair/compose; source/runtime/config pins; history/usage/unknown;
+   actual Trial/Call ownership; cancellation/crash/cleanup/concurrency/recovery;
+   migration/old-reader; atomic apply/revert; native/session/resume/activation.
+   Không thay gate bằng prompt/model vote hoặc tạo executor/ledger song song.
+7. Database/quyền/native lifecycle không được mặc định bất khả xâm phạm, nhưng
+   chỉ thay khi có lợi ích cụ thể và kế hoạch giữ compatibility/recovery. Không
+   lấy benchmark framework làm production authority; giữ action/model/reasoning
+   và quyền live đã có.
+8. Mỗi thay đổi là delta nhỏ review được, giữ test hợp đồng hành vi trước/sau,
+   thêm test theo rủi ro cần kiểm, kiểm consumer/integration bị ảnh hưởng. Reuse
+   evidence phần không đổi khi đủ điều kiện. Không giữ hai runtime dài hạn để
+   né chuyển đổi, không xóa đường cũ trước khi bảo toàn user/history/consumer.
+9. Đổi prompt/code thuộc native footprint phải invalidate/requalify đúng cơ
+   chế; không nhận proof cũ cho nguồn mới. Giữ review độc lập theo delta và full
+   required CI commit cuối. Phase1 code/kiểm kỹ thuật/mô phỏng/localhost fake;
+   model/account/business pilot/canary vẫn Phase2 như mục13.
+10. Checkpoint ghi upstream dùng thật, phần thay/giữ và lý do, test/review/
+    qualification và lợi ích đo được nếu có. Không hứa phần trăm tiết kiệm chưa đo.
+11. Lưu Goal/progress/checkpoint/plan/reuse map; bảo toàn công việc và quyền
+    chủ đã cấp. Tự quyết kỹ thuật thường lệ theo tiêu chí này, tiếp tục từ
+    checkpoint, không hỏi lại xác nhận thường lệ.
+
