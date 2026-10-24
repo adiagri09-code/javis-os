@@ -1,5 +1,23 @@
 # M0–M8: code and technical verification before real trials
 
+Latest owned publication component is scoped approved: actual one-shot shared
+RoleWorkflow/tasks/native2 result reader, atomic composition/optional candidate3
+and actual SkillCandidates v2 provenance consumer. Current consent/source/domain
+and native product gates remain; UNKNOWN qualification cannot publish. No
+inherited region/edit/semantic pass; ordinary staging remains cap2. Actual cold
+native history/decision and callerTx CallLedger gaps have meaningful REDs and
+shared-reader/binder fixes. Independent ROOT4PASS44.395s/24pins, root impact61PASS
++manual TC; early separate Linux69PASS+manual TC/10scripts/10pins40061864692.
+Publiccompose-owned-publication SHA1129532c0510ec9c7a839a0a4be07a8454308aa5c48e11fd77c117b2f660e3c3.
+PROFILE95 is unqualified/registries closed; all positive native/qualification
+predicates in these tests are explicitly unexecuted storage controls. Actual309
+exact-evidence test remains intact. Next2026-10-24-compose-checked-arm-policy.md:
+alternate explicit new candidate_policy reserves3 before observations, old
+request/budget2 unchanged; typed3 plus independent semantic/owner/new bundle/view/
+tuning/final/qualification/regression/API/UI before full integration. No real
+query/model/account/activation/deploy/restart. Actual derived upstream library,
+same-pipeline dummy qualification, exact final task-head full CI/Phase2 remain open.
+
 Latest connected compose admission is scoped approved: actual Records creation/
 event and shared Execution current authenticate active consent/input and only
 their exact own experiment generation+1/timestamp mutation. Actual ledger/lease/

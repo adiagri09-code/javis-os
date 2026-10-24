@@ -1,5 +1,53 @@
 # Agent and skill improvement Goal progress
 
+## Owned compose workflow/publication — scoped component approved
+
+ComposerService now runs one explicit current-consent compose through the actual
+shared RoleWorkflow/OperationTasks/Execution/CallLedger. Native2 format and current
+source/grant/domain checks precede verification/Records creation. Same-event
+callers share ownership; completed outcomes replay cold after off. Interrupted
+start history does not resume implicitly; malformed output gets no repair or
+second compose. Actual report2 and all required native/product gates remain
+mandatory; default UNKNOWN qualification publishes no composition/candidate.
+
+Actual report/artifact/decisions/input/basis link one immutable composition and
+optional encrypted candidate3. Existing SkillCandidates.read_proposal consumes
+version2/common provenance plus composition_id; no ordinary owner-request event,
+region/edit/semantic approval or inherited pass. Ordinary staging stays capped2.
+Event/typed metadata writes and slow reads precede final current/source and SQL
+product/input/op/consent/domain CAS. Late grant/source/domain/call drift rolls back.
+
+Author RED7/.207s before fixtures. Initial root7:2PASS/5failing cases(8assertions)
+144.041s; actual diagnostic traced missing composer metadata to telemetry refusal
+after the owned marker. Root metadata RED1/.001s preceded minimal closed
+composer/improve_compose map addition; actual NativeUsageRecorder unchanged.
+Targeted candidate+keepbase2PASS51.270s; remaining unknown/malformed/late4controls
+3PASS147.390s. Independent static P2 native-history gap reproduced by deleting
+actual encrypted decision/observation blobs: ROOT1/two subFAIL25.599s. Actual cold
+OperationResults.read_stored extraction now authenticates that history for both
+old and derived readers. Root actual callerTx mirror/model drift RED1/two subFAIL
+25.915s led to final _attempt/bound_call/status/config/materialization/result check;
+late token/cost fields remain mutable. ROOT4PASS56.883s and extended final lineage
+1PASS26.620s. Root impact9scripts:61unittestPASS +manual turn_context PASS.
+
+Independent ROOT4PASS44.395s/24stablepins/no findings, both P2 closed; own7 excluded
+selfapproval. Review3270c767d2859cf541592c0eb0cddd5769cb9e83e6b1c227f8f1d7fb958aec05.
+Early isolated Linux40061864692/job120776919060 SUCCESS69unittest +manual TC,
+10scripts/10exactpins, snapshotb792833d45e53e648d536e52632f22f861ddab4c. Public
+2026-10-24-compose-owned-publication.json SHA
+1129532c0510ec9c7a839a0a4be07a8454308aa5c48e11fd77c117b2f660e3c3 (UTF8/LF).
+
+Positive native packets/verifier/format/binding/qualification predicate are
+explicit UNEXECUTED STORAGE CONTROLS, not native image ACK/account/model readiness.
+PROFILE95/static Windowsraw3af5de7fdfbf4e05788b1bc18bcd42f7e181d16730c813468cce6da263dbc90c
+is unqualified; registries closed and actual309 exact-evidence test untouched.
+No real CLI/SDKClient/provider/model query, account retry, activation/deploy/restart
+or measured quality/cost benefit. Next checked-arm policy plan reserves3 only in
+an explicit alternate new request; old budget2 stays exact. Bind/freeze/select3
+still need actual reserved policy/fresh semantic/owner/new bundle/view/tuning/
+final/qualification/regression and API/UI. Actual upstream library follows that
+functioning compose slice; full Goal/same-pipeline dummy/final-head CI/Phase2 open.
+
 ## Actual compose operation admission — scoped component approved
 
 ComposePermissions.current now accepts an explicit actual stored operation and

@@ -24,13 +24,29 @@ class OperationResults:
         self.execution = execution
 
     def read(self, principal, identifier, attempt):
+        return self.read_stored(self.execution.assets, principal, identifier, attempt)
+
+    @staticmethod
+    def read_stored(assets, principal, identifier, attempt):
+        """The same concrete cold reader for role owners and derived proposals.
+
+        No source refresh or new execution is authorized by historical reading.
+        Native observations and durable decisions remain mandatory dependencies.
+        """
+        from improvement_operation_records import OperationRecords
+        if type(assets) is not IM.ImprovementStore:
+            raise TypeError('concrete_operation_result_store_required')
         if type(attempt) is not int or attempt not in (1, 2):
             raise ValueError("invalid_operation_result_attempt")
-        require_product_store(self.execution.assets, principal)
-        self.execution.records.get(principal, identifier)
+        require_product_store(assets, principal)
+        OperationRecords(assets).get(principal, identifier)
         brain = _brain(principal)
-        with closing(self.execution.store._conn()) as connection:
-            operation = self.execution._row(connection, principal, identifier)
+        with closing(assets.store._conn()) as connection:
+            operation = connection.execute('SELECT * FROM improvement_operations WHERE id=? AND brain_id=?',
+                (identifier, brain)).fetchone()
+            if operation is None:
+                raise PermissionError('operation_unavailable')
+            OperationRecords._public(operation)
             rows = list(connection.execute("SELECT * FROM improvement_operation_results WHERE operation_id=? AND brain_id=? AND attempt=?",
                                            (identifier, brain, attempt)))
             if not rows:
@@ -38,7 +54,7 @@ class OperationResults:
             if len(rows) != 1:
                 raise AssetUnavailable("operation_result_ambiguous")
         record = rows[0]
-        raw = self.execution.blobs.read(brain, record["blob_hash"])
+        raw = assets.blobs.read(brain, record["blob_hash"])
         value = json.loads(raw)
         if (IM._hash(value) != record["result_hash"] or value.get("operation_id") != identifier
                 or type(value.get("attempt")) is not int or value["attempt"] != attempt
@@ -48,20 +64,20 @@ class OperationResults:
             from improvement_native_trace_checks import validated_history, reread_native_decisions
             from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
             from improvement_trial_records import HostContextRecords
-            with closing(self.execution.store._conn()) as connection:
+            with closing(assets.store._conn()) as connection:
                 stored_attempt = connection.execute('SELECT workspace_json FROM improvement_operation_attempts WHERE operation_id=? AND brain_id=? AND attempt=?',
                     (identifier, brain, attempt)).fetchone()
                 workspace = json.loads(stored_attempt['workspace_json'])
                 context = connection.execute('SELECT * FROM improvement_trial_contexts WHERE id=? AND brain_id=?',
                     (operation['context_id'], brain)).fetchone()
-                configuration = HostContextRecords(self.execution.assets)._decode(context)['engine_config']
+                configuration = HostContextRecords(assets)._decode(context)['engine_config']
                 if IM._hash(configuration) != value['engine_config_hash']: raise AssetUnavailable('operation_result_binding_mismatch')
                 rows = list(connection.execute('SELECT * FROM improvement_operation_observations WHERE operation_id=? AND brain_id=? AND attempt=? ORDER BY sequence',
                     (identifier, brain, attempt)))
-                packets = validated_history(rows, lambda item: decode_trace(self.execution.blobs, brain, item), kind='operation', receipt=workspace)
+                packets = validated_history(rows, lambda item: decode_trace(assets.blobs, brain, item), kind='operation', receipt=workspace)
                 if [item['payload_hash'] for item in rows] != value['trace_hashes']: raise AssetUnavailable('operation_result_trace_changed')
                 scope = attempt_scope(kind='operation', brain_id=brain, receipt=workspace, config_pin=configuration, capability_hash=value['capability_hash'])
-                decisions = NativeImageDecisionStore(self.execution.assets)
+                decisions = NativeImageDecisionStore(assets)
                 actual = reread_native_decisions(packets, kind='operation', receipt=workspace,
                     read_decision=lambda joined: decisions.read(principal, joined, scope_hash=scope, connection=connection))
                 if actual != value.get('native_decisions'): raise AssetUnavailable('native_result_decisions_changed')

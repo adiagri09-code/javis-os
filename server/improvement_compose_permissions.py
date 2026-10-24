@@ -262,7 +262,7 @@ class ComposePermissions:
         if operation is not None:
             operation_permission(connection, self.assets, principal, request, operation=operation)
         require_product_store(self.assets, principal, connection=connection)
-        return {'authorization': metadata, 'data': data, 'basis': basis, 'prepared': before['prepared']}
+        return {'authorization': metadata, 'data': data, 'basis': basis, 'prepared': before['prepared'], 'snapshot': before}
 
     def authorize(self, principal, experiment_id, *, expected_generation, event_key):
         brain = _brain(principal); _identifier(experiment_id); _generation(expected_generation); self._installed()
