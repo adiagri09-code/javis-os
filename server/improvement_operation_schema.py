@@ -212,6 +212,14 @@ def assert_installed(connection):
     """
     import re
     from improvement_store import ConflictError
+    version = connection.execute('SELECT version FROM improvement_schema WHERE id=1').fetchone()
+    if version and version[0] == 8:
+        from improvement_compose_schema import assert_installed as assert_compose
+        try:
+            assert_compose(connection)
+        except ConflictError as exc:
+            raise ConflictError('operation_schema_changed') from exc
+        return
     statements = list(SCHEMA)
     statements.extend(f"CREATE TRIGGER {table}_{action.lower()} BEFORE {action} ON {table} "
                       "BEGIN SELECT RAISE(ABORT,'immutable_improvement_history'); END"
