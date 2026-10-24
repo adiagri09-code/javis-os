@@ -1,5 +1,39 @@
 # Agent and skill improvement Goal progress
 
+## Current proposer/evidence guidance — scoped implementation approved
+
+Existing render_proposer_input now adapts Google Harness² propose/_INV/_DOM/
+_KEEP_BASE/experience/evidence-boundary method at pinned1cfe254e, source Git
+blob9ccacf23b64ac15b06a1939f26224960f56d757c. Actual OperationProfile consumer
+receives the structured method separately from unchanged authorized evidence.
+It asks for earliest supported failure, execution/domain_process distinction,
+small explanatory edit, predicted effect/risk, linked observed attribution and
+confounded cases, separate overall versus protected-meaning review, or existing
+not_a_target_defect no-change. JSON/patch/refs/UTF8/candidate/repair contract and
+all source/owner/permission/privacy gates remain enforced. No extra evidence I/O,
+schema, store, executor or full-library input. Original Apache-2.0 LICENSE matches
+exact upstream Git blobd645695673349e3947e8e5ae42332d0ac3164cd7; narrow provenance
+and modifications retained in third_party/harness2/PROVENANCE.md.
+
+Root meaningful RED6:1FAIL4ERROR.008s (missing method); GREEN6PASS.019s. Affected
+actual improver-input/operation-profile2/proposal/skill-patch regression4/4PASS271s,
+including generated drafts and one structural repair. Independent review clean:
+guidance6+existing GenerationJsonTests2 PASS.016s,11pins stable; report
+cbda0ee6c090a435493a44cbb839628b24f8682babc2f70ca91478b85c1a2279.
+[Public evidence](../evidence/2026-10-24-proposer-evidence-guidance.json) records
+source/consumer/test/license identities and actual test/model-quality limits.
+No claim of model injection resistance, causal/business quality or token savings.
+
+Native PROFILE_SOURCES still85; actual pure source hash changed
+ac4b613eb692598d31bede47e5ee755c80872e18f3792c9c1cd5b1fba6f939cd →
+6e32d3fb91d8ec4b5b596bd3d68f1165a3921fa7fcf3049b5b0c6872549d355e;
+generation source24782400… →1f0eae72…. Historical qualification is not reused,
+registrations remain gated. No native/account/model call or live action occurred.
+Final exact-head full CI and full native qualification remain open. Preserve
+this unit, then finish the already identified upper engineering-store product/
+comparison/selection/replay boundaries using the existing actual domain helper
+and the targeted upstream reuse decision. Remaining M0–M8/Phase2 scope unchanged.
+
 ## Owner selective replacement update — Goal§16
 
 Direct owner update from the same authorized chat permits replacing existing
