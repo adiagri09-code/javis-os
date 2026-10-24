@@ -84,6 +84,7 @@ import mcp_store
 import mcp_client
 import mcp_catalog
 import mcp_hub
+from improvement_task_skill_turn import TaskSkillTurn
 import connect_health   # sức khoẻ kết nối: vòng check nền + phân loại lỗi tiếng người
 import purge          # xoá kết nối cho sạch: chủ sở hữu duy nhất của việc dọn dấu vết
 import core_off       # năng lực MẶC ĐỊNH gỡ được: trạng thái ghi ở STATE_DIR, không sửa cây code
@@ -3010,7 +3011,9 @@ async def _api_stream_mcp(prov, key, model, messages, reasoning="off", brain=Non
                     coding_ctx_cua_phien=_cctx,
                 )
                 inventory_tools, inventory_route = mcp_hub.registry_inventory(
-                    mode, vault_root=vault_root, force_lazy=force_lazy, staging=True)
+                    mode, vault_root=vault_root, force_lazy=force_lazy, staging=True,
+                    workspace_root=list(_cctx.workspace_roots) if _cctx is not None else None,
+                    coding_ctx_cua_phien=_cctx)
             else:
                 servers = mcp_store.servers_for_client()
                 if servers:
@@ -3400,6 +3403,12 @@ def _schedule_registry_shadow(trace, brain, tools, route, query, provider, model
     đúng cái filter mà Phase 9 dựa vào - không bao giờ quan sát được.
     """
     if not trace:
+        return
+
+    from improvement_task_skill_scope import has_binding
+    if has_binding():
+        # Frozen task descriptors belong to the private owner, never the global
+        # derived source. Shadow publication is optional observational work.
         return
 
     async def _job():
@@ -15852,7 +15861,8 @@ async def websocket_endpoint(ws: WebSocket):
 
     try:
         async def _do_turn(conv_sid, user_message, brain, turn_tag, runtime_trace=None,
-                           has_attachments=False, resume_attempt=0, user_mid=0, user_text=None):
+                           has_attachments=False, resume_attempt=0, user_mid=0, user_text=None,
+                           _task_skills=None, _turn_token=None):
             ws = _SendProxy(conv_sid, runtime_trace)  # các nhánh engine bên dưới dùng ws proxy này
             # 0.190.0: what the brain's memory looks like before the turn, for the "Đã nhớ · Hoàn tác" line and the
             # empty-claim check after it (memory_receipt).
@@ -16616,6 +16626,13 @@ async def websocket_endpoint(ws: WebSocket):
                     }))
                 else:
                     # ===== API/OAuth: Phase 8 sources canary, fallback độc lập về legacy =====
+                    if _task_skills is not None:
+                        await _task_skills.start(
+                            _cfg_all, provider_kind=kind, tool_provider=prov in _API_TOOL_PROVIDERS,
+                            hub_enabled=_hub_enabled(), api_key=api_key, root=_brain_root(brain),
+                            turn_token=_turn_token, runtime=_CONTEXT_RUNTIME, trace=runtime_trace,
+                            assets_factory=_improvement_write_store,
+                        )
                     def _phase8_base(include_memory: bool, include_skills: bool) -> str:
                         # The project's INSTRUCTIONS ride along, as on Telegram and the CLI
                         # (`_nen_goc`): they are a behaviour contract, its file list is not.
@@ -17115,10 +17132,12 @@ async def websocket_endpoint(ws: WebSocket):
             # 0.206.0: from here on, a message the owner sends goes to this turn (steer_inbox.py).
             _steer_tok = steer_inbox.INBOX.open(conv_sid, turn_tag)
             _engine_outcome_reset(conv_sid)
+            _task_skills = TaskSkillTurn()
             try:
                 final_text = await _do_turn(
                     conv_sid, user_message, brain, turn_tag, runtime_trace, has_attachments,
                     resume_attempt=resume_attempt, user_mid=user_mid, user_text=user_text,
+                    _task_skills=_task_skills, _turn_token=_luot_token,
                 )
                 _resonance_after_turn(conv_sid, brain, user_mid, _t0_luot, runtime_trace)
                 # Phiên TRỢ LÝ mở từ một lệnh "/" gõ ở khung Trò chuyện: câu trả lời quay về
@@ -17151,6 +17170,7 @@ async def websocket_endpoint(ws: WebSocket):
                                                                           f"Processing error: {type(e).__name__}: {e}"),
                                 "session_id": conv_sid, **context_runtime.event_fields(runtime_trace)})
             finally:
+                _task_skills.close()
                 luot_dang_chay.ket_thuc(_khoa_luot)
                 _steer_left = steer_inbox.INBOX.close(conv_sid, turn_tag, _steer_tok)
                 if _steer_left:
