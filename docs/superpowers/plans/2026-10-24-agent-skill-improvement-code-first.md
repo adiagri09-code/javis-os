@@ -60,11 +60,15 @@ integration using actual same Trial/Operation runners and localhost dummy-only
 provider. Operation binding proof is preserved56046f66; ordinary named-skill D2
 snapshot/private API lifecycle7ee04de5 and narrow upstream proposer method90821020
 have scoped technical approval, with their explicit native/helper/quality limits.
-Upper engineering-store comparison/selection/role replay/publication fences now
-have scoped technical approval (public2026-10-24-qualification-product-boundaries
-evidence). Next follow Goal17: functioning actual pinned upstream compose through
-a narrow adapter, then experience-library entry/index/serialization snapshots,
-then decide orchestration replacement. Continue typed owned qualifier and remaining
+Upper engineering-store fences80ad064c, actual pinned upstream compose adapter
+e465a4b9/pilot bound653c6516 and authenticated host input producer now have scoped
+technical approval/evidence. Early exact-selected-byte Linux40056590938 passes33
+fixtures. Next integrate distinct composition ownership/history into the existing
+Operation/CallLedger and explicit schema/arm migration, retaining original two
+proposals and independently checking the new bundle. Then actual experience-library
+entry/index/serialization snapshots and only afterward orchestration replacement
+assessment. Current input producer creates no native call/compose allowance or
+executable bundle; all quality/native/live gates remain. Continue typed qualifier and remaining
 D2/E/F and later milestone dependencies with all gates still open as appropriate.
 Source/lease/materialization/ledger gates remain real and unpatched.
 Do not reuse historical native qualification for changed source or mistake pure

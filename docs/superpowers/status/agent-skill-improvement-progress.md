@@ -1,5 +1,47 @@
 # Agent and skill improvement Goal progress
 
+## Authenticated host compose inputs — scoped component approved
+
+Actual current two-arm candidate/report/lineage, authorized solver/artifact/
+typed verdict/bound observable trace now feed the unchanged upstream renderer.
+Original A refs remain immutable history, not new citation/source permission.
+Input and stable hash/identity basis are encrypted in existing M0; exact tuning
+exposure and metadata share final-fenced transaction rollback. Replay requires
+current owner/brain/grant/policy/source/holdout/latest evidence. Actual settled
+Trial/Attempt/CallLedger identity/status/engine_at joins are checked and captured.
+Late call corruption, policy identity drift or final event domain marker refuse
+publication. Basis excludes process-local checker callback IDs. No new schema,
+executor/ledger, compose native call/allowance, candidate or executable bundle.
+
+Author RED7missingmodule; root independently reviewed/executed all7. Initial
+5green/2count failures exposed incorrect test expectation: successful input
+publication must record tuning exposure like existing readers. Root/author agreed
+exact tuning-key union, preserved old timestamps/replay and zero new exposure on
+failure. GREEN7PASS49.139s before final policy fence; final-source positive/replay2
+PASS14.658s, rootrace4PASS21.424s and protocol11PASS.169s. Actual call and policy
+races each had meaningful RED before fixes; historical original-ref RED preceded
+new-output/current-ref preserving fix. Independent rootrace4+historical1 PASS5/5
+14.943s,15pins stable/no findings; own original7 excluded self-approval. Report
+e6c9055afaf75487ebdddb7590cc4bea80332dc13b381e7f5766f1433f774422.
+
+Early isolated [Linux40056590938](https://github.com/blogminhquy/javis-os/actions/runs/40056590938)
+SUCCESS33/33 across protocol11,host7,races4,existing byte validator11. Exact8 raw
+source/test/license pins verified on isolated commit50a73cc28262e4bf1a9b9159c0d38e3df3f47890,
+fresh Ubuntu/Python3.12, serial no-real-engine fixtures. One initial dispatch500
+produced no run; bounded retry succeeded. Task checkout/index/head unchanged by
+CI snapshot; this is not task-final-head full required CI/native qualification.
+[Public evidence](../evidence/2026-10-24-compose-host-inputs.json) distinguishes
+synthetic_storage_fixture/technical_fixture/unexecuted controls from actual
+selected model/config/native/account support. No cross-process restart execution,
+provider delivery, business benefit, token saving or live activation proof.
+
+Next: distinct composition owner permission/history plus explicit existing
+Operation/CallLedger/schema/arm integration; preserve original two proposals,
+one compose total, and independently probe/qualify/regress new bundle. Then actual
+derived experience-library adapter and only afterward orchestration replacement
+assessment. Native footprint integration/qualification, final exact-head full CI,
+remaining M0–M8 technical work and Phase2 stay open; Goal remains active.
+
 ## Compose full pilot projection bound — scoped correction approved
 
 Consumer inspection found the initial pure adapter mistakenly reused32 patch
