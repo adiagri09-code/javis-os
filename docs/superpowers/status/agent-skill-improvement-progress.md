@@ -1,5 +1,23 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — pure dummy qualification environment approved
+
+Canonical pure helper accepts only literal dummy key and exact numeric
+http://127.0.0.1:<canonical port> over a closed production base. It refuses URL
+aliases, credentials, paths/query/fragments, proxies/auth config/mode knobs,
+malformed fixed fields and final-envelope tampering. No ambient environment,
+filesystem/network/launch or registry/account capability. Existing production
+startup2 still rejects dummy extras. RED5 FAIL.006s -> author5 PASS.011s;
+independent5 PASS.007s, all4 pins stable, no findings. Public
+qualification-environment records exact source/test/log/report scope.
+
+Authenticated qualification entrypoint, actual local traffic and empty-HOME/
+source/runtime proof remain outstanding. Next integrate explicit qualification
+protocol and host authority without changing default production validators or
+treating dummy-only capability as real account readiness. Global runtime/source
+registration still disabled; full same-pipeline proof and final CI still due.
+
+
 ## Current continuation — exact host-pinned native materializers approved
 
 Planned claude-owned-images-v3 exact-source selector now emits genuine baseline5,
