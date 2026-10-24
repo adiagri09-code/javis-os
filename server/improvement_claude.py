@@ -29,6 +29,8 @@ PROFILE_SOURCES = ("improvement_claude.py", "improvement_sandbox.py", "improveme
                    "improvement_compose_schema.py",
                    "improvement_compose_protocol.py", "improvement_harness2_compose.py",
                    "improvement_compose_permissions.py", "improvement_compose_inputs.py",
+                   "improvement_compositions.py", "improvement_compose_candidates.py",
+                   "turn_context.py", "improvement_telemetry.py",
                    "improvement_native_protocol.py",
                    "improvement_improver_inputs.py", "improvement_generation_protocol.py", "improvement_comparison_plans.py",
                    "improvement_proposals.py", "improvement_skill_candidates.py", "improvement_role_workflow.py",

@@ -1,0 +1,12 @@
+{
+  "server/improvement_compositions.py": "0ca1d1a96b47194b7a8879e8d7ee85a9de5a5a7baa649e186940f63540032809",
+  "server/improvement_compose_candidates.py": "07d1e4e55fee99c3def969f081622eb71f02ed5224a126c83598ef207006657f",
+  "server/improvement_skill_candidates.py": "9a359ff8f43e8c3fea04b80c66970c046f4e36595e6fa1198d689f08ed598a2b",
+  "server/improvement_compose_permissions.py": "db1bff5756ce5befa0d6082c4b0de12bfd2758dad285598362757d7ddc6aa6dd",
+  "server/improvement_operation_results.py": "526906e505e7ee796175df86d5f6b6e734bf8716cb3d57072b9e33149e443441",
+  "server/turn_context.py": "eeb8d13c55a14b0c064539d2768bae81e5bb59cf81c03c96443f73f4c056479e",
+  "server/improvement_claude.py": "c904797faf7ba6646e00aca495ba13ef2d58d6c60de84fdf53d4bbf8dd2dccc7",
+  "tests/python/test_improvement_compositions.py": "f982a3256fa31e32b433aff1125cba073e7bc13fba4252c3e25c7888a801e8d4",
+  "tests/python/test_improvement_composition_boundaries.py": "8179305338570234a8f5ef60feaa56407bb13f652dd832621bf02c5a155ca4ba",
+  "tests/python/test_improvement_operation_worker.py": "e516bc77fa16e7a2f694b2cf12433decb38e205585f51419e3578bee260a8819"
+}
