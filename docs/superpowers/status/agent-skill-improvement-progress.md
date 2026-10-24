@@ -1,5 +1,41 @@
 # Agent and skill improvement Goal progress
 
+## Explicit compose consent/current input — scoped component approved
+
+ComposePermissions uses actual owner/experiment/generation, authenticated existing
+input/basis event and a small encrypted guard holding the exact original experiment
+row/hash links. Complete stable SQL/definition/binding/policy authority remains
+the existing input-basis hash, not a duplicate ledger. Actual schema8 authorization/
+revocable grant/event publish atomically under current fences. Cold nine-field
+get/list/revoke/replay do not decrypt/refresh/probe/build; replay returns the
+current revoked state after off/source drift. Read-only current accepts actual
+store SQLite/query_only, authenticates encrypted links and current brain/source/
+policy/grants/holdout/domain/SQL, without public build/writer/event calls.
+
+Author RED6missingmodule/.013s before fixtures; root independently GREEN6/57.051s.
+Independent review found a final policy-read window after grant/source fence;
+root actual tailpolicy/grant mutation RED1FAIL10.333s preceded fix. Tail capture
+now precedes policy/source guards; final SQL input/grant/domain checks follow all
+slow observations. Final root3races PASS25.472s, positive+query_only2PASS14.437s;
+independent root3PASS15.882s/12stablepins/no remaining findings. Original reviewer-
+authored6 excluded selfapproval. Initial root race control attempted revocation
+twice through multiple arm guards; corrected test delegates complete actual fence
+then revokes once, no criterion change; old fixture-error log retained.
+Review cdceaadc41d0ec69e6588f07704828518192305a8b92298089ebe125016d8268.
+Public2026-10-24-compose-permissions.json SHA
+7ff6adeaef19e671cdb4f8ca0ed390650778e0343771fc0e846252614c47e517.
+
+Unchanged producer/vendor/license/role/schema proofs reused; no extra broad suite
+or portable rerun for this unwired component. PROFILE88 remains unqualified and
+unchanged, actual309 exact-evidence test stays intact. Consent is not yet wired
+to OperationRecords/Execution admission; current deliberately requires original
+exact generation, no own-op mutation normalization. Native private identity grammar
+still permits only improver/semantic pairs (native_protocol139); composer remains
+a closed pending gate. Next plan2026-10-24-compose-owned-admission.md connects the
+same actual owner/CallLedger/native2 paths and authenticates only their own exact
+creation mutation. Composer publisher/new independent checks/API/UI/library/full
+M0–M8/final-head CI/Phase2 remain open; no real query/model/account/activation.
+
 ## Compose role contract — scoped component approved
 
 Closed compose requestv2 requires composer/improve_compose and authorization ID;

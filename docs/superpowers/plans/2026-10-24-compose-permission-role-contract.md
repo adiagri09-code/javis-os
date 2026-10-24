@@ -1,5 +1,14 @@
 # Explicit compose permission and the existing owned role contract
 
+Consent checkpoint: ComposePermissions authorize/cold get/list/revoke/replay and
+read-only current are scoped approved, with actual private SQL/Fernet/source,
+query_only and late consent/policy/source/domain races. Public evidence
+2026-10-24-compose-permissions.json retains meaningful RED/fix/review and limits.
+The final policy-read race is closed by completing I/O before final SQL fences.
+No native admission/own-op normalization has been connected yet. Next bounded
+plan2026-10-24-compose-owned-admission.md records actual existing owner connection;
+native private identity grammar still rejects composer until that explicit unit.
+
 Transport checkpoint: closed compose requestv2/worker/nativeformat2 workspace and
 actual profile→upstream renderer, existing ledger purpose/usage references are
 scoped approved; independent7PASS/14stablepins. Existing3roles remain closedv1.

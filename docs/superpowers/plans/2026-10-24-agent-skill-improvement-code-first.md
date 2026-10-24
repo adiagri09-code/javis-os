@@ -38,6 +38,11 @@ independent7PASS/14stablepins. PROFILE_SOURCES is now88; no new qualification.
 Plan2026-10-24-compose-permission-role-contract.md next connects explicit owner
 consent/current saved-input authority; compose admission, actual publisher/API/UI/
 new-candidate checks still follow before integration. Transport is not consent.
+Explicit consent/current input is now independently scoped approved (root6 and
+final2/3, independent3/12stablepins); no new native consumer/admission enabled.
+Native private identity grammar remains closed to composer. Next plan
+2026-10-24-compose-owned-admission.md connects actual Operation owner/generation/
+consent/wire/source boundaries; final owned publisher/new checks/API/UI still open.
 
 ## Phase 1 — complete functioning code and technical checks for every milestone
 
