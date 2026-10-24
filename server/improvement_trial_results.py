@@ -90,6 +90,25 @@ class TrialResults:
                     or report.get("attempt") != attempt or report.get("request_hash") != trial["request_hash"]
                     or report.get("preparation_lineage") != request["preparation"]):
                 raise AssetUnavailable("preparation_trial_result_changed")
+            records = list(connection.execute('SELECT * FROM improvement_trial_observations WHERE trial_id=? AND attempt=? ORDER BY sequence',
+                (identifier, attempt))) if 'native_decisions' in report else []
+            if 'native_decisions' in report:
+                from improvement_native_trace_checks import validated_history, reread_native_decisions
+                from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
+                stored_attempt = connection.execute('SELECT workspace_json FROM improvement_trial_attempts WHERE trial_id=? AND attempt=?',
+                    (identifier, attempt)).fetchone()
+                workspace = json.loads(stored_attempt['workspace_json'])
+                reader = TrialEvidence(self.trials)
+                packets = validated_history(records, lambda item: reader._decode(brain, item), kind='trial', receipt=workspace)
+                trace = {'count': len(records), 'last_sequence': records[-1]['sequence'],
+                    'hash': IM._hash([[item['sequence'], item['payload_hash']] for item in records])}
+                if trace != report['trace']: raise AssetUnavailable('trial_result_trace_changed')
+                scope = attempt_scope(kind='trial', brain_id=brain, receipt=workspace,
+                    config_pin=request['engine_config'], capability_hash=report['capability_hash'])
+                decisions = NativeImageDecisionStore(self.trials.assets)
+                actual = reread_native_decisions(packets, kind='trial', receipt=workspace,
+                    read_decision=lambda joined: decisions.read(principal, joined, scope_hash=scope, connection=connection))
+                if actual != report['native_decisions']: raise AssetUnavailable('native_result_decisions_changed')
             return report
 
     def reevaluate(self, principal, identifier, attempt, *, expected_generation, event_key, checker_registry):
@@ -199,24 +218,43 @@ class TrialResults:
                                                      (brain, request["pins"]["contract_hash"])).fetchone()[0])
             if IM._hash(contract) != request["pins"]["contract_hash"]:
                 raise IM.ConflictError("trial_contract_drift")
-            TrialProducts(self.trials)._products(connection, row)
+            TrialProducts(self.trials)._products(connection, row, principal=principal, capability_hash=capability_hash)
             records = list(connection.execute("SELECT * FROM improvement_trial_observations WHERE trial_id=? AND attempt=? ORDER BY sequence",
                                               (identifier, row["attempt"])))
             reader = TrialEvidence(self.trials)
             packets = [reader._decode(brain, record) for record in records]
+            native = None
+            decision_reader = None
+            if manifest['version'] == 4:
+                from improvement_native_trace_checks import validated_history, validate_native_trace, require_durable_allow
+                from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
+                from improvement_sandbox import trial_system_prompt
+                decoded = {record['sequence']: packet for record, packet in zip(records, packets)}
+                validated_history(records, lambda record: decoded[record['sequence']], kind='trial', receipt=workspace)
+                scope = attempt_scope(kind='trial', brain_id=brain, receipt=workspace,
+                    config_pin=request['engine_config'], capability_hash=capability_hash)
+                image_decisions = NativeImageDecisionStore(self.trials.assets)
+                decision_reader = lambda joined: image_decisions.read(principal, joined, scope_hash=scope)
+                prompt = IM._json({'task': manifest['case']['task'], 'fixtures': [
+                    {key: item[key] for key in ('snapshot_id', 'source')} for item in manifest['case']['fixtures']]})
+                native = validate_native_trace(packets, kind='trial', receipt=workspace, pin=request['engine_config'],
+                    capability_hash=capability_hash, system_prompt=trial_system_prompt(manifest), user_prompt=prompt,
+                    data_hash=workspace['input_hash'], read_decision=lambda joined: image_decisions.read(principal, joined, scope_hash=scope, connection=connection))
+                require_durable_allow(native)
             artifact_hash = self._artifact_hash(connection, row, workspace, contract)
             private = {"id": case["id"], "answer": json.loads(self.trials.blobs.read(brain, case["answer_hash"])),
                        "evaluator_refs": case["evaluator_refs"]}
             number = row["attempt"]
         # Host checkers may perform expensive isolated work. Never hold a write lock
         # across them, and never reinterpret a failed evaluator as permission to query.
-        mandatory = execution_invariants(request, manifest, workspace, packets, capability_hash, contract=contract)
+        mandatory = execution_invariants(request, manifest, workspace, packets, capability_hash, contract=contract, read_decision=decision_reader)
         from improvement_trial_decisions import OwnerDecisionStore
         decisions = OwnerDecisionStore(self.trials).decisions(principal, identifier, number)
         evaluation = EVAL.evaluate_trial(contract, workspace["output_root"], private, checker_registry, owner_decisions=decisions)
         usage = IU.trial_usage(request["pins"]["experiment_id"], identifier)
         _guard(live_guard, request)
-        terminal = next(packet["event"] for packet in packets
+        bodies = packets if native is None else native['worker_bodies']
+        terminal = next(packet["event"] for packet in bodies
                         if packet["type"] == "engine_event" and packet["event"].get("type") == "terminal")
         status = "failed" if terminal["is_error"] else "completed"
         report = {"version": 1, "trial_id": identifier, "attempt": number, "execution_status": status,
@@ -226,6 +264,7 @@ class TrialResults:
                   "capability_hash": capability_hash, "live_guard": guard,
                   "trace": {"count": len(records), "last_sequence": records[-1]["sequence"],
                             "hash": IM._hash([[record["sequence"], record["payload_hash"]] for record in records])}}
+        if native is not None: report['native_decisions'] = native['decisions']
         if request.get('version') == 4:
             report.update(version=4, request_hash=IM._hash(request), experiment_lineage=request['lineage'], effective_view=request['view'])
         elif request.get("version") == 2:
@@ -242,6 +281,16 @@ class TrialResults:
                 raise IM.ConflictError("trial_evaluation_stale")
             self.trials._current(connection, brain, request, trial_id=row["id"], principal=principal)
             self.trials.workspace.validate(workspace)
+            if native is not None:
+                current_records = list(connection.execute('SELECT * FROM improvement_trial_observations WHERE trial_id=? AND attempt=? ORDER BY sequence',
+                    (identifier, number)))
+                if [dict(record) for record in current_records] != [dict(record) for record in records]:
+                    raise IM.ConflictError('trial_result_trace_changed')
+                current_packets = validated_history(current_records, lambda record: reader._decode(brain, record), kind='trial', receipt=workspace)
+                if current_packets != packets: raise IM.ConflictError('trial_result_trace_changed')
+                actual = [image_decisions.read(principal, joined, scope_hash=scope, connection=connection) for joined in native['joins']]
+                if actual != native['decisions']: raise IM.ConflictError('native_result_decisions_changed')
+                require_durable_allow({'decisions': actual})
             if self._artifact_hash(connection, row, workspace, contract) != artifact_hash:
                 raise IM.ConflictError("trial_output_changed")
             if evaluation["output_hash"] is not None and evaluation["output_hash"] != artifact_hash:

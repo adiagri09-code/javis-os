@@ -42,6 +42,27 @@ class OperationResults:
                 or type(value.get("attempt")) is not int or value["attempt"] != attempt
                 or value.get("request_hash") != operation["request_hash"]):
             raise AssetUnavailable("operation_result_binding_mismatch")
+        if value.get('version') == 2:
+            from improvement_native_trace_checks import validated_history, reread_native_decisions
+            from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
+            from improvement_trial_records import HostContextRecords
+            with closing(self.execution.store._conn()) as connection:
+                stored_attempt = connection.execute('SELECT workspace_json FROM improvement_operation_attempts WHERE operation_id=? AND brain_id=? AND attempt=?',
+                    (identifier, brain, attempt)).fetchone()
+                workspace = json.loads(stored_attempt['workspace_json'])
+                context = connection.execute('SELECT * FROM improvement_trial_contexts WHERE id=? AND brain_id=?',
+                    (operation['context_id'], brain)).fetchone()
+                configuration = HostContextRecords(self.execution.assets)._decode(context)['engine_config']
+                if IM._hash(configuration) != value['engine_config_hash']: raise AssetUnavailable('operation_result_binding_mismatch')
+                rows = list(connection.execute('SELECT * FROM improvement_operation_observations WHERE operation_id=? AND brain_id=? AND attempt=? ORDER BY sequence',
+                    (identifier, brain, attempt)))
+                packets = validated_history(rows, lambda item: decode_trace(self.execution.blobs, brain, item), kind='operation', receipt=workspace)
+                if [item['payload_hash'] for item in rows] != value['trace_hashes']: raise AssetUnavailable('operation_result_trace_changed')
+                scope = attempt_scope(kind='operation', brain_id=brain, receipt=workspace, config_pin=configuration, capability_hash=value['capability_hash'])
+                decisions = NativeImageDecisionStore(self.execution.assets)
+                actual = reread_native_decisions(packets, kind='operation', receipt=workspace,
+                    read_decision=lambda joined: decisions.read(principal, joined, scope_hash=scope, connection=connection))
+                if actual != value.get('native_decisions'): raise AssetUnavailable('native_result_decisions_changed')
         return value
 
     def artifact(self, principal, identifier, attempt):
@@ -69,7 +90,7 @@ class OperationResults:
             if row["status"] != "running" or attempt["engine_at"] is None or attempt["workspace_json"] is None:
                 raise IM.ConflictError("operation_result_state_stale")
             trace = self._trace(connection, row)
-            if (not trace or trace[-1]["kind"] != "worker_complete"
+            if (not trace or trace[-1]["kind"] not in ("worker_complete", "drained")
                     or any(item["late"] or item["sequence"] != number for number, item in enumerate(trace, 1))):
                 raise IM.ConflictError("operation_trace_incomplete")
             workspace = json.loads(attempt["workspace_json"])
@@ -80,9 +101,28 @@ class OperationResults:
         if (IM._hash(manifest) != materialization_hash or manifest["operation_id"] != identifier
                 or manifest["brain_id"] != brain or IM._hash(manifest["request"]) != request_hash):
             raise IM.ConflictError("operation_materialization_changed")
-        packets = [decode_trace(self.execution.blobs, brain, item) for item in trace]
-        checks = execution_checks(prepared[1]["engine_config"], manifest, workspace, packets, capability_hash)
-        events = [packet["event"] for packet in packets if packet["type"] == "engine_event"]
+        native = None
+        decision_reader = None
+        if manifest['version'] == 2:
+            from improvement_native_trace_checks import validated_history, validate_native_trace, require_durable_allow
+            from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
+            from improvement_operation_profile import operation_system_prompt, operation_user_prompt
+            packets = validated_history(trace, lambda item: decode_trace(self.execution.blobs, brain, item), kind='operation', receipt=workspace)
+            scope = attempt_scope(kind='operation', brain_id=brain, receipt=workspace,
+                config_pin=prepared[1]['engine_config'], capability_hash=capability_hash)
+            decisions = NativeImageDecisionStore(self.execution.assets)
+            decision_reader = lambda joined: decisions.read(principal, joined, scope_hash=scope)
+            native = validate_native_trace(packets, kind='operation', receipt=workspace, pin=prepared[1]['engine_config'],
+                capability_hash=capability_hash, system_prompt=operation_system_prompt(manifest), user_prompt=operation_user_prompt(manifest),
+                data_hash=manifest['request']['input_hash'], read_decision=decision_reader)
+            require_durable_allow(native)
+            bodies = native['worker_bodies']
+        else:
+            if trace[-1]['kind'] != 'worker_complete': raise IM.ConflictError('operation_trace_incomplete')
+            packets = [decode_trace(self.execution.blobs, brain, item) for item in trace]
+            bodies = packets
+        checks = execution_checks(prepared[1]["engine_config"], manifest, workspace, packets, capability_hash, read_decision=decision_reader)
+        events = [packet["event"] for packet in bodies if packet["type"] == "engine_event"]
         artifacts = [event for event in events if event.get("type") == "artifact"]
         receipts = [event for event in events if event.get("type") == "operation_installation_receipt"]
         artifact = installation = None
@@ -94,7 +134,7 @@ class OperationResults:
         if len(receipts) == 1 and type(receipts[0].get("receipt")) is dict and IM._hash(receipts[0]["receipt"]) == receipts[0].get("hash"):
             blob = self.execution.blobs.write(brain, IM._json(receipts[0]["receipt"]).encode())
             installation = {"hash": blob, "blob_hash": blob}
-        report = {"version": 1, "operation_id": identifier, "attempt": number, "request_hash": request_hash,
+        report = {"version": 2 if native is not None else 1, "operation_id": identifier, "attempt": number, "request_hash": request_hash,
                   "input_hash": workspace["input_hash"], "materialization_hash": materialization_hash,
                   "engine_config_hash": manifest["engine_config_hash"], "capability_hash": capability_hash,
                   "artifact": artifact, "installation": installation, "checks": checks,
@@ -102,6 +142,7 @@ class OperationResults:
                       "unknown" if any(item["verdict"] == "unknown" for item in checks) else "pass"),
                   "usage": IU.operation_usage(manifest["request"]["experiment_id"], identifier),
                   "trace_hashes": [item["payload_hash"] for item in trace], "business_proof": False}
+        if native is not None: report['native_decisions'] = native['decisions']
         blob = self.execution.blobs.write(brain, IM._json(report).encode())
         completion = next((item["verdict"] for item in checks if item["id"] == "completion"), "unknown")
         call_status = "ok" if completion == "pass" else "error" if completion == "fail" else "interrupted"
@@ -115,6 +156,15 @@ class OperationResults:
                 raise IM.ConflictError("operation_result_state_stale")
             self.execution.host._snapshot_observe(principal, prepared[1])
             self.execution._current(connection, principal, row)
+            if native is not None:
+                # Reauthenticate all encrypted bytes and durable decisions under
+                # the actual final transaction, not an earlier checker's view.
+                current_packets = validated_history(self._trace(connection, row),
+                    lambda item: decode_trace(self.execution.blobs, brain, item), kind='operation', receipt=workspace)
+                if current_packets != packets: raise IM.ConflictError('operation_result_state_stale')
+                actual = [decisions.read(principal, joined, scope_hash=scope, connection=connection) for joined in native['joins']]
+                if actual != native['decisions']: raise IM.ConflictError('native_result_decisions_changed')
+                require_durable_allow({'decisions': actual})
             stamp = time.time()
             self.execution._leased(connection, principal, identifier, expected_generation, lease_token, stamp)
             call = self.execution.bound_call(connection, row, attempt)

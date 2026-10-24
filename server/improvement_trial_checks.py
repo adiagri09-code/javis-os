@@ -35,20 +35,21 @@ def _equal(identifier, expected, actual, reason):
     return _row(identifier, "fail" if mismatches else "pass", reason if mismatches else "record_pins_match", fields=mismatches)
 
 
-def _valid_event(event, *, asset_reads=False):
+def _valid_event(event, *, asset_reads=False, read_outcomes=False):
     kind = event.get("type")
-    supported = _EVENTS | _EFFECTS | ({OBSERVATION_TYPE} if asset_reads else set())
+    supported = _EVENTS | _EFFECTS | ({OBSERVATION_TYPE} if asset_reads else set()) | ({'trial_read_broker_observation'} if read_outcomes else set())
     if not isinstance(kind, str) or kind not in supported:
         return False
     if "session_id" in event and event["session_id"] is not None and not isinstance(event["session_id"], str):
         return False
     if kind == "native_system":
         return isinstance(event.get("subtype"), str) and isinstance(event.get("data"), dict)
-    if kind == OBSERVATION_TYPE:
+    if kind in (OBSERVATION_TYPE, 'trial_read_broker_observation'):
         return isinstance(event.get('observation'), dict)
     if kind in ("tool_call", "tool_result"):
         return (isinstance(event.get("id"), str) and bool(event["id"])
-                and (isinstance(event.get("name"), str) if kind == "tool_call" else type(event.get("is_error")) is bool))
+                and (isinstance(event.get("name"), str) if kind == "tool_call" else
+                    type(event.get("is_error")) is bool or (read_outcomes and 'is_error' in event and event['is_error'] is None)))
     if kind == "tool_denied":
         return isinstance(event.get("name"), str) and isinstance(event.get("reason"), str)
     if kind == "observation":
@@ -111,12 +112,15 @@ def _receipt(events, workspace, manifest, request, capability):
     try:
         view_trial = request.get('version') == 4
         asset_reads = manifest['version'] == 3
+        native_reads = manifest['version'] == 4
         _fields(receipt, _RECEIPT_FIELDS | ({'effective_view'} if view_trial else set())
-                | ({'asset_read_proofs'} if asset_reads else set()))
-        if (type(receipt["version"]) is not int or receipt["version"] != (3 if asset_reads else 2 if view_trial else 1)
+                | ({'asset_read_proofs'} if asset_reads else set())
+                | ({'read_outcome_proofs', 'native_input_delivery'} if native_reads else set()))
+        if (type(receipt["version"]) is not int or receipt["version"] != (4 if native_reads else 3 if asset_reads else 2 if view_trial else 1)
                 or type(receipt["attempt"]) is not int or event.get("hash") != _hash(receipt)
                 or (receipt["session_id"] is not None and not isinstance(receipt["session_id"], str))
-                or (asset_reads and type(receipt['asset_read_proofs']) is not list)):
+                or (asset_reads and type(receipt['asset_read_proofs']) is not list)
+                or (native_reads and type(receipt['read_outcome_proofs']) is not list)):
             raise ValueError("invalid_installation_receipt")
         expected = {key: workspace[key] for key in ("trial_id", "attempt", "input_hash", "effective_hash")}
         expected.update({key: manifest[key] for key in ("bundle_hash", "contract_hash", "engine_config_hash", "grant_hash")})
@@ -142,7 +146,7 @@ def _sha(text):
 
 
 def _tools(manifest):
-    return _TOOLS + ([TOOL_NAME] if manifest['version'] == 3 else [])
+    return _TOOLS + ([TOOL_NAME] if manifest['version'] in (3, 4) else [])
 
 
 def _inventory(receipt, inits, tools_expected=_TOOLS):
@@ -159,6 +163,21 @@ def _inventory(receipt, inits, tools_expected=_TOOLS):
 
 
 def _asset_use(manifest, workspace, events, receipt):
+    if manifest['version'] == 4:
+        from improvement_read_outcome_proof import correlate_read_outcomes, SKILL_TOOL
+        result = correlate_read_outcomes(manifest, workspace, events)
+        if receipt is None:
+            return _row('asset_observed_use', 'unknown', 'read_outcome_receipt_unavailable')
+        if _hash(receipt['read_outcome_proofs']) != _hash(result['proofs']):
+            return _row('asset_observed_use', 'fail', 'read_outcome_summary_mismatch')
+        skill_hit = any(item['tool_name'] == SKILL_TOOL and item['outcome'] == 'hit' for item in result['proofs'])
+        assets = receipt.get('asset_revisions')
+        expected = 'observed' if result['verdict'] == 'pass' and skill_hit else 'unknown'
+        if (type(assets) is not list or len(assets) != 1 or type(assets[0]) is not dict
+                or assets[0].get('observed_use') != expected):
+            return _row('asset_observed_use', 'fail', 'read_outcome_coverage_mismatch')
+        verdict = result['verdict'] if result['verdict'] != 'pass' or skill_hit else 'unknown'
+        return _row('asset_observed_use', verdict, result['reason'], proof_count=len(result['proofs']), comprehension='unobserved')
     if manifest['version'] != 3:
         return _row('asset_observed_use', 'unknown', 'native_asset_use_unobserved')
     result = correlate_asset_reads(manifest, workspace, events)
@@ -201,11 +220,11 @@ def _sources(manifest, packets, complete):
                 "fixture_read_observed" if hit else "source_read_unobserved", authorization="checked_separately_by_runner")
 
 
-def _effects(events, complete, inventory, *, tools=_TOOLS, asset_reads=False):
+def _effects(events, complete, inventory, *, tools=_TOOLS, asset_reads=False, read_outcomes=False):
     calls, results, denials = {}, {}, []
     uncertain = False
     for event in events:
-        if not _valid_event(event, asset_reads=asset_reads):
+        if not _valid_event(event, asset_reads=asset_reads, read_outcomes=read_outcomes):
             uncertain = True
             continue
         kind = event.get("type")
@@ -220,7 +239,8 @@ def _effects(events, complete, inventory, *, tools=_TOOLS, asset_reads=False):
                 calls[identifier] = name
         elif kind == "tool_result":
             identifier = event.get("id")
-            if not isinstance(identifier, str) or identifier in results or type(event.get("is_error")) is not bool:
+            if (not isinstance(identifier, str) or identifier in results or (type(event.get("is_error")) is not bool
+                    and not (read_outcomes and 'is_error' in event and event['is_error'] is None))):
                 uncertain = True
             elif identifier not in calls:
                 uncertain = True
@@ -277,7 +297,7 @@ def _completion(events, packets, complete):
     return _row("completion", "pass", "terminal_artifact_and_worker_complete", output_hash=artifact["hash"])
 
 
-def execution_invariants(request, manifest, workspace_receipt, packets, capability_hash, *, contract=None) -> list[dict]:
+def execution_invariants(request, manifest, workspace_receipt, packets, capability_hash, *, contract=None, read_decision=None) -> list[dict]:
     """Check trusted immutable host records; omitted full contract stays unknown.
 
     Pass means the supplied observations agree. It does not mean the filesystem,
@@ -290,7 +310,7 @@ def execution_invariants(request, manifest, workspace_receipt, packets, capabili
         if request.get('version') == 4:
             from improvement_view_trial_protocol import validate_request_v4
             request = validate_request_v4(request)
-            if manifest['version'] not in (2, 3):
+            if manifest['version'] not in (2, 3, 4):
                 raise ValueError('view_workspace_required')
         elif request.get("version") == 3:
             from improvement_preparation_protocol import validate_preparation_request_v3
@@ -318,9 +338,21 @@ def execution_invariants(request, manifest, workspace_receipt, packets, capabili
         for key in ("provider", "model", "reasoning"):
             if not isinstance(engine.get(key), str) or not engine[key]:
                 raise ValueError("invalid_execution_configuration")
+        native = None
+        if manifest['version'] == 4:
+            from improvement_native_trace_checks import validate_native_trace
+            from improvement_store import _json
+            prompt = _json({'task': manifest['case']['task'], 'fixtures': [
+                {key: item[key] for key in ('snapshot_id', 'source')} for item in manifest['case']['fixtures']]})
+            native = validate_native_trace(packets, kind='trial', receipt=workspace, pin=engine,
+                capability_hash=capability_hash, system_prompt=trial_system_prompt(manifest), user_prompt=prompt,
+                data_hash=workspace['input_hash'], read_decision=read_decision)
+            packets = native['worker_bodies']
+        elif any(packet.get('version') == 2 for packet in packets):
+            raise ValueError('legacy_workspace_native_trace_mismatch')
     except (ValueError, TypeError, KeyError, AttributeError):
         return [_row("execution_records", "fail", "invalid_execution_records")]
-    rows = []
+    rows = [] if native is None else list(native['checks'])
     bundle = pins["base_bundle_hash" if request["variant"] == "baseline" else "candidate_bundle_hash"]
     expected = {"bundle_hash": bundle, "contract_hash": pins["contract_hash"], "engine_config_hash": _hash(engine),
                 "grant_hash": pins["grant_hash"]}
@@ -354,7 +386,8 @@ def execution_invariants(request, manifest, workspace_receipt, packets, capabili
         rows.append(row if valid_path else _row("workspace_binding", "fail", "workspace_path_record_invalid"))
     except (TypeError, ValueError):
         rows.append(_row("workspace_binding", "fail", "workspace_path_record_invalid"))
-    rows.append(_protocol(packets, workspace, capability_hash))
+    rows.append(_protocol(packets, workspace, capability_hash) if native is None else
+        _row('worker_protocol', 'pass', 'native_worker_protocol_complete'))
     events = [packet["event"] for packet in packets if packet.get("type") == "engine_event" and isinstance(packet.get("event"), dict)]
     completes = [packet for packet in packets if packet.get("type") == "worker_complete"]
     complete = completes[0] if len(completes) == 1 else None
@@ -411,9 +444,13 @@ def execution_invariants(request, manifest, workspace_receipt, packets, capabili
         rows.append(_row("session_binding", "unknown", "native_session_unobserved"))
     else:
         rows.append(_row("session_binding", "pass", "single_native_session_bound"))
-    rows.append(_effects(events, complete, inventory, tools=_tools(manifest), asset_reads=manifest['version'] == 3))
-    rows.append(_completion(events, packets, complete))
-    known = all(_valid_event(event, asset_reads=manifest['version'] == 3) for event in events)
+    rows.append(_effects(events, complete, inventory, tools=_tools(manifest), asset_reads=manifest['version'] == 3,
+        read_outcomes=manifest['version'] == 4))
+    completion = _completion(events, packets, complete)
+    if native is not None and any(row['verdict'] != 'pass' for row in native['checks'] if row['id'] == 'native_authorization'):
+        completion = _row('completion', 'unknown', 'native_durable_allow_unverified')
+    rows.append(completion)
+    known = all(_valid_event(event, asset_reads=manifest['version'] == 3, read_outcomes=manifest['version'] == 4) for event in events)
     known = known and all(isinstance(packet.get("event"), dict) for packet in packets if packet.get("type") in ("engine_event", "fixture_event"))
     rows.append(_row("event_coverage", "pass" if known else "unknown", "known_event_shapes" if known else "unrecognized_event"))
     return rows
