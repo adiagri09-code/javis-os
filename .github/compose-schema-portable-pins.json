@@ -1,0 +1,14 @@
+{
+  "server/improvement_compose_schema.py": "a33edf30ba19d73918d8e48138ca62c56dcfc67fa01b2b44e386e95fd192096f",
+  "server/improvement_store.py": "6951a65738070fd3a344141b66071f615e97e590a51dcbccfe46f0a5fb9a2255",
+  "server/improvement_operation_schema.py": "91768c8bbfa6a69e8b0c1451dcbffaa8fd596f19b506d8de0ed08354c60e8937",
+  "server/improvement_claude.py": "408687299b69ccaaa7a64bd3202401baf03e1258908874b23a4060fef28f4e4b",
+  "tests/python/test_improvement_compose_schema.py": "55b7b7d0d5088f729b83de66b9eb0faf0c1e8b72b3c47156a8499aebf0f477da",
+  "tests/python/test_improvement_compose_schema_boundaries.py": "09e72f0300c30b974e043c0990a1063728203b9e79beac0ac3e0496fc0dc33ca",
+  "tests/python/test_improvement_candidate_records.py": "4fd94dbe945e0e84f0701c5e999e84e4d2e3505ef8f4099fba41b3d3a72811c9",
+  "tests/python/test_improvement_cases.py": "f7cce9535d67fb367abb5f5ffe1f5bb81b29ee80cfa32e5c91d4118987763f35",
+  "tests/python/test_improvement_experiments.py": "5d4afe0405db1ad7f4505aadf3e0209661742fa13ceb626ea35e6ca47dbe0a8c",
+  "tests/python/test_improvement_operations.py": "ac4a0cffccaa495814914dacd8c47915bed47f3271de98529adac7164efb6216",
+  "tests/python/test_improvement_operation_execution.py": "af68df55d8e8e8c11832b8731ee7ea655ee82df59c131ec96c2f91233f0e59e7",
+  "tests/python/test_improvement_view_schema.py": "a6ad5a83dd5bdf8d8ee14e872d2069c45edc86c3271ac30044aa1701e2748256"
+}

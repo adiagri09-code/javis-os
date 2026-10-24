@@ -70,7 +70,7 @@ class ViewMigrationTests(unittest.TestCase):
 
     def test_schema6_upgrade_preserves_encrypted_history_and_actual_reader_rollback(self):
         IM.ensure(self.database)
-        self.assertEqual(IM._schema_version(self.database), 7, 'Effective-view migration is absent')
+        self.assertEqual(IM._schema_version(self.database), IM.SCHEMA_VERSION, 'Current migration is absent')
         self.assert_retained()
         with closing(self.database._conn()) as connection:
             names = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -91,7 +91,7 @@ class ViewMigrationTests(unittest.TestCase):
 
     def test_current_c_binary_refuses_schema7_before_any_backup_write_or_decryption(self):
         IM.ensure(self.database)
-        self.assertEqual(IM._schema_version(self.database), 7)
+        self.assertEqual(IM._schema_version(self.database), IM.SCHEMA_VERSION)
         before = history(self.database)
         with patch.object(self.database, '_backup_before', side_effect=AssertionError('Old code cannot write')), \
                 patch.object(self.f.blobs, 'read', side_effect=AssertionError('Old code cannot decrypt')):
@@ -115,8 +115,9 @@ class ViewMigrationTests(unittest.TestCase):
 
         with patch.object(self.database, '_backup_before', side_effect=backup), ThreadPoolExecutor(max_workers=2) as pool:
             list(pool.map(migrate, (1, 2)))
-        self.assertEqual(calls, [('improvement_effective_views', VIEWS_BACKUP)])
-        self.assertEqual(IM._schema_version(self.database), 7)
+        self.assertEqual(calls, [('improvement_compositions', '.pre-improvement-m2-compose.bak'),
+                                 ('improvement_effective_views', VIEWS_BACKUP)])
+        self.assertEqual(IM._schema_version(self.database), IM.SCHEMA_VERSION)
         self.assert_retained()
         backup = self.database.path.with_name(self.database.path.name + VIEWS_BACKUP)
         with closing(sqlite3.connect(backup)) as connection:
@@ -133,10 +134,10 @@ class ViewMigrationTests(unittest.TestCase):
         with closing(self.database._conn()) as connection:
             self.assertIsNone(connection.execute("SELECT name FROM sqlite_master WHERE name='improvement_effective_views'").fetchone())
         IM.ensure(self.database)
-        self.assertEqual(IM._schema_version(self.database), 7)
+        self.assertEqual(IM._schema_version(self.database), IM.SCHEMA_VERSION)
 
     def test_unknown_versions_reject_before_backup_or_mutation(self):
-        for version in (8, 999):
+        for version in (9, 999):
             with self.subTest(version=version):
                 with self.database._Tx(self.database) as connection:
                     connection.execute('UPDATE improvement_schema SET version=?', (version,))
@@ -151,13 +152,13 @@ class ViewMigrationTests(unittest.TestCase):
     def test_fresh_schema7_retains_pre_m0_backup_without_fabricating_schema6(self):
         fresh = type(self.database)(self.f.root / 'fresh.sqlite3')
         IM.ensure(fresh)
-        self.assertEqual(IM._schema_version(fresh), 7)
+        self.assertEqual(IM._schema_version(fresh), IM.SCHEMA_VERSION)
         self.assertTrue(fresh.path.with_name(fresh.path.name + '.pre-improvement-m0.bak').is_file())
         self.assertFalse(fresh.path.with_name(fresh.path.name + VIEWS_BACKUP).exists())
 
     def test_current_metadata_reader_remains_read_only_probe_free_and_decrypt_free(self):
         IM.ensure(self.database)
-        self.assertEqual(IM._schema_version(self.database), 7)
+        self.assertEqual(IM._schema_version(self.database), IM.SCHEMA_VERSION)
         before = history(self.database)
         with patch.object(self.database, '_backup_before', side_effect=AssertionError('Cold metadata cannot write')), \
                 patch.object(self.f.blobs, 'read', side_effect=AssertionError('Cold metadata cannot decrypt')):
@@ -402,7 +403,7 @@ class SettledHistoryMigrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(before['improvement_semantic_receipts'])
         self.assertTrue(calls)
         IM.ensure(database)
-        self.assertEqual(IM._schema_version(database), 7)
+        self.assertEqual(IM._schema_version(database), IM.SCHEMA_VERSION)
         after = history(database)
         self.assertEqual({name: after[name] for name in before if name != 'improvement_schema'},
             {name: rows for name, rows in before.items() if name != 'improvement_schema'})
