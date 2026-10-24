@@ -1,5 +1,29 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — startup3 consistency and genuine Linux preparation approved
+
+Explicit pure startup3 binds closed engineering scope/account_readyFalse, exact
+pin/environment hashes, isolated HOME path shape and full attempt/receipt/config/
+capability/call identity data. Production startup2 stays strict and rejects all
+engineering extensions. Parser/channel binding alone grants no provenance,
+native launch/account authority, actual M0/FS/emptyHOME/clock/budget observations.
+No runtime consumer is installed yet; actual owned host/worker permit integration
+and closure seeding remain mandatory before authority.
+
+Private Session now supplies both AppData path fields under its fresh empty HOME
+even when portable base lacks them; production worker_environment unchanged.
+Independent35 PASS7.716s, all17 pins stable. Genuine clean Linux first failed on
+undeclared direct packaging dependency; explicit packaging==26.2 matches local
+tested runtime and received narrow review. Fresh isolated Linux40051859131
+SUCCESS:46 PASS4.197s on fe7ecb0185, five selected rawsource/test/dependency pins
+recorded. This is early scoped preparation CI, not final-task-head full CI.
+Public qualification-startup3 records RED/GREEN/reviews/failed+successful CI.
+
+Remaining operation binding execution proof, typed qualifier launch/runtime,
+explicit engineering report publication/forensic joins and upper promotion
+fences precede actual exact-source owned qualification/registration/account
+feasibility/final CI. Goal remains open; no live/account activation occurred.
+
 ## Current continuation — durable engineering run/attempt domain approved
 
 Concrete session now supplies a read-only expected run anchor to actual M0 store;
