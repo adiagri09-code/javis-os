@@ -1,5 +1,30 @@
 # Agent and skill improvement Goal progress
 
+## Actual upstream compose adapter — scoped pure component approved
+
+Goal17's first functioning fixture slice now calls actual compose_round at t=k=1
+from the pinned upstream source. Nine extracted definitions/constants match exact
+source segments AND AST; raw original Git blob9ccacf23b64ac15b06a1939f26224960f56d757c
+and Apache2 LICENSE blobd645695673349e3947e8e5ae42332d0ac3164cd7 independently
+verified. Static narrow Javis body surface and context/notes→JSON mapping exclude
+upstream guardrail/plugin surfaces and filesystem access. Existing byte validator
+creates combined UTF8/CRLF bytes, KEEP_BASE or adoption; decisions remain model
+claims, semantics unreviewed, no source authority or inherited pass/activation.
+
+Meaningful RED8 preceded GREEN9; existing body patch regression11/11 PASS.
+Independent9/9 PASS.256s,10 pins stable, no actionable finding; report
+a06d21b5af3325fbf755a6c3ae5e288389caedbaa5ff71010e4c96b0b7a9a4bb.
+[Public component evidence](../evidence/2026-10-24-harness2-compose-adapter.json)
+and third_party/harness2/COMPOSE-PROVENANCE.json distinguish actual vendor code
+from host glue and unverified caller projections. This is not durable/runtime/
+executable-bundle integration. Next connect authenticated tuning lineage and a
+distinct immutable composition record to existing Operation/CallLedger ownership
+with explicit schema/arm migration; retain original two proposals and separately
+probe/qualify/regress the new composed bundle. No ordinal3 or authority shortcut.
+Native footprint must include new dependencies on connection and requalify; exact
+final-head full CI, later library adapter and full M0–M8 remain open. No actual
+model/account/business/cost-saving/live evidence.
+
 ## Upper engineering-domain product fences — scoped implementation approved
 
 Comparison create/read/evidence/replay/final publication, experiment selection

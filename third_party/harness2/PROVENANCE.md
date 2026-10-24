@@ -1,4 +1,17 @@
-# Harness² prompt adaptation
+# Harness² prompt reuse
+
+Actual independent implementation is additionally extracted in
+`server/improvement_harness2_compose.py`, consumed by the bounded body composition
+renderer/parser in `server/improvement_compose_protocol.py`. Exact unchanged
+definitions, upstream source/AST hashes, inspected recursion/test blobs and
+adapter modifications are in COMPOSE-PROVENANCE.json. It calls upstream
+compose_round for a single checkpoint, not a paraphrase of that method. Static
+Javis body-only registry replaces broad upstream surface construction; closed
+JSON and existing byte validator retain Javis contracts. This pure fixture slice
+has no operation/native execution, durable candidate, executable bundle, source
+authority, inherited pass or activation. Those consumers remain pending.
+
+The earlier proposer method below remains an adaptation, separately identified.
 
 Copyright 2026 Google LLC. Licensed under Apache-2.0; see LICENSE in this folder.
 Upstream: https://github.com/google-research/harness2
