@@ -1,5 +1,43 @@
 # Agent and skill improvement Goal progress
 
+## Current D2 ordinary named-skill snapshot unit — scoped technical approval
+
+Actual final Dashboard API branch now privately carries the original host turn
+token into an opt-in TaskSkillTurn lifecycle before Phase8 source/tool discovery.
+Default/off/malformed/native/nonhub/no-key routes do no capture/store creation.
+The core uses real running runtime rows and existing encrypted M0 blobs/events;
+lazy selection, main's precomputed skill metadata and the actual named hub handler
+share frozen per-task inventory and first selected bytes/hash. Global skill
+registry remains unchanged; hub cache/epoch/inventory stay owned by task and
+shadow scheduler refuses task descriptor publication. Closing invalidates copied
+contexts; no mutable fallback from missing/dead/foreign/corrupt bound snapshots.
+
+Root independent core13:12PASS1 Windows symlink privilege skip4.072s. Root impacted
+regression10/10scripts40s includes actual Phase8, prompt scan and ordinary skill
+asset/routing/language/caps/usage; later narrow cancellation fix independently
+verified. Independent root-source review reproduced/closed two Important issues:
+returning bytes after revocation during awaited usage, and capture failure
+overwriting retained Stop. Meaningful RED/GREEN logs are preserved. Final independent
+consumer11+root-owned cancellation1:12PASS5.141s,14pins stable; report
+fb8a1670e1f0776c1f1bc61c80fe8f9816c65f8af2a5a75e9a882dd70294883f.
+Own author tests/core are explicitly excluded from self-approval.
+
+Early genuine Linux [40053479314](https://github.com/blogminhquy/javis-os/actions/runs/40053479314)
+succeeded10/10scripts17s on isolatedcfdc8cd181a23b51a9585b22802c988ba5469cf5,
+with nine exact selected raw files and fresh remote HOME/DB/filesystem. This is
+not exact-final-task-head full CI. [Public evidence](../evidence/2026-10-24-m2d2-task-skill-snapshots.json)
+and [engineering boundary notes](../../dev/agent-skill-task-snapshots.md) record
+actual test seams, counter semantics and source identities.
+
+This is a delivered narrow engineering unit, not complete D2 effective-view
+isolation: arbitrary file/helper reads, native/HTTP/resume, OAuth/subscription and
+earlier fast paths remain separate. Actual run_turn AST proof substitutes _do_turn;
+final API route gates are source-reviewed, not full WebSocket/provider E2E. No
+account/model/native call, live settings change/deploy/activation or quality/
+business/canary conclusion. M0–M8 Goal remains active. Preserve this unit then
+execute the Goal§15 proposer adaptation plan; remaining D1 qualifier/D2/E/F and
+later code still require their own gates and final exact-head full CI.
+
 ## Owner prompt/evidence update — narrow existing renderer improvement next
 
 Goal§15 persists the next direct owner directive from the same authorized chat:
