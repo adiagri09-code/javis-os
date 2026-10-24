@@ -56,6 +56,27 @@ class NativeReleaseTests(unittest.TestCase):
 
     def inventory(self): return self.m._inventory(self.source, self.packages, ('entry.py',))
 
+    def test_wheel_manual_and_shell_completion_records_are_omitted_without_following_outside_import_root(self):
+        ancillary = ('../../share/man/man1/segno.1', '../../share/bash-completion/completions/yt-dlp',
+            '../../share/doc/yt_dlp/README.txt', '../../share/fish/vendor_completions.d/yt-dlp.fish',
+            '../../share/man/man1/yt-dlp.1', '../../share/zsh/site-functions/_yt-dlp')
+        record = self.packages / 'dep-1.0.dist-info/RECORD'
+        with record.open('a', encoding='utf-8', newline='') as output:
+            csv.writer(output, lineterminator='\n').writerows((name, '', '0') for name in ancillary)
+        before = {path.relative_to(self.root).as_posix() for path in self.root.rglob('*')}
+        sources, imports = self.inventory()
+        self.assertEqual(set(sources), {'entry.py', 'helper.py'})
+        self.assertIn('dep-1.0.dist-info/RECORD', imports)
+        self.assertEqual(before, {path.relative_to(self.root).as_posix() for path in self.root.rglob('*')})
+        for name in ancillary:
+            self.assertIsNone(self.m._record_path(name))
+        for name in ('../../share/dep.py', '../../share/man/../dep.py', '../../share/doc/../../dep.py',
+                '../../share//man/man1/dep.1', '../../share/man/./man1/dep.1', '/share/man/man1/dep.1',
+                r'../../share/man/..\dep.py', '../../share/doc/C:dep.py',
+                '../../share/man/man1/dep.1.', '../../share/man/man1/dep.1 '):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'native_release_path'):
+                self.m._record_path(name)
+
     def test_recursive_actual_source_and_windows_metadata_closure_without_executing_imports(self):
         sources, imports = self.inventory()
         self.assertEqual(set(sources), {'entry.py', 'helper.py'})

@@ -1,5 +1,30 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — actual default inventory observed; ancillary fix approved
+
+Readonly default inventory initially refused native_release_path in6.078s.
+Actual installed segno/yt_dlp RECORDs include six standard manuals/docs/shell
+completion paths outside site-packages. Narrow omission never follows those
+paths; selected RECORD/METADATA bytes stay pinned. Real selected-dependency
+fixture RED1 ERROR.138s -> GREEN.416s. Independent review found malformed Windows
+tail aliases were omitted before validation: actual RED1 with4 subfailures.381s,
+fixed by strict tail validation, GREEN.416s. Independent final builder11 PASS2.578s
+with sourcecdec514e/test9a9a3fdd unchanged; minor finding closed.
+
+One actual unoverridden default observation succeeded in44.187s on priorb711
+builder:206 source,1629 import and2 runtime files, fingerprint73d43cd9. Coverage
+authority/unlisted-import exclusion/initial sections/dynamic closure stays UNKNOWN.
+That observed snapshot precedes the stricter-tail line and remains historical;
+no repeated44s inventory just to relabel it current. Public native-default-inventory
+pins exact logs/manifests/source and this reuse limit. Final source qualification
+will rebuild after consumers settle. Registry is still empty, no launch/account
+query or performance/caching claim.
+
+Next is explicit native baseline support plus actual materializer4/2 integration,
+then closed dummy-only qualification policy and final frozen full-pipeline native
+evidence. Baseline preparation must retain genuine bundle authority without an
+invented paired view or unguarded fallback. Goal M0–M8/business/canary stays open.
+
 ## Current continuation — all nine native admission callers independently approved
 
 All nine audited synchronous caller bindings now pass one independent combined18

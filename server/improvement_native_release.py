@@ -145,13 +145,21 @@ def _normalize(name): return re.sub('[-_.]+', '-', name).lower()
 
 
 def _record_path(name):
-    # Installed command launchers are not imports and are not followed outside
-    # site-packages. All other traversal/absolute RECORD paths refuse discovery.
+    # Installed commands/manuals/completions are not imports and are never
+    # followed outside site-packages. Their RECORD bytes remain pinned. Other
+    # traversal/absolute paths still refuse discovery.
     parts = PurePosixPath(name).parts
     if parts and parts[0] == '..':
         index = 0
         while index < len(parts) and parts[index] == '..': index += 1
         if index and index < len(parts) and parts[index] == 'Scripts' and '..' not in parts[index:]: return None
+        ancillary = (('share', 'man'), ('share', 'doc'), ('share', 'bash-completion', 'completions'),
+                     ('share', 'fish', 'vendor_completions.d'), ('share', 'zsh', 'site-functions'))
+        tail = parts[index:]
+        if (index and tuple(name.split('/')) == parts and '..' not in tail
+                and any(len(tail) > len(prefix) and tail[:len(prefix)] == prefix for prefix in ancillary)):
+            _relative('/'.join(tail))
+            return None
     _relative(name)
     if (any(part in _OMIT for part in parts) or name.endswith(('.pyc', '.pyo', '.exe'))
             or any(part.endswith('.data') for part in parts)): return None

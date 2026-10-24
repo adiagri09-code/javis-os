@@ -128,7 +128,8 @@
       "Legacy retry decodes only selected active engine events; native observation2 authenticates whole history before interpretation"
     ],
     "first2_static_report_sha256": "4355c5c555eb7dfb62e8e20162b93112188ba238373f4924a490bca414b0091d",
-    "initial_next7_report_sha256": "ff2ae6e6f1422e95196d6e7533e7359fc34e7a5a950cbb61c634c13d6430b0dd"
+    "initial_next7_report_sha256": "ff2ae6e6f1422e95196d6e7533e7359fc34e7a5a950cbb61c634c13d6430b0dd",
+    "final_report_sha256": "365717016e098fd732d5db83476c6ddf26f37b32235f2833b55333ad664cd584"
   },
   "behavior": [
     "All nine audited synchronous admission/reserve callers bind actual M0/principal/current callback before native verification; existing owned worker-thread bridge retained",
