@@ -60,9 +60,12 @@ integration using actual same Trial/Operation runners and localhost dummy-only
 provider. Operation binding proof is preserved56046f66; ordinary named-skill D2
 snapshot/private API lifecycle7ee04de5 and narrow upstream proposer method90821020
 have scoped technical approval, with their explicit native/helper/quality limits.
-Next close upper engineering-store comparison/selection/role replay/publication
-fences using the existing authenticated domain helper, then resume typed owned
-qualifier and the remaining D2/E/F and later milestone technical dependencies.
+Upper engineering-store comparison/selection/role replay/publication fences now
+have scoped technical approval (public2026-10-24-qualification-product-boundaries
+evidence). Next follow Goal17: functioning actual pinned upstream compose through
+a narrow adapter, then experience-library entry/index/serialization snapshots,
+then decide orchestration replacement. Continue typed owned qualifier and remaining
+D2/E/F and later milestone dependencies with all gates still open as appropriate.
 Source/lease/materialization/ledger gates remain real and unpatched.
 Do not reuse historical native qualification for changed source or mistake pure
 startup3 parsing for native provenance. Integration remains a reviewed exact-head

@@ -15,6 +15,7 @@ from improvement_trial_associations import _association, _FIELDS
 from improvement_trial_host import HostContextStore, _brain
 from improvement_trial_sources import authorize_case
 from improvement_experiment_schema import TERMINAL_PHASES
+from improvement_qualification_records import require_product_store
 
 
 class ExperimentPlans:
@@ -275,6 +276,7 @@ class ExperimentPlans:
 
     def select(self, principal, experiment_id, choice, *, ordinal, expected_generation, event_key):
         brain = _brain(principal)
+        require_product_store(self.assets, principal)
         _identifier(experiment_id)
         _generation(expected_generation)
         if (type(choice) is not str or choice not in ("keep_base", "candidate")
@@ -286,6 +288,7 @@ class ExperimentPlans:
         if choice == "candidate":
             return self._select_candidate(principal, payload, event_key)
         with self.store._Tx(self.store) as connection:
+            require_product_store(self.assets, principal, connection=connection)
             replay = self.assets._replay(connection, brain, event_key, "experiment_select", payload)
             if replay is not None:
                 return replay
@@ -331,6 +334,7 @@ class ExperimentPlans:
         generation, ordinal = payload["expected_generation"], payload["ordinal"]
         reports = ComparisonResults(self)
         with closing(self.store._conn()) as connection:
+            require_product_store(self.assets, principal, connection=connection)
             replay = self.assets._replay(connection, brain, event_key, "experiment_select", payload)
             if replay is not None:
                 return replay
@@ -356,6 +360,7 @@ class ExperimentPlans:
                 raise PermissionError("experiment_selection_report_unavailable")
             validated.append((arm_ordinal, saved, metadata, captured, policy))
         with self.store._Tx(self.store) as connection:
+            require_product_store(self.assets, principal, connection=connection)
             replay = self.assets._replay(connection, brain, event_key, "experiment_select", payload)
             if replay is not None:
                 return replay
@@ -370,6 +375,7 @@ class ExperimentPlans:
             # report/blob/policy work. No model, new claim or exposure is opened.
             for _, _, metadata, _, _ in validated:
                 reports._guard(connection, principal, metadata, generation)
+            require_product_store(self.assets, principal, connection=connection)
             evidence = [[saved["id"], saved["report_hash"]] for _, saved, _, _, _ in validated]
             connection.execute("INSERT INTO improvement_experiment_selections VALUES(?,?,?,?,?,?,?,?)", (
                 experiment_id, brain, "candidate", ordinal, metadata["comparison"]["definition_hash"],

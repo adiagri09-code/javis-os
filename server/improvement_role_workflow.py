@@ -8,6 +8,7 @@ from improvement_operation_results import OperationResults
 from improvement_operation_tasks import OperationTasks
 from improvement_trial_records import _brain
 from improvement_result_domain import NATIVE_GATES, require_product_report
+from improvement_qualification_records import require_product_store
 
 _REQUIRED = {'materialization', 'worker_protocol', 'installation', 'tool_inventory', 'side_effects',
              'completion', 'actual_model', 'native_session'}
@@ -54,6 +55,7 @@ class RoleWorkflow:
             raise RuntimeError('role_workflow_closed')
 
     def _product(self, connection, principal, identifier):
+        require_product_store(self.assets, principal, connection=connection)
         row = self.execution._row(connection, principal, identifier)
         if row['kind'] not in self._product_kinds or row['status'] != 'completed':
             raise IM.ConflictError('proposal_operation_incomplete')
@@ -81,9 +83,11 @@ class RoleWorkflow:
         if any(item['late'] for item in trace) or [item['payload_hash'] for item in trace] != report['trace_hashes']:
             raise IM.ConflictError('proposal_native_trace_changed')
         raw = self.products.artifact(principal, identifier, row['attempt']).decode('utf-8')
+        require_product_store(self.assets, principal, connection=connection)
         return {'row': dict(row), 'attempt': dict(attempt), 'call': call, 'record': records[0], 'report': report, 'trace': trace, 'raw': raw}
 
     def _product_fence(self, connection, principal, product):
+        require_product_store(self.assets, principal, connection=connection)
         row = self.execution._row(connection, principal, product['row']['id'])
         attempt = self.execution._attempt(connection, row)
         if (dict(row) != product['row'] or dict(attempt) != product['attempt']
@@ -96,12 +100,14 @@ class RoleWorkflow:
             'WHERE operation_id=? AND brain_id=? AND attempt=? ORDER BY sequence', (row['id'], row['brain_id'], row['attempt']))]
         if trace != product['trace']:
             raise IM.ConflictError('proposal_native_trace_changed')
+        require_product_store(self.assets, principal, connection=connection)
 
     def _read_product(self, principal, identifier):
         with closing(self.store._conn()) as connection:
             return self._product(connection, principal, identifier)
 
     async def _run_owned(self, principal, scope_id, event_key, payload, factory):
+        require_product_store(self.assets, principal)
         self._bind()
         self._open()
         key, digest = (_brain(principal), event_key), IM._hash(payload)
@@ -109,7 +115,9 @@ class RoleWorkflow:
         if previous is not None:
             if previous[0] != digest:
                 raise IM.ConflictError('role_workflow_event_conflict')
-            return await self.tasks._join(previous[1])
+            result = await self.tasks._join(previous[1])
+            require_product_store(self.assets, principal)
+            return result
         task = asyncio.create_task(factory())
         self._operations[key] = digest, task, scope_id, principal
 
@@ -119,7 +127,9 @@ class RoleWorkflow:
             self.tasks._consume(done)
 
         task.add_done_callback(finished)
-        return await self.tasks._join(task)
+        result = await self.tasks._join(task)
+        require_product_store(self.assets, principal)
+        return result
 
     async def close(self):
         self._bind()

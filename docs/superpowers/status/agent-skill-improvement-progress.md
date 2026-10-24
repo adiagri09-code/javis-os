@@ -1,5 +1,28 @@
 # Agent and skill improvement Goal progress
 
+## Upper engineering-domain product fences — scoped implementation approved
+
+Comparison create/read/evidence/replay/final publication, experiment selection
+and actual role admission/join/product/return now reuse the existing authenticated
+require_product_store. Genuine engineering stores and unanchored markers refuse
+ordinary publication even with missing cells, replay or a late domain change.
+Comparator, baseline/unknown policy, schemas and encrypted history stay intact.
+Meaningful RED6 (12 assertions, no fixture errors) and RED4 preceded GREEN6
+23.820s/GREEN4 13.361s. Affected comparison/selection/proposal/semantic checks:
+25 tests,4/4 scripts PASS203.919s. Independent root-source/race review approved,
+4/4 PASS10.557s,8 stable pins, no actionable finding; reviewer-authored original
+six cases were separately verified by root, excluded self-approval. Report hash
+4fbd625e7b7c3ce0d506b871b8f81fdca847a8becfebf783df31776c3067f61f.
+[Public evidence](../evidence/2026-10-24-qualification-product-boundaries.json)
+distinguishes actual authenticated Session fixtures from unanchored refusal-only
+race controls and explicit static/native seams. No actual native/account/model,
+business benefit or live activation proof. Separate engineering reports/runtime,
+current-source native qualification and final-head full CI remain open.
+
+Next safe unit follows Goal17: actual pinned upstream compose through a bounded
+adapter, then experience-library snapshots/index; do not revert to an earlier
+native-first schedule or claim the whole M0–M8 Goal is complete.
+
 ## Owner direct compose/library priority — Goal§17
 
 Owner directive from the same authorized chat is saved in Goal§17. Next safe

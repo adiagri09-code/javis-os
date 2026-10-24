@@ -9,6 +9,7 @@ from math import comb
 
 from improvement_store import _hash
 from improvement_experiment_protocol import definition, comparison_matrix, matrix_cell
+from improvement_qualification_records import require_product_store
 
 _VERDICTS = {"pass", "fail", "unknown"}
 _SPLITS = ("tuning", "qualification", "regression")
@@ -419,6 +420,8 @@ class ComparisonResults:
                     'view_request': view_protocol.__file__, 'view_manifest': manifest_protocol.__file__}.items()})}
 
     def _evidence(self, principal, metadata, captured, *, refs=None):
+        # Domain refusal is categorical, outside per-cell UNKNOWN recovery.
+        require_product_store(self.assets, principal)
         import json
         import improvement_store as IM
         from improvement_blobs import AssetUnavailable
@@ -456,7 +459,9 @@ class ComparisonResults:
             rows.append(None if evidence is None else {"position": position, **evidence})
         if refs is not None and selected != refs:
             raise AssetUnavailable("comparison_result_reference_changed")
-        return selected, aggregate(metadata["definition"], metadata["matrix"], metadata["contract"], metadata["manifest"], rows)
+        summary = aggregate(metadata["definition"], metadata["matrix"], metadata["contract"], metadata["manifest"], rows)
+        require_product_store(self.assets, principal)
+        return selected, summary
 
     def _result_row(self, brain, trial_id, result_id, result_hash):
         from contextlib import closing
@@ -500,6 +505,7 @@ class ComparisonResults:
         self.records._available()
         payload = {"comparison_id": comparison_id, "expected_generation": expected_generation}
         with closing(self.store._conn()) as connection:
+            require_product_store(self.assets, principal, connection=connection)
             replay = self.assets._replay(connection, brain, event_key, "comparison_report", payload)
             if replay is not None:
                 return replay
@@ -522,6 +528,7 @@ class ComparisonResults:
         if blob != digest:
             raise IM.ConflictError("comparison_report_hash_changed")
         with self.store._Tx(self.store) as connection:
+            require_product_store(self.assets, principal, connection=connection)
             replay = self.assets._replay(connection, brain, event_key, "comparison_report", payload)
             if replay is not None:
                 return replay
@@ -530,6 +537,7 @@ class ComparisonResults:
             # Policy hashing reads public source files. Final full observation
             # and SQL-only authority fences must follow that last slow I/O.
             self._guard(connection, principal, metadata, expected_generation)
+            require_product_store(self.assets, principal, connection=connection)
             identifier = "icr_" + _hash([brain, comparison_id, digest])[:32]
             connection.execute("INSERT OR IGNORE INTO improvement_comparison_reports VALUES(?,?,?,?,?,?,?,?)", (
                 identifier, brain, comparison["experiment_id"], comparison_id, digest, blob, _hash(policy), time.time()))
@@ -551,6 +559,7 @@ class ComparisonResults:
         brain = IM._brain(principal)
         self.records._available()
         with closing(self.store._conn()) as connection:
+            require_product_store(self.assets, principal, connection=connection)
             row = connection.execute("SELECT * FROM improvement_comparison_reports WHERE id=? AND brain_id=?", (report_id, brain)).fetchone()
             if row is None:
                 raise PermissionError("comparison_report_unavailable")
@@ -579,4 +588,5 @@ class ComparisonResults:
         _, summary = self._evidence(principal, metadata, captured, refs=refs)
         if summary != report["summary"]:
             raise AssetUnavailable("comparison_report_evidence_changed")
+        require_product_store(self.assets, principal)
         return report
