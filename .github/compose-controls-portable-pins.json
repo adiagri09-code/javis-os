@@ -1,0 +1,11 @@
+{
+  "server/improvement_compose_permissions.py": "37f0d07f1db085884c32c65f2cc95f179cf2d6e37f71b03dfbcd04f839262f06",
+  "server/improvement_compositions.py": "27036c4f11e78667dd17528498dfdc98b10c3756226244992f806d3509023d29",
+  "server/improvement_experiment_api.py": "f9b3ada5718206297c89286cfcaff5d42ccbfb5967e77a68ba083ebc1fe5ae09",
+  "server/improvement_experiment_requests.py": "6ca7d6f90779774159737cd606b7834a7ca7a58faef77aed421bc2c9ac33fc4a",
+  "server/improvement_experiment_service.py": "0f528ba6a49cfe130254596cce7dd54deba6c7074d003fb6e0cf95c913f9ae69",
+  "server/main.py": "ed97f8b046f2eac49193f3f8450405b5e7dc2f329439a81a886dc0be4d4ffe2f",
+  "tests/python/test_improvement_compose_api.py": "b568e80554ecaca8098022ba1d7608d921ffa92d7735894a2e593eaf53b8f8c4",
+  "tests/python/test_improvement_compose_controls.py": "d7452d6a8d03b0078991aa683b7ceb4bec823ae98d6afda3c3e665413484ee5a",
+  "tests/python/test_improvement_experiment_main.py": "fbbc915e150475ba88eaadeaa4f65abf9a663d572dfdf64221059ee58c990c78"
+}
