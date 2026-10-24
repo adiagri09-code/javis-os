@@ -11,6 +11,13 @@ from __future__ import annotations
 
 import re
 
+# Reviewed path-independent release closures. Registration is external authority,
+# deliberately excluded from its own source/manifest fingerprint. Empty until
+# the complete production pipeline has passed actual qualification.
+# Key: (platform, CLI version/hash, SDK version, profile version/hash, fingerprint).
+# Value: SHA-256 of retained reviewed qualification evidence.
+REVIEWED_RELEASES = {}
+
 # Exact dummy-auth/native enforcement evidence; this does not attest account
 # readiness, actual call usage, business quality or final eligibility.
 # docs/superpowers/evidence/2026-10-23-m2c-native-qualification.json
