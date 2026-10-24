@@ -1,5 +1,43 @@
 # Agent and skill improvement Goal progress
 
+## Owner scheduling update — all M0–M8 code first, real trials second
+
+Direct owner update relayed2026-10-24 from chat
+`01a16662-a77c-72e2-9c40-265c5659d5cc` is persisted as Goal§13 and
+[the active code-first plan](../plans/2026-10-24-agent-skill-improvement-code-first.md).
+It changes order only: Phase1 completes functioning backend/runtime/UI/migration/
+selected adapters/agent/bundle/Team/operations and mandatory technical tests for
+all M0–M8. Phase2 then runs real account/model/business feasibility and pilots,
+correction, real canary and authorized rollout. No scope cut or reset/MVP stop.
+
+Previous source hashes remain historical:
+original67061573b8c584d65d0ecf1daa4c56b536c78c07fcc5158cfa090d40ea299afd;
+pre§13/after§12 558e91848624c2dbc5daf1d5decb64b43b960285ce0416e40099ca63863b2ec8.
+Post§13 Goal SHA-256: f683ff6abba61e110ef8034fe1451d80390d6688866c2def5f2f964ec4fcd356.
+New addendum identity never replaces old goal/spec/evidence lineage.
+
+No real inference is currently owned/running. Preserve all historical failed/
+unknown/refunded attempts and usage. Older checkpoint "next account feasibility"
+instructions below are historical; those tasks move to Phase2, traced in the new
+plan, with original selected config/quality/owner/canary criteria unchanged.
+Current dummy/fixture/native localhost technical work remains Phase1; incomplete
+business/canary evidence does not prevent independent later code. Keep actual
+native/runtime/production/activation gates, independent review and final-head CI.
+Code merge/publication does not authorize deploy/restart/live activation.
+
+| Scope | Code complete | Technical checks / environment | Engine evidence required | Business pilot | Canary / rollout |
+|---|---|---|---|---|---|
+| M0–M1 | Previously integrated foundation; reuse | Historical exact-source Windows/Linux proofs; recheck actual impacts only | Existing limited evidence stays scoped; no blanket adapter readiness | No new result inferred | No activation inferred |
+| M2 | A/B/C integrated; D1 ongoing, D2/E/F still open | Latest scoped Windows35 +Linux46; no complete owned native pipeline claim | Current exact-source dummy/native technical qualification pending; actual selected-account feasibility deferred | Phase2 pending | Phase2 pending |
+| M3 | Pending full implementation | Dataset/policy/reviewer/canary/monitor/revert simulations to implement/test | Phase2 verification where applicable | Phase2 pending | Real7days/10tasks and owner gates pending |
+| M4–M5 | Pending routing/adapters/scoped agent/UI | Real implementation +fixture/DI tests to complete | Each adapter/surface separately pending | Phase2 pending | Phase2 pending |
+| M6–M8 | Pending bundle/helper/Team/adaptive governance | Full atomic/recovery/transfer/filter/stop technical tests to complete | Each applicable helper/engine/Team scope pending | Phase2 pending | Phase2 pending |
+
+Phase1 is not complete. Full Goal remains active through Phase2. Immediate work
+continues from d13ecb48: real operation binding execution proof, owned qualifier
+and domain consumers, D2/E/F, then remaining milestone code in technical dependency
+order. Do not repeat unchanged tests or real account attempts to delay later code.
+
 ## Current continuation — startup3 consistency and genuine Linux preparation approved
 
 Explicit pure startup3 binds closed engineering scope/account_readyFalse, exact
@@ -2594,3 +2632,4 @@ Full M0–M8 Goal remains active; no business or live rollout gate is closed by 
   passes3/3 in61s. No actual model/native-auth query or runtime
   profile change occurred. Fresh final-head Linux CI, merge and publication remain
   mandatory; this technical correction supplies no business or rollout evidence.
+

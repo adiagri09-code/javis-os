@@ -1,5 +1,11 @@
 # D1 bounded read-only view observation
 
+Scheduling addendum2026-10-24: [code-first M0–M8 plan](2026-10-24-agent-skill-improvement-code-first.md)
+and Goal§13 now govern. Actual selected-account pair/final/feasibility/pilot and
+canary tasks below belong to Phase2 after all milestone code/technical checks.
+Technical native dummy/fixture/source tests continue in Phase1; old evidence and
+acceptance criteria remain unchanged. No further real inference now.
+
 Goal section12 applies; implementation continues inline under the existing M0-M8
 authority. Base29f5bdd5, same worktree/branch/reserved0.299.0 and draftPR803.
 

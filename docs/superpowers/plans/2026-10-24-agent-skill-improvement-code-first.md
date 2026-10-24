@@ -1,0 +1,61 @@
+# M0–M8: code and technical verification before real trials
+
+Owner Goal sections12/13 apply from checkpoint d13ecb48 on existing M2 worktree,
+branch codex/agent-skill-improvement-m2d1, draft PR803/reserved0.299.0. This plan
+changes scheduling, not scope, acceptance thresholds, evidence or live authority.
+It supersedes older plan instructions to run a real account feasibility next.
+No account inference is currently owned/running: recent tests are fixture/local
+preparation and isolated CI only. No restart, deployment or activation occurs.
+
+## Phase 1 — complete functioning code and technical checks for every milestone
+
+Reuse published M0/M1/M2A/B/C and their unchanged evidence. Each remaining unit
+records affected components/callers/tests first, meaningful RED/GREEN, targeted
+regression, independent review, early Linux where relevant, and exact-final-head
+required CI before integration. Implement real backend/runtime/UI/migration and
+operational paths; fixtures/DI exercise them without asserting business gates.
+No scaffold, fake pass, model downgrade or disabled required check substitutes
+for a working implementation. Preserve owner/grant/source/holdout/native gates.
+
+| Milestone | Remaining technical delivery and prerequisites |
+|---|---|
+| M0–M1 | Reuse merged foundation/ledger/case/sandbox/recovery. Update only actual impacted interfaces or newly evidenced defects. |
+| M2 | Finish owned native/SDK/localhost dummy qualification and typed engineering domain/attempt/report fences; D2 production effective-view resolver/cache/router/lazy/hub/task/resume; E atomic scoped manual apply/revert/canary state; F complete diff/evidence/operator UI and recovery. Existing qualified source/runtime is a technical gate, not a business win. |
+| M3 | Implement full12/20/12 dataset/report workflow, pinned decision policy/two repeats/reviewer/owner state,10% canary monitor/revert/recipe linkage and clock/task accounting. Test simulations with explicit labels; active remains gated pending real evidence/time. |
+| M4 | Implement routing intent/description/trigger candidate surfaces, positive/negative/competing regression cases and selection/use telemetry; engine adapters in selected scope with independent enforcement/view/config/usage contracts. Keep each unverified engine marked pending. |
+| M5 | Implement scoped managed procedure overlays, persona/owner/skills pins, DM/Team/goal/enabled-channel loading, agent_review/learn proposal and evidence linkage, complete agent UI. Never change model/reasoning/role/grant. |
+| M6 | Implement dependency graph and atomic bundle apply/revert, actual sandbox helper execution, skill split/merge aliases, interaction/ablation workflow, dependency update/rollback and bundle-specific qualification gates. |
+| M7 | Implement pinned roster/plan/role trials, private artifact handoff, aggregate acceptance/attribution and transfer as unverified candidate across agent/team/engine. Reuse existing Team acceptance/usage dependencies. |
+| M8 | Implement evidence/need ranking, at most two refinement steps, rechecked compose/consolidation, filtered export/import and brain-wide governance/stop/suspend/revoke under restart/multiple processes. Model work requires useful trigger; consumed holdout and scope cannot expand. |
+
+Build actual technical dependencies before consumers. Shared effective-view and
+selector contracts precede M4/M5; applicable surfaces precede M6, Team dependencies
+precede M7. M8 policy can consume injected evidence during technical checks while
+remaining gated for real evidence. Missing pilot benefit never becomes a fake
+accepted candidate and never blocks independent code work. Record any genuine
+unknown that needs a real engine without repeatedly attempting real inference.
+
+Immediate continuation: finish the concrete Session/owned host/worker/runtime
+integration using actual same Trial/Operation runners and localhost dummy-only
+provider. Operation binding execution proof is being authored as a focused real
+private-store fixture test; production source/lease/materialization/ledger checks
+are not patched. Follow with D2/E/F and the remaining milestone technical plans.
+Do not reuse historical native qualification for changed source or mistake pure
+startup3 parsing for native provenance. Integration remains a reviewed exact-head
+deliverable, not approval to activate on a real brain.
+
+## Phase 2 — deferred real trials, with original criteria and lineage intact
+
+| Deferred task / previous trace | Entry condition and preserved acceptance |
+|---|---|
+| M2D1 selected-account feasibility and actual candidate pair/final, previously next in view-observation/native-outcome plans | Phase1 code complete, current selected engine/config and exact source/runtime qualified; bounded actual trials with full ownership/accounting/unknowns. Historical failed/unknown attempt and refunded cell stay unchanged; no automatic retry now. |
+| M2–M3 business feasibility/A-B and owner correction | Reconciliation primary, document processing secondary, Python bugfix/test technical control as delegated pilot choice. Use authorized independent sources/splits,12/20/12 and pinned thresholds/repeats; owner decisions and missing data stay explicit. No fabricated business data/answer. |
+| M4 per-engine real smoke and routing quality | Separate actual enforcement/view/config/usage and routing regression evidence per selected adapter/surface; no blanket support claim. |
+| M5 agent / M6 bundle-helper / M7 Team / M8 adaptive evidence | Actual scoped pilots and, where needed, interaction/ablation and transfer requalification. Preserve quality/attribution/owner gates, no inference of multi-agent gains from one skill pilot. |
+| Every live canary and rollout | Authorized scope/revision/evidence/rollback, real7days/10tasks and owner confirmation where required. Simulation cannot close time/task/native/business readiness gates. No rollout inferred from code merge/publication. |
+
+Track five independent statuses in progress: code complete, technical tests and
+their exact environment, engine verification required, business pilot pending,
+canary/rollout pending. Phase1 completion may be reported only after all code and
+mandatory technical checks exist; full Goal stays active until Phase2 requirements
+or explicit product decisions satisfy the existing complete contract.

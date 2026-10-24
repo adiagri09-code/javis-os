@@ -185,3 +185,51 @@ bổ sung được ghi riêng trong hồ sơ tiến độ, không thay hash ngu�
    chứng bị vô hiệu bởi thay đổi mới, thời gian thực đo được nếu có. Không hứa
    tỷ lệ tăng tốc chưa đo. Tiếp tục Goal từ checkpoint hiện tại sau khi lưu bổ sung.
 
+## 13. Bổ sung thứ tự thực hiện: code toàn bộ M0–M8 trước — 24/10/2026
+
+Đây là cập nhật trực tiếp của chủ, được chuyển từ chat “Xác định bước harness2
+tốn thời gian” (`01a16662-a77c-72e2-9c40-265c5659d5cc`). Áp dụng từ checkpoint
+hiện tại, không reset, không dừng ở MVP M2 và không thu hẹp phạm vi. Mục này đổi
+thứ tự công việc khi các đoạn trước hoặc spec gắn việc viết code mốc sau với
+pilot mốc trước; giữ nguyên tiêu chí chất lượng, quyền và định nghĩa hoàn thành.
+Goal trước bổ sung này có SHA-256
+`558e91848624c2dbc5daf1d5decb64b43b960285ce0416e40099ca63863b2ec8`.
+Hash nguồn ban đầu `67061573b8c584d65d0ecf1daa4c56b536c78c07fcc5158cfa090d40ea299afd`
+và mọi lineage/bằng chứng lịch sử giữ nguyên; hash sau bổ sung được ghi riêng.
+
+1. **Giai đoạn 1:** hoàn thiện code và kiểm kỹ thuật toàn bộ M0–M8, gồm backend,
+   runtime, UI, migration, adapters trong phạm vi đã chọn, agent/bundle/Team và
+   vận hành. **Giai đoạn 2:** sau khi phần kỹ thuật hoàn thiện mới chạy thử thực
+   tế bằng model/tài khoản/dữ liệu nghiệp vụ, feasibility/pilot A/B, đánh giá và
+   correction theo kết quả, đủ thời gian/nhiệm vụ canary và rollout có quyền.
+2. Giai đoạn 1 vẫn làm unit test, RED/GREEN hành vi, integration/E2E mô phỏng,
+   migration/rollback/quyền/scope/cancellation/crash/recovery, runtime với fixture
+   và localhost fake provider/credential giả, review độc lập và CI bắt buộc;
+   kế thừa toàn bộ mục12 về giảm lặp. Hoãn inference tài khoản thật, model-backed
+   feasibility nghiệp vụ, pilot thật và live canary sang Giai đoạn 2. Không tự
+   tạo dữ liệu hoặc quyết định nghiệp vụ thay chủ. Nếu có lượt thật đang chạy,
+   bảo toàn ownership/settlement/bằng chứng và không khởi động thêm.
+3. Hoàn thiện prerequisite kỹ thuật trước consumer tương ứng. Gate chờ bằng
+   chứng nghiệp vụ/canary không ngăn xây code độc lập của mốc sau: tách interface
+   và policy, dùng dependency injection/fixture để kiểm kỹ thuật, không giả gate
+   đã đạt hoặc mở activation/runtime thật chưa qualified.
+4. Mỗi mốc đánh dấu riêng **code hoàn thiện / kiểm kỹ thuật đạt ở môi trường nào /
+   cần kiểm engine thật / chờ pilot nghiệp vụ / chờ canary và rollout**. Adapter
+   chưa xác minh thực tế không được công bố hỗ trợ đầy đủ. Có thể xác nhận riêng
+   “giai đoạn code hoàn tất” đúng phạm vi/bằng chứng; không đánh Goal toàn bộ
+   complete khi Giai đoạn 2 còn mở.
+5. Không bỏ test kỹ thuật quan trọng, review độc lập hoặc exact-final-head full
+   CI; không tạo scaffold/placeholder thay chức năng. Không dùng mô phỏng khẳng
+   định native isolation, hiệu quả nghiệp vụ hoặc readiness thật. Khi thiếu bằng
+   chứng thực tế, giữ production/activation gated và ghi rõ giới hạn. Merge/phát
+   hành code theo quyền và quy ước hiện có không đồng nghĩa deploy/restart/bật
+   trên brain thật.
+6. Chuyển các task đòi thử nghiệm thực tế trong plan hiện tại sang danh sách
+   Giai đoạn 2 có truy vết, giữ nguyên tiêu chí và evidence cũ. Nếu một phụ thuộc
+   kỹ thuật thật sự cần thông tin chỉ thử thật mới biết, ghi rõ phần chưa xác
+   minh và tiếp tục phần độc lập; không lặp nghiên cứu/tự thử thật để trì hoãn
+   toàn bộ code.
+7. Lưu mục bổ sung này vào Goal, progress/checkpoint, plan hiện tại và kế tiếp;
+   bảo toàn hash nguồn gốc và lineage như mục12. Tiếp tục từ checkpoint hiện
+   tại, không làm lại phần đã đạt và không hỏi lại xác nhận thông thường.
+

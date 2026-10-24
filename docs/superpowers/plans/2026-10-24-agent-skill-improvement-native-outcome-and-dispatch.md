@@ -1,5 +1,11 @@
 # Exact native read outcomes and qualified client dispatch
 
+Scheduling addendum2026-10-24: Goal§13 and
+[code-first M0–M8 plan](2026-10-24-agent-skill-improvement-code-first.md) apply.
+Complete all milestone code/technical tests first; account feasibility, business
+pilot and real canary/rollout move to Phase2 with unchanged evidence/criteria.
+Actual owned runtime/localhost dummy technical qualification remains Phase1.
+
 Full M0–M8 Goal/section12 applies. Base ea74d62e/PR803/reserved0.299.0.
 This follows the terminal native skill qualification20/93.952s, exact profile
 04c8c77b and independent review. It does not authorize a new account retry.
