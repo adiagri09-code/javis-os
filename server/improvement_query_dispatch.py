@@ -10,7 +10,8 @@ from pathlib import PureWindowsPath
 
 _FLAGS = 0x08000006  # CREATE_NO_WINDOW | CREATE_SUSPENDED | DEBUG_ONLY_THIS_PROCESS
 _TOOLS = ("mcp__fixture__fixture_read", "mcp__skill__skill_asset_read")
-_POLICIES = {"fixture_only": (_TOOLS[:1], ("fixture",)), "pinned_skill": (_TOOLS, ("fixture", "skill"))}
+_POLICIES = {"fixture_only": (_TOOLS[:1], ("fixture",)), "pinned_skill": (_TOOLS, ("fixture", "skill")),
+             "baseline_inline": (_TOOLS[:1], ("fixture",))}
 _PIN_FIELDS = {"version", "cli_path", "model", "reasoning", "prompt_hash", "cwd", "tools"}
 _EFFORTS = ("low", "medium", "high", "xhigh", "max")
 # Literal tokens and named single-value positions in SDK116 _build_command.
@@ -79,7 +80,8 @@ def validate_query_dispatch(argv, *, command_line, executable, cwd, creationflag
     raw UTF-8 prompt_hash, workspace cwd and the exact tools list. Version1 keeps
     the fixture/skill inventory and result bytes. Version2 adds tool_policy:
     fixture_only for the existing operation inventory, or pinned_skill for the
-    two readonly tools. This grammar choice does not authorize a role or launch.
+    two readonly tools. baseline_inline has only the fixture tool for the native
+    baseline bundle. This grammar choice does not authorize a role or launch.
     Only the installed SDK116 trial query grammar is supported, including its
     SDKClient stdio permission-prompt option. The raw Windows command must equal
     subprocess.list2cmdline(argv), executable must be None, and creationflags must

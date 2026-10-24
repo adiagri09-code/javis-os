@@ -71,9 +71,12 @@ class NativeProfileBinding:
         if environment != runtime._environment: raise ValueError('native_profile_environment_drift')
         policy = _copy(query_policy)
         _fields(policy, {'version', 'cli_path', 'model', 'reasoning', 'prompt_hash', 'cwd', 'tools', 'tool_policy'})
-        tools = ['mcp__fixture__fixture_read'] + (['mcp__skill__skill_asset_read'] if kind == 'trial' else [])
+        tool_policy = policy['tool_policy']
+        valid_policy = ((kind == 'trial' and tool_policy in ('pinned_skill', 'baseline_inline'))
+                        or (kind == 'operation' and tool_policy == 'fixture_only'))
+        tools = ['mcp__fixture__fixture_read'] + (['mcp__skill__skill_asset_read'] if tool_policy == 'pinned_skill' else [])
         if (type(policy['version']) is not int or policy['version'] != 2 or policy['tools'] != tools
-                or policy['tool_policy'] != ('pinned_skill' if kind == 'trial' else 'fixture_only')
+                or not valid_policy
                 or any(policy[name] != runtime._pin[name] for name in ('cli_path', 'model', 'reasoning'))
                 or policy['cwd'] != runtime._cwd):
             raise ValueError('native_profile_query_policy_drift')

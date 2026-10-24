@@ -1,5 +1,23 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — native baseline profile independently approved
+
+Explicit manifest5 now binds the same owned runtime/client/transport/original
+stdin write as view4, with distinct baseline_inline policy and fixture-only tools.
+Operation cannot select that policy. Receipt5 includes actual completed delivery
+or None, no invented effective_view/read proof; asset use/provider/comprehension
+remain UNKNOWN. Unbound native4/5 options/start refuse ambient client fallback.
+Focused profile4 RED1FAIL/3ERROR1.488s and SDK2 RED1ERROR.847s became GREEN;
+independent18 PASS6.792s total includes old view4/query/binding paths. All11 pins
+stable and ClaudeTrialAdapter AST unchanged against c3f82ce8. Public
+native-baseline-profile records exact logs/report and limited engineering scope.
+
+No baseline5 parent/worker/runner/result/materializer activation or registration
+yet. Next extends explicit guarded worker/parent routes, then result validation
+and actual host-selected producers. Reuse unchanged prior component proofs;
+full final-source native qualification and exact-final-head CI remain due.
+
+
 ## Current continuation — explicit native baseline manifest foundation approved
 
 Readonly manifest5 now carries the real baseline bundle/context/assets/fixtures

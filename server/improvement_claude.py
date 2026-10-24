@@ -393,20 +393,21 @@ class TrialProfile:
             if self._asset_broker is not None or self._read_outcome_broker is not None else [])
 
     def bind_native_runtime(self, runtime, *, environment, user_prompt):
-        """Install the root-owned native factory only for a fresh installed4.
+        """Install the root-owned native factory for a fresh native input4/5.
 
         The concrete binding validates the runtime's full configuration, exact
         environment/policy and completed original-stream delivery. This profile
         neither opens a transport nor infers provider acceptance from that proof.
         """
-        if (self._installation is None or self._installation['manifest']['version'] != 4
+        if (self._installation is None or self._installation['manifest']['version'] not in (4, 5)
                 or self._native_binding is not None or self._selection is not None or self._started):
             raise ValueError('trial_native_binding_unavailable')
         from improvement_native_profile import NativeProfileBinding
         workspace = self._installation['workspace']
         policy = {'version': 2, 'cli_path': self.pin['cli_path'], 'model': self.pin['model'],
             'reasoning': self.pin['reasoning'], 'prompt_hash': self._installation['prompt_hash'],
-            'cwd': workspace['path'], 'tools': self._tools(), 'tool_policy': 'pinned_skill'}
+            'cwd': workspace['path'], 'tools': self._tools(),
+            'tool_policy': 'pinned_skill' if self._installation['manifest']['version'] == 4 else 'baseline_inline'}
         binding = NativeProfileBinding(runtime, kind='trial', identity={key: workspace[key] for key in
             ('trial_id', 'attempt', 'input_hash')}, data_hash=workspace['input_hash'], user_prompt=user_prompt,
             environment=environment, query_policy=policy)
@@ -417,7 +418,7 @@ class TrialProfile:
         self.create_client = binding.create_client
 
     def _native_required(self):
-        if (self._installation is not None and self._installation['manifest']['version'] == 4
+        if (self._installation is not None and self._installation['manifest']['version'] in (4, 5)
                 and self._native_binding is None):
             raise ValueError('trial_native_runtime_unbound')
 
@@ -488,6 +489,9 @@ class TrialProfile:
                     if any(item['tool_name'] == SKILL_TOOL and item['outcome'] == 'hit'
                            and item['resource_id'] == asset['id'] for item in proof['proofs']):
                         asset['observed_use'] = 'observed'
+        if manifest['version'] == 5:
+            delivery = None if self._native_binding is None else self._native_binding.completed_delivery
+            receipt.update(version=5, native_input_delivery=_frozen(delivery))
         return receipt
 
     async def before_query(self):
@@ -554,7 +558,7 @@ class TrialProfile:
             extra_args={"no-session-persistence": None, "disable-slash-commands": None, "no-chrome": None,
                         "restricted": None, "safe-mode": None},
             max_buffer_size=8 * 1024 * 1024, stderr=engine._on_stderr)
-        if self._read_outcome_broker is not None:
+        if self._native_binding is not None:
             options.env = _frozen(self._native_environment)
         self._selection = {"system_prompt_hash": hashlib.sha256(options.system_prompt.encode("utf-8")).hexdigest()}
         return options
