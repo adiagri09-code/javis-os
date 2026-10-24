@@ -71,7 +71,7 @@ def _request(value):
 
 
 class TrialStore:
-    def __init__(self, improvement_store):
+    def __init__(self, improvement_store, *, native_host=None):
         self.assets = improvement_store
         self.store, self.blobs = improvement_store.store, improvement_store.blobs
         self.cases = IC.CaseStore(improvement_store)
@@ -79,6 +79,12 @@ class TrialStore:
         from improvement_sandbox import TrialWorkspace
         self.workspace = TrialWorkspace(self.blobs.root.parent / "trials")
         self._views = None
+        if native_host is not None:
+            from improvement_trial_host import HostContextStore
+            if (type(native_host) is not HostContextStore or native_host.assets is not self.assets
+                    or native_host.store is not self.store):
+                raise TypeError('concrete_same_store_native_host_required')
+        self._native_host = native_host
 
     def bind_views(self, views):
         from improvement_views import EffectiveViews, _retired
@@ -342,6 +348,16 @@ class TrialStore:
         if request.get('version') == 4:
             from improvement_view_materialization import materialize_view
             return materialize_view(self, connection, row, baseline_context, principal)
+        from improvement_native_formats import input_version
+        version = input_version(request['engine_config'], 'baseline')
+        if version == 5 and request['variant'] != 'baseline':
+            raise ValueError('native_unpaired_candidate_unsupported')
+        if version == 5:
+            if self._native_host is None:
+                raise PermissionError('trial_native_host_unbound')
+            _, binding = self._native_host._bound(connection, principal, request)
+            self._native_host._snapshot_observe(principal, binding)
+            self._native_host._bound(connection, principal, request)
         if IM._hash(baseline_context) != request["baseline_context_hash"]:
             raise IM.ConflictError("trial_context_drift")
         brain = row["brain_id"]
@@ -361,12 +377,20 @@ class TrialStore:
                                                  (brain, pins["contract_hash"])).fetchone()[0])
         public = IC.public_contract(contract)
         from improvement_sandbox import _manifest
-        return _manifest({"version": 1, "brain_id": brain, "bundle_hash": pins[field],
+        result = _manifest({"version": version, "brain_id": brain, "bundle_hash": pins[field],
             "engine_config_hash": pins["engine_config_hash"], "contract_hash": pins["contract_hash"],
             "grant_hash": pins["grant_hash"], "baseline_context": baseline_context,
             "public_contract": {"content": public, "hash": IM._hash(public)}, "assets": assets,
             "case": self.cases._solver(connection, brain, case),
             "learning_origin": "qualification" if case["split"] == "qualification" else "trial"})
+        if version == 5:
+            # Decrypted solver inputs may race an actual owner/source edit.
+            # Exposure is committed by the caller only after this fresh check.
+            _, binding = self._native_host._bound(connection, principal, request)
+            self._native_host._snapshot_observe(principal, binding)
+            self._native_host._bound(connection, principal, request)
+            self._current(connection, brain, request, trial_id=row['id'], principal=principal)
+        return result
 
     def materialize(self, principal, identifier, *, expected_generation, lease_token, baseline_context):
         baseline_context = IC._frozen(baseline_context)

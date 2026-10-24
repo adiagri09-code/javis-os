@@ -184,7 +184,9 @@ class OperationExecution:
             request = json.loads(row["request_json"])
         self.host._snapshot_observe(principal, prepared[1])
         data = json.loads(self.blobs.read(_brain(principal), data_hash))
-        manifest = operation_materialization({"version": 1, "brain_id": _brain(principal), "operation_id": identifier,
+        from improvement_native_formats import input_version
+        version = input_version(prepared[1]['engine_config'], 'operation')
+        manifest = operation_materialization({"version": version, "brain_id": _brain(principal), "operation_id": identifier,
             "request": request, "engine_config_hash": prepared[0]["engine_config_hash"], "data": data, "learning_origin": "compose"})
         with self.store._Tx(self.store) as connection:
             row, _ = self._leased(connection, principal, identifier, expected_generation, lease_token, time.time())

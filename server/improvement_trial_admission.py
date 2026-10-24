@@ -41,7 +41,7 @@ class TrialAdmission:
             raise TypeError("concrete_trial_admission_host_required")
         self.host, self.assets, self.store = host, host.assets, host.store
         self.associations = TrialCaseAssociations(host, checker_registry=checker_registry)
-        self.trials = TrialStore(self.assets)
+        self.trials = TrialStore(self.assets, native_host=host)
 
     @staticmethod
     def _reserve_key(brain, event_key):

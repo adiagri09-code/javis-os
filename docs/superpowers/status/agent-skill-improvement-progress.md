@@ -1,5 +1,28 @@
 # Agent and skill improvement Goal progress
 
+## Current continuation — exact host-pinned native materializers approved
+
+Planned claude-owned-images-v3 exact-source selector now emits genuine baseline5,
+linked view4 and operation2; old profile inputs remain1/3/1. Global PROFILE_VERSION
+stays old and registry empty. Selector added to source tuple84; full reachable
+release closure/final qualification remain separate. No request/env mode switch.
+
+Actual source-file race survived SQL-only _current: first GREEN6 retained1FAIL.
+Native5 now requires concrete same-store HostContextStore from TrialAdmission,
+with binding/source/binding checks before and after decrypted solver; finalSQL
+and caller lease checks retained. Unbound5 refuses before solver; fake/foreign
+hosts refuse. Actual request3 prepares before candidate/view; linked real pair
+and role preserve exact stored authority/data. Independent14 PASS101.454s total,
+all12 pins stable, no findings; public native-materializers retains full lineage.
+Semantic authoring fixture setup uses explicit historical-format seam only;
+view call itself uses actual new selector, stored host/profile/source and pair.
+
+Next is canonical dummy-only same-pipeline qualification support, preserving
+production startup2 default refusals and no auth-copy/account retry. Native full
+source qualification, exact registration, account feasibility and final CI due.
+M0–M8 business/owner/live-canary gates remain open and unchanged.
+
+
 ## Current continuation — baseline native result/runner consumers approved
 
 Validated baseline5 now reaches exact receipt/delivery checks, whole V2 product
