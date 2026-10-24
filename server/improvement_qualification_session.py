@@ -234,7 +234,11 @@ class QualificationSession:
         home.mkdir(mode=0o700)
         check_ancestry(home)
         if tuple(home.iterdir()): raise PermissionError('qualification_home_not_empty')
-        return dummy_environment(worker_environment(cwd, auth_home=home), endpoint=scope['endpoint'])
+        base = worker_environment(cwd, auth_home=home)
+        # Explicit engineering wire shape is stable during portable preparation;
+        # these are paths under a fresh empty HOME, never ambient platform config.
+        base.update(APPDATA=str(home / 'AppData' / 'Roaming'), LOCALAPPDATA=str(home / 'AppData' / 'Local'))
+        return dummy_environment(base, endpoint=scope['endpoint'])
 
     def close(self):
         # No launch consumer is installed in this component. Future owned native
