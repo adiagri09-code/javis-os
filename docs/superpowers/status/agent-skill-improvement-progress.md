@@ -1,5 +1,43 @@
 # Agent and skill improvement Goal progress
 
+## Actual compose operation admission — scoped component approved
+
+ComposePermissions.current now accepts an explicit actual stored operation and
+authenticates its exact closed request/hash/input plus one immutable actual
+operation_create event. Only the host creation mutation (original generation+1,
+updated_at=operation.created_at) is normalized for the old immutable basis hash;
+every other experiment field remains exact. Full current SQL/source/grant/policy/
+holdout/domain fences retain the actual experiment row and recheck grant,
+operation and creation history after slow reads. Shared SQL-only admission is
+used by actual OperationRecords creation/reservation; existing Execution current
+delegates the full guard at reserve/claim/materialize/start/heartbeat/retry.
+Existing CallLedger/lease/workspace/cancel/refund remain authoritative.
+
+Author RED6/.002s before fixtures; root independently GREEN6/52.625s. Additional
+root controls initially reached the existing immutable experiment trigger before
+the intended current guard (two fixture-error subcontrols); corrected to assert
+actual SQL refusal, without bypassing/dropping the trigger. Corrected focused1
+PASS6.955s. Root6-script impact regression PASS65; independent ROOT3PASS16.774s,
+13stablepins/no findings, own-authored6 excluded selfapproval. Review report
+ca2b7e6fb58ac1b9f15a4f6ed76dbb088b1aae1e5a0b87ef90fb9acb74b90ad3.
+Early isolated Linux40060390227/job120772406637 SUCCESS74/74 on separate snapshot
+017f887f6b8b897c219c39845e89f83ecec3faa7, eight raw source/test pins verified.
+Public2026-10-24-compose-owned-admission.json SHA
+5245196f130f744725f7025eb7742bebd37a3e1d522a26fcb4afdd8295d1d8f6.
+
+Actual host-profile format selector is unchanged: legacy1 refuses compose;
+declared selector2/verifier seams prove storage/PREPARED ownership only. Native
+wire grammar now recognizes composer/improve_compose; no readiness/launch grant
+is added. PROFILE_SOURCES91 includes newly consumed permission/input/protocol;
+static raw profile912340a42d1aa8577e1eca75b41ac418affe64dcbf5198466553f9043a6f6e21
+remains unqualified, registries closed, actual309 exact-evidence test untouched.
+No real query/model/account/activation/deploy/restart. Next actual ComposerService
+one-shot workflow, typed result/candidate provenance and independent composed
+checks/API/UI. Ordinary staging/selection still restrict two candidates; reserve
+an explicit three-hypothesis policy before admitting composed arm3 to selection.
+Actual derived upstream library follows compose. Full Goal, same-pipeline dummy
+qualification, exact final task-head full required CI and Phase2 remain open.
+
 ## Explicit compose consent/current input — scoped component approved
 
 ComposePermissions uses actual owner/experiment/generation, authenticated existing

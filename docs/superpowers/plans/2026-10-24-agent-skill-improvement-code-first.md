@@ -1,5 +1,20 @@
 # M0–M8: code and technical verification before real trials
 
+Latest connected compose admission is scoped approved: actual Records creation/
+event and shared Execution current authenticate active consent/input and only
+their exact own experiment generation+1/timestamp mutation. Actual ledger/lease/
+native2 workspace/PREPARED and cancel/refund controls pass; native2 selector stays
+unchanged and wire grammar is not readiness. Root author6PASS52.625s/impact65PASS,
+independent root3PASS16.774s/13stablepins/no findings, early separate Linux74PASS
+(40060390227, snapshot017f887f6b8b897c219c39845e89f83ecec3faa7/eightpins).
+Publiccompose-owned-admission SHA5245196f130f744725f7025eb7742bebd37a3e1d522a26fcb4afdd8295d1d8f6.
+PROFILE_SOURCES91 is unqualified; actual309 exact-evidence test remains intact.
+Next owned-publication plan connects actual one-shot tasks/product/candidate3
+provenance, then independent semantic/owner/new bundle/tuning/final/qualification/
+regression/API/UI. Comparison/selection still need typed3 plus explicit testing
+budget policy; do not reuse old two-hypothesis thresholds. No actual model query
+or new qualification/registry/activation. Full Goal/final-head CI/Phase2 open.
+
 Owner Goal sections12/13 apply from checkpoint d13ecb48 on existing M2 worktree,
 branch codex/agent-skill-improvement-m2d1, draft PR803/reserved0.299.0. This plan
 changes scheduling, not scope, acceptance thresholds, evidence or live authority.

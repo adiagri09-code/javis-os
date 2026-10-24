@@ -70,6 +70,11 @@ class OperationExecution:
 
     def _current(self, connection, principal, row):
         assert_installed(connection)
+        if row["kind"] == "compose":
+            from improvement_compose_permissions import ComposePermissions
+            request = json.loads(row["request_json"])
+            return ComposePermissions(self.plans).current(connection, principal,
+                request['compose_authorization_id'], operation=row)['prepared']
         experiment = self.plans.records._row(connection, row["brain_id"], row["experiment_id"])
         experiment, prepared = self.plans._state(connection, principal, row["experiment_id"], experiment["generation"], unsealed=True)
         phases = ("proposing", "probing", "comparing") if row["kind"] == "semantic" else ("proposing",)

@@ -136,7 +136,8 @@ def _identity(kind, receipt):
     if type(identity['attempt']) is not int or not 1 <= identity['attempt'] < (1 << 63): _invalid()
     if kind == 'operation':
         if identity['attempt'] not in (1, 2) or (identity['role'], identity['purpose']) not in (
-                ('improver', 'improve_propose'), ('semantic_reviewer', 'improve_evaluate')): _invalid()
+                ('improver', 'improve_propose'), ('semantic_reviewer', 'improve_evaluate'),
+                ('composer', 'improve_compose')): _invalid()
     return identity
 
 

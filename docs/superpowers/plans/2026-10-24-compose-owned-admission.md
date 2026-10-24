@@ -32,7 +32,7 @@ whole orchestration comparison still follows actual derived experience library.
    policy/domain/stop gates. Off/revoke still permits cancel/refund/settlement and
    cold historical metadata. No new executor, dispatch endpoint or usage ledger.
 4. Compose materialization must actually use native format2, never legacy1.
-   Preserve the existing input_version selector/qualification boundary: unsupported
+   Preserve the existing input_version selector/host-profile format boundary: unsupported
    format must refuse, not silently force a ready native profile. A declared format
    selector seam may test workspace/PREPARED storage only, never qualification.
    The private native identity grammar at improvement_native_protocol.py:139
