@@ -7,6 +7,30 @@ No OperationRecords/Execution phase admission or permission/current-source servi
 has been enabled. Public evidence2026-10-24-compose-role-contract.json retains
 RED/GREEN/regression, exact dependency test correction and native limitations.
 
+Next bounded unit: ComposePermissions(plans) in improvement_compose_permissions.py
+owns authorize/get/list/revoke/current only; no query/operation dispatch yet.
+authorize takes owner/experiment/expected_generation/event_key, not caller input
+or consent JSON. It uses actual ComposeInputs.build and verifies its encrypted
+input/basis/event, captures the exact original experiment row plus hash links in
+a small encrypted consent guard, and writes actual schema8 authorization/grant
+and an immutable compose_authorize event under current final fences. Reuse the
+existing basis.authority_snapshot_hash over complete current SQL/definition/
+binding/policy state; do not duplicate the ledger or store a large copy of every
+trial in the guard. The original experiment row permits a future precisely bound
+operation generation mutation without rewriting old basis bytes. Until that
+admission unit, current requires the original exact state with no normalization.
+
+current(connection,owner,authorization_id) is read-only: authenticate encrypted
+input/basis/guard and immutable metadata links; reconstruct the same stable hash
+(excluding only process-local prepared callback IDs, as existing input producer),
+reauthenticate sources/current policy/grants/holdout/domain and final SQL after
+slow observations. Never call public build or publish events inside callbacks.
+Return internal authenticated data/basis/prepared state, never readiness. Cold
+get/list/revoke and historical authorize replay do not decrypt, probe or refresh
+sources; replay returns the current revoked grant state and cannot revive it.
+Revocation stays possible after off/source drift. Actual operation admission and
+the tightly linked generation mutation described below remain a later unit.
+
 Goal12–17 and owned-compose-runtime plan apply. Complete/review the current
 schema8 foundation before this unit's production edits. This is the next
 bounded runtime connection, not completed compose publication or M0–M8.
